@@ -62,13 +62,7 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   await db.upsertUser(profile.id, profile.name, encrypt(token), expires);
   req.session.fbId = profile.id;
   req.session.name = profile.name;
-  // First login: load ad accounts and backfill this month so past days aren't empty.
-  if (!(await db.listAccounts()).length) {
-    const user = await db.getUser(profile.id);
-    try { await sync.refreshAccounts(user); } catch (e) { console.error('initial account load failed:', e.message); }
-    const today = sync.todayIn();
-    sync.syncRange(today.slice(0, 8) + '01', today, user).catch((e) => console.error('initial backfill failed:', e.message));
-  }
+  // Each admin starts with an empty workspace; nothing is loaded until they tap Sync from Meta.
   res.redirect('/');
 }));
 
@@ -102,7 +96,6 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
-    team: await db.listUsers(),
   });
 }));
 
@@ -121,23 +114,23 @@ const cleanClient = (b) => {
   if (b.archived != null) c.archived = !!b.archived;
   return c;
 };
-api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen())));
-api.get('/clients', wrap(async (req, res) => res.json(await db.listClients())));
+api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
+api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.user.fb_id))));
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
-  res.json(await db.createClient(c));
+  res.json(await db.createClient(req.user.fb_id, c));
 }));
 api.patch('/clients/:id', wrap(async (req, res) => {
-  const c = await db.updateClient(Number(req.params.id), cleanClient(req.body || {}));
+  const c = await db.updateClient(req.user.fb_id, Number(req.params.id), cleanClient(req.body || {}));
   c ? res.json(c) : res.status(404).json({ error: 'Client not found.' });
 }));
-api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(Number(req.params.id)); res.json({ ok: true }); }));
+api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); res.json({ ok: true }); }));
 
 // Days
 api.get('/day/:day', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
-  res.json(await db.getDay(req.params.day));
+  res.json(await db.getDay(req.user.fb_id, req.params.day));
 }));
 function deepMerge(t, s) {
   for (const k of Object.keys(s)) {
@@ -149,6 +142,7 @@ function deepMerge(t, s) {
 api.patch('/day/:day/:clientId', wrap(async (req, res) => {
   const { day, clientId } = req.params;
   if (!isDay(day)) return res.status(400).json({ error: 'Bad date.' });
+  if (!(await db.ownsClient(req.user.fb_id, Number(clientId)))) return res.status(404).json({ error: 'Client not found.' });
   const e = deepMerge(await db.getEntry(day, Number(clientId)), req.body || {});
   await db.putEntry(day, Number(clientId), e);
   res.json(e);
@@ -158,11 +152,16 @@ api.post('/sync/:day', wrap(async (req, res) => {
   res.json(await sync.syncDay(req.params.day, req.user));
 }));
 // Main sync: the last 30 days (or the month containing ?around= when that's older), in one pass.
-// Live progress of the running sync (one at a time for the whole team).
-let syncProgress = { running: false };
-api.get('/sync-progress', (req, res) => res.json({ ...syncProgress, elapsed: syncProgress.startedAt ? Math.round((Date.now() - syncProgress.startedAt) / 1000) : 0 }));
+// Live progress of each admin's running sync (one at a time per admin; admins don't block each other).
+const progressByUser = new Map();
+const getProg = (id) => progressByUser.get(id) || { running: false };
+api.get('/sync-progress', (req, res) => {
+  const p = getProg(req.user.fb_id);
+  res.json({ ...p, elapsed: p.startedAt ? Math.round((Date.now() - p.startedAt) / 1000) : 0 });
+});
 api.post('/sync-recent', wrap(async (req, res) => {
-  if (syncProgress.running) return res.status(409).json({ error: `A sync started by ${syncProgress.by} is already running. Wait for it to finish.`, busy: true });
+  const me = req.user.fb_id;
+  if (getProg(me).running) return res.status(409).json({ error: 'Your sync is already running (maybe in another tab). Wait for it to finish.', busy: true });
   const today = sync.todayIn();
   const from30 = sync.addDays(today, -29);
   const around = isDay(req.body?.around) ? req.body.around : today;
@@ -172,10 +171,11 @@ api.post('/sync-recent', wrap(async (req, res) => {
     const last = new Date(Date.UTC(Number(around.slice(0, 4)), Number(around.slice(5, 7)), 0)).getUTCDate();
     to = around.slice(0, 8) + String(last).padStart(2, '0');
   }
-  syncProgress = { running: true, phase: 'starting', done: 0, total: 0, account: '', from, to, by: req.user.name, startedAt: Date.now() };
+  const startedAt = Date.now();
+  progressByUser.set(me, { running: true, phase: 'starting', done: 0, total: 0, account: '', from, to, startedAt });
   let r;
-  try { r = await sync.syncRange(from, to, req.user, (p) => { syncProgress = { ...syncProgress, ...p }; }); }
-  finally { syncProgress = { running: false, lastSeconds: Math.round((Date.now() - syncProgress.startedAt) / 1000) }; }
+  try { r = await sync.syncRange(from, to, req.user, (p) => progressByUser.set(me, { ...getProg(me), ...p })); }
+  finally { progressByUser.set(me, { running: false, lastSeconds: Math.round((Date.now() - startedAt) / 1000) }); }
   res.json({ ...r, from, to });
 }));
 // Backfill past days, e.g. the whole month: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (max 93 days).
@@ -191,22 +191,22 @@ api.get('/month/:ym', wrap(async (req, res) => {
   const m = String(req.params.ym).match(/^(\d{4})-(\d{2})$/);
   if (!m) return res.status(400).json({ error: 'Bad month.' });
   const last = new Date(Number(m[1]), Number(m[2]), 0).getDate();
-  res.json(await db.monthEntries(`${m[1]}-${m[2]}-01`, `${m[1]}-${m[2]}-${last}`));
+  res.json(await db.monthEntries(req.user.fb_id, `${m[1]}-${m[2]}-01`, `${m[1]}-${m[2]}-${last}`));
 }));
 
 // Result of the last sync's completeness check (per ad account: Meta total vs found)
-api.get('/sync-check', wrap(async (req, res) => res.json(await db.getSetting('lastSyncCheck', null))));
+api.get('/sync-check', wrap(async (req, res) => res.json(await db.getUserSetting(req.user.fb_id, 'lastSyncCheck', null))));
 
 // Dashboard: per-client totals for a day or a month (?from=YYYY-MM-DD&to=YYYY-MM-DD, max 93 days)
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });
   if ((Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick at most 3 months.' });
-  res.json(await sync.dashboard(from, to));
+  res.json(await sync.dashboard(req.user.fb_id, from, to));
 }));
 
 // Ad accounts
-api.get('/accounts', wrap(async (req, res) => res.json(await db.listAccounts())));
+api.get('/accounts', wrap(async (req, res) => res.json(await db.listAccounts(req.user.fb_id))));
 api.post('/accounts/refresh', wrap(async (req, res) => {
   const list = await sync.refreshAccounts(req.user);
   const token = await sync.tokenFor(req.user);
@@ -215,10 +215,10 @@ api.post('/accounts/refresh', wrap(async (req, res) => {
     if (![1, 9, 201].includes(a.statusCode)) continue; // only accounts that can spend
     try { a.todaySpend = await meta.accountSpend(token, a.id, day); } catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
   }
-  await db.saveAccounts(list);
-  res.json(await db.listAccounts());
+  await db.saveAccounts(req.user.fb_id, list);
+  res.json(await db.listAccounts(req.user.fb_id));
 }));
-api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.params.id, req.body?.enabled); res.json({ ok: true }); }));
+api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); }));
 
 // Reports
 const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 92;
@@ -233,12 +233,12 @@ api.get('/telegram/chats', wrap(async (req, res) => {
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  res.json(await sync.clientReport(req.params.id, from, to));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to));
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
   const { from, to, text } = req.body || {};
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const r = await sync.clientReport(req.params.id, from, to);
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text, r.client.telegram);
   res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram });
@@ -246,21 +246,21 @@ api.post('/client-report/:id/send', wrap(async (req, res) => {
 api.get('/summary', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  res.json({ text: await sync.summaryReport(from, to) });
+  res.json({ text: await sync.summaryReport(req.user.fb_id, from, to) });
 }));
 api.post('/summary/send', wrap(async (req, res) => {
   const { from, to, text } = req.body || {};
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : await sync.summaryReport(from, to));
+  await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : await sync.summaryReport(req.user.fb_id, from, to));
   res.json({ ok: true });
 }));
 api.get('/report/:day', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
-  res.json({ text: await sync.buildReport(req.params.day) });
+  res.json({ text: await sync.buildReport(req.user.fb_id, req.params.day) });
 }));
 api.post('/report/:day/send', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
-  const text = await sync.buildReport(req.params.day);
+  const text = await sync.buildReport(req.user.fb_id, req.params.day);
   await telegram.send(text);
   res.json({ ok: true });
 }));
@@ -276,7 +276,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
       needsLogin: err.needsLogin,
     });
   }
-  res.status(500).json({ error: err.message || 'Something went wrong.' });
+  res.status(err.status || 500).json({ error: err.message || 'Something went wrong.' });
 });
 
 db.init().then(() => {

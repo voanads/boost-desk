@@ -98,7 +98,7 @@
 
   function buildCards(list) {
     const box = $('list'); box.innerHTML = '';
-    if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add your first client in the <a href="#clients" id="toClients">Clients</a> tab, with their Facebook Page names.</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
+    if (!list.length) { box.innerHTML = '<div class="empty"><b>Your workspace is empty.</b><br>1. Tap <b>Sync from Meta</b> to load your ad accounts and the last 30 days of spend.<br>2. Then add your clients in the <a href="#clients" id="toClients">Clients</a> tab (or tap <b>New client</b> on each Page listed under “Spend not matched”).</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
     for (const c of list) {
       const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id;
       card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
@@ -180,7 +180,7 @@
   async function loadCheck() {
     let c = null; try { c = await api('/sync-check'); } catch (_) {}
     const el = $('syncCheck');
-    if (!c || !c.checks) { el.textContent = ''; return; }
+    if (!c || !c.checks || !c.from || !c.to) { el.textContent = ''; return; }
     const gaps = c.checks.filter((x) => x.missing > 0.5);
     const t = new Date(c.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     if (!gaps.length) { status(el, `✓ Checked at ${t}: all spend from ${c.checks.length} ad account${c.checks.length === 1 ? '' : 's'} was found (${nice(c.from).replace(/^\w+, /, '')} – ${nice(c.to).replace(/^\w+, /, '')}).`); return; }
@@ -193,7 +193,8 @@
   function showProgress(p) {
     const box = $('syncProg'); box.hidden = false;
     let pct = 0, text = 'Starting…';
-    if (p.phase === 'accounts' && p.total) { pct = (p.done / p.total) * 85; text = `Reading ad account ${p.done + 1} of ${p.total}: ${p.account}`; }
+    if (p.phase === 'accounts' && !p.total) { pct = 2; text = 'Loading your ad accounts…'; }
+    else if (p.phase === 'accounts' && p.total) { pct = (p.done / p.total) * 85; text = `Reading ad account ${p.done + 1} of ${p.total}: ${p.account}`; }
     else if (p.phase === 'saving' && p.total) { pct = 85 + (p.done / p.total) * 15; text = `Saving day ${p.done + 1} of ${p.total}…`; }
     $('syncProgBar').style.width = Math.max(3, pct) + '%';
     $('syncProgText').textContent = text;
@@ -215,6 +216,7 @@
     try {
       const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
       await loadDay(); loadPages(); loadCheck();
+      try { accounts = await api('/accounts'); renderAccounts(); } catch (_) {}
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
     finally { stopProgress(); b.disabled = false; b.textContent = 'Sync from Meta'; }
@@ -334,10 +336,8 @@
   // ---------- team ----------
   async function renderTeam() {
     const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-    $('teamBody').innerHTML = (me.team || []).map((u) => {
-      const soon = u.token_expires && new Date(u.token_expires) - Date.now() < 7 * 864e5;
-      return `<tr><td>${esc(u.name)}</td><td class="num">${esc(u.fb_id)}</td><td>${fmt(u.updated_at)}</td><td class="${soon ? 'over' : ''}">${fmt(u.token_expires)}</td></tr>`;
-    }).join('');
+    const soon = me.tokenExpires && new Date(me.tokenExpires) - Date.now() < 7 * 864e5;
+    $('teamBody').innerHTML = `<tr><td>${esc(me.name)}</td><td class="num">${esc(me.id)}</td><td class="${soon ? 'over' : ''}">${fmt(me.tokenExpires)}</td></tr>`;
     $('tgInfo').textContent = me.telegram.configured
       ? `Sends automatically every day at ${me.telegram.time} (${me.tz}), after a fresh sync. Preview for ${nice(date)}:`
       : 'Not set up yet. Add TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME to the server settings (see README). Preview:';

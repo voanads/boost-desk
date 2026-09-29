@@ -109,8 +109,9 @@ async function tokenFor(user) {
 
 async function refreshAccounts(user) {
   const token = await tokenFor(user);
+  const owner = user.fb_id;
   const list = await meta.adAccounts(token);
-  await db.saveAccounts(list);
+  await db.saveAccounts(owner, list);
   return list;
 }
 
@@ -122,10 +123,13 @@ function addDays(day, n) {
 // Pull campaign spend for every enabled ad account over [since, until].
 async function fetchRange(since, until, user, onProgress = () => {}) {
   const token = await tokenFor(user);
+  const owner = user.fb_id;
   meta.rememberPageNames(await db.getSetting('pageNames', {}));
-  let ids = await db.enabledAccountIds();
-  if (!ids.length) { await refreshAccounts(user); ids = await db.enabledAccountIds(); }
-  const names = Object.fromEntries((await db.listAccounts()).map((a) => [a.id, a.name]));
+  // Always load this admin's current ad accounts first, so a sync only ever reads what they can access.
+  onProgress({ phase: 'accounts', done: 0, total: 0, account: 'loading your ad accounts…' });
+  try { await refreshAccounts(user); } catch (e) { if (e.needsLogin) throw e; console.error('[sync] could not refresh ad accounts:', e.message); }
+  const ids = await db.enabledAccountIds(owner);
+  const names = Object.fromEntries((await db.listAccounts(owner)).map((a) => [a.id, a.name]));
   const items = [];
   const errors = [];
   const checks = [];
@@ -153,7 +157,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients) {
-  await db.notePages(items.map((it) => it.page), day);
+  await db.notePages(user.fb_id, items.map((it) => it.page), day);
   const plan = buildPlan(items, clients);
   const syncedAt = new Date().toISOString();
   const touched = new Set();
@@ -176,16 +180,16 @@ async function applyDay(day, items, errors, user, clients) {
     e.syncedAt = syncedAt;
     await db.putEntry(day, t.clientId, e);
   }
-  await db.putDayMeta(day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
+  await db.putDayMeta(user.fb_id, day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
   return { day, matched: plan.targets.length, unmatched: plan.unmatched, errors, campaigns: items.length };
 }
 
 // Learn which client owns each Page ID: a named campaign ("DC Shop | 29") matched by name tells us
 // its Page belongs to that client, so auto-named "Post: …" boosts from the same Page match too —
 // even when Meta hides the Page's name. Learned links are saved and reused on later syncs.
-async function clientsWithLearnedPages(items) {
-  const clients = await db.listClients();
-  const learned = await db.getSetting('pageOwners', {}); // { pageId: clientId }
+async function clientsWithLearnedPages(owner, items) {
+  const clients = await db.listClients(owner);
+  const learned = await db.getUserSetting(owner, 'pageOwners', {}); // { pageId: clientId }
   for (const it of items) {
     if (!it.pageId || isAutoPost(it.name)) continue;
     const prefix = norm(campaignPrefix(it.name));
@@ -194,7 +198,7 @@ async function clientsWithLearnedPages(items) {
   }
   // A Page the user linked by hand (name or ID on the client) always wins over a learned link.
   for (const c of clients) for (const p of c.pages || []) if (/^\d+$/.test(p)) learned[p] = c.id;
-  await db.setSetting('pageOwners', learned);
+  await db.setUserSetting(owner, 'pageOwners', learned);
   const extra = {};
   for (const [pid, cid] of Object.entries(learned)) (extra[cid] = extra[cid] || []).push(pid);
   return clients.map((c) => (extra[c.id] ? { ...c, pages: [...new Set([...(c.pages || []), ...extra[c.id]])] } : c));
@@ -202,14 +206,14 @@ async function clientsWithLearnedPages(items) {
 
 async function syncDay(day, user) {
   const { items, errors } = await fetchRange(day, day, user);
-  return applyDay(day, items, errors, user, await clientsWithLearnedPages(items));
+  return applyDay(day, items, errors, user, await clientsWithLearnedPages(user.fb_id, items));
 }
 
 // Backfill several days with one API call per account (Meta allows up to ~37 months back).
 async function syncRange(since, until, user, onProgress = () => {}) {
   const { items, errors, checks } = await fetchRange(since, until, user, onProgress);
-  await db.setSetting('lastSyncCheck', { from: since, to: until, at: new Date().toISOString(), checks });
-  const clients = await clientsWithLearnedPages(items);
+  await db.setUserSetting(user.fb_id, 'lastSyncCheck', { from: since, to: until, at: new Date().toISOString(), checks });
+  const clients = await clientsWithLearnedPages(user.fb_id, items);
   const byDay = {};
   for (const it of items) (byDay[it.day] = byDay[it.day] || []).push(it);
   const results = [];
@@ -230,9 +234,9 @@ async function syncRange(since, until, user, onProgress = () => {}) {
 }
 
 // Per-client totals over [from, to] for the dashboard.
-async function dashboard(from, to) {
-  const clients = await db.listClients();
-  const rows = await db.monthEntries(from, to); // [{day, client_id, data}]
+async function dashboard(owner, from, to) {
+  const clients = await db.listClients(owner);
+  const rows = await db.monthEntries(owner, from, to); // [{day, client_id, data}]
   const per = new Map(clients.map((c) => [c.id, {
     id: c.id, name: c.name, type: c.type, pages: [...new Set([c.name, c.match, ...(c.pages || [])].filter(Boolean))],
     budget: c.budget, archived: c.archived, telegram: c.telegram || '', days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {},
@@ -268,10 +272,10 @@ const isWholeMonth = (from, to) => from.slice(8) === '01' && from.slice(0, 7) ==
 const fmt = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Report for one client: a single day (every live + posts) or a range (total + day by day).
-async function clientReport(clientId, from, to) {
-  const c = (await db.listClients()).find((x) => x.id === Number(clientId));
-  if (!c) throw new Error('Client not found.');
-  const rows = (await db.monthEntries(from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
+async function clientReport(owner, clientId, from, to) {
+  const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
+  if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
+  const rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
   const lines = [];
   if (from === to) {
     const e = (rows[0] || {}).data || {};
@@ -320,9 +324,9 @@ async function clientReport(clientId, from, to) {
 }
 
 // Team summary: every client's total for a day or a range.
-async function summaryReport(from, to) {
-  if (from === to) return buildReport(from);
-  const d = await dashboard(from, to);
+async function summaryReport(owner, from, to) {
+  if (from === to) return buildReport(owner, from);
+  const d = await dashboard(owner, from, to);
   const list = d.clients.filter((c) => c.spend > 0);
   const lines = [`📊 Boost summary — ${isWholeMonth(from, to) ? monthName(from) : shortDay(from) + ' – ' + shortDay(to)}`, ''];
   for (const c of list) lines.push(`• ${c.name}: ${fmt(c.spend)}${c.lives ? ` · ${c.lives} live${c.lives > 1 ? 's' : ''}` : ''}`);
@@ -331,9 +335,9 @@ async function summaryReport(from, to) {
   return lines.join('\n');
 }
 
-async function buildReport(day) {
-  const clients = (await db.listClients()).filter((c) => !c.archived);
-  const { entries, meta: m } = await db.getDay(day);
+async function buildReport(owner, day) {
+  const clients = (await db.listClients(owner)).filter((c) => !c.archived);
+  const { entries, meta: m } = await db.getDay(owner, day);
   const nice = new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const lines = [`📊 Boost report — ${nice}`, ''];
   let T = 0;

@@ -2,6 +2,8 @@
 
 Daily Facebook boost checklist for your agency. Your team logs in with Facebook, and the app reads Ads Manager directly through Meta's official Marketing API — no Supermetrics or other third-party service.
 
+**Each admin has their own workspace.** When someone logs in with Facebook for the first time, their Boost Desk is empty. Tapping **Sync from Meta** loads only the ad accounts and spend that *their* Facebook login can see. Clients, synced days, reports and settings are never shared between admins. (The Telegram bot is shared, so every admin sees the list of groups the bot is in.)
+
 **What it does**
 
 - **Checklist** — every client's spend for the day, pulled from Ads Manager. Campaigns named `Page name | day` (e.g. `DC Shop | 29`) go to that client. For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Ticks, live times and notes are saved.

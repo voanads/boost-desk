@@ -92,3 +92,27 @@ pre.report{white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:1
 
 h3.sub{font-size:.9rem;font-weight:600;margin:0;color:var(--muted)}
 #clientsSection{display:flex;flex-direction:column;gap:12px}
+
+.autobar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.autobar select{padding:4px 8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;border-radius:0;padding:7px 14px;background:var(--surface);color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--surface);font-weight:600}
+label.chk{display:flex;gap:6px;align-items:center;cursor:pointer}
+#dSearch{width:190px}
+.chart{display:flex;align-items:flex-end;gap:3px;height:150px;padding-top:6px;overflow-x:auto}
+.chart .col{flex:1 0 14px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;cursor:pointer;border:none;background:none;padding:0;min-width:14px}
+.chart .b{width:100%;background:var(--accent);border-radius:4px 4px 0 0;min-height:2px;opacity:.85}
+.chart .col:hover .b,.chart .col:focus-visible .b{opacity:1}
+.chart .col.today .b{background:var(--warn)}
+.chart .d{font-size:.66rem;color:var(--muted);font-family:var(--f-num)}
+.dtable th[data-sort]{cursor:pointer;user-select:none}
+.dtable th[data-sort]:hover{color:var(--ink)}
+.dtable th.sorted::after{content:" ↓"}
+.dtable th.sorted.asc::after{content:" ↑"}
+.dtable td .pg{font-size:.76rem;color:var(--muted);overflow-wrap:anywhere}
+.dtable tr.clickable{cursor:pointer}
+.dtable tr.clickable:hover td{background:var(--bg)}
+.meter{height:6px;background:var(--bg);border-radius:9px;overflow:hidden;min-width:80px}
+.meter i{display:block;height:100%;background:var(--accent)}
+.meter i.over{background:var(--live)}

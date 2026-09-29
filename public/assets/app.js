@@ -26,8 +26,9 @@
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   function showTab(name) {
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    ['checklist', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['checklist', 'dashboard', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
+    if (name === 'dashboard') loadDash();
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
 
@@ -331,17 +332,134 @@
 
   $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };
 
+  // ---------- auto sync ----------
+  let auto = null;
+  function renderAuto() {
+    if (!auto) return;
+    $('autoSel').value = auto.enabled ? String(auto.everyMinutes) : '0';
+    const last = auto.lastRun ? new Date(auto.lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null;
+    $('autoInfo').textContent = auto.enabled
+      ? `Runs ${pad(auto.from)}:00–${pad(auto.to)}:59 · today and, before noon, yesterday${last ? ` · last run ${last}` : ''}`
+      : 'Off. Tap Sync from Meta to update by hand.';
+  }
+  async function loadAuto() { try { auto = await api('/auto-sync'); renderAuto(); } catch (_) {} }
+  $('autoSel').onchange = async () => {
+    const v = Number($('autoSel').value);
+    try {
+      auto = await api('/auto-sync', { method: 'PUT', body: v ? { enabled: true, everyMinutes: v } : { enabled: false } });
+      renderAuto(); toast(v ? `Auto sync on: every ${v >= 60 ? v / 60 + ' hour' + (v > 60 ? 's' : '') : v + ' min'}` : 'Auto sync off');
+    } catch (e) { toast(e.message); }
+  };
+  // While the checklist is open on today, pull fresh numbers every 2 minutes (picks up auto-sync results).
+  setInterval(async () => {
+    if (document.hidden || $('tab-checklist').hidden || date !== (me && me.today)) return;
+    if (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    try {
+      const d = await api('/day/' + date);
+      if (JSON.stringify(d.entries) !== JSON.stringify(day.entries) || JSON.stringify(d.meta) !== JSON.stringify(day.meta)) { day = d; renderChecklist(); renderSyncInfo(); loadMonth(); }
+      loadAuto();
+    } catch (_) {}
+  }, 120000);
+
+  // ---------- dashboard ----------
+  let dMode = 'month', dDate = null, dData = null, dSort = { key: 'spend', asc: false };
+  const monthLabel = (ym) => parse(ym + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const lastDay = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+  const typeLabel = { live: 'Live', post: 'Post', both: 'Post + live' };
+  function dRange() {
+    if (dMode === 'day') return [dDate, dDate];
+    const ym = dDate.slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))];
+  }
+  function setMode(m) {
+    dMode = m;
+    $('dMode-day').setAttribute('aria-pressed', String(m === 'day'));
+    $('dMode-month').setAttribute('aria-pressed', String(m === 'month'));
+    $('dDay').hidden = m !== 'day'; $('dMonth').hidden = m !== 'month';
+    loadDash();
+  }
+  $('dMode-day').onclick = () => setMode('day');
+  $('dMode-month').onclick = () => setMode('month');
+  const dShift = (n) => {
+    const d = parse(dDate);
+    if (dMode === 'day') d.setDate(d.getDate() + n); else { d.setDate(1); d.setMonth(d.getMonth() + n); }
+    dDate = iso(d); loadDash();
+  };
+  $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
+  $('dToday').onclick = () => { dDate = me.today; loadDash(); };
+  $('dDay').onchange = () => { if ($('dDay').value) { dDate = $('dDay').value; loadDash(); } };
+  $('dMonth').onchange = () => { if ($('dMonth').value) { dDate = $('dMonth').value + '-01'; loadDash(); } };
+  $('dSearch').oninput = () => renderDash(); $('dType').onchange = () => renderDash(); $('dShowIdle').onchange = () => renderDash();
+  document.querySelectorAll('.dtable th[data-sort]').forEach((th) => th.onclick = () => {
+    const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' }; renderDash();
+  });
+
+  async function loadDash() {
+    if (!dDate) dDate = me.today;
+    $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
+    const [from, to] = dRange();
+    $('dTableTitle').textContent = dMode === 'day' ? 'Clients · ' + nice(from) : 'Clients · ' + monthLabel(from.slice(0, 7));
+    try { dData = await api(`/dashboard?from=${from}&to=${to}`); renderDash(); }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`; }
+  }
+
+  function renderDash() {
+    if (!dData) return;
+    const q = $('dSearch').value.trim().toLowerCase(), type = $('dType').value, idle = $('dShowIdle').checked;
+    let list = dData.clients.filter((c) => !c.archived || c.spend > 0)
+      .filter((c) => idle || c.spend > 0)
+      .filter((c) => !type || c.type === type)
+      .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
+    const k = dSort.key, dir = dSort.asc ? 1 : -1;
+    list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
+    document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
+
+    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, planned: a.planned + c.planned, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, planned: 0, live: 0, post: 0, lives: 0, active: 0 });
+    $('dSpend').textContent = money(t.spend); $('dPlanned').textContent = money(t.planned);
+    $('dSpend').classList.toggle('over', t.planned > 0 && t.spend > t.planned + 0.009);
+    $('dSplit').textContent = `$${Math.round(t.live)} / $${Math.round(t.post)}`;
+    $('dActive').textContent = t.active;
+
+    const diffCell = (d) => `<td class="r num" style="color:${d > 0.009 ? 'var(--live)' : 'var(--ok)'}">${d > 0.009 ? '+' : d < -0.009 ? '−' : ''}${money(Math.abs(d))}</td>`;
+    $('dBody').innerHTML = list.map((c) => {
+      const pct = c.planned ? Math.min(100, c.spend / c.planned * 100) : 0, over = c.planned && c.spend > c.planned + 0.009;
+      const extra = c.pages.filter((p) => p !== c.name);
+      return `<tr class="clickable" data-cid="${c.id}"><td>${esc(c.name)}${extra.length ? `<div class="pg">${esc(extra.join(' · '))}</div>` : ''}${c.overDays && dMode === 'month' ? `<div class="pg" style="color:var(--live)">over budget ${c.overDays} day${c.overDays > 1 ? 's' : ''}</div>` : ''}</td>
+        <td><span class="chip ${c.type === 'post' ? 'post' : 'live'}">${typeLabel[c.type] || c.type}</span></td>
+        <td class="r num">${c.days}</td><td class="r num">${c.type === 'post' ? '–' : c.lives}</td>
+        <td class="r num">${c.type === 'post' ? '–' : money(c.liveSpend)}</td><td class="r num">${c.type === 'live' ? '–' : money(c.postSpend)}</td>
+        <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${money(c.planned)}</td>${diffCell(c.diff)}
+        <td><div class="meter" title="${Math.round(c.planned ? c.spend / c.planned * 100 : 0)}% of budget"><i class="${over ? 'over' : ''}" style="width:${pct}%"></i></div></td></tr>`;
+    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them on the Checklist page.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.planned)}</td>${diffCell(t.spend - t.planned)}<td></td></tr>` : '';
+    document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
+      if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
+      else { $('dSearch').value = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; setMode('day'); }
+    });
+
+    // Daily chart (month mode only), filtered to the visible clients.
+    $('dChartPanel').hidden = dMode !== 'month';
+    if (dMode === 'month') {
+      const ids = new Set(list.map((c) => c.id));
+      const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
+      const max = Math.max(1, ...days.map((d) => d.spend));
+      $('dChartTitle').textContent = 'Spend per day · ' + money(days.reduce((s, d) => s + d.spend, 0));
+      $('dChart').innerHTML = days.map((d) => `<button class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
+      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; setMode('day'); });
+    }
+  }
+
   // ---------- boot ----------
   (async () => {
     try {
       me = await api('/me');
+      loadAuto();
       date = me.today || date;
       $('whoName').textContent = me.name;
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);
       renderClients(); renderAccounts(); drawNewPages(); loadPages();
       await loadDay();
       const h = location.hash.slice(1);
-      if (['accounts', 'team'].includes(h)) showTab(h);
+      if (['dashboard', 'accounts', 'team'].includes(h)) showTab(h);
       else if (h === 'clients') $('clientsSection').scrollIntoView();
       else window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }

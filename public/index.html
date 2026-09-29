@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=5">
+<link rel="stylesheet" href="/assets/app.css?v=6">
 </head>
 <body>
 <div class="wrap">
@@ -13,6 +13,7 @@
     <h1>Boost Desk</h1>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="checklist" aria-selected="true">Checklist</button>
+      <button role="tab" data-tab="dashboard" aria-selected="false">Dashboard</button>
       <button role="tab" data-tab="accounts" aria-selected="false">Ad accounts</button>
       <button role="tab" data-tab="team" aria-selected="false">Team &amp; Telegram</button>
     </nav>
@@ -34,6 +35,18 @@
         <button id="copyReport">Copy report</button>
         <button id="sendReport">Send to Telegram</button>
       </div>
+    </div>
+    <div class="autobar">
+      <label for="autoSel" class="hint">Auto sync</label>
+      <select id="autoSel" aria-label="Auto sync">
+        <option value="0">Off</option>
+        <option value="15">Every 15 min</option>
+        <option value="30">Every 30 min</option>
+        <option value="60">Every hour</option>
+        <option value="120">Every 2 hours</option>
+        <option value="240">Every 4 hours</option>
+      </select>
+      <span class="hint" id="autoInfo"></span>
     </div>
     <div class="status" id="syncStatus"></div>
     <div class="summary">
@@ -81,6 +94,50 @@
     </div>
   </section>
 
+  <!-- DASHBOARD -->
+  <section id="tab-dashboard" class="wrap" hidden>
+    <div class="top">
+      <div class="daybar">
+        <div class="seg" role="group" aria-label="Period">
+          <button id="dMode-day" data-mode="day" aria-pressed="false">Day</button>
+          <button id="dMode-month" data-mode="month" aria-pressed="true">Month</button>
+        </div>
+        <button id="dPrev" aria-label="Previous">‹</button>
+        <input type="date" id="dDay" aria-label="Day" hidden>
+        <input type="month" id="dMonth" aria-label="Month">
+        <button id="dNext" aria-label="Next">›</button>
+        <button id="dToday">Today</button>
+      </div>
+      <div class="tools">
+        <input type="text" id="dSearch" placeholder="Search client or Page" aria-label="Search clients">
+        <select id="dType" aria-label="Boost type"><option value="">All types</option><option value="live">Live</option><option value="post">Post</option><option value="both">Post + live</option></select>
+        <label class="hint chk"><input type="checkbox" id="dShowIdle"> Show clients with no spend</label>
+      </div>
+    </div>
+    <div class="summary">
+      <div><span class="lbl">Total spent</span><span class="val num" id="dSpend">$0.00</span></div>
+      <div><span class="lbl">Planned budget</span><span class="val num" id="dPlanned">$0.00</span></div>
+      <div><span class="lbl">Live / Post</span><span class="val num" id="dSplit">$0 / $0</span></div>
+      <div><span class="lbl">Active clients</span><span class="val num" id="dActive">0</span></div>
+    </div>
+    <div class="panel" id="dChartPanel">
+      <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a day to open it</span></div>
+      <div class="chart" id="dChart"></div>
+    </div>
+    <div class="panel">
+      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Planned = daily budget × days with spend</span></div>
+      <div class="tablewrap"><table class="dtable">
+        <thead><tr>
+          <th data-sort="name">Client</th><th>Type</th>
+          <th class="r" data-sort="days">Days</th><th class="r" data-sort="lives">Lives</th>
+          <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
+          <th class="r" data-sort="spend">Spent</th><th class="r" data-sort="planned">Planned</th><th class="r" data-sort="diff">Diff</th><th>Of budget</th>
+        </tr></thead>
+        <tbody id="dBody"></tbody><tfoot id="dFoot"></tfoot>
+      </table></div>
+    </div>
+  </section>
+
   <!-- AD ACCOUNTS -->
   <section id="tab-accounts" class="wrap" hidden>
     <div class="top">
@@ -113,6 +170,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=5"></script>
+<script src="/assets/app.js?v=6"></script>
 </body>
 </html>

@@ -147,6 +147,28 @@ api.get('/month/:ym', wrap(async (req, res) => {
   res.json(await db.monthEntries(`${m[1]}-${m[2]}-01`, `${m[1]}-${m[2]}-${last}`));
 }));
 
+// Auto sync setting
+api.get('/auto-sync', wrap(async (req, res) => res.json(await jobs.getAuto())));
+api.put('/auto-sync', wrap(async (req, res) => {
+  const cur = await jobs.getAuto();
+  const b = req.body || {};
+  const next = { ...cur };
+  if (b.enabled != null) next.enabled = !!b.enabled;
+  if (b.everyMinutes != null) next.everyMinutes = [15, 30, 60, 120, 240].includes(Number(b.everyMinutes)) ? Number(b.everyMinutes) : 60;
+  if (b.from != null) next.from = Math.min(23, Math.max(0, parseInt(b.from, 10) || 0));
+  if (b.to != null) next.to = Math.min(23, Math.max(0, parseInt(b.to, 10) || 23));
+  await db.setSetting('autoSync', next);
+  res.json(next);
+}));
+
+// Dashboard: per-client totals for a day or a month (?from=YYYY-MM-DD&to=YYYY-MM-DD, max 93 days)
+api.get('/dashboard', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  if ((Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick at most 3 months.' });
+  res.json(await sync.dashboard(from, to));
+}));
+
 // Ad accounts
 api.get('/accounts', wrap(async (req, res) => res.json(await db.listAccounts())));
 api.post('/accounts/refresh', wrap(async (req, res) => {

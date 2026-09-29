@@ -186,6 +186,38 @@ async function syncRange(since, until, user) {
   };
 }
 
+// Per-client totals over [from, to] for the dashboard.
+async function dashboard(from, to) {
+  const clients = await db.listClients();
+  const rows = await db.monthEntries(from, to); // [{day, client_id, data}]
+  const per = new Map(clients.map((c) => [c.id, {
+    id: c.id, name: c.name, type: c.type, pages: [...new Set([c.name, c.match, ...(c.pages || [])].filter(Boolean))],
+    budget: c.budget, archived: c.archived, days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {},
+  }]));
+  const byDay = {};
+  for (const r of rows) {
+    const c = clients.find((x) => x.id === r.client_id);
+    const p = per.get(r.client_id);
+    if (!c || !p) continue;
+    const e = r.data || {};
+    const post = hasPost(c) ? Number((e.post || {}).spend) || 0 : 0;
+    let live = 0, lives = 0;
+    if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; live += v; if (v > 0) lives++; }
+    const total = round2(post + live);
+    if (!total) continue;
+    p.days++; p.lives += lives; p.liveSpend = round2(p.liveSpend + live); p.postSpend = round2(p.postSpend + post);
+    p.spend = round2(p.spend + total); p.daily[r.day] = total;
+    if (c.budget && total > c.budget + 0.009) p.overDays++;
+    byDay[r.day] = round2((byDay[r.day] || 0) + total);
+  }
+  const list = [...per.values()].map((p) => ({ ...p, planned: round2(p.days * p.budget), diff: round2(p.spend - p.days * p.budget) }));
+  list.sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
+  const days = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) days.push({ day: d, spend: byDay[d] || 0 });
+  const totals = list.reduce((t, p) => ({ spend: round2(t.spend + p.spend), planned: round2(t.planned + p.planned), live: round2(t.live + p.liveSpend), post: round2(t.post + p.postSpend), lives: t.lives + p.lives, active: t.active + (p.spend > 0 ? 1 : 0) }), { spend: 0, planned: 0, live: 0, post: 0, lives: 0, active: 0 });
+  return { from, to, clients: list, days, totals };
+}
+
 async function buildReport(day) {
   const clients = (await db.listClients()).filter((c) => !c.archived);
   const { entries, meta: m } = await db.getDay(day);
@@ -212,4 +244,4 @@ async function buildReport(day) {
   return lines.join('\n');
 }
 
-module.exports = { buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

@@ -46,6 +46,10 @@ async function init() {
       name TEXT PRIMARY KEY,                      -- Facebook Page names seen in synced campaigns
       last_seen DATE NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS day_meta (
       day DATE PRIMARY KEY,
       synced_at TIMESTAMPTZ,
@@ -103,6 +107,14 @@ async function notePages(names, day) {
 }
 const listPagesSeen = async () => (await q('SELECT name, to_char(last_seen,\'YYYY-MM-DD\') AS last_seen FROM pages_seen ORDER BY last_seen DESC, name')).rows;
 
+// ---- settings ----
+async function getSetting(key, fallback) {
+  const r = (await q('SELECT value FROM settings WHERE key=$1', [key])).rows[0];
+  return r ? r.value : fallback;
+}
+const setSetting = (key, value) =>
+  q(`INSERT INTO settings (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2`, [key, JSON.stringify(value)]);
+
 // ---- days ----
 async function getDay(day) {
   const rows = (await q('SELECT client_id, data FROM day_entries WHERE day=$1', [day])).rows;
@@ -127,7 +139,7 @@ module.exports = {
   pool, init,
   upsertUser, getUser, latestUser, listUsers,
   listClients, createClient, updateClient, deleteClient,
-  notePages, listPagesSeen,
+  notePages, listPagesSeen, getSetting, setSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
   getDay, getEntry, putEntry, putDayMeta, monthEntries,
 };

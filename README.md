@@ -10,7 +10,8 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 - **Boost posts** — Meta names these automatically (`Post: "…"`), so the app looks up which Facebook Page each boosted post belongs to and gives the spend to the client with that Page name. This works even when one ad account boosts posts for many Pages. For *Post + live* clients, boosted posts go in the post row and named campaigns go in the live rows.
 - **Telegram** — the day's report is sent to your group automatically every night (default 21:00), after a fresh sync.
 - **Past days** — on first login the app fills in the whole current month. **Sync whole month** re-reads every day of the month you're viewing (use it after adding a new client). Each morning, auto-sync also re-checks yesterday, since Meta keeps finalizing late-night spend.
-- **Auto-sync** — refreshes today's spend every hour between 08:00 and 23:00.
+- **Auto sync** — switch it on the Checklist page: Off, every 15 min, 30 min, 1 h, 2 h or 4 h (between 08:00 and 23:59). An open Checklist refreshes itself every 2 minutes to show the new numbers.
+- **Dashboard** — every client's spend for a **day** or a **month**: live vs post spend, number of lives, planned budget, over/under, and a spend-per-day chart. Search by client or Page, filter by type, sort any column, tap a day or client to drill in.
 
 The app only asks for `ads_read` (read-only) and `business_management`. It never changes your ads.
 

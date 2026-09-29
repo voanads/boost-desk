@@ -1,4 +1,4 @@
-// Scheduled jobs: hourly auto-sync and the nightly Telegram report.
+// Scheduled jobs: auto-sync (interval set in the app) and the nightly Telegram report.
 const cron = require('node-cron');
 const cfg = require('./config');
 const db = require('./db');
@@ -7,7 +7,16 @@ const telegram = require('./telegram');
 
 const log = (...a) => console.log(new Date().toISOString(), '[jobs]', ...a);
 
+const AUTO_DEFAULT = { enabled: true, everyMinutes: 60, from: 8, to: 23 }; // hours in local time
+const getAuto = async () => ({ ...AUTO_DEFAULT, ...(await db.getSetting('autoSync', {})) });
+
+let running = false;
 async function autoSync() {
+  if (running) return log('auto-sync skipped: previous run still going');
+  running = true;
+  try { await autoSyncInner(); } finally { running = false; }
+}
+async function autoSyncInner() {
   const user = await db.latestUser();
   if (!user) return log('auto-sync skipped: nobody logged in yet');
   const today = sync.todayIn();
@@ -20,6 +29,19 @@ async function autoSync() {
       log(`auto-sync ${day}: ${r.campaigns} campaigns, ${r.matched} clients, ${r.unmatched.length} unmatched, ${r.errors.length} errors`);
     } catch (e) { log(`auto-sync ${day} failed:`, e.message); }
   }
+  const a = await getAuto();
+  await db.setSetting('autoSync', { ...a, lastRun: new Date().toISOString() });
+}
+
+// Every 5 minutes: run a sync when auto-sync is on, we're inside its hours, and the interval has passed.
+async function autoSyncTick() {
+  const a = await getAuto();
+  if (!a.enabled) return;
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: cfg.tz, hour: '2-digit', hour12: false }).format(new Date())) % 24;
+  if (hour < a.from || hour > a.to) return;
+  const last = a.lastRun ? Date.parse(a.lastRun) : 0;
+  if (Date.now() - last < a.everyMinutes * 60000 - 60000) return; // 1-minute slack
+  await autoSync();
 }
 
 async function sendDailyReport(day = sync.todayIn()) {
@@ -37,10 +59,8 @@ async function sendDailyReport(day = sync.todayIn()) {
 }
 
 function start() {
-  if (cron.validate(cfg.autoSyncCron)) {
-    cron.schedule(cfg.autoSyncCron, autoSync, { timezone: cfg.tz });
-    log(`auto-sync scheduled: "${cfg.autoSyncCron}" (${cfg.tz})`);
-  } else log(`AUTO_SYNC_CRON "${cfg.autoSyncCron}" is not valid; auto-sync off`);
+  cron.schedule('*/5 * * * *', () => autoSyncTick().catch((e) => log('auto-sync tick failed:', e.message)), { timezone: cfg.tz });
+  log('auto-sync checker running every 5 minutes (turn on/off in the app)');
 
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
   if (telegram.configured() && m) {
@@ -49,4 +69,4 @@ function start() {
   } else log('Telegram report off (set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME=HH:MM)');
 }
 
-module.exports = { start, autoSync, sendDailyReport };
+module.exports = { start, autoSync, sendDailyReport, getAuto, AUTO_DEFAULT };

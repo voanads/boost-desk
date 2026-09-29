@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=24">
+<link rel="stylesheet" href="/assets/app.css?v=25">
 </head>
 <body>
 <div class="wrap">
@@ -66,65 +66,46 @@
 
   <!-- DASHBOARD -->
   <section id="tab-dashboard" class="wrap" hidden>
-    <div class="top">
-      <div class="daybar">
-        <select id="dPreset" aria-label="Quick period">
-          <option value="today">Today</option>
-          <option value="yesterday">Yesterday</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="thisMonth" selected>This month</option>
-          <option value="lastMonth">Last month</option>
-          <option value="custom">Custom range…</option>
-        </select>
-        <div class="seg" role="group" aria-label="Period">
-          <button id="dMode-day" data-mode="day" aria-pressed="false">Day</button>
-          <button id="dMode-month" data-mode="month" aria-pressed="true">Month</button>
-          <button id="dMode-range" data-mode="range" aria-pressed="false">Range</button>
-        </div>
-        <button id="dPrev" aria-label="Previous">‹</button>
-        <input type="date" id="dDay" aria-label="Day" hidden>
-        <input type="month" id="dMonth" aria-label="Month">
-        <span class="rangeins" id="dRangeBox" hidden><input type="date" id="dFrom" aria-label="From"> – <input type="date" id="dTo" aria-label="To"></span>
-        <button id="dNext" aria-label="Next">›</button>
+    <div class="dhead">
+      <div class="chips" id="dChips" role="group" aria-label="Period">
+        <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">Last 7 days</button><button data-preset="30">Last 30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="custom">Custom…</button>
       </div>
-      <div class="tools">
-        <input type="text" id="dSearch" placeholder="Search client or Page" aria-label="Search clients">
-        <select id="dType" aria-label="Boost type"><option value="">All types</option><option value="live">Live</option><option value="post">Post</option><option value="both">Post + live</option></select>
-        <label class="hint chk"><input type="checkbox" id="dShowIdle"> Show clients with no spend</label>
-        <button id="dTeamReport">Team summary</button>
-      </div>
-    </div>
-    <div class="panel report-panel" id="rPanel" hidden>
-      <div class="top">
-        <div><h2 id="rTitle">Report</h2><div class="hint" id="rTo"></div></div>
-        <button class="ghost" id="rClose" aria-label="Close report">Close</button>
-      </div>
-      <textarea id="rText" rows="12" aria-label="Report text (you can edit before sending)"></textarea>
-      <div class="tools">
-        <button id="rCopy">Copy</button>
-        <button id="rSend" class="primary">Send to Telegram</button>
-        <span class="hint" id="rHint">You can edit the text before sending.</span>
+      <div class="pnav">
+        <button id="dPrev" class="navbtn" aria-label="Previous period">‹</button>
+        <button id="dPick" class="plabel" aria-label="Pick a date"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="dLabel">…</span></button>
+        <input type="date" id="dDay" class="vh" tabindex="-1" aria-hidden="true"><input type="month" id="dMonth" class="vh" tabindex="-1" aria-hidden="true">
+        <span class="rangeins" id="dRangeBox" hidden><label>From <input type="date" id="dFrom"></label><label>To <input type="date" id="dTo"></label></span>
+        <button id="dNext" class="navbtn" aria-label="Next period">›</button>
+        <span class="spacer"></span>
+        <button id="dTeamReport" class="teambtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Team report</span></button>
       </div>
     </div>
     <div class="summary">
-      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span></div>
-      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Lives with spend</span><span class="val num" id="dLives">0</span></div>
-      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/></svg>Live / Post</span><span class="val num" id="dSplit">$0 / $0</span></div>
-      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Active clients</span><span class="val num" id="dActive">0</span></div>
+      <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span><span class="sub num" id="dTax"></span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Live spend</span><span class="val num" id="dLive">$0.00</span><span class="sub" id="dLives"></span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 3h6l-1 7 4 3H6l4-3Z"/></svg>Boost post spend</span><span class="val num" id="dPost">$0.00</span><span class="sub" id="dPosts"></span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="dActive">0</span><span class="sub" id="dActiveSub"></span></div>
     </div>
     <div class="panel" id="dChartPanel">
-      <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a day to open it</span></div>
+      <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint">Tap a bar to see that day</span></div>
       <div class="chart" id="dChart"></div>
     </div>
     <div class="panel">
-      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Tap a client to show only them</span></div>
-      <div class="tablewrap"><table class="dtable">
+      <div class="thead">
+        <h2 id="dTableTitle">Clients</h2>
+        <div class="filters">
+          <input type="search" id="dSearch" placeholder="Search client or Page" aria-label="Search clients">
+          <div class="seg" role="group" aria-label="Boost type" id="dTypeSeg"><button data-type="" aria-pressed="true">All</button><button data-type="live" aria-pressed="false">Live</button><button data-type="post" aria-pressed="false">Post</button></div>
+          <label class="hint chk"><input type="checkbox" id="dShowIdle"> Show clients with no spend</label>
+        </div>
+      </div>
+      <div class="tablewrap"><table class="dtable" id="dTable">
         <thead><tr>
-          <th data-sort="name">Client</th><th>Type</th>
-          <th class="r" data-sort="days">Days</th><th class="r" data-sort="lives">Lives</th>
+          <th data-sort="name">Client</th>
+          <th class="r" data-sort="lives">Lives</th>
           <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
-          <th class="r" data-sort="spend">Spent</th><th class="r">Per day</th><th>Share</th><th></th>
+          <th class="r multi" data-sort="days">Days</th><th class="r multi" data-sort="perDay">Per day</th>
+          <th class="r" data-sort="spend">Total</th><th>Share</th><th></th>
         </tr></thead>
         <tbody id="dBody"></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
@@ -204,6 +185,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=24"></script>
+<script src="/assets/app.js?v=25"></script>
 </body>
 </html>

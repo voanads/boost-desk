@@ -460,136 +460,170 @@
   }, 120000);
 
   // ---------- dashboard ----------
-  let dMode = 'month', dDate = null, dFrom = null, dTo = null, dData = null, dSort = { key: 'spend', asc: false };
+  // One control for the period: quick chips + ‹ label › to step. Mode follows the chip.
+  let dMode = 'month', dDate = null, dFrom = null, dTo = null, dData = null, dSort = { key: 'spend', asc: false }, dTypeF = '';
   const addD = (d, n) => { const x = parse(d); x.setDate(x.getDate() + n); return iso(x); };
   const monthLabel = (ym) => parse(ym + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const lastDay = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
-  const typeLabel = { live: 'Live', post: 'Post', both: 'Post + live' };
+  const shortD = (d) => parse(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const taxRate = () => (me && Number.isFinite(me.taxRate) ? me.taxRate : 10);
+  const withTax = (v) => Math.round(Math.round(v * 100) * (100 + taxRate()) / 100) / 100;
   function dRange() {
     if (dMode === 'day') return [dDate, dDate];
     if (dMode === 'range') return [dFrom, dTo];
     const ym = dDate.slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))];
   }
-  function setMode(m) {
-    dMode = m;
-    $('dMode-day').setAttribute('aria-pressed', String(m === 'day'));
-    $('dMode-month').setAttribute('aria-pressed', String(m === 'month'));
-    $('dMode-range').setAttribute('aria-pressed', String(m === 'range'));
-    $('dDay').hidden = m !== 'day'; $('dMonth').hidden = m !== 'month'; $('dRangeBox').hidden = m !== 'range';
-    if (m === 'range' && !dFrom) { dTo = dDate || me.today; dFrom = addD(dTo, -6); }
+  const periodLabel = () => dMode === 'day' ? nice(dDate) : dMode === 'month' ? monthLabel(dDate.slice(0, 7)) : `${shortD(dFrom)} – ${shortD(dTo)} ${dTo.slice(0, 4)}`;
+  let forceCustom = false;
+  function currentPreset() {
+    const t = me.today;
+    if (dMode === 'range' && forceCustom) return 'custom';
+    if (dMode === 'day') return dDate === t ? 'today' : dDate === addD(t, -1) ? 'yesterday' : '';
+    if (dMode === 'month') { const lm = parse(t.slice(0, 8) + '01'); lm.setMonth(lm.getMonth() - 1); return dDate.slice(0, 7) === t.slice(0, 7) ? 'thisMonth' : dDate.slice(0, 7) === iso(lm).slice(0, 7) ? 'lastMonth' : ''; }
+    if (dTo === t && dFrom === addD(t, -6)) return '7';
+    if (dTo === t && dFrom === addD(t, -29)) return '30';
+    return 'custom';
+  }
+  function applyPreset(v) {
+    const t = me.today; forceCustom = false;
+    if (v === 'today') { dMode = 'day'; dDate = t; }
+    else if (v === 'yesterday') { dMode = 'day'; dDate = addD(t, -1); }
+    else if (v === '7' || v === '30') { dMode = 'range'; dTo = t; dFrom = addD(t, -(Number(v) - 1)); }
+    else if (v === 'thisMonth') { dMode = 'month'; dDate = t; }
+    else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dMode = 'month'; dDate = iso(d); }
+    else if (v === 'custom') { if (dMode !== 'range') { dTo = dMode === 'day' ? dDate : t; dFrom = addD(dTo, -13); } dMode = 'range'; forceCustom = true; setTimeout(() => $('dFrom').focus(), 50); }
     loadDash();
   }
-  // Quick periods
-  function applyPreset(v) {
-    const t = me.today;
-    if (v === 'today') { dDate = t; setMode('day'); }
-    else if (v === 'yesterday') { dDate = addD(t, -1); setMode('day'); }
-    else if (v === '7' || v === '30') { dTo = t; dFrom = addD(t, -(Number(v) - 1)); setMode('range'); }
-    else if (v === 'thisMonth') { dDate = t; setMode('month'); }
-    else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dDate = iso(d); setMode('month'); }
-    else if (v === 'custom') { if (!dFrom) { dTo = t; dFrom = addD(t, -13); } setMode('range'); $('dFrom').focus(); }
-  }
-  $('dPreset').onchange = () => applyPreset($('dPreset').value);
-  $('dMode-range').onclick = () => { $('dPreset').value = 'custom'; setMode('range'); };
-  $('dFrom').onchange = () => { if ($('dFrom').value) { dFrom = $('dFrom').value; if (dTo < dFrom) dTo = dFrom; $('dPreset').value = 'custom'; loadDash(); } };
-  $('dTo').onchange = () => { if ($('dTo').value) { dTo = $('dTo').value; if (dFrom > dTo) dFrom = dTo; $('dPreset').value = 'custom'; loadDash(); } };
-  $('dMode-day').onclick = () => setMode('day');
-  $('dMode-month').onclick = () => setMode('month');
+  document.querySelectorAll('#dChips button').forEach((b) => b.onclick = () => applyPreset(b.dataset.preset));
   const dShift = (n) => {
-    const d = parse(dDate);
-    if (dMode === 'range') { // move the whole range by its own length
-      const len = Math.round((parse(dTo) - parse(dFrom)) / 864e5) + 1;
-      dFrom = addD(dFrom, n * len); dTo = addD(dTo, n * len); $('dPreset').value = 'custom'; loadDash(); return;
-    }
-    if (dMode === 'day') d.setDate(d.getDate() + n); else { d.setDate(1); d.setMonth(d.getMonth() + n); }
-    dDate = iso(d); $('dPreset').value = dMode === 'day' ? (dDate === me.today ? 'today' : dDate === addD(me.today, -1) ? 'yesterday' : 'custom') : (dDate.slice(0, 7) === me.today.slice(0, 7) ? 'thisMonth' : 'custom');
+    if (dMode === 'range') { const len = Math.round((parse(dTo) - parse(dFrom)) / 864e5) + 1; dFrom = addD(dFrom, n * len); dTo = addD(dTo, n * len); }
+    else if (dMode === 'day') dDate = addD(dDate, n);
+    else { const d = parse(dDate); d.setDate(1); d.setMonth(d.getMonth() + n); dDate = iso(d); }
     loadDash();
   };
   $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
+  $('dPick').onclick = () => {
+    if (dMode === 'range') { applyPreset('custom'); return; }
+    const el = dMode === 'month' ? $('dMonth') : $('dDay');
+    try { el.showPicker(); } catch (_) { el.focus(); el.click(); }
+  };
   $('dDay').onchange = () => { if ($('dDay').value) { dDate = $('dDay').value; loadDash(); } };
   $('dMonth').onchange = () => { if ($('dMonth').value) { dDate = $('dMonth').value + '-01'; loadDash(); } };
-  $('dSearch').oninput = () => renderDash(); $('dType').onchange = () => renderDash(); $('dShowIdle').onchange = () => renderDash();
+  $('dFrom').onchange = () => { if ($('dFrom').value) { dFrom = $('dFrom').value; if (dTo < dFrom) dTo = dFrom; loadDash(); } };
+  $('dTo').onchange = () => { if ($('dTo').value) { dTo = $('dTo').value; if (dFrom > dTo) dFrom = dTo; loadDash(); } };
+  $('dSearch').oninput = () => renderDash(); $('dShowIdle').onchange = () => renderDash();
+  document.querySelectorAll('#dTypeSeg button').forEach((b) => b.onclick = () => {
+    dTypeF = b.dataset.type; document.querySelectorAll('#dTypeSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); renderDash();
+  });
   document.querySelectorAll('.dtable th[data-sort]').forEach((th) => th.onclick = () => {
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' }; renderDash();
   });
 
   async function loadDash() {
-    if (!$('rPanel').hidden && rTarget) openReport(rTarget.kind === 'client' ? rTarget.id : null);
     if (!dDate) dDate = me.today;
+    const pre = currentPreset();
+    document.querySelectorAll('#dChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
+    $('dLabel').textContent = periodLabel();
     $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
-    if (dFrom) { $('dFrom').value = dFrom; $('dTo').value = dTo; }
+    const custom = dMode === 'range' && pre === 'custom';
+    $('dRangeBox').hidden = !custom; $('dPick').hidden = custom;
+    if (dMode === 'range') { $('dFrom').value = dFrom; $('dTo').value = dTo; }
+    $('dNext').disabled = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'range' && dTo >= me.today);
+    $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
     $('dTableTitle').textContent = 'Clients · ' + periodLabel();
     try { dData = await api(`/dashboard?from=${from}&to=${to}`); renderDash(); }
-    catch (e) { $('dBody').innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
   }
+
+  // Page names under the client (hide raw Page ID numbers and the client's own name).
+  const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
+  const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 
   function renderDash() {
     if (!dData) return;
-    const q = $('dSearch').value.trim().toLowerCase(), type = $('dType').value, idle = $('dShowIdle').checked;
-    let list = dData.clients.filter((c) => !c.archived || c.spend > 0)
+    const q = $('dSearch').value.trim().toLowerCase(), idle = $('dShowIdle').checked;
+    let list = dData.clients.map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0 }))
+      .filter((c) => !c.archived || c.spend > 0)
       .filter((c) => idle || c.spend > 0)
-      .filter((c) => !type || c.type === type)
+      .filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c)))
       .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
     const k = dSort.key, dir = dSort.asc ? 1 : -1;
     list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
-    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0 });
-    countTo($('dSpend'), t.spend, money); countTo($('dLives'), t.lives, intF);
-    $('dSplit').textContent = `$${Math.round(t.live).toLocaleString('en-US')} / $${Math.round(t.post).toLocaleString('en-US')}`;
-    countTo($('dActive'), t.active, intF);
+    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0), posters: a.posters + (c.postSpend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0, posters: 0 });
+    countTo($('dSpend'), t.spend, money);
+    $('dTax').textContent = t.spend && taxRate() ? `With tax ${taxRate()}%: ${money(withTax(t.spend))}` : '';
+    countTo($('dLive'), t.live, money); $('dLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
+    countTo($('dPost'), t.post, money); $('dPosts').textContent = `${t.posters} client${t.posters === 1 ? '' : 's'} boosted posts`;
+    countTo($('dActive'), t.active, intF); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
+    const dash = '<span class="muted">–</span>';
     $('dBody').innerHTML = list.map((c) => {
-      const share = t.spend ? c.spend / t.spend * 100 : 0;
-      const extra = c.pages.filter((p) => p !== c.name);
-      return `<tr class="clickable" data-cid="${c.id}"><td>${esc(c.name)}${extra.length ? `<div class="pg">${esc(extra.join(' · '))}</div>` : ''}</td>
-        <td><span class="chip ${c.type === 'post' ? 'post' : 'live'}">${typeLabel[c.type] || c.type}</span></td>
-        <td class="r num">${c.days}</td><td class="r num">${c.type === 'post' ? '–' : c.lives}</td>
-        <td class="r num">${c.type === 'post' ? '–' : money(c.liveSpend)}</td><td class="r num">${c.type === 'live' ? '–' : money(c.postSpend)}</td>
-        <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${c.days ? money(c.spend / c.days) : '–'}</td>
-        <td><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td>
-        <td><button class="rbtn" data-report="${c.id}">Report${c.telegram ? ' ✈' : ''}</button></td></tr>`;
-    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td></td><td></td><td></td></tr>` : '';
-    document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); openReport(Number(b.dataset.report)); });
-    document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
-      if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
-      else { const n = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; $('dSearch').value = $('dSearch').value === n ? '' : n; renderDash(); }
+      const share = t.spend ? c.spend / t.spend * 100 : 0, pg = pageNames(c);
+      const tags = (hasL(c) ? '<span class="chip live">Live</span>' : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
+      return `<tr data-cid="${c.id}">
+        <td class="cname"><div class="nm"><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
+        <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
+        <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>
+        <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
+        <td class="r num multi" data-l="Days">${c.days || dash}</td>
+        <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
+        <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
+        <td class="sharec" data-l="Share"><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td>
+        <td class="actc"><button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client’s Telegram group' : 'No Telegram group yet — you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button></td></tr>`;
+    }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td><td></td></tr>` : '';
+    document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
+      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel() });
     });
 
-    // Daily chart (month mode only), filtered to the visible clients.
+    // Daily chart for months and ranges, filtered to the visible clients.
     $('dChartPanel').hidden = dMode === 'day';
     if (dMode !== 'day') {
       const ids = new Set(list.map((c) => c.id));
       const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
       const max = Math.max(1, ...days.map((d) => d.spend));
-      $('dChartTitle').textContent = 'Spend per day · ' + money(days.reduce((s, d) => s + d.spend, 0));
+      $('dChartTitle').textContent = 'Spend per day';
       $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
-      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; $('dPreset').value = dDate === me.today ? 'today' : 'custom'; setMode('day'); });
+      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dMode = 'day'; dDate = b.dataset.day; loadDash(); });
     }
   }
 
-  // ---------- checklist: one client's report for the day ----------
+  // ---------- report dialog (Home + Dashboard + team summary) ----------
   let ckTarget = null;
-  async function openDayReport(cid) {
-    const dlg = $('ckDlg'), d = date; ckTarget = { cid, day: d };
+  async function openReportDlg(o) {
+    const dlg = $('ckDlg'); ckTarget = o;
     $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
-    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
+    const bot = me.telegram && me.telegram.bot;
     try {
-      const r = await api(`/client-report/${cid}?from=${d}&to=${d}`);
-      if (!ckTarget || ckTarget.cid !== cid) return;
-      $('ckTitle').textContent = `${r.client.name} · ${nice(d)}`;
-      $('ckText').value = r.text;
-      const bot = me.telegram && me.telegram.bot;
-      $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
-        : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
-        : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;
-      $('ckSend').disabled = !r.client.telegram || !bot;
+      if (o.kind === 'client') {
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}`);
+        if (ckTarget !== o) return;
+        $('ckTitle').textContent = `${r.client.name} · ${o.label}`;
+        $('ckText').value = r.text;
+        $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
+          : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
+          : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;
+        $('ckSend').textContent = 'Send to Telegram';
+        $('ckSend').disabled = !r.client.telegram || !bot;
+      } else {
+        const r = await api(`/summary?from=${o.from}&to=${o.to}`);
+        if (ckTarget !== o) return;
+        $('ckTitle').textContent = `Team summary · ${o.label}`;
+        $('ckText').value = r.text;
+        $('ckTo').textContent = me.telegram.configured ? 'Sends to your team Telegram group.' : 'Team Telegram group not set (TELEGRAM_CHAT_ID), so you can only copy the text.';
+        $('ckSend').textContent = 'Send to team group';
+        $('ckSend').disabled = !me.telegram.configured;
+      }
       $('ckText').focus();
     } catch (e) { $('ckText').value = e.message; }
   }
+  const openDayReport = (cid) => openReportDlg({ kind: 'client', cid, from: date, to: date, label: nice(date) });
+  $('dTeamReport').onclick = () => { const [from, to] = dRange(); openReportDlg({ kind: 'team', from, to, label: periodLabel() }); };
   $('ckDlg').addEventListener('close', () => { ckTarget = null; });
   $('ckDlg').addEventListener('click', (ev) => { if (ev.target === $('ckDlg')) $('ckDlg').close(); });
   $('ckCopy').onclick = async () => {
@@ -597,57 +631,16 @@
     catch (_) { $('ckText').select(); try { document.execCommand('copy'); toast('Report copied'); } catch (__) { toast('Select the text and copy it'); } }
   };
   $('ckSend').onclick = async () => {
-    if (!ckTarget) return;
-    const { cid, day: d } = ckTarget, b = $('ckSend'); b.disabled = true; b.classList.add('busy');
+    const o = ckTarget; if (!o) return;
+    const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
-      const r = await api(`/client-report/${cid}/send`, { method: 'POST', body: { from: d, to: d, text: $('ckText').value } });
-      if (d === date) { day.entries[cid] = merge(day.entries[cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
-      $('ckDlg').close(); toast('Sent to ' + r.sentTo);
+      if (o.kind === 'client') {
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } });
+        if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
+        toast('Sent to ' + r.sentTo);
+      } else { await api('/summary/send', { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } }); toast('Sent to the team group'); }
+      $('ckDlg').close();
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
-  };
-
-  // ---------- reports (per client + team summary) ----------
-  let rTarget = null; // { kind: 'client', id } or { kind: 'team' }
-  const shortD = (d) => parse(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const periodLabel = () => dMode === 'day' ? nice(dDate) : dMode === 'month' ? monthLabel(dDate.slice(0, 7)) : `${shortD(dFrom)} – ${shortD(dTo)} ${dTo.slice(0, 4)}`;
-  async function openReport(clientId) {
-    const [from, to] = dRange();
-    rTarget = clientId ? { kind: 'client', id: clientId } : { kind: 'team' };
-    $('rPanel').hidden = false; $('rText').value = 'Loading…'; $('rSend').disabled = true;
-    $('rPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    try {
-      if (clientId) {
-        const r = await api(`/client-report/${clientId}?from=${from}&to=${to}`);
-        $('rTitle').textContent = `${r.client.name} · ${periodLabel()}`;
-        $('rText').value = r.text;
-        rTarget.hasGroup = !!r.client.telegram;
-        $('rTo').textContent = r.client.telegram ? `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}` : 'No Telegram group for this client yet. Copy the text, or pick a group in the Clients tab.';
-        $('rSend').textContent = 'Send to client group';
-        $('rSend').disabled = !r.client.telegram || !(me.telegram && me.telegram.bot);
-      } else {
-        const r = await api(`/summary?from=${from}&to=${to}`);
-        $('rTitle').textContent = `Team summary · ${periodLabel()}`;
-        $('rText').value = r.text;
-        $('rTo').textContent = me.telegram.configured ? 'Sends to your team Telegram group.' : 'Team Telegram group not set (TELEGRAM_CHAT_ID). You can still copy the text.';
-        $('rSend').textContent = 'Send to team group';
-        $('rSend').disabled = !me.telegram.configured;
-      }
-    } catch (e) { $('rText').value = e.message; }
-  }
-  $('dTeamReport').onclick = () => openReport(null);
-  $('rClose').onclick = () => { $('rPanel').hidden = true; rTarget = null; };
-  $('rCopy').onclick = async () => {
-    const t = $('rText').value;
-    try { await navigator.clipboard.writeText(t); toast('Report copied'); }
-    catch (_) { $('rText').select(); try { document.execCommand('copy'); toast('Report copied'); } catch (__) { toast('Select the text and copy it'); } }
-  };
-  $('rSend').onclick = async () => {
-    if (!rTarget) return;
-    const [from, to] = dRange(), b = $('rSend'); b.disabled = true;
-    try {
-      if (rTarget.kind === 'client') { const r = await api(`/client-report/${rTarget.id}/send`, { method: 'POST', body: { from, to, text: $('rText').value } }); toast('Sent to ' + r.sentTo); }
-      else { await api('/summary/send', { method: 'POST', body: { from, to, text: $('rText').value } }); toast('Sent to the team group'); }
-    } catch (e) { toast(e.message); } finally { b.disabled = false; }
   };
 
   // ---------- Telegram groups for clients ----------

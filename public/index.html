@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=21">
+<link rel="stylesheet" href="/assets/app.css?v=22">
 </head>
 <body>
 <div class="wrap">
@@ -40,14 +40,14 @@
       <div class="ptext"><span id="syncProgText">Starting…</span><span class="num hint" id="syncProgTime"></span></div>
       <div class="pbar"><i id="syncProgBar"></i></div>
     </div>
-    <div class="status" id="syncStatus"></div>
-    <div class="status" id="syncCheck"></div>
+    <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
     <div class="summary">
-      <div class="hero"><span class="lbl">Spent</span><span class="val num" id="sSpend">$0.00</span></div>
-      <div><span class="lbl">Lives with spend</span><span class="val num" id="sLives">0</span></div>
-      <div><span class="lbl">Boosts done</span><span class="val num" id="sDone">0 / 0</span></div>
-      <div><span class="lbl">Clients with spend</span><span class="val num" id="sActive">0</span></div>
+      <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Spent</span><span class="val num" id="sSpend">$0.00</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Lives with spend</span><span class="val num" id="sLives">0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Boosts done</span><span class="val num" id="sDone">0 / 0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="sActive">0</span></div>
     </div>
+    <div class="sechead"><h2 id="listTitle">Clients</h2><span class="hint" id="listHint"></span></div>
     <div class="list" id="list"><div class="empty">Loading…</div></div>
     <div class="panel" id="unmatchedPanel" hidden>
       <h2>Spend not matched to a client</h2>
@@ -108,10 +108,10 @@
       </div>
     </div>
     <div class="summary">
-      <div><span class="lbl">Total spent</span><span class="val num" id="dSpend">$0.00</span></div>
-      <div><span class="lbl">Lives with spend</span><span class="val num" id="dLives">0</span></div>
-      <div><span class="lbl">Live / Post</span><span class="val num" id="dSplit">$0 / $0</span></div>
-      <div><span class="lbl">Active clients</span><span class="val num" id="dActive">0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Lives with spend</span><span class="val num" id="dLives">0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/></svg>Live / Post</span><span class="val num" id="dSplit">$0 / $0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Active clients</span><span class="val num" id="dActive">0</span></div>
     </div>
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a day to open it</span></div>
@@ -197,6 +197,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=21"></script>
+<script src="/assets/app.js?v=22"></script>
 </body>
 </html>

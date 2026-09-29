@@ -11,7 +11,17 @@
 
   let me = null, clients = [], accounts = [], date = iso(new Date()), day = { entries: {}, meta: null }, structSig = '';
 
-  function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 2200); }
+  function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, 2400); }
+  // Count numbers up/down smoothly when they change.
+  const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function countTo(el, to, fmt) {
+    const from = el._v ?? 0; el._v = to; cancelAnimationFrame(el._raf);
+    if (calm || from === to) { el.textContent = fmt(to); return; }
+    const t0 = performance.now(), dur = 650;
+    const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(from + (to - from) * e); if (k < 1) el._raf = requestAnimationFrame(step); };
+    el._raf = requestAnimationFrame(step);
+  }
+  const intF = (v) => String(Math.round(v));
   function status(el, text, isErr) { el.textContent = text; el.classList.toggle('err', !!isErr); }
 
   async function api(path, opts = {}) {
@@ -99,9 +109,9 @@
   function buildCards(list) {
     const box = $('list'); box.innerHTML = '';
     if (!list.length) { box.innerHTML = '<div class="empty"><b>Your workspace is empty.</b><br>1. Tap <b>Sync from Meta</b> to load your ad accounts and the last 30 days of spend.<br>2. Then add your clients in the <a href="#clients" id="toClients">Clients</a> tab (or tap <b>New client</b> on each Page listed under “Spend not matched”).</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
-    for (const c of list) {
-      const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id;
-      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
+    for (const [i, c] of list.entries()) {
+      const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id; card.style.setProperty('--i', Math.min(i, 12));
+      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="cprog hint" data-f="prog"></span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
       const rows = card.querySelector('.rows');
       if (hasPost(c)) rows.appendChild(makeRow(c, 'post', 'Boost post', false));
       if (hasLive(c)) for (let i = 1; i <= liveCount(c); i++) rows.appendChild(makeRow(c, 'l' + i, 'Live ' + i, true));
@@ -142,6 +152,7 @@
       if (hasLive(c)) lives += Object.values(e.lives || {}).filter((l) => l && Number(l.spend) > 0).length;
       const card = document.querySelector(`.card[data-cid="${c.id}"]`); if (!card) continue;
       card.classList.toggle('is-done', s.total > 0 && s.done === s.total);
+      card.querySelector('[data-f=prog]').textContent = s.total ? (s.done === s.total ? '✓ Done' : `${s.done}/${s.total} done`) : '';
       card.querySelector('[data-f=spent]').textContent = money(s.spend);
       card.querySelector('[data-f=synced]').hidden = !e.syncedAt;
       card.querySelectorAll('.row').forEach((row) => {
@@ -154,8 +165,10 @@
       });
       const note = card.querySelector('[data-f=note]'); if (document.activeElement !== note) note.value = e.note || '';
     }
-    $('sSpend').textContent = money(spend); $('sLives').textContent = lives;
-    $('sDone').textContent = done + ' / ' + total; $('sActive').textContent = withSpend + ' / ' + active().length;
+    countTo($('sSpend'), spend, money); countTo($('sLives'), lives, intF);
+    countTo($('sDone'), done, (v) => Math.round(v) + ' / ' + total); countTo($('sActive'), withSpend, (v) => Math.round(v) + ' / ' + active().length);
+    $('listTitle').textContent = nice(date).replace(/ \d{4}$/, '');
+    $('listHint').textContent = total ? (done === total ? '✓ All ' + total + ' boosts done' : `${done} of ${total} boosts done · ${total - done} to go`) : '';
   }
 
   async function loadMonth() {
@@ -209,7 +222,7 @@
   function stopProgress() { clearInterval(progTimer); progTimer = null; $('syncProg').hidden = true; }
 
   $('syncBtn').onclick = async () => {
-    const b = $('syncBtn'); b.disabled = true; b.textContent = 'Syncing 30 days…';
+    const b = $('syncBtn'); b.disabled = true; b.classList.add('busy'); b.textContent = 'Syncing 30 days…';
     status($('syncStatus'), '');
     showProgress({ phase: 'starting', elapsed: 0 }); watchProgress();
     const t0 = Date.now();
@@ -219,7 +232,7 @@
       try { accounts = await api('/accounts'); renderAccounts(); } catch (_) {}
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
-    finally { stopProgress(); b.disabled = false; b.textContent = 'Sync from Meta'; }
+    finally { stopProgress(); b.disabled = false; b.classList.remove('busy'); b.textContent = 'Sync from Meta'; }
   };
   // If a sync is already running (started by someone else or another tab), show it.
   (async () => { try { const p = await api('/sync-progress'); if (p.running) { showProgress(p); watchProgress(); const w = setInterval(async () => { const q = await api('/sync-progress').catch(() => ({})); if (!q.running) { clearInterval(w); stopProgress(); loadDay(); loadCheck(); } }, 1500); } } catch (_) {} })();
@@ -513,9 +526,9 @@
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
     const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0 });
-    $('dSpend').textContent = money(t.spend); $('dLives').textContent = t.lives;
+    countTo($('dSpend'), t.spend, money); countTo($('dLives'), t.lives, intF);
     $('dSplit').textContent = `$${Math.round(t.live).toLocaleString('en-US')} / $${Math.round(t.post).toLocaleString('en-US')}`;
-    $('dActive').textContent = t.active;
+    countTo($('dActive'), t.active, intF);
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     $('dBody').innerHTML = list.map((c) => {
@@ -543,7 +556,7 @@
       const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
       const max = Math.max(1, ...days.map((d) => d.spend));
       $('dChartTitle').textContent = 'Spend per day · ' + money(days.reduce((s, d) => s + d.spend, 0));
-      $('dChart').innerHTML = days.map((d) => `<button class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
+      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
       document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; $('dPreset').value = dDate === me.today ? 'today' : 'custom'; setMode('day'); });
     }
   }

@@ -66,7 +66,7 @@
     if (m && m.synced_at) {
       const t = new Date(m.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       const errs = (m.unmatched && m.unmatched.errors) || [];
-      status($('syncStatus'), `Last synced from Meta ${t} by ${m.synced_by}.` + (errs.length ? ` ${errs.length} account(s) failed: ` + errs.map((e) => e.account).join(', ') : ''), errs.length > 0);
+      status($('syncStatus'), `Last synced from Meta ${t} by ${m.synced_by}.` + (errs.length ? ` ${errs.length} account(s) failed — ` + errs.map((e) => `${e.account}: ${e.message}`).join(' · ') : ''), errs.length > 0);
     } else status($('syncStatus'), 'Not synced from Meta yet for this day.');
     const un = (m && m.unmatched && m.unmatched.unmatched) || [];
     $('unmatchedPanel').hidden = !un.length;

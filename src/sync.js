@@ -127,7 +127,8 @@ async function fetchRange(since, until, user) {
     try { items.push(...(await meta.campaignSpendRange(token, id, since, until, names[id]))); }
     catch (e) {
       if (e.needsLogin) throw e;
-      errors.push({ account: names[id] || id, message: e.message });
+      console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);
+      errors.push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message });
       if (e.rateLimited) break;
     }
   }

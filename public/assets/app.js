@@ -39,6 +39,7 @@
     ['checklist', 'dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
+    if (name === 'clients') loadClientMonth();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -87,10 +88,8 @@
       : '<span class="hint">Page unknown. Link the ad account to a client instead.</span>'}</td></tr>`).join('');
     document.querySelectorAll('[data-new]').forEach((b) => b.onclick = () => {
       const u = un[b.dataset.new];
-      $('newName').value = u.pageId && u.page === u.pageId ? '' : u.page; newPages = [u.page]; drawNewPages();
-      $('newType').value = u.kind === 'post' ? 'post' : 'live';
-      showTab('clients'); $('newType').focus();
-      toast('Check the boost type, then tap Add client');
+      showTab('clients');
+      openClientDlg(null, { name: u.pageId && u.page === u.pageId ? '' : u.page, pages: [u.page], type: u.kind === 'post' ? 'post' : 'live' });
     });
     document.querySelectorAll('[data-link]').forEach((sel) => sel.onchange = async () => {
       const u = un[sel.dataset.link], c = clients.find((x) => x.id === Number(sel.value));
@@ -300,65 +299,110 @@
     inp.onchange = add;
     el.appendChild(inp);
   }
-  let newPages = [];
-  function drawNewPages() { pageEditor($('newPages'), newPages, 'newpg', (p) => { newPages = p; drawNewPages(); }); }
   async function loadPages() {
     try {
       const pages = await api('/pages');
       $('pageList').innerHTML = pages.map((p) => `<option value="${esc(p.name)}"></option>`).join('');
     } catch (_) {}
   }
+  const isId = (p) => /^\d{6,}$/.test(p);
+  const typeTags = (t) => (t === 'live' || t === 'both' ? '<span class="chip live">Live</span>' : '') + (t === 'post' || t === 'both' ? '<span class="chip post">Post</span>' : '');
 
-  function tgSelect(c) {
-    if (!me || !me.telegram || !me.telegram.bot) return '<span class="hint">Add TELEGRAM_BOT_TOKEN to use groups</span>';
-    const opts = [...tgChats];
-    if (c.telegram && !opts.some((o) => o.id === c.telegram)) opts.push({ id: c.telegram, title: c.telegram_title || c.telegram });
-    return `<select data-tg aria-label="Telegram group for ${esc(c.name)}"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === c.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select>
-      <button class="ghost rbtn" data-tgrefresh type="button">Refresh groups</button>`;
+  // This month's spend per client, shown on the cards.
+  let cMonth = {};
+  async function loadClientMonth() {
+    const t = (me && me.today) || iso(new Date()), ym = t.slice(0, 7);
+    try {
+      const d = await api(`/dashboard?from=${ym}-01&to=${t}`);
+      cMonth = Object.fromEntries(d.clients.map((c) => [c.id, c]));
+      renderClients();
+    } catch (_) {}
   }
+
   function renderClients() {
-    const typeSel = (c) => `<select data-k="type">${[['live', 'Live'], ['post', 'Post'], ['both', 'Post + live']].map(([v, l]) => `<option value="${v}" ${c.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-    $('clientBody').innerHTML = clients.map((c) => `<tr data-cid="${c.id}">
-      <td><input type="text" data-k="name" value="${esc(c.name)}" style="width:150px">${c.archived ? '<div class="hint">Paused</div>' : ''}</td>
-      <td><span class="pages" data-pages></span></td>
-      <td>${typeSel(c)}</td>
-      <td><div class="tgcell">${tgSelect(c)}</div></td>
-      <td><button class="ghost" data-act="pause">${c.archived ? 'Resume' : 'Pause'}</button><button class="ghost" data-act="del">Delete</button></td></tr>`).join('')
-      || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>';
-    document.querySelectorAll('#clientBody tr[data-cid]').forEach((tr) => {
-      const id = Number(tr.dataset.cid);
-      const c0 = clients.find((c) => c.id === id);
-      pageEditor(tr.querySelector('[data-pages]'), [...new Set([...(c0.pages || []), c0.match].filter(Boolean))], 'pg-' + id,
-        (pages) => saveClient(id, { pages, match: '' }));
-      tr.querySelectorAll('[data-k]').forEach((el) => el.onchange = () => saveClient(id, { [el.dataset.k]: el.type === 'number' ? Number(el.value) : el.value }));
-      const tg = tr.querySelector('[data-tg]');
-      if (tg) tg.onchange = () => { const o = tgChats.find((x) => x.id === tg.value); saveClient(id, { telegram: tg.value, telegram_title: o ? o.title : '' }); };
-      const tr2 = tr.querySelector('[data-tgrefresh]');
-      if (tr2) tr2.onclick = async () => { await loadChats(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet. Add the bot to a group and send a message there, then refresh.'); };
-      tr.querySelector('[data-act=pause]').onclick = () => saveClient(id, { archived: !clients.find((c) => c.id === id).archived });
-      const del = tr.querySelector('[data-act=del]');
-      del.onclick = async () => {
-        if (!del.dataset.arm) { del.dataset.arm = '1'; del.textContent = 'Tap again to delete'; setTimeout(() => { del.dataset.arm = ''; del.textContent = 'Delete'; }, 3000); return; }
-        try { await api('/clients/' + id, { method: 'DELETE' }); clients = clients.filter((c) => c.id !== id); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Client deleted'); } catch (e) { toast(e.message); }
-      };
-    });
+    const q = ($('cSearch').value || '').trim().toLowerCase();
+    const list = clients.filter((c) => !q || [c.name, ...(c.pages || [])].some((x) => String(x).toLowerCase().includes(q)))
+      .sort((a, b) => (a.archived - b.archived) || ((cMonth[b.id]?.spend || 0) - (cMonth[a.id]?.spend || 0)) || a.name.localeCompare(b.name));
+    $('cCount').textContent = clients.filter((c) => !c.archived).length;
+    $('cGrid').innerHTML = list.map((c, i) => {
+      const pages = [...new Set([...(c.pages || []), c.match].filter(Boolean))];
+      const m = cMonth[c.id];
+      const tg = c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="muted">No Telegram group</span>';
+      return `<button class="ccard${c.archived ? ' paused' : ''}" data-edit="${c.id}" style="--i:${Math.min(i, 12)}">
+        <div class="cc-top"><span class="cc-title"><b class="cc-name">${esc(c.name)}</b>${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}</span><span class="cc-edit">Edit</span></div>
+        <div class="cc-pages">${pages.length ? pages.map((p) => `<span class="pchip ro${isId(p) ? ' id' : ''}">${isId(p) ? 'Page ID …' + esc(p.slice(-5)) : esc(p)}</span>`).join('') : '<span class="warnline">⚠ No Facebook Page yet — tap to add one</span>'}</div>
+        <div class="cc-foot"><span class="cc-month">${m && m.spend ? `This month <b class="num">${money(m.spend)}</b>${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}` : '<span class="muted">No spend this month</span>'}</span>${tg}</div>
+      </button>`;
+    }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on Home and add the Pages it finds.'}</div>`;
+    document.querySelectorAll('#cGrid [data-edit]').forEach((b) => b.onclick = () => openClientDlg(clients.find((c) => c.id === Number(b.dataset.edit))));
   }
+  $('cSearch').oninput = () => renderClients();
+
+  // Add / edit dialog
+  let cEdit = null, cDraft = null;
+  function drawDlgPages() { pageEditor($('cPages'), cDraft.pages, 'cpg', (p) => { cDraft.pages = p; drawDlgPages(); }); }
+  function drawDlgType() { document.querySelectorAll('#cType button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cDraft.type))); }
+  document.querySelectorAll('#cType button').forEach((b) => b.onclick = () => { cDraft.type = b.dataset.v; drawDlgType(); });
+  function drawDlgTg() {
+    const box = $('cTgBox');
+    if (!me || !me.telegram || !me.telegram.bot) { box.innerHTML = '<div class="note">The Telegram bot is not set up on the server yet (TELEGRAM_BOT_TOKEN in Railway), so groups can’t be picked. Reports can still be copied.</div>'; return; }
+    const opts = [...tgChats];
+    if (cDraft.telegram && !opts.some((o) => o.id === cDraft.telegram)) opts.push({ id: cDraft.telegram, title: cDraft.telegram_title || cDraft.telegram });
+    box.innerHTML = `<div class="tgrow"><select id="cTg"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === cDraft.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select><button type="button" id="cTgRefresh">Refresh list</button></div>
+      <small class="hint">Group missing? Add the bot to the client's group, send any message there, then tap Refresh list.</small>`;
+    $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
+    $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
+  }
+  function openClientDlg(c, preset) {
+    cEdit = c || null;
+    cDraft = c ? { name: c.name, type: c.type, pages: [...new Set([...(c.pages || []), c.match].filter(Boolean))], telegram: c.telegram || '', telegram_title: c.telegram_title || '' }
+      : { name: '', type: 'live', pages: [], telegram: '', telegram_title: '', ...(preset || {}) };
+    $('cDlgTitle').textContent = c ? 'Edit ' + c.name : 'Add client';
+    $('cName').value = cDraft.name; $('cSave').textContent = c ? 'Save changes' : 'Add client';
+    $('cDel').hidden = !c; $('cPause').hidden = !c; if (c) $('cPause').textContent = c.archived ? 'Resume' : 'Pause';
+    $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
+    drawDlgType(); drawDlgPages(); drawDlgTg();
+    const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
+  }
+  const closeClientDlg = () => $('cDlg').close();
+  $('cAddBtn').onclick = () => openClientDlg(null);
+  $('cClose').onclick = closeClientDlg; $('cCancel').onclick = closeClientDlg;
+  $('cDlg').addEventListener('click', (ev) => { if (ev.target === $('cDlg')) closeClientDlg(); });
+  $('cForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const pending = $('cpg-add') && $('cpg-add').value.trim(); if (pending && !cDraft.pages.includes(pending)) cDraft.pages.push(pending);
+    const body = { name: $('cName').value.trim(), type: cDraft.type, pages: cDraft.pages, telegram: cDraft.telegram, telegram_title: cDraft.telegram_title };
+    if (!body.name) { $('cName').focus(); return; }
+    const b = $('cSave'); b.disabled = true;
+    try {
+      if (cEdit) {
+        const c = await api('/clients/' + cEdit.id, { method: 'PATCH', body: { ...body, match: '' } });
+        clients = clients.map((x) => x.id === c.id ? c : x); toast('Saved ' + c.name);
+      } else {
+        const c = await api('/clients', { method: 'POST', body });
+        clients.push(c); toast('Added ' + c.name + ' — matched to your synced days');
+      }
+      closeClientDlg(); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); loadClientMonth();
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  });
+  $('cPause').onclick = async () => {
+    if (!cEdit) return;
+    try { const c = await api('/clients/' + cEdit.id, { method: 'PATCH', body: { archived: !cEdit.archived } }); clients = clients.map((x) => x.id === c.id ? c : x); toast(c.archived ? c.name + ' paused' : c.name + ' resumed'); closeClientDlg(); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); }
+    catch (e) { toast(e.message); }
+  };
+  $('cDel').onclick = async () => {
+    const del = $('cDel'); if (!cEdit) return;
+    if (!del.dataset.arm) { del.dataset.arm = '1'; del.textContent = 'Tap again to delete'; setTimeout(() => { del.dataset.arm = ''; del.textContent = 'Delete'; }, 3000); return; }
+    try { await api('/clients/' + cEdit.id, { method: 'DELETE' }); const n = cEdit.name; clients = clients.filter((c) => c.id !== cEdit.id); closeClientDlg(); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast(n + ' deleted'); }
+    catch (e) { toast(e.message); }
+  };
   // After a client change the server re-matches all saved days, so reload what's on screen.
   function afterClientChange() { loadDay(); if (!$('tab-dashboard').hidden || dData) loadDash(); }
   async function saveClient(id, p) {
     try { const c = await api('/clients/' + id, { method: 'PATCH', body: p }); clients = clients.map((x) => x.id === id ? c : x); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Saved'); }
     catch (e) { toast(e.message); }
   }
-  $('addForm').addEventListener('submit', async (ev) => {
-    ev.preventDefault();
-    const body = { name: $('newName').value, pages: newPages, type: $('newType').value };
-    try {
-      const c = await api('/clients', { method: 'POST', body });
-      clients.push(c); clients.sort((a, b) => a.name.localeCompare(b.name));
-      $('newName').value = ''; newPages = []; drawNewPages();
-      renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Added ' + c.name + ' — matched to your synced days');
-    } catch (e) { toast(e.message); }
-  });
 
   // ---------- team ----------
   async function renderTeam() {
@@ -662,7 +706,7 @@
       $('whoName').textContent = me.name;
       $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);
-      renderClients(); renderAccounts(); drawNewPages(); loadPages();
+      renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
       if (['dashboard', 'clients', 'accounts', 'team'].includes(h)) showTab(h);

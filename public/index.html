@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=25">
+<link rel="stylesheet" href="/assets/app.css?v=26">
 </head>
 <body>
 <div class="wrap">
@@ -114,26 +114,40 @@
 
   <!-- CLIENTS -->
   <section id="tab-clients" class="wrap" hidden>
-    <div id="clientsSection" class="wrap" style="padding:0">
-    <div class="panel">
-      <h2 id="clientsTitle">Clients</h2>
-      <h3 class="sub">Add a client</h3>
-      <form class="form" id="addForm">
-        <label>Client name<input type="text" id="newName" required placeholder="e.g. DC Shop"></label>
-        <label>Facebook Pages<span class="pages" id="newPages"></span></label>
-        <label>Boost type<select id="newType"><option value="live">Boost live</option><option value="post">Boost post</option><option value="both">Post + live</option></select></label>
-        <button class="primary" type="submit">Add client</button>
-      </form>
-      <div class="hint">A client can have several Facebook Pages. Spend from any of them counts for the client — lives and boost posts are both matched by the Facebook Page the ad promotes. The client name also counts as a Page name, and campaigns named "Client | day" still match if Meta hides the Page.</div>
-      <datalist id="acctList"></datalist>
-      <datalist id="pageList"></datalist>
+    <div class="chead2">
+      <div><h2>Clients <span class="countpill" id="cCount">0</span></h2><div class="hint">Spend is matched to a client by the Facebook Page each ad promotes.</div></div>
+      <span class="spacer"></span>
+      <input type="search" id="cSearch" placeholder="Search client or Page" aria-label="Search clients">
+      <button class="primary" id="cAddBtn">+ Add client</button>
     </div>
-    <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th>Telegram group</th><th></th></tr></thead>
-      <tbody id="clientBody"></tbody>
-    </table></div></div>
-      </div>
+    <div class="cgrid" id="cGrid"></div>
+    <datalist id="acctList"></datalist>
+    <datalist id="pageList"></datalist>
   </section>
+
+  <dialog id="cDlg" class="dlg" aria-labelledby="cDlgTitle">
+    <form class="dlg-in" id="cForm">
+      <div class="dlg-head"><h2 id="cDlgTitle">Add client</h2><button type="button" class="ghost" id="cClose" aria-label="Close">✕</button></div>
+      <label class="fld"><span>Client name</span><input type="text" id="cName" required placeholder="e.g. DC Shop" autocomplete="off"></label>
+      <div class="fld"><span>Boost type</span>
+        <div class="seg seg-lg" id="cType" role="group" aria-label="Boost type"><button type="button" data-v="live">🔴 Live</button><button type="button" data-v="post">📌 Boost post</button><button type="button" data-v="both">Post + live</button></div>
+      </div>
+      <div class="fld"><span>Facebook Pages</span>
+        <div class="pages pages-lg" id="cPages"></div>
+        <small class="hint">Type the Page name exactly as on Facebook and press Enter. Add every Page this client boosts from. Pages seen in your synced ads are suggested.</small>
+      </div>
+      <div class="fld"><span>Telegram group <small class="hint">(where Send report goes)</small></span>
+        <div id="cTgBox"></div>
+      </div>
+      <div class="dlg-foot">
+        <button type="button" class="danger" id="cDel" hidden>Delete</button>
+        <button type="button" id="cPause" hidden>Pause</button>
+        <span class="spacer"></span>
+        <button type="button" id="cCancel">Cancel</button>
+        <button type="submit" class="primary" id="cSave">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- AD ACCOUNTS -->
   <section id="tab-accounts" class="wrap" hidden>
@@ -185,6 +199,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=25"></script>
+<script src="/assets/app.js?v=26"></script>
 </body>
 </html>

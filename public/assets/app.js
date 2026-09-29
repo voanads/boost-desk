@@ -622,24 +622,70 @@
     return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
-  // Opening a client: the row's Report button flies down and becomes the Send report button.
+  // ---------- open / close motion ----------
+  const ease = 'cubic-bezier(.22,.8,.2,1)';
+  // The breakdown unfolds, and each live / post line slides in one after another.
+  function unfoldClient(id) {
+    const tr = document.querySelector(`#dBody tr.drow[data-cid="${id}"]`), box = tr && tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
+    if (!box || calm || !box.animate) return;
+    const h = box.offsetHeight;
+    box.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: 380, easing: ease });
+    box.querySelectorAll('.dl, .dday-h, .dnote, .dsent').forEach((el, i) => el.animate(
+      [{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 360, delay: 60 + i * 55, easing: ease, fill: 'backwards' }));
+  }
+  // Closing folds it back up, then the Report button pops back in.
+  function collapseClient(id, tr) {
+    const box = tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
+    const finish = () => {
+      dOpen.delete(id); renderDash();
+      const rb = document.querySelector(`#dBody [data-report="${id}"]`);
+      if (rb && !calm && rb.animate) rb.animate([{ opacity: 0, transform: 'scale(.6) translateY(6px)' }, { opacity: 1, transform: 'scale(1.08)', offset: .7 }, { transform: 'none' }], { duration: 420, easing: ease });
+    };
+    if (!box || calm || !box.animate) return finish();
+    box.style.overflow = 'hidden';
+    const a = box.animate([{ height: box.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)' });
+    a.onfinish = finish; a.oncancel = finish;
+  }
+  // The row's Report button lifts, arcs down while turning purple, and lands as Send report.
   function flyToSend(id, from) {
     const btn = document.querySelector(`#dBody [data-dreport="${id}"]`); if (!btn) return;
-    const glow = () => { btn.classList.remove('glow'); void btn.offsetWidth; btn.classList.add('glow'); };
-    const to = btn.getBoundingClientRect();
-    if (calm || !from || !btn.animate) { btn.scrollIntoView({ block: 'nearest' }); glow(); return; }
-    const ghost = document.createElement('div');
-    ghost.className = 'flyghost'; ghost.innerHTML = btn.innerHTML;
-    const sx = window.scrollX, sy = window.scrollY;
-    Object.assign(ghost.style, { left: from.left + sx + 'px', top: from.top + sy + 'px', width: from.width + 'px', height: from.height + 'px' });
-    document.body.appendChild(ghost);
-    btn.style.visibility = 'hidden';
-    const anim = ghost.animate([
-      { left: from.left + sx + 'px', top: from.top + sy + 'px', width: from.width + 'px', height: from.height + 'px', opacity: .9, borderRadius: '10px' },
-      { left: to.left + sx + 'px', top: to.top + sy + 'px', width: to.width + 'px', height: to.height + 'px', opacity: 1, borderRadius: '12px' },
-    ], { duration: 520, easing: 'cubic-bezier(.2,.7,.2,1)' });
-    const done = () => { ghost.remove(); btn.style.visibility = ''; glow(); btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
-    anim.onfinish = done; anim.oncancel = done;
+    const land = () => {
+      btn.style.visibility = '';
+      btn.classList.remove('glow', 'shine'); void btn.offsetWidth; btn.classList.add('glow', 'shine');
+      if (!calm && btn.animate) btn.animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.06)', offset: .45 }, { transform: 'scale(.98)', offset: .75 }, { transform: 'none' }], { duration: 520, easing: ease });
+      const r = btn.getBoundingClientRect();
+      if (r.bottom > innerHeight - 70 || r.top < 70) btn.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+    };
+    if (calm || !from || !btn.animate) { land(); return; }
+    // wait for the unfold so we fly to where the button ends up
+    setTimeout(() => {
+      const to = btn.getBoundingClientRect(), sx = scrollX, sy = scrollY;
+      const g = document.createElement('div'); g.className = 'flyghost';
+      g.innerHTML = `<span class="fg-dark">${document.querySelector(`#dBody tr.drow[data-cid="${id}"]`) ? 'Report' : ''}</span><span class="fg-brand">${btn.innerHTML}</span>`;
+      document.body.appendChild(g);
+      btn.style.visibility = 'hidden';
+      const x0 = from.left + sx, y0 = from.top + sy, x1 = to.left + sx, y1 = to.top + sy;
+      const midX = (x0 + x1) / 2 + (x1 < x0 ? -40 : 40), midY = Math.min(y0, y1) - 26;
+      const box = (x, y, w, h, extra) => ({ left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', ...extra });
+      const anim = g.animate([
+        box(x0, y0, from.width, from.height, { transform: 'scale(1)', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }),
+        box(x0 - 4, y0 - 10, from.width + 8, from.height + 4, { transform: 'scale(1.08)', boxShadow: '0 14px 30px rgba(0,0,0,.35)', offset: .18 }),
+        box(midX - (from.width + to.width) / 4, midY, (from.width + to.width) / 2, (from.height + to.height) / 2, { transform: 'scale(1.04) rotate(-2deg)', offset: .55 }),
+        box(x1, y1, to.width, to.height, { transform: 'scale(1)', boxShadow: '0 6px 18px rgba(91,69,240,.45)' }),
+      ], { duration: 720, easing: ease });
+      g.querySelector('.fg-brand').animate([{ opacity: 0 }, { opacity: 0, offset: .25 }, { opacity: 1, offset: .7 }, { opacity: 1 }], { duration: 720, easing: 'linear' });
+      g.querySelector('.fg-dark').animate([{ opacity: 1 }, { opacity: 1, offset: .25 }, { opacity: 0, offset: .6 }, { opacity: 0 }], { duration: 720, easing: 'linear' });
+      // a few sparks trail behind
+      for (let i = 0; i < 6; i++) {
+        const sp = document.createElement('i'); sp.className = 'spark'; document.body.appendChild(sp);
+        const t = .25 + i * .1, px = x0 + (x1 - x0) * t + (Math.random() - .5) * 30, py = y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 26 + from.height / 2;
+        sp.style.left = px + 'px'; sp.style.top = py + 'px';
+        sp.animate([{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)', offset: .3 }, { opacity: 0, transform: 'scale(.2) translateY(10px)' }], { duration: 600, delay: 120 + i * 70, easing: 'ease-out', fill: 'both' }).onfinish = () => sp.remove();
+      }
+      const done = () => { g.remove(); land(); };
+      anim.onfinish = done; anim.oncancel = done;
+    }, 140);
   }
 
   function renderDash() {
@@ -681,9 +727,9 @@
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);
+        if (!opening) return collapseClient(id, tr);
         const rb = tr.querySelector('[data-report]'), from = rb && rb.getBoundingClientRect();
-        opening ? dOpen.add(id) : dOpen.delete(id); renderDash();
-        if (opening) flyToSend(id, from);
+        dOpen.add(id); renderDash(); unfoldClient(id); flyToSend(id, from);
       };
       tr.onclick = (ev) => { if (!ev.target.closest('button')) toggle(); };
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };

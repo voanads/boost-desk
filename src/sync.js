@@ -21,16 +21,12 @@ const campaignPrefix = (name) => { const m = String(name).match(/^(.*?)\s*\|/); 
 
 const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
 
-// Match order: campaign name ("DC Shop | 29") → the Facebook Page the ad promotes → linked ad account.
+// Match order: the Facebook Page the ad promotes (name, then ID) → campaign name ("DC Shop | 29")
+// → linked ad account. Lives and boost posts both match by Page first.
 function matchClient(item, clients) {
   const active = clients.filter((c) => !c.archived);
   // A client can own several Pages: its name, its alternate name and every Page listed on it all count.
   const names = (c) => [c.name, c.match, ...(c.pages || [])].filter(Boolean).map(norm);
-  if (!isAutoPost(item.name)) {
-    const prefix = norm(campaignPrefix(item.name));
-    const byName = active.find((c) => names(c).includes(prefix));
-    if (byName) return byName;
-  }
   if (item.page) {
     const byPage = active.find((c) => names(c).includes(norm(item.page)));
     if (byPage) return byPage;
@@ -38,6 +34,11 @@ function matchClient(item, clients) {
   if (item.pageId) {
     const byId = active.find((c) => names(c).includes(norm(item.pageId)));
     if (byId) return byId;
+  }
+  if (!isAutoPost(item.name)) {
+    const prefix = norm(campaignPrefix(item.name));
+    const byName = active.find((c) => names(c).includes(prefix));
+    if (byName) return byName;
   }
   return active.find((c) => c.account && (norm(c.account) === norm(item.account) || c.account === item.accountId)) || null;
 }
@@ -57,7 +58,7 @@ function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
       const auto = isAutoPost(it.name);
       const label = auto
         ? (it.page ? `Post boosts for Page "${it.page}"` : it.pageId ? `Post boosts for Page ID ${it.pageId} (name hidden)` : 'Post boosts (Page unknown)') + (it.account ? ' · ' + it.account : '')
-        : campaignPrefix(it.name) + (it.account ? ' · ' + it.account : '');
+        : (it.page ? `Lives for Page "${it.page}"` : campaignPrefix(it.name)) + (it.account ? ' · ' + it.account : '');
       const u = unmatched.get(label) || { label, page: it.page || it.pageId || (auto ? '' : campaignPrefix(it.name)), pageId: it.pageId || '', kind: auto ? 'post' : 'live', spend: 0, count: 0 };
       u.spend = round2(u.spend + it.spend); u.count++;
       unmatched.set(label, u);
@@ -203,6 +204,7 @@ async function clientsWithLearnedPages(owner, items) {
   const learned = await db.getUserSetting(owner, 'pageOwners', {}); // { pageId: clientId }
   for (const it of items) {
     if (!it.pageId || isAutoPost(it.name)) continue;
+    if (it.page && clients.some((x) => !x.archived && [x.name, x.match, ...(x.pages || [])].filter(Boolean).map(norm).includes(norm(it.page)))) continue;
     const prefix = norm(campaignPrefix(it.name));
     const c = clients.find((x) => !x.archived && [x.name, x.match, ...(x.pages || [])].filter(Boolean).map(norm).includes(prefix));
     if (c) learned[it.pageId] = c.id;

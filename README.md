@@ -6,7 +6,7 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 
 **What it does**
 
-- **Checklist** — every client's spend for the day, pulled from Ads Manager. Campaigns named `Page name | day` (e.g. `DC Shop | 29`) go to that client. For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Ticks, live times and notes are saved.
+- **Checklist** — every client's spend for the day, pulled from Ads Manager. Live campaigns go to the client whose **Facebook Page** the ad promotes — the same way boost posts match — so a typo in the campaign name doesn't matter. If Meta hides the Page, the campaign name is used instead (`DC Shop | 29` → DC Shop). For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Ticks, live times and notes are saved.
 - **Ad accounts** — every ad account you can access: status (with the reason if disabled), balance due, spend limit left, lifetime spend, and today's spend. Tick which accounts are included in the spend sync.
 - **Clients** — name, one or more Facebook Pages (spend from any of them counts for that client) and type (live / post / both). Budgets are set by each client, so the app records what was actually spent.
 - **Boost posts** — Meta names these automatically (`Post: "…"`), so the app looks up which Facebook Page each boosted post belongs to and gives the spend to the client with that Page name. This works even when one ad account boosts posts for many Pages. For *Post + live* clients, boosted posts go in the post row and named campaigns go in the live rows.
@@ -54,7 +54,7 @@ Run locally instead: `cp .env.example .env`, fill it in, then `npm install` and 
 ## 4. First use
 
 1. **Clients** tab → add each client and their **Facebook Pages** (`DC Shop`, `CosMe`, `LR Shop`…). A client with two or three Pages gets all of them listed. After a sync, the Page picker suggests every Page name Meta reported. Pages that don't belong to any client show up on the Checklist with **New client** and **Add to client** buttons.
-2. Boost posts match automatically by the client's Facebook Page name. The **Ad account** field is only a fallback, for a client whose Page can't be looked up.
+2. Lives and boost posts both match automatically by the client's Facebook Page name (then by campaign name). The **Ad account** field is only a fallback, for a client whose Page can't be looked up.
 3. **Ad accounts** tab → **Refresh from Meta**, then untick accounts that aren't used for client boosts.
 4. **Checklist** → **Sync from Meta**. Anything that didn't match a client is listed under *Spend not matched to a client*.
 

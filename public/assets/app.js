@@ -635,30 +635,36 @@
       [{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }],
       { duration: 360, delay: 60 + i * 55, easing: ease, fill: 'backwards' }));
   }
-  // A paper plane flies along an arc between two points, leaving a dotted trail.
-  function flyPlane(from, to, { duration = 820, lift = 70 } = {}) {
+  // A paper plane swings out past the right edge, loops back in and lands with a little spin, leaving a dotted trail.
+  function flyPlane(from, to, { duration = 1150 } = {}) {
     return new Promise((resolve) => {
       if (calm || !document.body.animate) return resolve();
       const sx = scrollX, sy = scrollY;
       const x0 = from.left + from.width / 2 + sx, y0 = from.top + from.height / 2 + sy;
       const x1 = to.left + to.width / 2 + sx, y1 = to.top + to.height / 2 + sy;
-      const cx = (x0 + x1) / 2 + (x1 - x0) * .15, cy = Math.min(y0, y1) - lift;       // arc control point
-      const pt = (t) => ({ x: (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t * t * x1, y: (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t * t * y1 });
-      const ang = (t) => { const dx = 2 * (1 - t) * (cx - x0) + 2 * t * (x1 - cx), dy = 2 * (1 - t) * (cy - y0) + 2 * t * (y1 - cy); return Math.atan2(dy, dx) * 180 / Math.PI; };
+      const R = Math.min(Math.max(x0, x1) + 330, sx + innerWidth + 30);                 // out to the right
+      const down = y1 > y0;
+      const c1 = { x: R, y: y0 + (down ? -70 : 50) }, c2 = { x: R + 10, y: y1 + (down ? 60 : -70) };
+      const pt = (t) => { const u = 1 - t; return { x: u * u * u * x0 + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * x1, y: u * u * u * y0 + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * y1 }; };
+      const tan = (t) => { const u = 1 - t; return Math.atan2(3 * u * u * (c1.y - y0) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (y1 - c2.y), 3 * u * u * (c1.x - x0) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (x1 - c2.x)) * 180 / Math.PI; };
       const size0 = Math.max(12, from.height), size1 = Math.max(12, to.height);
       const p = document.createElement('div'); p.className = 'flyplane'; p.innerHTML = PLANE_SVG; document.body.appendChild(p);
-      const frames = [];
-      for (let i = 0; i <= 12; i++) {
-        const t = i / 12, q = pt(t), sc = (size0 + (size1 - size0) * t) / 20 * (1 + Math.sin(t * Math.PI) * .45);
-        frames.push({ transform: `translate(${q.x - 10}px, ${q.y - 10}px) rotate(${ang(Math.min(t, .96))}deg) scale(${sc})`, offset: t });
+      const N = 24, frames = []; let prev = null, turn = 0;
+      for (let i = 0; i <= N; i++) {
+        const t = i / N, q = pt(t);
+        let a = tan(Math.min(Math.max(t, .02), .9));
+        if (prev != null) { while (a - prev > 180) a -= 360; while (a - prev < -180) a += 360; }  // keep rotation continuous
+        prev = a; if (t > .9) a = prev + (Math.round(prev / 360 + .5) * 360 - prev) * ((t - .9) / .1);  // spin upright to land
+        turn = a;
+        const sc = (size0 + (size1 - size0) * t) / 20 * (1 + Math.sin(t * Math.PI) * .7);
+        frames.push({ transform: `translate(${q.x - 10}px, ${q.y - 10}px) rotate(${a}deg) scale(${sc})`, offset: t });
       }
-      const last = frames[frames.length - 1]; last.transform = last.transform.replace(/rotate\([^)]*\)/, 'rotate(0deg)');
-      const anim = p.animate(frames, { duration, easing: 'cubic-bezier(.45,.05,.3,1)' });
-      for (let i = 1; i < 10; i++) {
-        const t = i / 10, q = pt(t), d = document.createElement('i'); d.className = 'trail'; document.body.appendChild(d);
+      const anim = p.animate(frames, { duration, easing: 'cubic-bezier(.4,.05,.25,1)' });
+      for (let i = 1; i < 16; i++) {
+        const t = i / 16, q = pt(t), d = document.createElement('i'); d.className = 'trail'; document.body.appendChild(d);
         d.style.left = q.x + 'px'; d.style.top = q.y + 'px';
         d.animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: .9, transform: 'scale(1)', offset: .2 }, { opacity: 0, transform: 'scale(.3)' }],
-          { duration: 700, delay: duration * t * .85, easing: 'ease-out', fill: 'both' }).onfinish = () => d.remove();
+          { duration: 750, delay: duration * t * .8, easing: 'ease-out', fill: 'both' }).onfinish = () => d.remove();
       }
       const done = () => { p.remove(); resolve(); };
       anim.onfinish = done; anim.oncancel = done;
@@ -690,7 +696,7 @@
       const rb = document.querySelector(`#dBody [data-report="${id}"]`), rp = rb && rb.querySelector('.plane');
       if (!rp || calm || !from) return;
       rp.style.visibility = 'hidden';
-      flyPlane(from, rp.getBoundingClientRect(), { duration: 700, lift: 60 }).then(() => { rp.style.visibility = ''; pop(rp); rb.animate && rb.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 320, easing: ease }); });
+      flyPlane(from, rp.getBoundingClientRect(), { duration: 1050 }).then(() => { rp.style.visibility = ''; pop(rp); rb.animate && rb.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 320, easing: ease }); });
     };
     if (!box || calm || !box.animate) return reopen();
     box.style.overflow = 'hidden';

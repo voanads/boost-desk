@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=18">
+<link rel="stylesheet" href="/assets/app.css?v=19">
 </head>
 <body>
 <div class="wrap">
@@ -177,6 +177,12 @@
       <div class="hint">Each admin has their own workspace: only the ad accounts, clients and reports from your own Facebook login. Facebook logins last about 60 days; log in again before yours expires.</div>
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Facebook ID</th><th>Login expires</th></tr></thead><tbody id="teamBody"></tbody></table></div>
     </div>
+    <div class="panel" id="autoPanel" hidden>
+      <div class="rowx"><h2>Auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
+      <div class="hint">Only you (the app owner) see this. For each account that has logged in: every 5 minutes it checks for new campaigns, every hour it refreshes today and yesterday, and at 05:30 it refreshes the last 30 days. An account is only synced after it has tapped Sync from Meta once, and while its Facebook login is valid.</div>
+      <div id="autoMsg" class="hint"></div>
+      <div class="tablewrap"><table><thead><tr><th>Account</th><th>Auto sync</th><th>Status</th><th>Last auto sync</th><th>Login expires</th><th></th></tr></thead><tbody id="autoBody"></tbody></table></div>
+    </div>
     <div class="panel">
       <h2>Telegram daily report</h2>
       <div id="tgInfo" class="hint"></div>
@@ -184,6 +190,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=18"></script>
+<script src="/assets/app.js?v=19"></script>
 </body>
 </html>

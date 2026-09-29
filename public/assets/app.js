@@ -344,6 +344,67 @@
       ? `Sends automatically every day at ${me.telegram.time} (${me.tz}), after a fresh sync. Preview for ${nice(date)}:`
       : 'Not set up yet. Add TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME to the server settings (see README). Preview:';
     try { $('reportPreview').textContent = (await api('/report/' + date)).text; } catch (e) { $('reportPreview').textContent = e.message; }
+    if (me.isOwner) loadAuto();
+  }
+
+  // ---------- auto sync (owner only) ----------
+  const ago = (t) => {
+    if (!t) return '—';
+    const m = Math.round((Date.now() - new Date(t)) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.round(m / 60) + ' h ago';
+    return new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+  const whyLabel = { 'new campaign': 'new campaign found', hourly: 'hourly refresh', 'daily 30-day': '30-day refresh', 'run now': 'run now' };
+  async function loadAuto() {
+    $('autoPanel').hidden = false;
+    let d;
+    try { d = await api('/auto-sync'); } catch (e) { $('autoMsg').textContent = e.message; return; }
+    $('autoMsg').textContent = d.on ? '' : 'Auto sync is switched off on the server (AUTO_SYNC=off in Railway), so nothing runs until you remove it.';
+    $('autoMsg').classList.toggle('err', !d.on);
+    $('autoBody').innerHTML = d.users.map((u) => {
+      let st;
+      if (u.expired) st = '<span class="over">Login expired</span>';
+      else if (!u.enabled) st = '<span class="muted">Off</span>';
+      else if (!u.synced) st = '<span class="muted">Waiting for first Sync from Meta</span>';
+      else if (u.busy) st = 'Syncing…';
+      else st = '<span class="ok">Running</span>';
+      const lr = u.lastRun;
+      const last = !lr ? '—' : lr.error
+        ? `<span class="over">${esc(ago(lr.at))} · failed: ${esc(lr.error)}</span>`
+        : `${esc(ago(lr.at))} · ${esc(whyLabel[lr.why] || lr.why)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
+      const exp = u.tokenExpires ? new Date(u.tokenExpires).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+      return `<tr>
+        <td>${esc(u.name)}${u.id === me.id ? ' <span class="muted">(you)</span>' : ''}<div class="hint">${u.accounts} ad accounts · ${u.clients} clients</div></td>
+        <td><label class="chk"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''}> ${u.enabled ? 'On' : 'Off'}</label></td>
+        <td>${st}</td>
+        <td>${last}${u.lastCheck ? `<div class="hint">checked for new campaigns ${esc(ago(u.lastCheck))}</div>` : ''}</td>
+        <td>${esc(exp)}</td>
+        <td><button data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>Run now</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" class="muted">Nobody has logged in yet.</td></tr>';
+  }
+  $('autoBody').addEventListener('change', async (ev) => {
+    const id = ev.target.dataset.auto; if (!id) return;
+    try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); }
+    catch (e) { toast(e.message); }
+    loadAuto();
+  });
+  $('autoBody').addEventListener('click', async (ev) => {
+    const id = ev.target.dataset.run; if (!id) return;
+    ev.target.disabled = true;
+    try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); }
+    catch (e) { toast(e.message); }
+    loadAuto();
+    setTimeout(() => { if (!$('tab-team').hidden) loadAuto(); }, 15000);
+  });
+  for (const [btn, on] of [['autoAllOn', true], ['autoAllOff', false]]) {
+    $(btn).onclick = async () => {
+      try { await api('/auto-sync', { method: 'PUT', body: { enabled: on } }); toast('Auto sync ' + (on ? 'on' : 'off') + ' for everyone'); }
+      catch (e) { toast(e.message); }
+      loadAuto();
+    };
   }
 
   $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };

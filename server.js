@@ -94,10 +94,28 @@ const api = express.Router();
 api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
+    isOwner: (await db.ownerId()) === req.user.fb_id,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
   });
 }));
+
+// Auto sync control — only the app owner can see or change it, for every account that logged in.
+const ownerOnly = wrap(async (req, res, next) => {
+  if ((await db.ownerId()) !== req.user.fb_id) return res.status(403).json({ error: 'Only the app owner can manage auto sync.' });
+  next();
+});
+api.get('/auto-sync', ownerOnly, wrap(async (req, res) => res.json({ on: process.env.AUTO_SYNC !== 'off', users: await jobs.statusAll() })));
+api.put('/auto-sync/:id', ownerOnly, wrap(async (req, res) => {
+  if (!(await db.getUser(req.params.id))) return res.status(404).json({ error: 'Account not found.' });
+  await jobs.setEnabled(req.params.id, !!req.body.enabled);
+  res.json({ ok: true });
+}));
+api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
+  for (const u of await db.allUsers()) await jobs.setEnabled(u.fb_id, !!req.body.enabled);
+  res.json({ ok: true });
+}));
+api.post('/auto-sync/:id/run', ownerOnly, wrap(async (req, res) => { await jobs.runNow(req.params.id); res.json({ ok: true }); }));
 
 // Clients
 const cleanClient = (b) => {

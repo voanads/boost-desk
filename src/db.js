@@ -117,6 +117,21 @@ const upsertUser = (fbId, name, tokenEnc, expires) =>
      ON CONFLICT (fb_id) DO UPDATE SET name=$2, token_enc=$3, token_expires=$4, updated_at=now()`, [fbId, name, tokenEnc, expires]);
 const getUser = async (fbId) => (await q('SELECT * FROM users WHERE fb_id=$1', [fbId])).rows[0] || null;
 // Admins whose login is still valid — scheduled jobs run once per admin, each on their own data.
+const allUsers = async () => (await q('SELECT * FROM users ORDER BY lower(name)')).rows;
+
+// The app owner controls auto sync for every account. OWNER_FB_ID wins; otherwise the owner is
+// picked once (the admin with the most clients, then the most synced days) and remembered.
+async function ownerId() {
+  if (process.env.OWNER_FB_ID) return process.env.OWNER_FB_ID.trim();
+  const saved = await getSetting('ownerId', null);
+  if (saved) return saved;
+  const r = (await q(`SELECT u.fb_id FROM users u
+    ORDER BY (SELECT count(*) FROM clients c WHERE c.owner=u.fb_id) DESC,
+             (SELECT count(*) FROM raw_rows r WHERE r.owner=u.fb_id) DESC, u.updated_at ASC LIMIT 1`)).rows[0];
+  if (!r) return null;
+  await setSetting('ownerId', r.fb_id);
+  return r.fb_id;
+}
 const activeUsers = async () =>
   (await q(`SELECT * FROM users WHERE token_expires IS NULL OR token_expires > now() ORDER BY updated_at DESC`)).rows;
 
@@ -203,7 +218,7 @@ const monthEntries = async (owner, from, to) =>
 
 module.exports = {
   pool, init,
-  upsertUser, getUser, activeUsers,
+  upsertUser, getUser, activeUsers, allUsers, ownerId,
   listClients, createClient, updateClient, deleteClient, ownsClient,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,

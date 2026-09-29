@@ -15,15 +15,22 @@ const telegram = require('./telegram');
 const log = (...a) => console.log(new Date().toISOString(), '[jobs]', ...a);
 const AUTO_NAME = 'Auto sync';
 
-// Admins who have synced before (so a brand-new admin stays empty until they tap Sync).
+// Has this admin tapped Sync from Meta at least once? (A brand-new admin stays empty until they do.)
+async function hasSynced(owner) {
+  return !!(await db.getUserSetting(owner, 'lastSyncCheck', null)) || (await db.listRaw(owner)).length > 0;
+}
+// The owner can switch auto sync off per account; default is on.
+const autoSyncOn = async (owner) => (await db.getUserSetting(owner, 'autoSync', true)) !== false;
+
 async function syncedAdmins() {
   const out = [];
   for (const user of await db.activeUsers()) {
-    const check = await db.getUserSetting(user.fb_id, 'lastSyncCheck', null);
-    if (check || (await db.listRaw(user.fb_id)).length) out.push(user);
+    if ((await autoSyncOn(user.fb_id)) && (await hasSynced(user.fb_id))) out.push(user);
   }
   return out;
 }
+
+const noteRun = (owner, info) => db.setUserSetting(owner, 'autoSyncLast', { at: new Date().toISOString(), ...info });
 
 const asAuto = (user) => ({ ...user, name: AUTO_NAME });
 
@@ -31,6 +38,7 @@ async function rangeFor(user, days, why) {
   const today = sync.todayIn();
   const since = sync.addDays(today, -(days - 1));
   const r = await sync.exclusive(user.fb_id, () => sync.syncRange(since, today, asAuto(user)));
+  if (r) await noteRun(user.fb_id, { why, from: since, to: today, campaigns: r.campaigns, errors: r.errors.length });
   if (r) log(`${why}: ${user.name} ${since}→${today}, ${r.campaigns} campaigns${r.errors.length ? `, ${r.errors.length} account errors` : ''}`);
   return r;
 }
@@ -61,6 +69,7 @@ async function checkNewCampaigns(user) {
     merged[act] = [...new Set([...(known?.[act] || []), ...(now[act] || [])])].slice(-2000);
   }
   await db.setUserSetting(user.fb_id, 'activeCampaigns', merged);
+  await db.setUserSetting(user.fb_id, 'autoSyncChecked', new Date().toISOString());
   if (!fresh.length) return false;
   log(`new campaigns for ${user.name}: ${fresh.length}`);
   await rangeFor(user, 2, 'new campaign');
@@ -70,7 +79,10 @@ async function checkNewCampaigns(user) {
 // Run a job for every synced admin, one at a time; errors are logged, never thrown.
 async function forEachAdmin(job, label) {
   for (const user of await syncedAdmins()) {
-    try { await job(user); } catch (e) { log(`${label} failed for ${user.name}:`, e.message); }
+    try { await job(user); } catch (e) {
+      log(`${label} failed for ${user.name}:`, e.message);
+      await noteRun(user.fb_id, { why: label, error: e.message }).catch(() => {});
+    }
   }
 }
 
@@ -112,4 +124,35 @@ function start() {
   } else log('Telegram report off (set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME=HH:MM)');
 }
 
-module.exports = { start, sendDailyReport, checkNewCampaigns, syncedAdmins, rangeFor };
+// Owner's control panel: every account that has logged in, with its auto sync state.
+async function statusAll() {
+  const out = [];
+  for (const u of await db.allUsers()) {
+    out.push({
+      id: u.fb_id, name: u.name, tokenExpires: u.token_expires,
+      expired: !!(u.token_expires && new Date(u.token_expires) < new Date()),
+      enabled: await autoSyncOn(u.fb_id),
+      synced: await hasSynced(u.fb_id),
+      busy: sync.isBusy(u.fb_id),
+      accounts: (await db.enabledAccountIds(u.fb_id)).length,
+      clients: (await db.listClients(u.fb_id)).filter((c) => !c.archived).length,
+      lastRun: await db.getUserSetting(u.fb_id, 'autoSyncLast', null),
+      lastCheck: await db.getUserSetting(u.fb_id, 'autoSyncChecked', null),
+    });
+  }
+  return out;
+}
+
+const setEnabled = (owner, on) => db.setUserSetting(owner, 'autoSync', !!on);
+
+// "Run now" from the owner panel: refresh today + yesterday for one account.
+async function runNow(owner) {
+  const user = await db.getUser(owner);
+  if (!user) throw Object.assign(new Error('Account not found.'), { status: 404 });
+  if (user.token_expires && new Date(user.token_expires) < new Date()) throw Object.assign(new Error(`${user.name}'s Facebook login has expired. They need to log in again.`), { status: 400 });
+  if (!(await hasSynced(owner))) throw Object.assign(new Error(`${user.name} hasn't tapped Sync from Meta yet, so their workspace stays empty until they do.`), { status: 400 });
+  if (sync.isBusy(owner)) throw Object.assign(new Error(`A sync is already running for ${user.name}.`), { status: 409 });
+  rangeFor(user, 2, 'run now').catch(async (e) => { log('run now failed for', user.name, e.message); await noteRun(owner, { why: 'run now', error: e.message }).catch(() => {}); });
+}
+
+module.exports = { start, sendDailyReport, checkNewCampaigns, syncedAdmins, rangeFor, statusAll, setEnabled, runNow };

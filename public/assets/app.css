@@ -148,3 +148,9 @@ body{overflow-x:hidden}
 .progress .pbar{height:6px;background:var(--bg);border-radius:9px;overflow:hidden}
 .progress .pbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:9px}
 @media (prefers-reduced-motion:no-preference){.progress .pbar i{transition:width .4s}}
+
+/* auto sync panel */
+.rowx{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.rowx h2{margin:0}.spacer{flex:1}
+.ok{color:var(--accent)}
+#autoMsg.err{color:var(--live)}
+#autoBody td{vertical-align:top}

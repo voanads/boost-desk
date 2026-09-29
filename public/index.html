@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=7">
+<link rel="stylesheet" href="/assets/app.css?v=8">
 </head>
 <body>
 <div class="wrap">
@@ -14,6 +14,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="checklist" aria-selected="true">Checklist</button>
       <button role="tab" data-tab="dashboard" aria-selected="false">Dashboard</button>
+      <button role="tab" data-tab="clients" aria-selected="false">Clients</button>
       <button role="tab" data-tab="accounts" aria-selected="false">Ad accounts</button>
       <button role="tab" data-tab="team" aria-selected="false">Team &amp; Telegram</button>
     </nav>
@@ -62,29 +63,6 @@
       <div class="tablewrap"><table><thead><tr><th>Campaigns</th><th class="r">Count</th><th class="r">Spend</th><th>Match to</th></tr></thead><tbody id="unmatchedBody"></tbody></table></div>
     </div>
 
-    <!-- CLIENTS (same page) -->
-    <div id="clientsSection" class="wrap" style="padding:0">
-    <div class="panel">
-      <h2 id="clientsTitle">Clients</h2>
-      <h3 class="sub">Add a client</h3>
-      <form class="form" id="addForm">
-        <label>Client name<input type="text" id="newName" required placeholder="e.g. DC Shop"></label>
-        <label>Facebook Pages<span class="pages" id="newPages"></span></label>
-        <label>Boost type<select id="newType"><option value="live">Boost live</option><option value="post">Boost post</option><option value="both">Post + live</option></select></label>
-        <label>Daily budget ($)<input type="number" id="newBudget" min="0" step="0.5" value="10" style="width:96px"></label>
-        <label>Lives per day<input type="number" id="newLives" min="1" max="6" value="2" style="width:70px"></label>
-        <label>Ad account (fallback)<input type="text" id="newAccount" list="acctList" placeholder="optional"></label>
-        <button class="primary" type="submit">Add client</button>
-      </form>
-      <div class="hint">A client can have several Facebook Pages. Spend from any of them counts for the client. The client name also counts as a Page name.</div>
-      <datalist id="acctList"></datalist>
-      <datalist id="pageList"></datalist>
-    </div>
-    <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th>$/day</th><th>Lives</th><th>Ad account (fallback)</th><th></th></tr></thead>
-      <tbody id="clientBody"></tbody>
-    </table></div></div>
-      </div>
     <div class="panel">
       <div class="top"><h2 id="monthTitle">This month</h2><span class="hint">Every logged day this month</span></div>
       <div class="tablewrap"><table>
@@ -138,6 +116,32 @@
     </div>
   </section>
 
+  <!-- CLIENTS -->
+  <section id="tab-clients" class="wrap" hidden>
+    <div id="clientsSection" class="wrap" style="padding:0">
+    <div class="panel">
+      <h2 id="clientsTitle">Clients</h2>
+      <h3 class="sub">Add a client</h3>
+      <form class="form" id="addForm">
+        <label>Client name<input type="text" id="newName" required placeholder="e.g. DC Shop"></label>
+        <label>Facebook Pages<span class="pages" id="newPages"></span></label>
+        <label>Boost type<select id="newType"><option value="live">Boost live</option><option value="post">Boost post</option><option value="both">Post + live</option></select></label>
+        <label>Daily budget ($)<input type="number" id="newBudget" min="0" step="0.5" value="10" style="width:96px"></label>
+        <label>Lives per day<input type="number" id="newLives" min="1" max="6" value="2" style="width:70px"></label>
+        <label>Ad account (fallback)<input type="text" id="newAccount" list="acctList" placeholder="optional"></label>
+        <button class="primary" type="submit">Add client</button>
+      </form>
+      <div class="hint">A client can have several Facebook Pages. Spend from any of them counts for the client. The client name also counts as a Page name.</div>
+      <datalist id="acctList"></datalist>
+      <datalist id="pageList"></datalist>
+    </div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th>$/day</th><th>Lives</th><th>Ad account (fallback)</th><th></th></tr></thead>
+      <tbody id="clientBody"></tbody>
+    </table></div></div>
+      </div>
+  </section>
+
   <!-- AD ACCOUNTS -->
   <section id="tab-accounts" class="wrap" hidden>
     <div class="top">
@@ -170,6 +174,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=7"></script>
+<script src="/assets/app.js?v=8"></script>
 </body>
 </html>

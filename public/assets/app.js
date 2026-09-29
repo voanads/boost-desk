@@ -26,7 +26,7 @@
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   function showTab(name) {
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    ['checklist', 'dashboard', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['checklist', 'dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -78,7 +78,7 @@
       const u = un[b.dataset.new];
       $('newName').value = u.page; newPages = [u.page]; drawNewPages();
       $('newType').value = u.kind === 'post' ? 'post' : 'live';
-      showTab('checklist'); $('clientsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('newBudget').focus({ preventScroll: true });
+      showTab('clients'); $('newBudget').focus();
       toast('Set the budget, then tap Add client');
     });
     document.querySelectorAll('[data-link]').forEach((sel) => sel.onchange = async () => {
@@ -98,7 +98,7 @@
 
   function buildCards(list) {
     const box = $('list'); box.innerHTML = '';
-    if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add your first client in <a href="#clients" id="toClients">Clients</a> below, with their Facebook Page names.</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); $('clientsSection').scrollIntoView({ behavior: 'smooth' }); }; return; }
+    if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add your first client in the <a href="#clients" id="toClients">Clients</a> tab, with their Facebook Page names.</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
     for (const c of list) {
       const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id;
       card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip warn" data-f="over" hidden></span><span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><b class="num" data-f="spent"></b><span class="muted num">/ ${money(c.budget)}</span></span></div><div class="bar"><i data-f="bar"></i></div><div class="rows"></div><div class="cfoot"></div>`;
@@ -429,7 +429,7 @@
         <td class="r num">${c.type === 'post' ? '–' : money(c.liveSpend)}</td><td class="r num">${c.type === 'live' ? '–' : money(c.postSpend)}</td>
         <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${money(c.planned)}</td>${diffCell(c.diff)}
         <td><div class="meter" title="${Math.round(c.planned ? c.spend / c.planned * 100 : 0)}% of budget"><i class="${over ? 'over' : ''}" style="width:${pct}%"></i></div></td></tr>`;
-    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them on the Checklist page.'}</td></tr>`;
+    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
     $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.planned)}</td>${diffCell(t.spend - t.planned)}<td></td></tr>` : '';
     document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
       if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
@@ -459,8 +459,7 @@
       renderClients(); renderAccounts(); drawNewPages(); loadPages();
       await loadDay();
       const h = location.hash.slice(1);
-      if (['dashboard', 'accounts', 'team'].includes(h)) showTab(h);
-      else if (h === 'clients') $('clientsSection').scrollIntoView();
+      if (['dashboard', 'clients', 'accounts', 'team'].includes(h)) showTab(h);
       else window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

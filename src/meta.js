@@ -49,7 +49,7 @@ async function getAll(path, params, token, cap = 50) {
 
 // ---- OAuth ----
 function loginUrl(state) {
-  const u = new URL(`https://www.facebook.com/${cfg.graphVersion}/dialog/oauth`);
+  const u = new URL("https://www.facebook.com/dialog/oauth"); // unversioned: the versioned path was rejected for this app
   u.searchParams.set('client_id', cfg.fbAppId);
   u.searchParams.set('redirect_uri', `${cfg.baseUrl}/auth/facebook/callback`);
   u.searchParams.set('state', state);

@@ -49,14 +49,16 @@ async function getAll(path, params, token, cap = 50) {
 
 // ---- OAuth ----
 function loginUrl(state) {
-  const u = new URL(`https://www.facebook.com/${cfg.graphVersion}/dialog/oauth`);
-  u.searchParams.set('client_id', cfg.fbAppId);
-  u.searchParams.set('redirect_uri', `${cfg.baseUrl}/auth/facebook/callback`);
-  u.searchParams.set('state', state);
-  u.searchParams.set('response_type', 'code');
-  if (cfg.fbConfigId) u.searchParams.set('config_id', cfg.fbConfigId); // Facebook Login for Business
-  else u.searchParams.set('scope', 'ads_read,business_management');
-  return u.toString();
+  // Same shape as the link Facebook accepted in testing: client_id, redirect_uri, response_type, scope, state.
+  // (config_id is not used — Facebook rejected every link that carried it for this app.)
+  const q = [
+    ['client_id', cfg.fbAppId],
+    ['redirect_uri', `${cfg.baseUrl}/auth/facebook/callback`],
+    ['response_type', 'code'],
+    ['scope', 'ads_read,business_management'],
+    ['state', state],
+  ].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&').replace('ads_read%2Cbusiness_management', 'ads_read,business_management');
+  return `https://www.facebook.com/${cfg.graphVersion}/dialog/oauth?${q}`;
 }
 
 async function exchangeCode(code) {

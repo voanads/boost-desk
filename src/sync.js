@@ -192,7 +192,7 @@ async function dashboard(from, to) {
   const rows = await db.monthEntries(from, to); // [{day, client_id, data}]
   const per = new Map(clients.map((c) => [c.id, {
     id: c.id, name: c.name, type: c.type, pages: [...new Set([c.name, c.match, ...(c.pages || [])].filter(Boolean))],
-    budget: c.budget, archived: c.archived, days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {},
+    budget: c.budget, archived: c.archived, telegram: c.telegram || '', days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {},
   }]));
   const byDay = {};
   for (const r of rows) {
@@ -216,6 +216,76 @@ async function dashboard(from, to) {
   for (let d = from; d <= to; d = addDays(d, 1)) days.push({ day: d, spend: byDay[d] || 0 });
   const totals = list.reduce((t, p) => ({ spend: round2(t.spend + p.spend), planned: round2(t.planned + p.planned), live: round2(t.live + p.liveSpend), post: round2(t.post + p.postSpend), lives: t.lives + p.lives, active: t.active + (p.spend > 0 ? 1 : 0) }), { spend: 0, planned: 0, live: 0, post: 0, lives: 0, active: 0 });
   return { from, to, clients: list, days, totals };
+}
+
+const niceDay = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const shortDay = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const monthName = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const isWholeMonth = (from, to) => from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && addDays(to, 1).slice(8) === '01';
+const fmt = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Report for one client: a single day (every live + posts) or a range (total + day by day).
+async function clientReport(clientId, from, to) {
+  const c = (await db.listClients()).find((x) => x.id === Number(clientId));
+  if (!c) throw new Error('Client not found.');
+  const rows = (await db.monthEntries(from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
+  const lines = [];
+  if (from === to) {
+    const e = (rows[0] || {}).data || {};
+    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${niceDay(from)}`, '');
+    let total = 0;
+    if (hasLive(c)) {
+      const lives = Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)));
+      for (const [k, l] of lives) {
+        if (!(Number(l.spend) > 0)) continue;
+        total += Number(l.spend);
+        lines.push(`🔴 Live ${k.slice(1)}${l.time ? ' (' + l.time + ')' : ''}: ${fmt(l.spend)}`);
+      }
+    }
+    if (hasPost(c) && Number((e.post || {}).spend) > 0) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
+    if (!total) lines.push('No boost spend on this day.');
+    lines.push('', `💰 Total: ${fmt(total)}`);
+    if (e.note) lines.push(`📝 ${e.note}`);
+  } else {
+    const whole = isWholeMonth(from, to);
+    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${whole ? monthName(from) : shortDay(from) + ' – ' + shortDay(to)}`, '');
+    let total = 0, live = 0, post = 0, lives = 0, days = 0;
+    const daily = [];
+    for (const r of rows) {
+      const e = r.data || {};
+      let dl = 0, dn = 0, dp = 0;
+      if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; if (v > 0) { dl += v; dn++; } }
+      if (hasPost(c)) dp = Number((e.post || {}).spend) || 0;
+      const t = dl + dp;
+      if (!t) continue;
+      days++; total += t; live += dl; post += dp; lives += dn;
+      const parts = [];
+      if (dn) parts.push(`${dn} live${dn > 1 ? 's' : ''}`);
+      if (dp) parts.push('post');
+      daily.push(`• ${shortDay(r.day)}: ${fmt(t)}${parts.length ? ' (' + parts.join(' + ') + ')' : ''}`);
+    }
+    if (!total) lines.push('No boost spend in this period.');
+    else {
+      lines.push(`💰 Total: ${fmt(total)}`);
+      const sub = [];
+      if (hasLive(c)) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
+      if (hasPost(c)) sub.push(`📌 Boost posts: ${fmt(post)}`);
+      lines.push(...sub, `📅 ${days} day${days === 1 ? '' : 's'} with boosts`, '', ...daily);
+    }
+  }
+  return { text: lines.join('\n'), client: { id: c.id, name: c.name, telegram: c.telegram, telegramTitle: c.telegram_title } };
+}
+
+// Team summary: every client's total for a day or a range.
+async function summaryReport(from, to) {
+  if (from === to) return buildReport(from);
+  const d = await dashboard(from, to);
+  const list = d.clients.filter((c) => c.spend > 0);
+  const lines = [`📊 Boost summary — ${isWholeMonth(from, to) ? monthName(from) : shortDay(from) + ' – ' + shortDay(to)}`, ''];
+  for (const c of list) lines.push(`• ${c.name}: ${fmt(c.spend)}${c.lives ? ` · ${c.lives} live${c.lives > 1 ? 's' : ''}` : ''}`);
+  if (!list.length) lines.push('No boost spend in this period.');
+  lines.push('', `💰 Total: ${fmt(d.totals.spend)} · ${list.length} client${list.length === 1 ? '' : 's'}`);
+  return lines.join('\n');
 }
 
 async function buildReport(day) {
@@ -243,4 +313,4 @@ async function buildReport(day) {
   return lines.join('\n');
 }
 
-module.exports = { dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

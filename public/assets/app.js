@@ -199,18 +199,6 @@
     } catch (e) { status($('syncStatus'), e.message, true); }
     finally { b.disabled = false; b.textContent = 'Sync whole month'; }
   };
-  $('copyReport').onclick = async () => {
-    try {
-      const { text } = await api('/report/' + date);
-      await navigator.clipboard.writeText(text); toast('Report copied');
-    } catch (e) { toast('Could not copy: ' + e.message); }
-  };
-  $('sendReport').onclick = async () => {
-    if (!me.telegram.configured) { toast('Telegram is not set up yet. See Team & Telegram.'); return; }
-    const b = $('sendReport'); b.disabled = true;
-    try { await api(`/report/${date}/send`, { method: 'POST' }); toast('Sent to Telegram'); }
-    catch (e) { toast(e.message); } finally { b.disabled = false; }
-  };
   const shift = (n) => { const d = parse(date); d.setDate(d.getDate() + n); date = iso(d); loadDay(); };
   $('prevDay').onclick = () => shift(-1); $('nextDay').onclick = () => shift(1);
   $('todayBtn').onclick = () => { date = me?.today || iso(new Date()); loadDay(); };
@@ -272,20 +260,32 @@
     } catch (_) {}
   }
 
+  function tgSelect(c) {
+    if (!me || !me.telegram || !me.telegram.bot) return '<span class="hint">Add TELEGRAM_BOT_TOKEN to use groups</span>';
+    const opts = [...tgChats];
+    if (c.telegram && !opts.some((o) => o.id === c.telegram)) opts.push({ id: c.telegram, title: c.telegram_title || c.telegram });
+    return `<select data-tg aria-label="Telegram group for ${esc(c.name)}"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === c.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select>
+      <button class="ghost rbtn" data-tgrefresh type="button">Refresh groups</button>`;
+  }
   function renderClients() {
     const typeSel = (c) => `<select data-k="type">${[['live', 'Live'], ['post', 'Post'], ['both', 'Post + live']].map(([v, l]) => `<option value="${v}" ${c.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
     $('clientBody').innerHTML = clients.map((c) => `<tr data-cid="${c.id}">
       <td><input type="text" data-k="name" value="${esc(c.name)}" style="width:150px">${c.archived ? '<div class="hint">Paused</div>' : ''}</td>
       <td><span class="pages" data-pages></span></td>
       <td>${typeSel(c)}</td>
+      <td><div class="tgcell">${tgSelect(c)}</div></td>
       <td><button class="ghost" data-act="pause">${c.archived ? 'Resume' : 'Pause'}</button><button class="ghost" data-act="del">Delete</button></td></tr>`).join('')
-      || '<tr><td colspan="4" class="muted">No clients yet.</td></tr>';
+      || '<tr><td colspan="5" class="muted">No clients yet.</td></tr>';
     document.querySelectorAll('#clientBody tr[data-cid]').forEach((tr) => {
       const id = Number(tr.dataset.cid);
       const c0 = clients.find((c) => c.id === id);
       pageEditor(tr.querySelector('[data-pages]'), [...new Set([...(c0.pages || []), c0.match].filter(Boolean))], 'pg-' + id,
         (pages) => saveClient(id, { pages, match: '' }));
       tr.querySelectorAll('[data-k]').forEach((el) => el.onchange = () => saveClient(id, { [el.dataset.k]: el.type === 'number' ? Number(el.value) : el.value }));
+      const tg = tr.querySelector('[data-tg]');
+      if (tg) tg.onchange = () => { const o = tgChats.find((x) => x.id === tg.value); saveClient(id, { telegram: tg.value, telegram_title: o ? o.title : '' }); };
+      const tr2 = tr.querySelector('[data-tgrefresh]');
+      if (tr2) tr2.onclick = async () => { await loadChats(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet. Add the bot to a group and send a message there, then refresh.'); };
       tr.querySelector('[data-act=pause]').onclick = () => saveClient(id, { archived: !clients.find((c) => c.id === id).archived });
       const del = tr.querySelector('[data-act=del]');
       del.onclick = async () => {
@@ -386,6 +386,7 @@
   });
 
   async function loadDash() {
+    if (!$('rPanel').hidden && rTarget) openReport(rTarget.kind === 'client' ? rTarget.id : null);
     if (!dDate) dDate = me.today;
     $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
     const [from, to] = dRange();
@@ -419,9 +420,11 @@
         <td class="r num">${c.days}</td><td class="r num">${c.type === 'post' ? '–' : c.lives}</td>
         <td class="r num">${c.type === 'post' ? '–' : money(c.liveSpend)}</td><td class="r num">${c.type === 'live' ? '–' : money(c.postSpend)}</td>
         <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${c.days ? money(c.spend / c.days) : '–'}</td>
-        <td><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td></tr>`;
-    }).join('') || `<tr><td colspan="9" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td></td><td></td></tr>` : '';
+        <td><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td>
+        <td><button class="rbtn" data-report="${c.id}">Report${c.telegram ? ' ✈' : ''}</button></td></tr>`;
+    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td></td><td></td><td></td></tr>` : '';
+    document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); openReport(Number(b.dataset.report)); });
     document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
       if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
       else { $('dSearch').value = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; setMode('day'); }
@@ -439,11 +442,62 @@
     }
   }
 
+  // ---------- reports (per client + team summary) ----------
+  let rTarget = null; // { kind: 'client', id } or { kind: 'team' }
+  const periodLabel = () => dMode === 'day' ? nice(dDate) : monthLabel(dDate.slice(0, 7));
+  async function openReport(clientId) {
+    const [from, to] = dRange();
+    rTarget = clientId ? { kind: 'client', id: clientId } : { kind: 'team' };
+    $('rPanel').hidden = false; $('rText').value = 'Loading…'; $('rSend').disabled = true;
+    $('rPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+      if (clientId) {
+        const r = await api(`/client-report/${clientId}?from=${from}&to=${to}`);
+        $('rTitle').textContent = `${r.client.name} · ${periodLabel()}`;
+        $('rText').value = r.text;
+        rTarget.hasGroup = !!r.client.telegram;
+        $('rTo').textContent = r.client.telegram ? `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}` : 'No Telegram group for this client yet. Copy the text, or pick a group in the Clients tab.';
+        $('rSend').textContent = 'Send to client group';
+        $('rSend').disabled = !r.client.telegram || !(me.telegram && me.telegram.bot);
+      } else {
+        const r = await api(`/summary?from=${from}&to=${to}`);
+        $('rTitle').textContent = `Team summary · ${periodLabel()}`;
+        $('rText').value = r.text;
+        $('rTo').textContent = me.telegram.configured ? 'Sends to your team Telegram group.' : 'Team Telegram group not set (TELEGRAM_CHAT_ID). You can still copy the text.';
+        $('rSend').textContent = 'Send to team group';
+        $('rSend').disabled = !me.telegram.configured;
+      }
+    } catch (e) { $('rText').value = e.message; }
+  }
+  $('dTeamReport').onclick = () => openReport(null);
+  $('rClose').onclick = () => { $('rPanel').hidden = true; rTarget = null; };
+  $('rCopy').onclick = async () => {
+    const t = $('rText').value;
+    try { await navigator.clipboard.writeText(t); toast('Report copied'); }
+    catch (_) { $('rText').select(); try { document.execCommand('copy'); toast('Report copied'); } catch (__) { toast('Select the text and copy it'); } }
+  };
+  $('rSend').onclick = async () => {
+    if (!rTarget) return;
+    const [from, to] = dRange(), b = $('rSend'); b.disabled = true;
+    try {
+      if (rTarget.kind === 'client') { const r = await api(`/client-report/${rTarget.id}/send`, { method: 'POST', body: { from, to, text: $('rText').value } }); toast('Sent to ' + r.sentTo); }
+      else { await api('/summary/send', { method: 'POST', body: { from, to, text: $('rText').value } }); toast('Sent to the team group'); }
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  };
+
+  // ---------- Telegram groups for clients ----------
+  let tgChats = [];
+  async function loadChats() {
+    if (!me || !me.telegram || !me.telegram.bot) return;
+    try { tgChats = await api('/telegram/chats'); } catch (_) { tgChats = []; }
+    renderClients();
+  }
+
   // ---------- boot ----------
   (async () => {
     try {
       me = await api('/me');
-      loadAuto();
+      loadAuto(); loadChats();
       date = me.today || date;
       $('whoName').textContent = me.name;
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);

@@ -77,7 +77,7 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     today: sync.todayIn(), tz: cfg.tz,
-    telegram: { configured: telegram.configured(), time: cfg.reportTime },
+    telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
     team: await db.listUsers(),
   });
 }));
@@ -91,6 +91,8 @@ const cleanClient = (b) => {
   if (b.budget != null) c.budget = Math.max(0, Number(b.budget) || 0);
   if (b.lives != null) c.lives = Math.min(6, Math.max(1, parseInt(b.lives, 10) || 2));
   if (b.account != null) c.account = String(b.account).trim().slice(0, 120);
+  if (b.telegram != null) c.telegram = String(b.telegram).trim().slice(0, 40);
+  if (b.telegram_title != null) c.telegram_title = String(b.telegram_title).trim().slice(0, 150);
   if (Array.isArray(b.pages)) c.pages = [...new Set(b.pages.map((x) => String(x).trim().slice(0, 150)).filter(Boolean))].slice(0, 20);
   if (b.archived != null) c.archived = !!b.archived;
   return c;
@@ -185,6 +187,39 @@ api.post('/accounts/refresh', wrap(async (req, res) => {
 api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.params.id, req.body?.enabled); res.json({ ok: true }); }));
 
 // Reports
+const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 92;
+api.get('/telegram/chats', wrap(async (req, res) => {
+  const saved = await db.getSetting('telegramChats', []);
+  const byId = new Map(saved.map((c) => [c.id, c]));
+  for (const c of await telegram.listChats()) byId.set(c.id, c);
+  const all = [...byId.values()].sort((a, b) => a.title.localeCompare(b.title));
+  await db.setSetting('telegramChats', all);
+  res.json(all);
+}));
+api.get('/client-report/:id', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  res.json(await sync.clientReport(req.params.id, from, to));
+}));
+api.post('/client-report/:id/send', wrap(async (req, res) => {
+  const { from, to, text } = req.body || {};
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  const r = await sync.clientReport(req.params.id, from, to);
+  if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
+  await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text, r.client.telegram);
+  res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram });
+}));
+api.get('/summary', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  res.json({ text: await sync.summaryReport(from, to) });
+}));
+api.post('/summary/send', wrap(async (req, res) => {
+  const { from, to, text } = req.body || {};
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : await sync.summaryReport(from, to));
+  res.json({ ok: true });
+}));
 api.get('/report/:day', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
   res.json({ text: await sync.buildReport(req.params.day) });

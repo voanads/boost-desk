@@ -42,6 +42,8 @@ async function init() {
       PRIMARY KEY (day, client_id)
     );
     ALTER TABLE clients ADD COLUMN IF NOT EXISTS pages JSONB NOT NULL DEFAULT '[]';
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS telegram TEXT NOT NULL DEFAULT '';          -- client's own Telegram group chat id
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS telegram_title TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS pages_seen (
       name TEXT PRIMARY KEY,                      -- Facebook Page names seen in synced campaigns
       last_seen DATE NOT NULL
@@ -78,7 +80,7 @@ async function createClient(c) {
   return clientRow(r.rows[0]);
 }
 async function updateClient(id, c) {
-  const allowed = ['name', 'match', 'pages', 'type', 'budget', 'lives', 'account', 'archived'];
+  const allowed = ['name', 'match', 'pages', 'type', 'budget', 'lives', 'account', 'archived', 'telegram', 'telegram_title'];
   const keys = Object.keys(c).filter((k) => allowed.includes(k));
   if (!keys.length) return null;
   const sets = keys.map((k, i) => `${k}=$${i + 2}`).join(', ');

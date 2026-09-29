@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=9">
+<link rel="stylesheet" href="/assets/app.css?v=11">
 </head>
 <body>
 <div class="wrap">
@@ -33,8 +33,6 @@
       <div class="tools">
         <button id="syncBtn" class="primary">Sync from Meta</button>
         <button id="syncMonthBtn">Sync whole month</button>
-        <button id="copyReport">Copy report</button>
-        <button id="sendReport">Send to Telegram</button>
       </div>
     </div>
     <div class="autobar">
@@ -90,6 +88,19 @@
         <input type="text" id="dSearch" placeholder="Search client or Page" aria-label="Search clients">
         <select id="dType" aria-label="Boost type"><option value="">All types</option><option value="live">Live</option><option value="post">Post</option><option value="both">Post + live</option></select>
         <label class="hint chk"><input type="checkbox" id="dShowIdle"> Show clients with no spend</label>
+        <button id="dTeamReport">Team summary</button>
+      </div>
+    </div>
+    <div class="panel report-panel" id="rPanel" hidden>
+      <div class="top">
+        <div><h2 id="rTitle">Report</h2><div class="hint" id="rTo"></div></div>
+        <button class="ghost" id="rClose" aria-label="Close report">Close</button>
+      </div>
+      <textarea id="rText" rows="12" aria-label="Report text (you can edit before sending)"></textarea>
+      <div class="tools">
+        <button id="rCopy">Copy</button>
+        <button id="rSend" class="primary">Send to Telegram</button>
+        <span class="hint" id="rHint">You can edit the text before sending.</span>
       </div>
     </div>
     <div class="summary">
@@ -109,7 +120,7 @@
           <th data-sort="name">Client</th><th>Type</th>
           <th class="r" data-sort="days">Days</th><th class="r" data-sort="lives">Lives</th>
           <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
-          <th class="r" data-sort="spend">Spent</th><th class="r">Per day</th><th>Share</th>
+          <th class="r" data-sort="spend">Spent</th><th class="r">Per day</th><th>Share</th><th></th>
         </tr></thead>
         <tbody id="dBody"></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
@@ -133,7 +144,7 @@
       <datalist id="pageList"></datalist>
     </div>
     <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th></th></tr></thead>
+      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th>Telegram group</th><th></th></tr></thead>
       <tbody id="clientBody"></tbody>
     </table></div></div>
       </div>
@@ -171,6 +182,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=9"></script>
+<script src="/assets/app.js?v=11"></script>
 </body>
 </html>

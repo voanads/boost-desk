@@ -129,3 +129,14 @@ body{overflow-x:hidden}
 }
 .sharecell{display:flex;align-items:center;gap:8px}
 .sharecell .meter{flex:1}
+
+.report-panel{border-color:var(--accent)}
+.report-panel textarea{width:100%;min-height:220px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit;font-size:.92rem;line-height:1.5;resize:vertical;color:var(--ink)}
+.dtable td .rbtn{padding:4px 10px;font-size:.82rem;white-space:nowrap}
+.tgcell{display:flex;flex-direction:column;gap:4px;min-width:170px}
+.tgcell select{max-width:220px}
+.dtable th,.dtable td{padding:8px 7px}
+@media (min-width:900px){table.dtable{min-width:0}}
+.dtable .meter{min-width:44px}
+.dtable .chip{padding:2px 6px}
+.dtable td:first-child{min-width:140px}

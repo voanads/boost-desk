@@ -35,8 +35,9 @@
   // ---------- tabs ----------
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   function showTab(name) {
+    if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    ['checklist', 'dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     if (name === 'clients') loadClientMonth();
@@ -238,7 +239,7 @@
     const t0 = Date.now();
     try {
       const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
-      await loadDay(); loadPages(); loadCheck();
+      await loadDay(); loadPages(); loadCheck(); loadDash();
       try { accounts = await api('/accounts'); renderAccounts(); } catch (_) {}
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
@@ -495,19 +496,18 @@
 
   $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };
 
-  // While the checklist is open on today, pull fresh numbers every 2 minutes (picks up auto-sync results).
-  setInterval(async () => {
-    if (document.hidden || $('tab-checklist').hidden || date !== (me && me.today)) return;
+  // While the Dashboard shows a period that includes today, pull fresh numbers every 2 minutes (picks up auto sync).
+  setInterval(() => {
+    if (document.hidden || $('tab-dashboard').hidden || !me || !dDate) return;
     if (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
-    try {
-      const d = await api('/day/' + date);
-      if (JSON.stringify(d.entries) !== JSON.stringify(day.entries) || JSON.stringify(d.meta) !== JSON.stringify(day.meta)) { day = d; renderChecklist(); renderSyncInfo(); loadMonth(); }
-    } catch (_) {}
+    if ($('ckDlg').open || $('cDlg').open) return;
+    const [, to] = dRange(); if (to < me.today) return;
+    loadDay(); loadDash(true);
   }, 120000);
 
   // ---------- dashboard ----------
   // One control for the period: quick chips + ‹ label › to step. Mode follows the chip.
-  let dMode = 'month', dDate = null, dFrom = null, dTo = null, dData = null, dSort = { key: 'spend', asc: false }, dTypeF = '';
+  let dMode = 'day', dDate = null, dFrom = null, dTo = null, dData = null, dSort = { key: 'spend', asc: false }, dTypeF = '';
   const addD = (d, n) => { const x = parse(d); x.setDate(x.getDate() + n); return iso(x); };
   const monthLabel = (ym) => parse(ym + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const lastDay = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
@@ -565,8 +565,12 @@
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' }; renderDash();
   });
 
-  async function loadDash() {
+  let dEntries = {}; const dOpen = new Set();
+  async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
+    // Sync status and "Spend not matched" follow the day you're looking at (today for longer periods).
+    const infoDay = dMode === 'day' ? dDate : me.today;
+    if (date !== infoDay) { date = infoDay; loadDay(); }
     const pre = currentPreset();
     document.querySelectorAll('#dChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
     $('dLabel').textContent = periodLabel();
@@ -578,13 +582,45 @@
     $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
     $('dTableTitle').textContent = 'Clients · ' + periodLabel();
-    try { dData = await api(`/dashboard?from=${from}&to=${to}`); renderDash(); }
+    try {
+      const [d, rows] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => [])]);
+      dData = d; dEntries = {};
+      for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
+      renderDash();
+    }
     catch (e) { $('dBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
   const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
+
+  // The breakdown under a client: lives (start time, campaigns, spend) and boost posts — one day, or day by day.
+  function dayParts(c, e) {
+    const out = [];
+    if (hasL(c)) Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
+      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend) }); });
+    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend) });
+    return out;
+  }
+  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n">${p.kind === 'live' ? '🔴' : '📌'} ${esc(p.label)}</span><span class="dl-t num">${esc(p.time)}</span><span class="hint">${p.n ? p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span><span class="dl-v num">${money(p.spend)}</span></div>`;
+  function detailRow(c) {
+    const days = dEntries[c.id] || {};
+    let body = '';
+    if (dMode === 'day') {
+      const e = days[dDate] || {}, parts = dayParts(c, e);
+      body = (parts.length ? parts.map(partLine).join('') : '<div class="muted">No boost spend on this day.</div>')
+        + (e.note ? `<div class="dnote">📝 ${esc(e.note)}</div>` : '')
+        + (e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
+    } else {
+      const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
+      body = list.length ? list.map((x) => {
+        const tot = x.parts.reduce((s2, p) => s2 + p.spend, 0);
+        return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
+      }).join('') : '<div class="muted">No boost spend in this period.</div>';
+    }
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+  }
 
   function renderDash() {
     if (!dData) return;
@@ -610,8 +646,9 @@
     $('dBody').innerHTML = list.map((c) => {
       const share = t.spend ? c.spend / t.spend * 100 : 0, pg = pageNames(c);
       const tags = (hasL(c) ? '<span class="chip live">Live</span>' : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
-      return `<tr data-cid="${c.id}">
-        <td class="cname"><div class="nm"><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
+      const open = dOpen.has(c.id);
+      return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}" tabindex="0" aria-expanded="${open}">
+        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
@@ -619,9 +656,18 @@
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
         <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
         <td class="sharec" data-l="Share"><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td>
-        <td class="actc"><button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client’s Telegram group' : 'No Telegram group yet — you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button></td></tr>`;
+        <td class="actc"><button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client’s Telegram group' : 'No Telegram group yet — you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button></td></tr>${open ? detailRow(c) : ''}`;
     }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
     $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td><td></td></tr>` : '';
+    document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
+      const toggle = () => { const id = Number(tr.dataset.cid); dOpen.has(id) ? dOpen.delete(id) : dOpen.add(id); renderDash(); };
+      tr.onclick = (ev) => { if (!ev.target.closest('button')) toggle(); };
+      tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };
+    });
+    document.querySelectorAll('#dBody [data-dreport]').forEach((b) => b.onclick = () => {
+      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.dreport), from, to, label: periodLabel() });
+    });
+    document.querySelectorAll('#dBody [data-oneday]').forEach((b) => b.onclick = () => { dMode = 'day'; dDate = b.dataset.oneday; loadDash(); });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel() });
     });
@@ -684,6 +730,7 @@
         const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         toast('Sent to ' + r.sentTo);
+        if (!$('tab-dashboard').hidden) loadDash();
       } else { await api('/summary/send', { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } }); toast('Sent to the team group'); }
       $('ckDlg').close();
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
@@ -709,8 +756,8 @@
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (['dashboard', 'clients', 'accounts', 'team'].includes(h)) showTab(h);
-      else window.scrollTo(0, 0);
+      showTab(['clients', 'accounts', 'team'].includes(h) ? h : 'dashboard');
+      window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();
 })();

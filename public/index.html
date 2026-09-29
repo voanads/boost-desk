@@ -7,15 +7,14 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=26">
+<link rel="stylesheet" href="/assets/app.css?v=27">
 </head>
 <body>
 <div class="wrap">
   <header class="appbar">
     <a class="brand" href="#checklist" aria-label="Ads Box Boost Desk"><img class="logo" src="/assets/logo.svg" alt=""><span class="bname">Ads Box<small>Boost Desk</small></span></a>
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="checklist" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/></svg><span class="full">Home</span><span class="short">Home</span></button>
-      <button role="tab" data-tab="dashboard" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
+      <button role="tab" data-tab="dashboard" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
       <button role="tab" data-tab="team" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span class="full">Team &amp; Telegram</span><span class="short">Team</span></button>
@@ -24,7 +23,7 @@
   </header>
 
   <!-- HOME -->
-  <section id="tab-checklist" class="wrap">
+  <section id="tab-checklist" class="wrap" hidden>
     <div class="top">
       <div class="daybar">
         <button id="prevDay" aria-label="Previous day">‹</button>
@@ -33,14 +32,8 @@
         <button id="todayBtn">Today</button>
       </div>
       <div class="tools">
-        <button id="syncBtn" class="primary" title="Pulls the last 30 days from Ads Manager">Sync from Meta</button>
       </div>
     </div>
-    <div class="progress" id="syncProg" hidden>
-      <div class="ptext"><span id="syncProgText">Starting…</span><span class="num hint" id="syncProgTime"></span></div>
-      <div class="pbar"><i id="syncProgBar"></i></div>
-    </div>
-    <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
     <div class="summary">
       <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Spent</span><span class="val num" id="sSpend">$0.00</span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Lives with spend</span><span class="val num" id="sLives">0</span></div>
@@ -49,11 +42,6 @@
     </div>
     <div class="sechead"><h2 id="listTitle">Clients</h2><span class="hint" id="listHint"></span></div>
     <div class="list" id="list"><div class="empty">Loading…</div></div>
-    <div class="panel" id="unmatchedPanel" hidden>
-      <h2>Spend not matched to a client</h2>
-      <div class="hint">Add the Page as a new client, or add it to an existing client who owns it. The next sync picks it up.</div>
-      <div class="tablewrap"><table><thead><tr><th>Campaigns</th><th class="r">Count</th><th class="r">Spend</th><th>Match to</th></tr></thead><tbody id="unmatchedBody"></tbody></table></div>
-    </div>
 
     <div class="panel">
       <div class="top"><h2 id="monthTitle">This month</h2><span class="hint">Days and lives with spend · a live = campaigns started within 30 min</span></div>
@@ -65,7 +53,7 @@
   </section>
 
   <!-- DASHBOARD -->
-  <section id="tab-dashboard" class="wrap" hidden>
+  <section id="tab-dashboard" class="wrap">
     <div class="dhead">
       <div class="chips" id="dChips" role="group" aria-label="Period">
         <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">Last 7 days</button><button data-preset="30">Last 30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="custom">Custom…</button>
@@ -77,9 +65,15 @@
         <span class="rangeins" id="dRangeBox" hidden><label>From <input type="date" id="dFrom"></label><label>To <input type="date" id="dTo"></label></span>
         <button id="dNext" class="navbtn" aria-label="Next period">›</button>
         <span class="spacer"></span>
+        <button id="syncBtn" class="primary syncbtn" title="Pulls the last 30 days from Ads Manager">Sync from Meta</button>
         <button id="dTeamReport" class="teambtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Team report</span></button>
       </div>
     </div>
+    <div class="progress" id="syncProg" hidden>
+      <div class="ptext"><span id="syncProgText">Starting…</span><span class="num hint" id="syncProgTime"></span></div>
+      <div class="pbar"><i id="syncProgBar"></i></div>
+    </div>
+    <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
     <div class="summary">
       <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span><span class="sub num" id="dTax"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Live spend</span><span class="val num" id="dLive">$0.00</span><span class="sub" id="dLives"></span></div>
@@ -109,6 +103,11 @@
         </tr></thead>
         <tbody id="dBody"></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
+    </div>
+    <div class="panel" id="unmatchedPanel" hidden>
+      <h2>Spend not matched to a client</h2>
+      <div class="hint">Add the Page as a new client, or add it to an existing client who owns it. The next sync picks it up.</div>
+      <div class="tablewrap"><table><thead><tr><th>Campaigns</th><th class="r">Count</th><th class="r">Spend</th><th>Match to</th></tr></thead><tbody id="unmatchedBody"></tbody></table></div>
     </div>
   </section>
 
@@ -199,6 +198,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=26"></script>
+<script src="/assets/app.js?v=27"></script>
 </body>
 </html>

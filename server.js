@@ -230,6 +230,12 @@ api.post('/sync-range', wrap(async (req, res) => {
   if ((Date.parse(until) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Sync at most 3 months at a time.' });
   res.json(await sync.syncRange(from, until, req.user));
 }));
+// Day entries for any range (the dashboard's per-client breakdown).
+api.get('/entries', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from || '') || !/^\d{4}-\d{2}-\d{2}$/.test(to || '') || from > to) return res.status(400).json({ error: 'Pick a valid date range.' });
+  res.json(await db.monthEntries(req.user.fb_id, from, to));
+}));
 api.get('/month/:ym', wrap(async (req, res) => {
   const m = String(req.params.ym).match(/^(\d{4})-(\d{2})$/);
   if (!m) return res.status(400).json({ error: 'Bad month.' });

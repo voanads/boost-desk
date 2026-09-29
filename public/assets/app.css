@@ -355,3 +355,7 @@ button.busy::before{content:"";position:absolute;left:16px;top:50%;width:14px;he
   .dlg-foot button{flex:1}
 }
 @media (max-width:760px){.dlg-foot button{white-space:nowrap}#ckSend{flex:2}.dlg textarea{min-height:200px}}
+/* home rows (no tick boxes) */
+.rlabel{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:0}
+.rlabel span:first-child{font-weight:600;white-space:nowrap}
+.row{min-height:52px}

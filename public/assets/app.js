@@ -111,7 +111,7 @@
     if (!list.length) { box.innerHTML = '<div class="empty"><b>Your workspace is empty.</b><br>1. Tap <b>Sync from Meta</b> to load your ad accounts and the last 30 days of spend.<br>2. Then add your clients in the <a href="#clients" id="toClients">Clients</a> tab (or tap <b>New client</b> on each Page listed under “Spend not matched”).</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
     for (const [i, c] of list.entries()) {
       const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id; card.style.setProperty('--i', Math.min(i, 12));
-      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="cprog hint" data-f="prog"></span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
+      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
       const rows = card.querySelector('.rows');
       if (hasPost(c)) rows.appendChild(makeRow(c, 'post', 'Boost post', false));
       if (hasLive(c)) for (let i = 1; i <= liveCount(c); i++) rows.appendChild(makeRow(c, 'l' + i, 'Live ' + i, true));
@@ -137,32 +137,31 @@
 
   function makeRow(c, key, label, isLive) {
     const row = document.createElement('div'); row.className = 'row'; row.dataset.key = key;
-    row.innerHTML = `<label><input type="checkbox" id="cb-${c.id}-${key}"><span>${label}</span><span class="hint" data-f="camp"></span></label>` +
+    row.innerHTML = `<div class="rlabel"><span>${label}</span><span class="hint" data-f="camp"></span></div>` +
       (isLive ? `<input type="text" class="time num" id="tm-${c.id}-${key}" placeholder="time">` : '<span></span>') +
       `<span class="spend"><span class="muted">$</span><input type="number" min="0" step="0.01" inputmode="decimal" id="sp-${c.id}-${key}" placeholder="0.00"></span><span></span>`;
     const mk = (v) => key === 'post' ? { post: v } : { lives: { [key]: v } };
-    const cb = row.querySelector('input[type=checkbox]'), sp = row.querySelector('input[type=number]'), tm = row.querySelector('input.time');
-    cb.onchange = () => patch(c.id, mk({ on: cb.checked }));
+    const sp = row.querySelector('input[type=number]'), tm = row.querySelector('input.time');
     let t; sp.oninput = () => { clearTimeout(t); t = setTimeout(() => patch(c.id, mk({ spend: sp.value === '' ? 0 : Number(sp.value) })), 600); };
     if (tm) { let tt; tm.oninput = () => { clearTimeout(tt); tt = setTimeout(() => patch(c.id, mk({ time: tm.value })), 700); }; }
     return row;
   }
 
   function refreshValues() {
-    let spend = 0, total = 0, done = 0, lives = 0, withSpend = 0;
+    let spend = 0, total = 0, done = 0, lives = 0, withSpend = 0, posts = 0;
     for (const c of active()) {
       const e = entry(c.id), s = stats(c, e);
       spend += s.spend; total += s.total; done += s.done; if (s.spend > 0) withSpend++;
       if (hasLive(c)) lives += Object.values(e.lives || {}).filter((l) => l && Number(l.spend) > 0).length;
+      if (hasPost(c) && Number((e.post || {}).spend) > 0) posts++;
       const card = document.querySelector(`.card[data-cid="${c.id}"]`); if (!card) continue;
-      card.classList.toggle('is-done', s.total > 0 && s.done === s.total);
-      card.querySelector('[data-f=prog]').textContent = s.total ? (s.done === s.total ? '✓ Done' : `${s.done}/${s.total} done`) : '';
+      card.classList.toggle('is-done', s.spend > 0);
       card.querySelector('[data-f=spent]').textContent = money(s.spend);
       card.querySelector('[data-f=synced]').hidden = !e.syncedAt;
       card.querySelectorAll('.row').forEach((row) => {
         const key = row.dataset.key; const v = key === 'post' ? (e.post || {}) : ((e.lives || {})[key] || {});
-        const cb = row.querySelector('input[type=checkbox]'), sp = row.querySelector('input[type=number]'), tm = row.querySelector('input.time');
-        cb.checked = !!v.on; row.classList.toggle('done', !!v.on);
+        const sp = row.querySelector('input[type=number]'), tm = row.querySelector('input.time');
+        row.classList.toggle('done', Number(v.spend) > 0);
         if (document.activeElement !== sp) sp.value = v.spend ? v.spend : '';
         if (tm && document.activeElement !== tm) tm.value = v.time || '';
         row.querySelector('[data-f=camp]').textContent = v.campaigns ? `· ${v.campaigns} campaign${v.campaigns > 1 ? 's' : ''}` : '';
@@ -177,9 +176,9 @@
       }
     }
     countTo($('sSpend'), spend, money); countTo($('sLives'), lives, intF);
-    countTo($('sDone'), done, (v) => Math.round(v) + ' / ' + total); countTo($('sActive'), withSpend, (v) => Math.round(v) + ' / ' + active().length);
+    countTo($('sDone'), posts, intF); countTo($('sActive'), withSpend, (v) => Math.round(v) + ' / ' + active().length);
     $('listTitle').textContent = nice(date).replace(/ \d{4}$/, '');
-    $('listHint').textContent = total ? (done === total ? '✓ All ' + total + ' boosts done' : `${done} of ${total} boosts done · ${total - done} to go`) : '';
+    $('listHint').textContent = withSpend ? `${lives} live${lives === 1 ? '' : 's'} · ${posts} boost post${posts === 1 ? '' : 's'} · ${money(spend)}` : 'No boost spend yet';
   }
 
   async function loadMonth() {

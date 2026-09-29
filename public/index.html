@@ -7,14 +7,14 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=23">
+<link rel="stylesheet" href="/assets/app.css?v=24">
 </head>
 <body>
 <div class="wrap">
   <header class="appbar">
     <a class="brand" href="#checklist" aria-label="Ads Box Boost Desk"><img class="logo" src="/assets/logo.svg" alt=""><span class="bname">Ads Box<small>Boost Desk</small></span></a>
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="checklist" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span class="full">Checklist</span><span class="short">Checklist</span></button>
+      <button role="tab" data-tab="checklist" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/></svg><span class="full">Home</span><span class="short">Home</span></button>
       <button role="tab" data-tab="dashboard" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
@@ -23,7 +23,7 @@
     <div class="who"><span class="avatar" id="whoAvatar" aria-hidden="true"></span><span id="whoName" class="wname"></span><button id="logoutBtn" class="ghost">Log out</button></div>
   </header>
 
-  <!-- CHECKLIST -->
+  <!-- HOME -->
   <section id="tab-checklist" class="wrap">
     <div class="top">
       <div class="daybar">
@@ -44,7 +44,7 @@
     <div class="summary">
       <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Spent</span><span class="val num" id="sSpend">$0.00</span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Lives with spend</span><span class="val num" id="sLives">0</span></div>
-      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Boosts done</span><span class="val num" id="sDone">0 / 0</span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 3h6l-1 7 4 3H6l4-3Z"/></svg>Boost posts</span><span class="val num" id="sDone">0</span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="sActive">0</span></div>
     </div>
     <div class="sechead"><h2 id="listTitle">Clients</h2><span class="hint" id="listHint"></span></div>
@@ -204,6 +204,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=23"></script>
+<script src="/assets/app.js?v=24"></script>
 </body>
 </html>

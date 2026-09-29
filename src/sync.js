@@ -120,7 +120,7 @@ function addDays(day, n) {
 }
 
 // Pull campaign spend for every enabled ad account over [since, until].
-async function fetchRange(since, until, user) {
+async function fetchRange(since, until, user, onProgress = () => {}) {
   const token = await tokenFor(user);
   meta.rememberPageNames(await db.getSetting('pageNames', {}));
   let ids = await db.enabledAccountIds();
@@ -129,7 +129,8 @@ async function fetchRange(since, until, user) {
   const items = [];
   const errors = [];
   const checks = [];
-  for (const id of ids) {
+  for (const [i, id] of ids.entries()) {
+    onProgress({ phase: 'accounts', done: i, total: ids.length, account: names[id] || id });
     try {
       const rows = await meta.campaignSpendRange(token, id, since, until, names[id]);
       items.push(...rows);
@@ -205,14 +206,19 @@ async function syncDay(day, user) {
 }
 
 // Backfill several days with one API call per account (Meta allows up to ~37 months back).
-async function syncRange(since, until, user) {
-  const { items, errors, checks } = await fetchRange(since, until, user);
+async function syncRange(since, until, user, onProgress = () => {}) {
+  const { items, errors, checks } = await fetchRange(since, until, user, onProgress);
   await db.setSetting('lastSyncCheck', { from: since, to: until, at: new Date().toISOString(), checks });
   const clients = await clientsWithLearnedPages(items);
   const byDay = {};
   for (const it of items) (byDay[it.day] = byDay[it.day] || []).push(it);
   const results = [];
-  for (let d = since; d <= until; d = addDays(d, 1)) results.push(await applyDay(d, byDay[d] || [], errors, user, clients));
+  const allDays = [];
+  for (let d = since; d <= until; d = addDays(d, 1)) allDays.push(d);
+  for (const [i, d] of allDays.entries()) {
+    onProgress({ phase: 'saving', done: i, total: allDays.length, account: '' });
+    results.push(await applyDay(d, byDay[d] || [], errors, user, clients));
+  }
   return {
     days: results.length,
     campaigns: items.length,

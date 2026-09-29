@@ -158,7 +158,11 @@ api.post('/sync/:day', wrap(async (req, res) => {
   res.json(await sync.syncDay(req.params.day, req.user));
 }));
 // Main sync: the last 30 days (or the month containing ?around= when that's older), in one pass.
+// Live progress of the running sync (one at a time for the whole team).
+let syncProgress = { running: false };
+api.get('/sync-progress', (req, res) => res.json({ ...syncProgress, elapsed: syncProgress.startedAt ? Math.round((Date.now() - syncProgress.startedAt) / 1000) : 0 }));
 api.post('/sync-recent', wrap(async (req, res) => {
+  if (syncProgress.running) return res.status(409).json({ error: `A sync started by ${syncProgress.by} is already running. Wait for it to finish.`, busy: true });
   const today = sync.todayIn();
   const from30 = sync.addDays(today, -29);
   const around = isDay(req.body?.around) ? req.body.around : today;
@@ -168,7 +172,10 @@ api.post('/sync-recent', wrap(async (req, res) => {
     const last = new Date(Date.UTC(Number(around.slice(0, 4)), Number(around.slice(5, 7)), 0)).getUTCDate();
     to = around.slice(0, 8) + String(last).padStart(2, '0');
   }
-  const r = await sync.syncRange(from, to, req.user);
+  syncProgress = { running: true, phase: 'starting', done: 0, total: 0, account: '', from, to, by: req.user.name, startedAt: Date.now() };
+  let r;
+  try { r = await sync.syncRange(from, to, req.user, (p) => { syncProgress = { ...syncProgress, ...p }; }); }
+  finally { syncProgress = { running: false, lastSeconds: Math.round((Date.now() - syncProgress.startedAt) / 1000) }; }
   res.json({ ...r, from, to });
 }));
 // Backfill past days, e.g. the whole month: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (max 93 days).

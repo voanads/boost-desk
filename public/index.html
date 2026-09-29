@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=15">
+<link rel="stylesheet" href="/assets/app.css?v=16">
 </head>
 <body>
 <div class="wrap">
@@ -33,6 +33,10 @@
       <div class="tools">
         <button id="syncBtn" class="primary" title="Pulls the last 30 days from Ads Manager">Sync from Meta</button>
       </div>
+    </div>
+    <div class="progress" id="syncProg" hidden>
+      <div class="ptext"><span id="syncProgText">Starting…</span><span class="num hint" id="syncProgTime"></span></div>
+      <div class="pbar"><i id="syncProgBar"></i></div>
     </div>
     <div class="status" id="syncStatus"></div>
     <div class="status" id="syncCheck"></div>
@@ -180,6 +184,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=15"></script>
+<script src="/assets/app.js?v=16"></script>
 </body>
 </html>

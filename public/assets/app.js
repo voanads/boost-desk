@@ -188,16 +188,39 @@
   }
 
   // ---------- checklist actions ----------
+  // Live progress: accounts are ~85% of the work, saving the days the rest.
+  let progTimer = null;
+  function showProgress(p) {
+    const box = $('syncProg'); box.hidden = false;
+    let pct = 0, text = 'Starting…';
+    if (p.phase === 'accounts' && p.total) { pct = (p.done / p.total) * 85; text = `Reading ad account ${p.done + 1} of ${p.total}: ${p.account}`; }
+    else if (p.phase === 'saving' && p.total) { pct = 85 + (p.done / p.total) * 15; text = `Saving day ${p.done + 1} of ${p.total}…`; }
+    $('syncProgBar').style.width = Math.max(3, pct) + '%';
+    $('syncProgText').textContent = text;
+    $('syncProgTime').textContent = (p.elapsed || 0) + 's';
+  }
+  function watchProgress() {
+    clearInterval(progTimer);
+    progTimer = setInterval(async () => {
+      try { const p = await api('/sync-progress'); if (p.running) showProgress(p); } catch (_) {}
+    }, 1000);
+  }
+  function stopProgress() { clearInterval(progTimer); progTimer = null; $('syncProg').hidden = true; }
+
   $('syncBtn').onclick = async () => {
     const b = $('syncBtn'); b.disabled = true; b.textContent = 'Syncing 30 days…';
-    status($('syncStatus'), 'Reading the last 30 days from Ads Manager… this can take up to a minute.');
+    status($('syncStatus'), '');
+    showProgress({ phase: 'starting', elapsed: 0 }); watchProgress();
+    const t0 = Date.now();
     try {
       const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
       await loadDay(); loadPages(); loadCheck();
-      toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} · ${r.daysWithSpend} days with spend`);
+      toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
-    finally { b.disabled = false; b.textContent = 'Sync from Meta'; }
+    finally { stopProgress(); b.disabled = false; b.textContent = 'Sync from Meta'; }
   };
+  // If a sync is already running (started by someone else or another tab), show it.
+  (async () => { try { const p = await api('/sync-progress'); if (p.running) { showProgress(p); watchProgress(); const w = setInterval(async () => { const q = await api('/sync-progress').catch(() => ({})); if (!q.running) { clearInterval(w); stopProgress(); loadDay(); loadCheck(); } }, 1500); } } catch (_) {} })();
   const shift = (n) => { const d = parse(date); d.setDate(d.getDate() + n); date = iso(d); loadDay(); };
   $('prevDay').onclick = () => shift(-1); $('nextDay').onclick = () => shift(1);
   $('todayBtn').onclick = () => { date = me?.today || iso(new Date()); loadDay(); };

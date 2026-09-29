@@ -142,3 +142,9 @@ body{overflow-x:hidden}
 .dtable td:first-child{min-width:140px}
 .rangeins{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
 #dPreset{padding:6px 9px}
+
+.progress{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.progress .ptext{display:flex;justify-content:space-between;gap:10px;font-size:.88rem}
+.progress .pbar{height:6px;background:var(--bg);border-radius:9px;overflow:hidden}
+.progress .pbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:9px}
+@media (prefers-reduced-motion:no-preference){.progress .pbar i{transition:width .4s}}

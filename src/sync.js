@@ -315,6 +315,15 @@ const isWholeMonth = (from, to) => from.slice(8) === '01' && from.slice(0, 7) ==
 const fmt = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Report for one client: a single day (every live + posts) or a range (total + day by day).
+// Client reports show the total plus tax (TAX_RATE %, default 10). Rounded to the cent in whole cents.
+const TAX_RATE = Number.isFinite(Number(process.env.TAX_RATE)) && process.env.TAX_RATE !== '' ? Number(process.env.TAX_RATE) : 10;
+function totalWithTax(total) {
+  if (!(total > 0) || !TAX_RATE) return `💰 Total: ${fmt(total)}`;
+  const cents = Math.round(total * 100);
+  const withTax = Math.round(cents * (100 + TAX_RATE) / 100) / 100;
+  return `💰 Total: ${fmt(cents / 100)} +Tax ${TAX_RATE}% = ${fmt(withTax)}`;
+}
+
 async function clientReport(owner, clientId, from, to) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
@@ -334,7 +343,7 @@ async function clientReport(owner, clientId, from, to) {
     }
     if (hasPost(c) && Number((e.post || {}).spend) > 0) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
     if (!total) lines.push('No boost spend on this day.');
-    lines.push('', `💰 Total: ${fmt(total)}`);
+    lines.push('', totalWithTax(total));
     if (e.note) lines.push(`📝 ${e.note}`);
   } else {
     const whole = isWholeMonth(from, to);
@@ -356,7 +365,7 @@ async function clientReport(owner, clientId, from, to) {
     }
     if (!total) lines.push('No boost spend in this period.');
     else {
-      lines.push(`💰 Total: ${fmt(total)}`);
+      lines.push(totalWithTax(total));
       const sub = [];
       if (hasLive(c)) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
       if (hasPost(c)) sub.push(`📌 Boost posts: ${fmt(post)}`);

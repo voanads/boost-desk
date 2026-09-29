@@ -190,20 +190,6 @@ api.get('/month/:ym', wrap(async (req, res) => {
 // Result of the last sync's completeness check (per ad account: Meta total vs found)
 api.get('/sync-check', wrap(async (req, res) => res.json(await db.getSetting('lastSyncCheck', null))));
 
-// Auto sync setting
-api.get('/auto-sync', wrap(async (req, res) => res.json(await jobs.getAuto())));
-api.put('/auto-sync', wrap(async (req, res) => {
-  const cur = await jobs.getAuto();
-  const b = req.body || {};
-  const next = { ...cur };
-  if (b.enabled != null) next.enabled = !!b.enabled;
-  if (b.everyMinutes != null) next.everyMinutes = [15, 30, 60, 120, 240].includes(Number(b.everyMinutes)) ? Number(b.everyMinutes) : 60;
-  if (b.from != null) next.from = Math.min(23, Math.max(0, parseInt(b.from, 10) || 0));
-  if (b.to != null) next.to = Math.min(23, Math.max(0, parseInt(b.to, 10) || 23));
-  await db.setSetting('autoSync', next);
-  res.json(next);
-}));
-
 // Dashboard: per-client totals for a day or a month (?from=YYYY-MM-DD&to=YYYY-MM-DD, max 93 days)
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;

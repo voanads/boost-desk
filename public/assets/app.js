@@ -323,24 +323,6 @@
 
   $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };
 
-  // ---------- auto sync ----------
-  let auto = null;
-  function renderAuto() {
-    if (!auto) return;
-    $('autoSel').value = auto.enabled ? String(auto.everyMinutes) : '0';
-    const last = auto.lastRun ? new Date(auto.lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null;
-    $('autoInfo').textContent = auto.enabled
-      ? `Syncs the last 30 days · ${pad(auto.from)}:00–${pad(auto.to)}:59${last ? ` · last run ${last}` : ''}`
-      : 'Off. Tap Sync from Meta to update by hand.';
-  }
-  async function loadAuto() { try { auto = await api('/auto-sync'); renderAuto(); } catch (_) {} }
-  $('autoSel').onchange = async () => {
-    const v = Number($('autoSel').value);
-    try {
-      auto = await api('/auto-sync', { method: 'PUT', body: v ? { enabled: true, everyMinutes: v } : { enabled: false } });
-      renderAuto(); toast(v ? `Auto sync on: every ${v >= 60 ? v / 60 + ' hour' + (v > 60 ? 's' : '') : v + ' min'}` : 'Auto sync off');
-    } catch (e) { toast(e.message); }
-  };
   // While the checklist is open on today, pull fresh numbers every 2 minutes (picks up auto-sync results).
   setInterval(async () => {
     if (document.hidden || $('tab-checklist').hidden || date !== (me && me.today)) return;
@@ -348,7 +330,6 @@
     try {
       const d = await api('/day/' + date);
       if (JSON.stringify(d.entries) !== JSON.stringify(day.entries) || JSON.stringify(d.meta) !== JSON.stringify(day.meta)) { day = d; renderChecklist(); renderSyncInfo(); loadMonth(); }
-      loadAuto();
     } catch (_) {}
   }, 120000);
 
@@ -520,7 +501,7 @@
   (async () => {
     try {
       me = await api('/me');
-      loadAuto(); loadChats(); loadCheck();
+      loadChats(); loadCheck();
       date = me.today || date;
       $('whoName').textContent = me.name;
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);

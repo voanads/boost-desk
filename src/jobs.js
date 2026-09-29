@@ -55,8 +55,7 @@ async function sendDailyReport(day = sync.todayIn()) {
 }
 
 function start() {
-  cron.schedule('*/5 * * * *', () => autoSyncTick().catch((e) => log('auto-sync tick failed:', e.message)), { timezone: cfg.tz });
-  log('auto-sync checker running every 5 minutes (turn on/off in the app)');
+  // Auto sync is off: data updates when someone taps "Sync from Meta".
 
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
   if (telegram.configured() && m) {

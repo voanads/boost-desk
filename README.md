@@ -11,7 +11,6 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 - **Telegram** — the day's report is sent to your group automatically every night (default 21:00), after a fresh sync.
 - **Past days** — on first login the app fills in the whole current month. **Sync whole month** re-reads every day of the month you're viewing (use it after adding a new client). Each morning, auto-sync also re-checks yesterday, since Meta keeps finalizing late-night spend.
 - **Sync from Meta** — one tap pulls and saves the **last 30 days** (or the whole month when you're looking at an older date).
-- **Auto sync** — also pulls the last 30 days; switch it on the Checklist page: Off, every 15 min, 30 min, 1 h, 2 h or 4 h (between 08:00 and 23:59). An open Checklist refreshes itself every 2 minutes to show the new numbers.
 - **Dashboard** — every client's spend for **Today, Yesterday, Last 7 / 30 days, This month, Last month or any custom range**: live vs post spend, number of lives, spend per day, share of total, and a spend-per-day chart. Search by client or Page, filter by type, sort any column, tap a day or client to drill in.
 
 The app only asks for `ads_read` (read-only) and `business_management`. It never changes your ads.

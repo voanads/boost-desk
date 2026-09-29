@@ -7,7 +7,13 @@ const req = (k) => {
 
 module.exports = {
   port: Number(process.env.PORT || 3000),
-  baseUrl: (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, ''),
+  // Tolerate typos like "https:host", "host" or a trailing slash.
+  baseUrl: (() => {
+    let u = String(process.env.BASE_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+    u = u.replace(/^(https?):\/*/i, (m, p) => p.toLowerCase() + '://');
+    if (!/^https?:\/\//.test(u)) u = 'https://' + u;
+    return u;
+  })(),
   databaseUrl: req('DATABASE_URL'),
   sessionSecret: req('SESSION_SECRET'),
   encryptionKey: req('ENCRYPTION_KEY'), // 64 hex chars (32 bytes)

@@ -127,6 +127,10 @@
       const note = document.createElement('input'); note.type = 'text'; note.className = 'note'; note.id = 'note-' + c.id; note.placeholder = 'Note (e.g. client asked +3 days)'; note.dataset.f = 'note';
       let t; note.oninput = () => { clearTimeout(t); t = setTimeout(() => patch(c.id, { note: note.value }), 700); };
       foot.appendChild(note);
+      const rep = document.createElement('button'); rep.className = 'repbtn'; rep.dataset.f = 'rep';
+      rep.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Send report</span>';
+      rep.onclick = () => openDayReport(c.id);
+      foot.appendChild(rep);
       box.appendChild(card);
     }
   }
@@ -164,6 +168,13 @@
         row.querySelector('[data-f=camp]').textContent = v.campaigns ? `· ${v.campaigns} campaign${v.campaigns > 1 ? 's' : ''}` : '';
       });
       const note = card.querySelector('[data-f=note]'); if (document.activeElement !== note) note.value = e.note || '';
+      const rep = card.querySelector('[data-f=rep]');
+      if (rep) {
+        const sent = e.reportSent && e.reportSent.at;
+        rep.classList.toggle('sent', !!sent);
+        rep.querySelector('span').textContent = sent ? '✓ Sent ' + new Date(sent).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'Send report';
+        rep.title = sent ? `Report sent by ${e.reportSent.by || 'you'} — tap to send again` : 'Preview and send this day\'s report to the client\'s Telegram group';
+      }
     }
     countTo($('sSpend'), spend, money); countTo($('sLives'), lives, intF);
     countTo($('sDone'), done, (v) => Math.round(v) + ' / ' + total); countTo($('sActive'), withSpend, (v) => Math.round(v) + ' / ' + active().length);
@@ -560,6 +571,41 @@
       document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; $('dPreset').value = dDate === me.today ? 'today' : 'custom'; setMode('day'); });
     }
   }
+
+  // ---------- checklist: one client's report for the day ----------
+  let ckTarget = null;
+  async function openDayReport(cid) {
+    const dlg = $('ckDlg'), d = date; ckTarget = { cid, day: d };
+    $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    try {
+      const r = await api(`/client-report/${cid}?from=${d}&to=${d}`);
+      if (!ckTarget || ckTarget.cid !== cid) return;
+      $('ckTitle').textContent = `${r.client.name} · ${nice(d)}`;
+      $('ckText').value = r.text;
+      const bot = me.telegram && me.telegram.bot;
+      $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
+        : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
+        : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;
+      $('ckSend').disabled = !r.client.telegram || !bot;
+      $('ckText').focus();
+    } catch (e) { $('ckText').value = e.message; }
+  }
+  $('ckDlg').addEventListener('close', () => { ckTarget = null; });
+  $('ckDlg').addEventListener('click', (ev) => { if (ev.target === $('ckDlg')) $('ckDlg').close(); });
+  $('ckCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText($('ckText').value); toast('Report copied'); }
+    catch (_) { $('ckText').select(); try { document.execCommand('copy'); toast('Report copied'); } catch (__) { toast('Select the text and copy it'); } }
+  };
+  $('ckSend').onclick = async () => {
+    if (!ckTarget) return;
+    const { cid, day: d } = ckTarget, b = $('ckSend'); b.disabled = true; b.classList.add('busy');
+    try {
+      const r = await api(`/client-report/${cid}/send`, { method: 'POST', body: { from: d, to: d, text: $('ckText').value } });
+      if (d === date) { day.entries[cid] = merge(day.entries[cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
+      $('ckDlg').close(); toast('Sent to ' + r.sentTo);
+    } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
+  };
 
   // ---------- reports (per client + team summary) ----------
   let rTarget = null; // { kind: 'client', id } or { kind: 'team' }

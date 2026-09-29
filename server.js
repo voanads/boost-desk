@@ -283,7 +283,13 @@ api.post('/client-report/:id/send', wrap(async (req, res) => {
   const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text, r.client.telegram);
-  res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram });
+  const sentAt = new Date().toISOString();
+  // A one-day report is remembered on that day's checklist ("Sent 21:05").
+  if (from === to && isDay(from)) {
+    const id = Number(req.params.id);
+    await db.putEntry(from, id, deepMerge(await db.getEntry(from, id), { reportSent: { at: sentAt, by: req.user.name } }));
+  }
+  res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram, sentAt });
 }));
 api.get('/summary', wrap(async (req, res) => {
   const { from, to } = req.query;

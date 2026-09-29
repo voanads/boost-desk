@@ -187,7 +187,7 @@ async function campaignPages(token, actId, campaignIds) {
       }, { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
       for (const ad of ads) {
         const c = ad.creative || {};
-        const pid = c.actor_id || c.object_story_spec?.page_id || ad.adset?.promoted_object?.page_id
+        const pid = ad.adset?.promoted_object?.page_id || c.object_story_spec?.page_id || c.actor_id
           || String(c.effective_object_story_id || '').split('_')[0];
         if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = String(pid);
       }
@@ -196,7 +196,8 @@ async function campaignPages(token, actId, campaignIds) {
     if (e.needsLogin || e.rateLimited) throw e;
     console.error(`[meta] ${actId}: could not read ads for Page lookup:`, e.message);
   }
-  const needed = [...new Set(Object.values(pageOf))].filter((p) => !pageNameCache.has(p));
+  let needed = [...new Set(Object.values(pageOf))].filter((p) => !pageNameCache.has(p));
+  if (needed.length) { await loadPageDirectory(token); needed = needed.filter((p) => !pageNameCache.has(p)); }
   if (needed.length) {
     try {
       const promoted = await getAll(`/${actId}/promote_pages`, { fields: 'id,name', limit: 200 }, token);
@@ -213,6 +214,24 @@ async function campaignPages(token, actId, campaignIds) {
   return Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
 }
 
+// Names of every Page you can see through Business portfolios (owned + client Pages shared
+// with the business) and Pages you manage directly. Doesn't need access to the Page itself.
+let directoryLoadedAt = 0;
+async function loadPageDirectory(token, force = false) {
+  if (!force && Date.now() - directoryLoadedAt < 10 * 60 * 1000) return; // at most every 10 min
+  directoryLoadedAt = Date.now();
+  const add = (list) => { for (const p of list || []) if (p && p.id && p.name) pageNameCache.set(String(p.id), p.name); };
+  const soft = async (fn) => { try { return await fn(); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; console.error('[meta] page directory:', e.message); return []; } };
+  add(await soft(() => getAll('/me/accounts', { fields: 'id,name', limit: 200 }, token)));
+  const businesses = await soft(() => getAll('/me/businesses', { fields: 'id,name', limit: 100 }, token));
+  for (const b of businesses) {
+    add(await soft(() => getAll(`/${b.id}/owned_pages`, { fields: 'id,name', limit: 200 }, token)));
+    add(await soft(() => getAll(`/${b.id}/client_pages`, { fields: 'id,name', limit: 200 }, token)));
+  }
+}
+const knownPageNames = () => Object.fromEntries(pageNameCache);
+const rememberPageNames = (map) => { for (const [id, n] of Object.entries(map || {})) if (n && !pageNameCache.has(id)) pageNameCache.set(id, n); };
+
 // Graph returns "2026-09-29T13:28:04+0700"; add the colon so Date.parse is reliable.
 function parseTime(s) {
   if (!s) return null;
@@ -220,4 +239,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

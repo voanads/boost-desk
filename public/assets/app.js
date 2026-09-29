@@ -76,7 +76,7 @@
       : '<span class="hint">Page unknown. Link the ad account to a client instead.</span>'}</td></tr>`).join('');
     document.querySelectorAll('[data-new]').forEach((b) => b.onclick = () => {
       const u = un[b.dataset.new];
-      $('newName').value = u.page; newPages = [u.page]; drawNewPages();
+      $('newName').value = u.pageId && u.page === u.pageId ? '' : u.page; newPages = [u.page]; drawNewPages();
       $('newType').value = u.kind === 'post' ? 'post' : 'live';
       showTab('clients'); $('newType').focus();
       toast('Check the boost type, then tap Add client');

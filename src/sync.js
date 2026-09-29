@@ -35,6 +35,10 @@ function matchClient(item, clients) {
     const byPage = active.find((c) => names(c).includes(norm(item.page)));
     if (byPage) return byPage;
   }
+  if (item.pageId) {
+    const byId = active.find((c) => names(c).includes(norm(item.pageId)));
+    if (byId) return byId;
+  }
   return active.find((c) => c.account && (norm(c.account) === norm(item.account) || c.account === item.accountId)) || null;
 }
 
@@ -54,7 +58,7 @@ function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
       const label = auto
         ? (it.page ? `Post boosts for Page "${it.page}"` : it.pageId ? `Post boosts for Page ID ${it.pageId} (name hidden)` : 'Post boosts (Page unknown)') + (it.account ? ' · ' + it.account : '')
         : campaignPrefix(it.name) + (it.account ? ' · ' + it.account : '');
-      const u = unmatched.get(label) || { label, page: auto ? it.page || '' : it.page || campaignPrefix(it.name), kind: auto ? 'post' : 'live', spend: 0, count: 0 };
+      const u = unmatched.get(label) || { label, page: it.page || it.pageId || (auto ? '' : campaignPrefix(it.name)), pageId: it.pageId || '', kind: auto ? 'post' : 'live', spend: 0, count: 0 };
       u.spend = round2(u.spend + it.spend); u.count++;
       unmatched.set(label, u);
       continue;
@@ -118,6 +122,7 @@ function addDays(day, n) {
 // Pull campaign spend for every enabled ad account over [since, until].
 async function fetchRange(since, until, user) {
   const token = await tokenFor(user);
+  meta.rememberPageNames(await db.getSetting('pageNames', {}));
   let ids = await db.enabledAccountIds();
   if (!ids.length) { await refreshAccounts(user); ids = await db.enabledAccountIds(); }
   const names = Object.fromEntries((await db.listAccounts()).map((a) => [a.id, a.name]));
@@ -141,6 +146,7 @@ async function fetchRange(since, until, user) {
       if (e.rateLimited) break;
     }
   }
+  try { await db.setSetting('pageNames', meta.knownPageNames()); } catch (_) {}
   return { items, errors, checks };
 }
 

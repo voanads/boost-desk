@@ -268,7 +268,7 @@
         <td>${chip}</td>
         <td class="r num">${i.todayError ? '<span class="hint" title="' + esc(i.todayError) + '">error</span>' : i.todaySpend != null ? (Number(i.todaySpend) > 0 ? '<b>' + money(i.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
         <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${cap}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
-    }).join('') || '<tr><td colspan="7" class="muted">No ad accounts loaded yet. Tap Refresh from Meta.</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="muted">No ad accounts loaded yet. Tap Refresh from Meta.</td></tr>';
     $('aCount').textContent = accounts.length; $('aActive').textContent = act; $('aBad').textContent = bad;
     $('aBad').classList.toggle('over', bad > 0); $('aToday').textContent = money(today);
     const seen = accounts.map((a) => a.seen_at).sort().pop();
@@ -588,7 +588,7 @@
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
       renderDash();
     }
-    catch (e) { $('dBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="8" class="muted">${esc(e.message)}</td></tr>`; }
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
@@ -619,7 +619,27 @@
         return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="7"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+  }
+
+  // Opening a client: the row's Report button flies down and becomes the Send report button.
+  function flyToSend(id, from) {
+    const btn = document.querySelector(`#dBody [data-dreport="${id}"]`); if (!btn) return;
+    const glow = () => { btn.classList.remove('glow'); void btn.offsetWidth; btn.classList.add('glow'); };
+    const to = btn.getBoundingClientRect();
+    if (calm || !from || !btn.animate) { btn.scrollIntoView({ block: 'nearest' }); glow(); return; }
+    const ghost = document.createElement('div');
+    ghost.className = 'flyghost'; ghost.innerHTML = btn.innerHTML;
+    const sx = window.scrollX, sy = window.scrollY;
+    Object.assign(ghost.style, { left: from.left + sx + 'px', top: from.top + sy + 'px', width: from.width + 'px', height: from.height + 'px' });
+    document.body.appendChild(ghost);
+    btn.style.visibility = 'hidden';
+    const anim = ghost.animate([
+      { left: from.left + sx + 'px', top: from.top + sy + 'px', width: from.width + 'px', height: from.height + 'px', opacity: .9, borderRadius: '10px' },
+      { left: to.left + sx + 'px', top: to.top + sy + 'px', width: to.width + 'px', height: to.height + 'px', opacity: 1, borderRadius: '12px' },
+    ], { duration: 520, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    const done = () => { ghost.remove(); btn.style.visibility = ''; glow(); btn.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+    anim.onfinish = done; anim.oncancel = done;
   }
 
   function renderDash() {
@@ -654,18 +674,16 @@
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
-        <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td></tr>${open ? detailRow(c) : ''}`;
-    }).join('') || `<tr><td colspan="7" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td></tr>` : '';
+        <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
+        <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
+    }).join('') || `<tr><td colspan="8" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);
+        const rb = tr.querySelector('[data-report]'), from = rb && rb.getBoundingClientRect();
         opening ? dOpen.add(id) : dOpen.delete(id); renderDash();
-        if (opening) setTimeout(() => {
-          const b = document.querySelector(`#dBody [data-dreport="${id}"]`); if (!b) return;
-          b.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' });
-          b.classList.remove('glow'); void b.offsetWidth; b.classList.add('glow');
-        }, 120);
+        if (opening) flyToSend(id, from);
       };
       tr.onclick = (ev) => { if (!ev.target.closest('button')) toggle(); };
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };

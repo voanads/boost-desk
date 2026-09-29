@@ -521,3 +521,19 @@ table.dtable{min-width:0}
   .pnav .rangeins label{flex:1}
   .pnav .rangeins input{width:100%}
 }
+/* breakdown rows styled like the old Home card */
+.dl{grid-template-columns:auto auto 1fr;background:var(--accent-soft);border:none;border-radius:12px;padding:8px 10px 8px 14px;gap:14px}
+.dl.live,.dl.post{border-left:none}
+.dl-n{display:flex;align-items:baseline;gap:4px;white-space:nowrap}
+.dl-n b{font-weight:700}
+.dl-t{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 14px;font-weight:600;font-size:1rem}
+.dl-v{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.dl-v .box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:7px 14px;min-width:96px;text-align:right;font-weight:800;font-size:1rem}
+.dexp-in{padding:6px 0 4px 20px;gap:8px}
+.dexp-in>.dl:first-child{margin-top:2px}
+@media (max-width:760px){
+  .dl{grid-template-columns:1fr auto;grid-template-areas:"n n" "t v";row-gap:8px}
+  .dl-n{grid-area:n}.dl-t{grid-area:t;justify-self:start}.dl-v{grid-area:v}
+  .dl-v .box{min-width:84px}
+}
+@media (max-width:760px){.dexp-in{padding:0}.dl-t{color:var(--ink);font-size:1rem}}

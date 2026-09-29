@@ -603,7 +603,7 @@
     if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend) });
     return out;
   }
-  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n">${p.kind === 'live' ? '🔴' : '📌'} ${esc(p.label)}</span><span class="dl-t num">${esc(p.time)}</span><span class="hint">${p.n ? p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span><span class="dl-v num">${money(p.spend)}</span></div>`;
+  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span></span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';

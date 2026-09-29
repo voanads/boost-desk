@@ -179,16 +179,36 @@ async function applyDay(day, items, errors, user, clients) {
   return { day, matched: plan.targets.length, unmatched: plan.unmatched, errors, campaigns: items.length };
 }
 
+// Learn which client owns each Page ID: a named campaign ("DC Shop | 29") matched by name tells us
+// its Page belongs to that client, so auto-named "Post: …" boosts from the same Page match too —
+// even when Meta hides the Page's name. Learned links are saved and reused on later syncs.
+async function clientsWithLearnedPages(items) {
+  const clients = await db.listClients();
+  const learned = await db.getSetting('pageOwners', {}); // { pageId: clientId }
+  for (const it of items) {
+    if (!it.pageId || isAutoPost(it.name)) continue;
+    const prefix = norm(campaignPrefix(it.name));
+    const c = clients.find((x) => !x.archived && [x.name, x.match, ...(x.pages || [])].filter(Boolean).map(norm).includes(prefix));
+    if (c) learned[it.pageId] = c.id;
+  }
+  // A Page the user linked by hand (name or ID on the client) always wins over a learned link.
+  for (const c of clients) for (const p of c.pages || []) if (/^\d+$/.test(p)) learned[p] = c.id;
+  await db.setSetting('pageOwners', learned);
+  const extra = {};
+  for (const [pid, cid] of Object.entries(learned)) (extra[cid] = extra[cid] || []).push(pid);
+  return clients.map((c) => (extra[c.id] ? { ...c, pages: [...new Set([...(c.pages || []), ...extra[c.id]])] } : c));
+}
+
 async function syncDay(day, user) {
   const { items, errors } = await fetchRange(day, day, user);
-  return applyDay(day, items, errors, user, await db.listClients());
+  return applyDay(day, items, errors, user, await clientsWithLearnedPages(items));
 }
 
 // Backfill several days with one API call per account (Meta allows up to ~37 months back).
 async function syncRange(since, until, user) {
   const { items, errors, checks } = await fetchRange(since, until, user);
   await db.setSetting('lastSyncCheck', { from: since, to: until, at: new Date().toISOString(), checks });
-  const clients = await db.listClients();
+  const clients = await clientsWithLearnedPages(items);
   const byDay = {};
   for (const it of items) (byDay[it.day] = byDay[it.day] || []).push(it);
   const results = [];

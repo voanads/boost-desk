@@ -163,6 +163,9 @@ api.get('/month/:ym', wrap(async (req, res) => {
   res.json(await db.monthEntries(`${m[1]}-${m[2]}-01`, `${m[1]}-${m[2]}-${last}`));
 }));
 
+// Result of the last sync's completeness check (per ad account: Meta total vs found)
+api.get('/sync-check', wrap(async (req, res) => res.json(await db.getSetting('lastSyncCheck', null))));
+
 // Auto sync setting
 api.get('/auto-sync', wrap(async (req, res) => res.json(await jobs.getAuto())));
 api.put('/auto-sync', wrap(async (req, res) => {

@@ -177,13 +177,23 @@
     $('monthFoot').innerHTML = list.length ? `<tr><td>Total</td><td></td><td class="r num">${L}</td><td class="r num">${money(T)}</td><td></td></tr>` : '';
   }
 
+  async function loadCheck() {
+    let c = null; try { c = await api('/sync-check'); } catch (_) {}
+    const el = $('syncCheck');
+    if (!c || !c.checks) { el.textContent = ''; return; }
+    const gaps = c.checks.filter((x) => x.missing > 0.5);
+    const t = new Date(c.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    if (!gaps.length) { status(el, `✓ Checked at ${t}: all spend from ${c.checks.length} ad account${c.checks.length === 1 ? '' : 's'} was found (${nice(c.from).replace(/^\w+, /, '')} – ${nice(c.to).replace(/^\w+, /, '')}).`); return; }
+    status(el, `⚠ Checked at ${t}: some spend was not found — ` + gaps.map((g) => `${g.account}: Meta ${money(g.meta)}, found ${money(g.found)} (missing ${money(g.missing)})`).join(' · ') + '. Tell your developer which accounts.', true);
+  }
+
   // ---------- checklist actions ----------
   $('syncBtn').onclick = async () => {
     const b = $('syncBtn'); b.disabled = true; b.textContent = 'Syncing 30 days…';
     status($('syncStatus'), 'Reading the last 30 days from Ads Manager… this can take up to a minute.');
     try {
       const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
-      await loadDay(); loadPages();
+      await loadDay(); loadPages(); loadCheck();
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
     finally { b.disabled = false; b.textContent = 'Sync from Meta'; }
@@ -510,7 +520,7 @@
   (async () => {
     try {
       me = await api('/me');
-      loadAuto(); loadChats();
+      loadAuto(); loadChats(); loadCheck();
       date = me.today || date;
       $('whoName').textContent = me.name;
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);

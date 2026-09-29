@@ -122,22 +122,42 @@ async function campaignSpend(token, actId, day, accountName = '') {
   return campaignSpendRange(token, actId, day, day, accountName);
 }
 
+// Every status, so finished / archived / deleted boosts are included (Meta skips them by default).
+const CAMPAIGN_STATUSES = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED', 'IN_PROCESS', 'WITH_ISSUES'];
+const AD_STATUSES = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED', 'PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED',
+  'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'IN_PROCESS', 'WITH_ISSUES'];
+
+// Try with the "all statuses" filter; if Meta rejects that filter, run the plain query instead.
+async function allStatuses(path, params, filter, token) {
+  try { return await getAll(path, { ...params, filtering: [...(params.filtering || []), filter] }, token); }
+  catch (e) {
+    if (e.needsLogin || e.rateLimited || e.code !== 100) throw e;
+    return getAll(path, params, token);
+  }
+}
+
+// Total spend of the whole ad account for a period — used to check nothing was missed.
+async function accountSpendRange(token, actId, since, until) {
+  const d = await get(`/${actId}/insights`, { fields: 'spend', time_range: { since, until } }, token);
+  return Number(d.data?.[0]?.spend || 0);
+}
+
 // Campaign spend per day over a date range (one API call per account, daily breakdown).
 async function campaignSpendRange(token, actId, since, until, accountName = '') {
-  const rows = await getAll(`/${actId}/insights`, {
+  const rows = await allStatuses(`/${actId}/insights`, {
     level: 'campaign', fields: 'campaign_id,campaign_name,spend',
     time_range: { since, until }, time_increment: 1, limit: 500,
-  }, token);
+  }, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
   const ids = [...new Set(withSpend.map((r) => r.campaign_id))];
   const starts = {};
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     // Campaign start times via the account's campaign list (the multi-ID "?ids=" lookup is retired).
-    const camps = await getAll(`/${actId}/campaigns`, {
+    const camps = await allStatuses(`/${actId}/campaigns`, {
       fields: 'id,start_time,created_time',
       filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100,
-    }, token);
+    }, { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
     for (const c of camps) starts[c.id] = c.start_time || c.created_time || null;
   }
   const pages = await campaignPages(token, actId, ids);
@@ -146,39 +166,51 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     account: accountName || actId, accountId: actId,
     name: r.campaign_name, spend: Number(r.spend),
     start: parseTime(starts[r.campaign_id]),
-    page: pages[r.campaign_id] || '',
+    page: pages[r.campaign_id]?.name || '',
+    pageId: pages[r.campaign_id]?.id || '',
   }));
 }
 
-// Which Facebook Page each campaign promotes (so auto-named "Post: …" boosts can be matched
-// to a client by Page). Uses the ad creative's actor / post ID; page names are cached.
-const pageNameCache = new Map();
+// Which Facebook Page each campaign promotes, so auto-named "Post: …" boosts can be matched
+// to a client by Page. Page names come from the ad account's promoted-Pages list first (works
+// even for client Pages you don't manage), then from the Page itself.
+const pageNameCache = new Map(); // only successful lookups are cached
 async function campaignPages(token, actId, campaignIds) {
   const pageOf = {};
+  if (!campaignIds.length) return pageOf;
   try {
     for (let i = 0; i < campaignIds.length; i += 50) {
       const chunk = campaignIds.slice(i, i + 50);
-      const ads = await getAll(`/${actId}/ads`, {
-        fields: 'campaign_id,creative{actor_id,effective_object_story_id}',
+      const ads = await allStatuses(`/${actId}/ads`, {
+        fields: 'campaign_id,creative{actor_id,effective_object_story_id,object_story_spec{page_id}},adset{promoted_object{page_id}}',
         filtering: [{ field: 'campaign.id', operator: 'IN', value: chunk }], limit: 500,
-      }, token);
+      }, { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
       for (const ad of ads) {
         const c = ad.creative || {};
-        const pid = c.actor_id || String(c.effective_object_story_id || '').split('_')[0];
-        if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = pid;
+        const pid = c.actor_id || c.object_story_spec?.page_id || ad.adset?.promoted_object?.page_id
+          || String(c.effective_object_story_id || '').split('_')[0];
+        if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = String(pid);
       }
-    }
-    const missing = [...new Set(Object.values(pageOf))].filter((p) => !pageNameCache.has(p));
-    // Page names one by one (cached for the life of the server).
-    for (const p of missing) {
-      try { pageNameCache.set(p, (await get(`/${p}`, { fields: 'name' }, token)).name || ''); }
-      catch (e) { if (e.needsLogin || e.rateLimited) throw e; pageNameCache.set(p, ''); }
     }
   } catch (e) {
     if (e.needsLogin || e.rateLimited) throw e;
-    return {}; // Page lookup is a bonus; spend still syncs without it.
+    console.error(`[meta] ${actId}: could not read ads for Page lookup:`, e.message);
   }
-  return Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, pageNameCache.get(pid) || '']));
+  const needed = [...new Set(Object.values(pageOf))].filter((p) => !pageNameCache.has(p));
+  if (needed.length) {
+    try {
+      const promoted = await getAll(`/${actId}/promote_pages`, { fields: 'id,name', limit: 200 }, token);
+      for (const p of promoted) if (p.name) pageNameCache.set(String(p.id), p.name);
+    } catch (e) {
+      if (e.needsLogin || e.rateLimited) throw e;
+      console.error(`[meta] ${actId}: promote_pages failed:`, e.message);
+    }
+    for (const p of needed.filter((x) => !pageNameCache.has(x))) {
+      try { const n = (await get(`/${p}`, { fields: 'name' }, token)).name; if (n) pageNameCache.set(p, n); }
+      catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    }
+  }
+  return Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
 }
 
 // Graph returns "2026-09-29T13:28:04+0700"; add the colon so Date.parse is reliable.
@@ -188,4 +220,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, campaignSpend, campaignSpendRange };
+module.exports = { MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

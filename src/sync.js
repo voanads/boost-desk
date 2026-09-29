@@ -52,7 +52,7 @@ function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
     if (!c) {
       const auto = isAutoPost(it.name);
       const label = auto
-        ? (it.page ? `Post boosts for Page "${it.page}"` : 'Post boosts (Page unknown)') + (it.account ? ' · ' + it.account : '')
+        ? (it.page ? `Post boosts for Page "${it.page}"` : it.pageId ? `Post boosts for Page ID ${it.pageId} (name hidden)` : 'Post boosts (Page unknown)') + (it.account ? ' · ' + it.account : '')
         : campaignPrefix(it.name) + (it.account ? ' · ' + it.account : '');
       const u = unmatched.get(label) || { label, page: auto ? it.page || '' : it.page || campaignPrefix(it.name), kind: auto ? 'post' : 'live', spend: 0, count: 0 };
       u.spend = round2(u.spend + it.spend); u.count++;
@@ -123,16 +123,25 @@ async function fetchRange(since, until, user) {
   const names = Object.fromEntries((await db.listAccounts()).map((a) => [a.id, a.name]));
   const items = [];
   const errors = [];
+  const checks = [];
   for (const id of ids) {
-    try { items.push(...(await meta.campaignSpendRange(token, id, since, until, names[id]))); }
-    catch (e) {
+    try {
+      const rows = await meta.campaignSpendRange(token, id, since, until, names[id]);
+      items.push(...rows);
+      // Completeness check: the account's own total vs what we collected campaign by campaign.
+      try {
+        const total = round2(await meta.accountSpendRange(token, id, since, until));
+        const found = round2(rows.reduce((t, r) => t + r.spend, 0));
+        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found) });
+      } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    } catch (e) {
       if (e.needsLogin) throw e;
       console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);
       errors.push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message });
       if (e.rateLimited) break;
     }
   }
-  return { items, errors };
+  return { items, errors, checks };
 }
 
 // Write one day's campaign rows into the client entries.
@@ -171,7 +180,8 @@ async function syncDay(day, user) {
 
 // Backfill several days with one API call per account (Meta allows up to ~37 months back).
 async function syncRange(since, until, user) {
-  const { items, errors } = await fetchRange(since, until, user);
+  const { items, errors, checks } = await fetchRange(since, until, user);
+  await db.setSetting('lastSyncCheck', { from: since, to: until, at: new Date().toISOString(), checks });
   const clients = await db.listClients();
   const byDay = {};
   for (const it of items) (byDay[it.day] = byDay[it.day] || []).push(it);
@@ -183,6 +193,7 @@ async function syncRange(since, until, user) {
     matched: results.reduce((s, r) => s + r.matched, 0),
     daysWithSpend: results.filter((r) => r.campaigns).length,
     errors,
+    checks,
   };
 }
 

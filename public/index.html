@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=19">
+<link rel="stylesheet" href="/assets/app.css?v=20">
 </head>
 <body>
 <div class="wrap">
@@ -178,10 +178,15 @@
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Facebook ID</th><th>Login expires</th></tr></thead><tbody id="teamBody"></tbody></table></div>
     </div>
     <div class="panel" id="autoPanel" hidden>
-      <div class="rowx"><h2>Auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
+      <div class="rowx"><h2>Accounts &amp; auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
       <div class="hint">Only you (the app owner) see this. For each account that has logged in: every 5 minutes it checks for new campaigns, every hour it refreshes today and yesterday, and at 05:30 it refreshes the last 30 days. An account is only synced after it has tapped Sync from Meta once, and while its Facebook login is valid.</div>
       <div id="autoMsg" class="hint"></div>
       <div class="tablewrap"><table><thead><tr><th>Account</th><th>Auto sync</th><th>Status</th><th>Last auto sync</th><th>Login expires</th><th></th></tr></thead><tbody id="autoBody"></tbody></table></div>
+      <div id="blockedBox" hidden>
+        <h3>Removed accounts</h3>
+        <div class="hint">These Facebook accounts can't log in to Boost Desk. Restore one to let them log in again (they start with an empty workspace).</div>
+        <div class="tablewrap"><table><tbody id="blockedBody"></tbody></table></div>
+      </div>
     </div>
     <div class="panel">
       <h2>Telegram daily report</h2>
@@ -190,6 +195,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=19"></script>
+<script src="/assets/app.js?v=20"></script>
 </body>
 </html>

@@ -59,6 +59,9 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   if (cfg.allowedFbIds.length && !cfg.allowedFbIds.includes(profile.id)) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name} is not on this app's team list. Ask the admin to add Facebook ID ${profile.id}.`));
   }
+  if ((await db.blockedUsers())[profile.id]) {
+    return res.redirect('/login?error=' + encodeURIComponent(`${profile.name}'s access to Boost Desk was removed. Ask the app owner to restore it.`));
+  }
   await db.upsertUser(profile.id, profile.name, encrypt(token), expires);
   req.session.fbId = profile.id;
   req.session.name = profile.name;
@@ -115,6 +118,18 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
   for (const u of await db.allUsers()) await jobs.setEnabled(u.fb_id, !!req.body.enabled);
   res.json({ ok: true });
 }));
+api.get('/blocked', ownerOnly, wrap(async (req, res) => res.json(await db.blockedUsers())));
+api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {
+  const id = req.params.id;
+  if (id === req.user.fb_id) return res.status(400).json({ error: "You can't remove your own account." });
+  const u = await db.getUser(id);
+  if (!u) return res.status(404).json({ error: 'Account not found.' });
+  if (sync.isBusy(id)) return res.status(409).json({ error: `${u.name} is syncing right now. Try again in a minute.` });
+  await db.setBlocked(id, u.name, true);
+  await db.removeUser(id);
+  res.json({ ok: true });
+}));
+api.delete('/blocked/:id', ownerOnly, wrap(async (req, res) => { await db.setBlocked(req.params.id, '', false); res.json({ ok: true }); }));
 api.post('/auto-sync/:id/run', ownerOnly, wrap(async (req, res) => { await jobs.runNow(req.params.id); res.json({ ok: true }); }));
 
 // Clients

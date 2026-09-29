@@ -381,10 +381,20 @@
         <td>${st}</td>
         <td>${last}${u.lastCheck ? `<div class="hint">checked for new campaigns ${esc(ago(u.lastCheck))}</div>` : ''}</td>
         <td>${esc(exp)}</td>
-        <td><button data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>Run now</button></td>
+        <td class="acts"><button data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>Run now</button>${u.id === me.id ? '' : ` <button class="danger" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>`}</td>
       </tr>`;
     }).join('') || '<tr><td colspan="6" class="muted">Nobody has logged in yet.</td></tr>';
+    try {
+      const b = Object.entries(await api('/blocked'));
+      $('blockedBox').hidden = !b.length;
+      $('blockedBody').innerHTML = b.map(([id, x]) => `<tr><td>${esc(x.name || id)}<div class="hint">Facebook ID ${esc(id)} · removed ${esc(ago(x.at))}</div></td><td class="acts"><button data-restore="${esc(id)}">Restore access</button></td></tr>`).join('');
+    } catch (_) {}
   }
+  $('blockedBody').addEventListener('click', async (ev) => {
+    const id = ev.target.dataset.restore; if (!id) return;
+    try { await api('/blocked/' + encodeURIComponent(id), { method: 'DELETE' }); toast('Access restored — they can log in again'); } catch (e) { toast(e.message); }
+    loadAuto();
+  });
   $('autoBody').addEventListener('change', async (ev) => {
     const id = ev.target.dataset.auto; if (!id) return;
     try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); }
@@ -392,6 +402,13 @@
     loadAuto();
   });
   $('autoBody').addEventListener('click', async (ev) => {
+    const rm = ev.target.dataset.remove;
+    if (rm) {
+      const name = ev.target.dataset.name;
+      if (!confirm(`Remove ${name}?\n\nThis deletes ${name}'s clients, synced days and settings from Boost Desk, logs them out, and blocks them from logging in again. It does not touch anything in Facebook or Ads Manager.\n\nThis can't be undone (you can restore their login later, but their data will be gone).`)) return;
+      try { await api('/users/' + encodeURIComponent(rm), { method: 'DELETE' }); toast(name + ' removed'); } catch (e) { toast(e.message); }
+      return loadAuto();
+    }
     const id = ev.target.dataset.run; if (!id) return;
     ev.target.disabled = true;
     try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); }

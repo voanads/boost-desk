@@ -132,6 +132,25 @@ async function ownerId() {
   await setSetting('ownerId', r.fb_id);
   return r.fb_id;
 }
+// Remove an account and everything in its workspace (clients, days, ad accounts, settings).
+async function removeUser(fbId) {
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('DELETE FROM clients WHERE owner=$1', [fbId]); // day_entries go with them
+    for (const t of ['ad_accounts', 'day_meta', 'pages_seen', 'raw_rows']) await c.query(`DELETE FROM ${t} WHERE owner=$1`, [fbId]);
+    await c.query("DELETE FROM settings WHERE starts_with(key, $1)", [fbId + ':']);
+    await c.query('DELETE FROM users WHERE fb_id=$1', [fbId]);
+    await c.query('COMMIT');
+  } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
+}
+// Removed accounts can't log back in until the owner unblocks them.
+const blockedUsers = () => getSetting('blockedIds', {});
+async function setBlocked(fbId, name, on) {
+  const b = await blockedUsers();
+  if (on) b[fbId] = { name, at: new Date().toISOString() }; else delete b[fbId];
+  await setSetting('blockedIds', b);
+}
 const activeUsers = async () =>
   (await q(`SELECT * FROM users WHERE token_expires IS NULL OR token_expires > now() ORDER BY updated_at DESC`)).rows;
 
@@ -218,7 +237,7 @@ const monthEntries = async (owner, from, to) =>
 
 module.exports = {
   pool, init,
-  upsertUser, getUser, activeUsers, allUsers, ownerId,
+  upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,

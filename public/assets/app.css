@@ -154,3 +154,6 @@ body{overflow-x:hidden}
 .ok{color:var(--accent)}
 #autoMsg.err{color:var(--live)}
 #autoBody td{vertical-align:top}
+button.danger{color:var(--live);border-color:var(--live)}
+.acts{white-space:nowrap}
+#blockedBox h3{margin:16px 0 4px}

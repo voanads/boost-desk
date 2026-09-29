@@ -54,7 +54,8 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
 app.post('/auth/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
 
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: '1h' }));
+// Always revalidate so a new deploy shows up on the next refresh.
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {

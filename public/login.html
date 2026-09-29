@@ -3,26 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Boost Desk — Log in</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=20">
+<title>Ads Box · Boost Desk — Log in</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#5B45F0">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/app.css?v=21">
 <style>
-  .login{min-height:100vh;display:flex;align-items:center;justify-content:center}
-  .box{max-width:420px;width:100%;display:flex;flex-direction:column;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px}
-  .err{background:var(--live-soft);color:var(--live);border-radius:8px;padding:10px 12px;font-size:.9rem}
+  body{padding:0;min-height:100vh;background:
+    radial-gradient(900px 500px at 10% -10%,color-mix(in srgb,var(--brand-2) 28%,transparent),transparent 60%),
+    radial-gradient(700px 500px at 110% 110%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 60%),var(--bg)}
+  .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+  .box{max-width:420px;width:100%;display:flex;flex-direction:column;gap:18px;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:32px 28px;box-shadow:0 20px 60px rgba(20,24,40,.12)}
+  .mark{display:flex;align-items:center;gap:12px}
+  .mark img{width:52px;height:52px;border-radius:14px}
+  .mark b{display:block;font-size:1.5rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+  .mark span{color:var(--muted);font-size:.9rem}
+  .lead{margin:0;font-size:1.02rem;color:var(--ink)}
+  .feats{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:.9rem;color:var(--muted)}
+  .feats li{display:flex;gap:8px;align-items:center}
+  .feats li::before{content:"";width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--brand-2),var(--brand));flex:none}
+  .fbbtn{justify-content:center;border-radius:12px;padding:14px 20px}
+  .err{background:var(--live-soft);color:var(--live);border-radius:10px;padding:10px 12px;font-size:.9rem}
 </style>
 </head>
 <body>
 <main class="login">
   <div class="box">
-    <h1>Boost Desk</h1>
-    <p class="muted" style="margin:0">Daily boost spend for every client, pulled straight from Ads Manager.</p>
+    <div class="mark"><img src="/assets/logo.svg" alt=""><div><b>Ads Box</b><span>Boost Desk</span></div></div>
+    <p class="lead">Every client's boost spend — lives and posts — pulled straight from Ads Manager.</p>
+    <ul class="feats">
+      <li>Daily checklist for every live and boost post</li>
+      <li>Dashboard by day, month or any range</li>
+      <li>Reports to each client's Telegram group</li>
+    </ul>
     <div id="err" class="err" hidden></div>
     <a class="fbbtn" href="/auth/facebook">
       <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/></svg>
       Continue with Facebook
     </a>
-    <p class="hint" style="margin:0">The app asks for read-only access to your ad accounts (ads_read). It never changes your ads.</p>
+    <p class="hint" style="margin:0;text-align:center">Read-only access to your ad accounts (ads_read). It never changes your ads.</p>
   </div>
 </main>
 <script>

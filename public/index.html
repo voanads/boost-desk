@@ -3,22 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Boost Desk</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=20">
+<title>Ads Box · Boost Desk</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<meta name="theme-color" content="#5B45F0">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/app.css?v=21">
 </head>
 <body>
 <div class="wrap">
   <header class="appbar">
-    <h1>Boost Desk</h1>
+    <a class="brand" href="#checklist" aria-label="Ads Box Boost Desk"><img class="logo" src="/assets/logo.svg" alt=""><span class="bname">Ads Box<small>Boost Desk</small></span></a>
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="checklist" aria-selected="true">Checklist</button>
-      <button role="tab" data-tab="dashboard" aria-selected="false">Dashboard</button>
-      <button role="tab" data-tab="clients" aria-selected="false">Clients</button>
-      <button role="tab" data-tab="accounts" aria-selected="false">Ad accounts</button>
-      <button role="tab" data-tab="team" aria-selected="false">Team &amp; Telegram</button>
+      <button role="tab" data-tab="checklist" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span class="full">Checklist</span><span class="short">Checklist</span></button>
+      <button role="tab" data-tab="dashboard" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
+      <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
+      <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
+      <button role="tab" data-tab="team" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span class="full">Team &amp; Telegram</span><span class="short">Team</span></button>
     </nav>
-    <div class="who"><span id="whoName" class="muted"></span><button id="logoutBtn" class="ghost">Log out</button></div>
+    <div class="who"><span class="avatar" id="whoAvatar" aria-hidden="true"></span><span id="whoName" class="wname"></span><button id="logoutBtn" class="ghost">Log out</button></div>
   </header>
 
   <!-- CHECKLIST -->
@@ -41,7 +43,7 @@
     <div class="status" id="syncStatus"></div>
     <div class="status" id="syncCheck"></div>
     <div class="summary">
-      <div><span class="lbl">Spent</span><span class="val num" id="sSpend">$0.00</span></div>
+      <div class="hero"><span class="lbl">Spent</span><span class="val num" id="sSpend">$0.00</span></div>
       <div><span class="lbl">Lives with spend</span><span class="val num" id="sLives">0</span></div>
       <div><span class="lbl">Boosts done</span><span class="val num" id="sDone">0 / 0</span></div>
       <div><span class="lbl">Clients with spend</span><span class="val num" id="sActive">0</span></div>
@@ -195,6 +197,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=20"></script>
+<script src="/assets/app.js?v=21"></script>
 </body>
 </html>

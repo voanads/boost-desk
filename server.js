@@ -22,18 +22,39 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 
 // ---------- Facebook login ----------
-app.get('/auth/facebook', (req, res) => {
-  const state = crypto.randomBytes(16).toString('hex');
-  req.session.oauthState = state;
-  res.redirect(meta.loginUrl(state));
-});
+// The login "state" is signed by the server and valid for 15 minutes, so it works in any tab
+// and doesn't depend on a browser cookie surviving the trip to Facebook and back.
+const signState = (nonce, ts) => crypto.createHmac('sha256', cfg.sessionSecret).update(`${nonce}.${ts}`).digest('hex').slice(0, 32);
+function newState() {
+  const nonce = crypto.randomBytes(12).toString('hex'), ts = Date.now().toString(36);
+  return `${nonce}.${ts}.${signState(nonce, ts)}`;
+}
+function stateOk(state) {
+  const [nonce, ts, sig] = String(state || '').split('.');
+  if (!nonce || !ts || !sig) return false;
+  const good = signState(nonce, ts);
+  if (sig.length !== good.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(good))) return false;
+  return Date.now() - parseInt(ts, 36) < 15 * 60 * 1000;
+}
+const loggedIn = async (req) => !!(req.session && req.session.fbId && (await db.getUser(req.session.fbId)));
+
+app.get('/auth/facebook', (req, res) => res.redirect(meta.loginUrl(newState())));
 
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
   if (error_description) return res.redirect('/login?error=' + encodeURIComponent(error_description));
-  if (!code || !state || state !== req.session.oauthState) return res.redirect('/login?error=' + encodeURIComponent('Login expired. Please try again.'));
-  req.session.oauthState = null;
-  const { token, expires } = await meta.exchangeCode(String(code));
+  if (!code || !stateOk(state)) {
+    // A replayed or old return link: if you're already logged in, just go in.
+    if (await loggedIn(req)) return res.redirect('/');
+    return res.redirect('/login?error=' + encodeURIComponent('That login link expired. Tap Continue with Facebook again.'));
+  }
+  let token, expires;
+  try { ({ token, expires } = await meta.exchangeCode(String(code))); }
+  catch (e) {
+    // Facebook codes work once; a second use (back button, restored tab) fails here.
+    if (await loggedIn(req)) return res.redirect('/');
+    return res.redirect('/login?error=' + encodeURIComponent('Facebook login did not finish (' + e.message + '). Tap Continue with Facebook again.'));
+  }
   const profile = await meta.me(token);
   if (cfg.allowedFbIds.length && !cfg.allowedFbIds.includes(profile.id)) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name} is not on this app's team list. Ask the admin to add Facebook ID ${profile.id}.`));
@@ -53,7 +74,10 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
 
 app.post('/auth/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
 
-app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/login', wrap(async (req, res) => {
+  if (await loggedIn(req)) return res.redirect('/'); // already logged in: go straight to the app
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+}));
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 

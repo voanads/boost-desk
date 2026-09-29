@@ -1,6 +1,6 @@
 (() => {
   const $ = (id) => document.getElementById(id);
-  const money = (n) => '$' + (Number(n) || 0).toFixed(2);
+  const money = (n) => (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const pad = (n) => String(n).padStart(2, '0');
   const iso = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   const parse = (s) => { const [a, b, c] = s.split('-').map(Number); return new Date(a, b - 1, c); };
@@ -416,7 +416,7 @@
     const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, planned: a.planned + c.planned, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, planned: 0, live: 0, post: 0, lives: 0, active: 0 });
     $('dSpend').textContent = money(t.spend); $('dPlanned').textContent = money(t.planned);
     $('dSpend').classList.toggle('over', t.planned > 0 && t.spend > t.planned + 0.009);
-    $('dSplit').textContent = `$${Math.round(t.live)} / $${Math.round(t.post)}`;
+    $('dSplit').textContent = `$${Math.round(t.live).toLocaleString('en-US')} / $${Math.round(t.post).toLocaleString('en-US')}`;
     $('dActive').textContent = t.active;
 
     const diffCell = (d) => `<td class="r num" style="color:${d > 0.009 ? 'var(--live)' : 'var(--ok)'}">${d > 0.009 ? '+' : d < -0.009 ? '−' : ''}${money(Math.abs(d))}</td>`;

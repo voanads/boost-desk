@@ -537,3 +537,10 @@ table.dtable{min-width:0}
   .dl-v .box{min-width:84px}
 }
 @media (max-width:760px){.dexp-in{padding:0}.dl-t{color:var(--ink);font-size:1rem}}
+/* Send report glow when a client opens */
+@keyframes glow{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 70%,transparent),0 4px 14px color-mix(in srgb,var(--brand) 35%,transparent);transform:scale(1)}
+  30%{transform:scale(1.05)}
+  60%{box-shadow:0 0 0 12px transparent,0 4px 14px color-mix(in srgb,var(--brand) 35%,transparent);transform:scale(1)}
+  100%{box-shadow:0 0 0 0 transparent,0 4px 14px color-mix(in srgb,var(--brand) 35%,transparent)}}
+@media (prefers-reduced-motion:no-preference){.dexp-foot .glow{animation:glow 1.1s ease-out 2}}
+.dexp-foot .glow{outline:2px solid color-mix(in srgb,var(--brand) 60%,transparent);outline-offset:3px}

@@ -588,7 +588,7 @@
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
       renderDash();
     }
-    catch (e) { $('dBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
@@ -619,7 +619,7 @@
         return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="7"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   function renderDash() {
@@ -654,13 +654,19 @@
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
-        <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
-        <td class="sharec" data-l="Share"><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td>
-        <td class="actc"><button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client’s Telegram group' : 'No Telegram group yet — you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button></td></tr>${open ? detailRow(c) : ''}`;
-    }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td><td></td></tr>` : '';
+        <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td></tr>${open ? detailRow(c) : ''}`;
+    }).join('') || `<tr><td colspan="7" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
-      const toggle = () => { const id = Number(tr.dataset.cid); dOpen.has(id) ? dOpen.delete(id) : dOpen.add(id); renderDash(); };
+      const toggle = () => {
+        const id = Number(tr.dataset.cid), opening = !dOpen.has(id);
+        opening ? dOpen.add(id) : dOpen.delete(id); renderDash();
+        if (opening) setTimeout(() => {
+          const b = document.querySelector(`#dBody [data-dreport="${id}"]`); if (!b) return;
+          b.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' });
+          b.classList.remove('glow'); void b.offsetWidth; b.classList.add('glow');
+        }, 120);
+      };
       tr.onclick = (ev) => { if (!ev.target.closest('button')) toggle(); };
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };
     });

@@ -39,6 +39,7 @@
     ['checklist', 'dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
+    if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
 
@@ -265,18 +266,19 @@
       return `<tr><td><input type="checkbox" data-acct="${esc(a.id)}" ${a.enabled ? 'checked' : ''} aria-label="Include in sync"></td>
         <td>${esc(a.name)}<div class="hint num">${esc(a.id)}${i.business ? ' · ' + esc(i.business) : ''}</div></td>
         <td>${chip}</td>
-        <td class="r num">${i.todayError ? '<span class="hint">error</span>' : i.todaySpend != null ? money(i.todaySpend) : '–'}</td>
+        <td class="r num">${i.todayError ? '<span class="hint" title="' + esc(i.todayError) + '">error</span>' : i.todaySpend != null ? (Number(i.todaySpend) > 0 ? '<b>' + money(i.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
         <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${cap}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
     }).join('') || '<tr><td colspan="7" class="muted">No ad accounts loaded yet. Tap Refresh from Meta.</td></tr>';
     $('aCount').textContent = accounts.length; $('aActive').textContent = act; $('aBad').textContent = bad;
     $('aBad').classList.toggle('over', bad > 0); $('aToday').textContent = money(today);
     const seen = accounts.map((a) => a.seen_at).sort().pop();
-    if (seen) $('acctUpdated').textContent = 'Updated ' + new Date(seen).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '. Ticked accounts are included in Sync.';
+    const tAt = accounts.map((a) => a.info && a.info.todayAt).filter(Boolean).sort().pop();
+    if (seen) $('acctUpdated').textContent = (tAt ? "Today's spend as of " + new Date(tAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' (updates with every sync). ' : '') + 'Ticked accounts are included in Sync.';
     document.querySelectorAll('[data-acct]').forEach((cb) => cb.onchange = () => api('/accounts/' + encodeURIComponent(cb.dataset.acct), { method: 'PATCH', body: { enabled: cb.checked } }).then(() => toast(cb.checked ? 'Included in sync' : 'Left out of sync')).catch((e) => toast(e.message)));
   }
   $('refreshAccts').onclick = async () => {
     const b = $('refreshAccts'); b.disabled = true; b.textContent = 'Refreshing…';
-    try { accounts = await api('/accounts/refresh', { method: 'POST' }); renderAccounts(); toast('Ad accounts updated'); }
+    try { accounts = await api('/accounts/refresh', { method: 'POST' }); renderAccounts(); toast("Ad accounts and today's spend updated"); if (date === me.today) loadDay(); }
     catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Refresh from Meta'; }
   };
 

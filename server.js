@@ -249,17 +249,37 @@ api.get('/dashboard', wrap(async (req, res) => {
 }));
 
 // Ad accounts
-api.get('/accounts', wrap(async (req, res) => res.json(await db.listAccounts(req.user.fb_id))));
+// Today's spend per ad account comes from the campaign rows the last sync saved for today
+// (Sync, auto sync every hour / on new campaigns), so it stays current without extra Meta calls.
+async function accountsWithToday(owner) {
+  const list = await db.listAccounts(owner);
+  const day = sync.todayIn();
+  const rows = await db.getRaw(owner, day);
+  const meta0 = (await db.getDay(owner, day)).meta;
+  const byAcct = {};
+  for (const r of rows || []) byAcct[r.accountId] = (byAcct[r.accountId] || 0) + (Number(r.spend) || 0);
+  for (const a of list) {
+    const i = a.info || (a.info = {});
+    if (rows && a.enabled) { i.todaySpend = Math.round((byAcct[a.id] || 0) * 100) / 100; i.todayAt = meta0?.synced_at || null; delete i.todayError; }
+  }
+  return list;
+}
+api.get('/accounts', wrap(async (req, res) => res.json(await accountsWithToday(req.user.fb_id))));
 api.post('/accounts/refresh', wrap(async (req, res) => {
-  const list = await sync.refreshAccounts(req.user);
+  const me = req.user.fb_id;
+  // Pull today's spend for the ticked accounts (updates Home too); unticked ones get a quick total.
+  const r = await sync.exclusive(me, () => sync.syncDay(sync.todayIn(), req.user));
+  if (r === null) return res.status(409).json({ error: 'A sync is running right now. Try again in a moment.' });
+  const enabled = new Set(await db.enabledAccountIds(me));
+  const list = (await db.listAccounts(me)).map((row) => ({ ...(row.info || {}), id: row.id, name: row.name }));
   const token = await sync.tokenFor(req.user);
   const day = sync.todayIn();
   for (const a of list) {
-    if (![1, 9, 201].includes(a.statusCode)) continue; // only accounts that can spend
-    try { a.todaySpend = await meta.accountSpend(token, a.id, day); } catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
+    if (enabled.has(a.id)) continue;
+    try { a.todaySpend = await meta.accountSpend(token, a.id, day); a.todayAt = new Date().toISOString(); } catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
   }
-  await db.saveAccounts(req.user.fb_id, list);
-  res.json(await db.listAccounts(req.user.fb_id));
+  await db.saveAccounts(me, list.filter((a) => !enabled.has(a.id)));
+  res.json(await accountsWithToday(me));
 }));
 api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); }));
 

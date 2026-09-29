@@ -119,13 +119,19 @@ api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.u
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
-  res.json(await db.createClient(req.user.fb_id, c));
+  const created = await db.createClient(req.user.fb_id, c);
+  await sync.rematch(req.user);
+  res.json(created);
 }));
 api.patch('/clients/:id', wrap(async (req, res) => {
-  const c = await db.updateClient(req.user.fb_id, Number(req.params.id), cleanClient(req.body || {}));
-  c ? res.json(c) : res.status(404).json({ error: 'Client not found.' });
+  const body = cleanClient(req.body || {});
+  const c = await db.updateClient(req.user.fb_id, Number(req.params.id), body);
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  // Only changes that affect matching need a re-match (not e.g. the Telegram group).
+  if (['name', 'match', 'pages', 'type', 'archived'].some((k) => k in body)) await sync.rematch(req.user);
+  res.json(c);
 }));
-api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); res.json({ ok: true }); }));
+api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 
 // Days
 api.get('/day/:day', wrap(async (req, res) => {

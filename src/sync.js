@@ -156,8 +156,8 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 }
 
 // Write one day's campaign rows into the client entries.
-async function applyDay(day, items, errors, user, clients) {
-  await db.notePages(user.fb_id, items.map((it) => it.page), day);
+async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
+  if (!rematch) await db.notePages(user.fb_id, items.map((it) => it.page), day);
   const plan = buildPlan(items, clients);
   const syncedAt = new Date().toISOString();
   const touched = new Set();
@@ -180,7 +180,18 @@ async function applyDay(day, items, errors, user, clients) {
     e.syncedAt = syncedAt;
     await db.putEntry(day, t.clientId, e);
   }
-  await db.putDayMeta(user.fb_id, day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
+  // Clients that had synced spend this day but no longer match (a Page was moved to another client,
+  // a client was changed…): clear their synced spend so nothing is counted twice.
+  const { entries } = await db.getDay(user.fb_id, day);
+  for (const [cid, e] of Object.entries(entries)) {
+    if (touched.has(Number(cid)) || !e.syncedAt) continue;
+    for (const l of Object.values(e.lives || {})) { l.spend = 0; l.campaigns = 0; l.on = false; }
+    if (e.post) { e.post.spend = 0; e.post.campaigns = 0; e.post.on = false; }
+    delete e.syncedAt;
+    await db.putEntry(day, Number(cid), e);
+  }
+  if (rematch) await db.setDayUnmatched(user.fb_id, day, { unmatched: plan.unmatched, errors });
+  else await db.putDayMeta(user.fb_id, day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
   return { day, matched: plan.targets.length, unmatched: plan.unmatched, errors, campaigns: items.length };
 }
 
@@ -206,7 +217,24 @@ async function clientsWithLearnedPages(owner, items) {
 
 async function syncDay(day, user) {
   const { items, errors } = await fetchRange(day, day, user);
-  return applyDay(day, items, errors, user, await clientsWithLearnedPages(user.fb_id, items));
+  const failed = new Set(errors.map((e) => e.account));
+  let rows = items;
+  if (failed.size) { const prev = (await db.getRaw(user.fb_id, day)) || []; rows = rows.concat(prev.filter((r) => failed.has(r.account))); }
+  await db.putRaw(user.fb_id, day, rows);
+  return applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
+}
+
+// Re-match every saved day after clients change — uses the saved campaign rows, no Meta call.
+async function rematch(user) {
+  const t0 = Date.now();
+  const days = await db.listRaw(user.fb_id);
+  const all = days.flatMap((d) => d.rows);
+  const clients = await clientsWithLearnedPages(user.fb_id, all);
+  for (const d of days) {
+    const prevErrors = ((await db.getDay(user.fb_id, d.day)).meta?.unmatched?.errors) || [];
+    await applyDay(d.day, d.rows, prevErrors, user, clients, { rematch: true });
+  }
+  return { days: days.length, ms: Date.now() - t0 };
 }
 
 // Backfill several days with one API call per account (Meta allows up to ~37 months back).
@@ -219,9 +247,13 @@ async function syncRange(since, until, user, onProgress = () => {}) {
   const results = [];
   const allDays = [];
   for (let d = since; d <= until; d = addDays(d, 1)) allDays.push(d);
+  const failed = new Set(errors.map((e) => e.account));
   for (const [i, d] of allDays.entries()) {
     onProgress({ phase: 'saving', done: i, total: allDays.length, account: '' });
-    results.push(await applyDay(d, byDay[d] || [], errors, user, clients));
+    let rows = byDay[d] || [];
+    if (failed.size) { const prev = (await db.getRaw(user.fb_id, d)) || []; rows = rows.concat(prev.filter((r) => failed.has(r.account))); }
+    await db.putRaw(user.fb_id, d, rows);
+    results.push(await applyDay(d, rows, errors, user, clients));
   }
   return {
     days: results.length,
@@ -360,4 +392,4 @@ async function buildReport(owner, day) {
   return lines.join('\n');
 }
 
-module.exports = { clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

@@ -314,12 +314,14 @@
       const del = tr.querySelector('[data-act=del]');
       del.onclick = async () => {
         if (!del.dataset.arm) { del.dataset.arm = '1'; del.textContent = 'Tap again to delete'; setTimeout(() => { del.dataset.arm = ''; del.textContent = 'Delete'; }, 3000); return; }
-        try { await api('/clients/' + id, { method: 'DELETE' }); clients = clients.filter((c) => c.id !== id); renderClients(); structSig = ''; renderChecklist(); toast('Client deleted'); } catch (e) { toast(e.message); }
+        try { await api('/clients/' + id, { method: 'DELETE' }); clients = clients.filter((c) => c.id !== id); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Client deleted'); } catch (e) { toast(e.message); }
       };
     });
   }
+  // After a client change the server re-matches all saved days, so reload what's on screen.
+  function afterClientChange() { loadDay(); if (!$('tab-dashboard').hidden || dData) loadDash(); }
   async function saveClient(id, p) {
-    try { const c = await api('/clients/' + id, { method: 'PATCH', body: p }); clients = clients.map((x) => x.id === id ? c : x); renderClients(); structSig = ''; renderChecklist(); toast('Saved'); }
+    try { const c = await api('/clients/' + id, { method: 'PATCH', body: p }); clients = clients.map((x) => x.id === id ? c : x); renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Saved'); }
     catch (e) { toast(e.message); }
   }
   $('addForm').addEventListener('submit', async (ev) => {
@@ -329,7 +331,7 @@
       const c = await api('/clients', { method: 'POST', body });
       clients.push(c); clients.sort((a, b) => a.name.localeCompare(b.name));
       $('newName').value = ''; newPages = []; drawNewPages();
-      renderClients(); structSig = ''; renderChecklist(); toast('Added ' + c.name + '. Tap "Sync whole month" to fill past days.');
+      renderClients(); structSig = ''; renderChecklist(); afterClientChange(); toast('Added ' + c.name + ' — matched to your synced days');
     } catch (e) { toast(e.message); }
   });
 

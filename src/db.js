@@ -65,6 +65,12 @@ async function init() {
     ALTER TABLE day_meta ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT '';
     ALTER TABLE pages_seen ADD COLUMN IF NOT EXISTS owner TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS clients_owner_idx ON clients (owner);
+    CREATE TABLE IF NOT EXISTS raw_rows (           -- every campaign row a sync downloaded, matched or not
+      owner TEXT NOT NULL,
+      day DATE NOT NULL,
+      rows JSONB NOT NULL DEFAULT '[]',
+      PRIMARY KEY (owner, day)
+    );
   `);
   await migrateToWorkspaces();
 }
@@ -183,6 +189,14 @@ const putEntry = (day, clientId, data) =>
 const putDayMeta = (owner, day, syncedBy, unmatched) =>
   q(`INSERT INTO day_meta (owner, day, synced_at, synced_by, unmatched) VALUES ($1, $2, now(), $3, $4)
      ON CONFLICT (owner, day) DO UPDATE SET synced_at=now(), synced_by=$3, unmatched=$4`, [owner, day, syncedBy, JSON.stringify(unmatched)]);
+// Saved campaign rows, so matching can be re-run when clients change (no Meta call needed).
+const getRaw = async (owner, day) => (await q('SELECT rows FROM raw_rows WHERE owner=$1 AND day=$2', [owner, day])).rows[0]?.rows || null;
+const putRaw = (owner, day, rows) =>
+  q(`INSERT INTO raw_rows (owner, day, rows) VALUES ($1,$2,$3) ON CONFLICT (owner, day) DO UPDATE SET rows=$3`, [owner, day, JSON.stringify(rows)]);
+const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31') =>
+  (await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, rows FROM raw_rows WHERE owner=$1 AND day BETWEEN $2 AND $3 ORDER BY day`, [owner, from, to])).rows;
+const setDayUnmatched = (owner, day, unmatched) =>
+  q(`UPDATE day_meta SET unmatched=$3 WHERE owner=$1 AND day=$2`, [owner, day, JSON.stringify(unmatched)]);
 const monthEntries = async (owner, from, to) =>
   (await q(`SELECT to_char(e.day,'YYYY-MM-DD') AS day, e.client_id, e.data FROM day_entries e JOIN clients c ON c.id=e.client_id
             WHERE c.owner=$1 AND e.day BETWEEN $2 AND $3`, [owner, from, to])).rows;
@@ -193,5 +207,5 @@ module.exports = {
   listClients, createClient, updateClient, deleteClient, ownsClient,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
-  getDay, getEntry, putEntry, putDayMeta, monthEntries,
+  getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched,
 };

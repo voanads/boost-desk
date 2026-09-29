@@ -19,16 +19,12 @@ async function autoSync() {
 async function autoSyncInner() {
   const user = await db.latestUser();
   if (!user) return log('auto-sync skipped: nobody logged in yet');
-  const today = sync.todayIn();
-  // Before noon, also re-sync yesterday: Meta keeps finalizing late-night spend for a few hours.
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: cfg.tz, hour: '2-digit', hour12: false }).format(new Date()));
-  const days = hour < 12 ? [sync.addDays(today, -1), today] : [today];
-  for (const day of days) {
-    try {
-      const r = await sync.syncDay(day, user);
-      log(`auto-sync ${day}: ${r.campaigns} campaigns, ${r.matched} clients, ${r.unmatched.length} unmatched, ${r.errors.length} errors`);
-    } catch (e) { log(`auto-sync ${day} failed:`, e.message); }
-  }
+  // Same as the Sync button: the last 30 days in one pass (Meta keeps adjusting recent days).
+  const today = sync.todayIn(), from = sync.addDays(today, -29);
+  try {
+    const r = await sync.syncRange(from, today, user);
+    log(`auto-sync ${from}..${today}: ${r.campaigns} campaign-days, ${r.daysWithSpend} days with spend, ${r.errors.length} errors`);
+  } catch (e) { log('auto-sync failed:', e.message); }
   const a = await getAuto();
   await db.setSetting('autoSync', { ...a, lastRun: new Date().toISOString() });
 }

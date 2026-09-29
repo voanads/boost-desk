@@ -179,25 +179,14 @@
 
   // ---------- checklist actions ----------
   $('syncBtn').onclick = async () => {
-    const b = $('syncBtn'); b.disabled = true; b.textContent = 'Syncing…';
-    status($('syncStatus'), 'Reading spend for ' + nice(date) + ' from Ads Manager…');
+    const b = $('syncBtn'); b.disabled = true; b.textContent = 'Syncing 30 days…';
+    status($('syncStatus'), 'Reading the last 30 days from Ads Manager… this can take up to a minute.');
     try {
-      const r = await api('/sync/' + date, { method: 'POST' });
-      await loadDay();
-      toast(`Synced ${r.campaigns} campaigns · ${r.matched} clients`); loadPages();
+      const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
+      await loadDay(); loadPages();
+      toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} · ${r.daysWithSpend} days with spend`);
     } catch (e) { status($('syncStatus'), e.message, true); }
     finally { b.disabled = false; b.textContent = 'Sync from Meta'; }
-  };
-  $('syncMonthBtn').onclick = async () => {
-    const b = $('syncMonthBtn'); b.disabled = true; b.textContent = 'Syncing month…';
-    const ym = date.slice(0, 7), last = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
-    status($('syncStatus'), 'Reading every day of ' + parse(date).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) + ' from Ads Manager… this can take a minute.');
-    try {
-      const r = await api('/sync-range', { method: 'POST', body: { from: ym + '-01', to: ym + '-' + pad(last) } });
-      await loadDay();
-      toast(`Synced ${r.daysWithSpend} days with spend · ${r.campaigns} campaign-days`);
-    } catch (e) { status($('syncStatus'), e.message, true); }
-    finally { b.disabled = false; b.textContent = 'Sync whole month'; }
   };
   const shift = (n) => { const d = parse(date); d.setDate(d.getDate() + n); date = iso(d); loadDay(); };
   $('prevDay').onclick = () => shift(-1); $('nextDay').onclick = () => shift(1);
@@ -331,7 +320,7 @@
     $('autoSel').value = auto.enabled ? String(auto.everyMinutes) : '0';
     const last = auto.lastRun ? new Date(auto.lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : null;
     $('autoInfo').textContent = auto.enabled
-      ? `Runs ${pad(auto.from)}:00–${pad(auto.to)}:59 · today and, before noon, yesterday${last ? ` · last run ${last}` : ''}`
+      ? `Syncs the last 30 days · ${pad(auto.from)}:00–${pad(auto.to)}:59${last ? ` · last run ${last}` : ''}`
       : 'Off. Tap Sync from Meta to update by hand.';
   }
   async function loadAuto() { try { auto = await api('/auto-sync'); renderAuto(); } catch (_) {} }
@@ -354,30 +343,52 @@
   }, 120000);
 
   // ---------- dashboard ----------
-  let dMode = 'month', dDate = null, dData = null, dSort = { key: 'spend', asc: false };
+  let dMode = 'month', dDate = null, dFrom = null, dTo = null, dData = null, dSort = { key: 'spend', asc: false };
+  const addD = (d, n) => { const x = parse(d); x.setDate(x.getDate() + n); return iso(x); };
   const monthLabel = (ym) => parse(ym + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const lastDay = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
   const typeLabel = { live: 'Live', post: 'Post', both: 'Post + live' };
   function dRange() {
     if (dMode === 'day') return [dDate, dDate];
+    if (dMode === 'range') return [dFrom, dTo];
     const ym = dDate.slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))];
   }
   function setMode(m) {
     dMode = m;
     $('dMode-day').setAttribute('aria-pressed', String(m === 'day'));
     $('dMode-month').setAttribute('aria-pressed', String(m === 'month'));
-    $('dDay').hidden = m !== 'day'; $('dMonth').hidden = m !== 'month';
+    $('dMode-range').setAttribute('aria-pressed', String(m === 'range'));
+    $('dDay').hidden = m !== 'day'; $('dMonth').hidden = m !== 'month'; $('dRangeBox').hidden = m !== 'range';
+    if (m === 'range' && !dFrom) { dTo = dDate || me.today; dFrom = addD(dTo, -6); }
     loadDash();
   }
+  // Quick periods
+  function applyPreset(v) {
+    const t = me.today;
+    if (v === 'today') { dDate = t; setMode('day'); }
+    else if (v === 'yesterday') { dDate = addD(t, -1); setMode('day'); }
+    else if (v === '7' || v === '30') { dTo = t; dFrom = addD(t, -(Number(v) - 1)); setMode('range'); }
+    else if (v === 'thisMonth') { dDate = t; setMode('month'); }
+    else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dDate = iso(d); setMode('month'); }
+    else if (v === 'custom') { if (!dFrom) { dTo = t; dFrom = addD(t, -13); } setMode('range'); $('dFrom').focus(); }
+  }
+  $('dPreset').onchange = () => applyPreset($('dPreset').value);
+  $('dMode-range').onclick = () => { $('dPreset').value = 'custom'; setMode('range'); };
+  $('dFrom').onchange = () => { if ($('dFrom').value) { dFrom = $('dFrom').value; if (dTo < dFrom) dTo = dFrom; $('dPreset').value = 'custom'; loadDash(); } };
+  $('dTo').onchange = () => { if ($('dTo').value) { dTo = $('dTo').value; if (dFrom > dTo) dFrom = dTo; $('dPreset').value = 'custom'; loadDash(); } };
   $('dMode-day').onclick = () => setMode('day');
   $('dMode-month').onclick = () => setMode('month');
   const dShift = (n) => {
     const d = parse(dDate);
+    if (dMode === 'range') { // move the whole range by its own length
+      const len = Math.round((parse(dTo) - parse(dFrom)) / 864e5) + 1;
+      dFrom = addD(dFrom, n * len); dTo = addD(dTo, n * len); $('dPreset').value = 'custom'; loadDash(); return;
+    }
     if (dMode === 'day') d.setDate(d.getDate() + n); else { d.setDate(1); d.setMonth(d.getMonth() + n); }
-    dDate = iso(d); loadDash();
+    dDate = iso(d); $('dPreset').value = dMode === 'day' ? (dDate === me.today ? 'today' : dDate === addD(me.today, -1) ? 'yesterday' : 'custom') : (dDate.slice(0, 7) === me.today.slice(0, 7) ? 'thisMonth' : 'custom');
+    loadDash();
   };
   $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
-  $('dToday').onclick = () => { dDate = me.today; loadDash(); };
   $('dDay').onchange = () => { if ($('dDay').value) { dDate = $('dDay').value; loadDash(); } };
   $('dMonth').onchange = () => { if ($('dMonth').value) { dDate = $('dMonth').value + '-01'; loadDash(); } };
   $('dSearch').oninput = () => renderDash(); $('dType').onchange = () => renderDash(); $('dShowIdle').onchange = () => renderDash();
@@ -389,8 +400,9 @@
     if (!$('rPanel').hidden && rTarget) openReport(rTarget.kind === 'client' ? rTarget.id : null);
     if (!dDate) dDate = me.today;
     $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
+    if (dFrom) { $('dFrom').value = dFrom; $('dTo').value = dTo; }
     const [from, to] = dRange();
-    $('dTableTitle').textContent = dMode === 'day' ? 'Clients · ' + nice(from) : 'Clients · ' + monthLabel(from.slice(0, 7));
+    $('dTableTitle').textContent = 'Clients · ' + periodLabel();
     try { dData = await api(`/dashboard?from=${from}&to=${to}`); renderDash(); }
     catch (e) { $('dBody').innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`; }
   }
@@ -427,24 +439,25 @@
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); openReport(Number(b.dataset.report)); });
     document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
       if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
-      else { $('dSearch').value = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; setMode('day'); }
+      else { const n = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; $('dSearch').value = $('dSearch').value === n ? '' : n; renderDash(); }
     });
 
     // Daily chart (month mode only), filtered to the visible clients.
-    $('dChartPanel').hidden = dMode !== 'month';
-    if (dMode === 'month') {
+    $('dChartPanel').hidden = dMode === 'day';
+    if (dMode !== 'day') {
       const ids = new Set(list.map((c) => c.id));
       const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
       const max = Math.max(1, ...days.map((d) => d.spend));
       $('dChartTitle').textContent = 'Spend per day · ' + money(days.reduce((s, d) => s + d.spend, 0));
       $('dChart').innerHTML = days.map((d) => `<button class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
-      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; setMode('day'); });
+      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dDate = b.dataset.day; $('dPreset').value = dDate === me.today ? 'today' : 'custom'; setMode('day'); });
     }
   }
 
   // ---------- reports (per client + team summary) ----------
   let rTarget = null; // { kind: 'client', id } or { kind: 'team' }
-  const periodLabel = () => dMode === 'day' ? nice(dDate) : monthLabel(dDate.slice(0, 7));
+  const shortD = (d) => parse(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const periodLabel = () => dMode === 'day' ? nice(dDate) : dMode === 'month' ? monthLabel(dDate.slice(0, 7)) : `${shortD(dFrom)} – ${shortD(dTo)} ${dTo.slice(0, 4)}`;
   async function openReport(clientId) {
     const [from, to] = dRange();
     rTarget = clientId ? { kind: 'client', id: clientId } : { kind: 'team' };

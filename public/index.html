@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=11">
+<link rel="stylesheet" href="/assets/app.css?v=12">
 </head>
 <body>
 <div class="wrap">
@@ -31,8 +31,7 @@
         <button id="todayBtn">Today</button>
       </div>
       <div class="tools">
-        <button id="syncBtn" class="primary">Sync from Meta</button>
-        <button id="syncMonthBtn">Sync whole month</button>
+        <button id="syncBtn" class="primary" title="Pulls the last 30 days from Ads Manager">Sync from Meta</button>
       </div>
     </div>
     <div class="autobar">
@@ -74,15 +73,25 @@
   <section id="tab-dashboard" class="wrap" hidden>
     <div class="top">
       <div class="daybar">
+        <select id="dPreset" aria-label="Quick period">
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7">Last 7 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="thisMonth" selected>This month</option>
+          <option value="lastMonth">Last month</option>
+          <option value="custom">Custom range…</option>
+        </select>
         <div class="seg" role="group" aria-label="Period">
           <button id="dMode-day" data-mode="day" aria-pressed="false">Day</button>
           <button id="dMode-month" data-mode="month" aria-pressed="true">Month</button>
+          <button id="dMode-range" data-mode="range" aria-pressed="false">Range</button>
         </div>
         <button id="dPrev" aria-label="Previous">‹</button>
         <input type="date" id="dDay" aria-label="Day" hidden>
         <input type="month" id="dMonth" aria-label="Month">
+        <span class="rangeins" id="dRangeBox" hidden><input type="date" id="dFrom" aria-label="From"> – <input type="date" id="dTo" aria-label="To"></span>
         <button id="dNext" aria-label="Next">›</button>
-        <button id="dToday">Today</button>
       </div>
       <div class="tools">
         <input type="text" id="dSearch" placeholder="Search client or Page" aria-label="Search clients">
@@ -114,7 +123,7 @@
       <div class="chart" id="dChart"></div>
     </div>
     <div class="panel">
-      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Tap a client to see their days</span></div>
+      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Tap a client to show only them</span></div>
       <div class="tablewrap"><table class="dtable">
         <thead><tr>
           <th data-sort="name">Client</th><th>Type</th>
@@ -182,6 +191,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=11"></script>
+<script src="/assets/app.js?v=12"></script>
 </body>
 </html>

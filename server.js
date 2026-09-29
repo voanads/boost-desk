@@ -133,6 +133,20 @@ api.post('/sync/:day', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
   res.json(await sync.syncDay(req.params.day, req.user));
 }));
+// Main sync: the last 30 days (or the month containing ?around= when that's older), in one pass.
+api.post('/sync-recent', wrap(async (req, res) => {
+  const today = sync.todayIn();
+  const from30 = sync.addDays(today, -29);
+  const around = isDay(req.body?.around) ? req.body.around : today;
+  let from = from30, to = today;
+  if (around < from30) { // looking at an older day: sync that whole month
+    from = around.slice(0, 8) + '01';
+    const last = new Date(Date.UTC(Number(around.slice(0, 4)), Number(around.slice(5, 7)), 0)).getUTCDate();
+    to = around.slice(0, 8) + String(last).padStart(2, '0');
+  }
+  const r = await sync.syncRange(from, to, req.user);
+  res.json({ ...r, from, to });
+}));
 // Backfill past days, e.g. the whole month: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' } (max 93 days).
 api.post('/sync-range', wrap(async (req, res) => {
   const { from, to } = req.body || {};

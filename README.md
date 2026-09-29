@@ -11,7 +11,7 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 - **Clients** — name, one or more Facebook Pages (spend from any of them counts for that client) and type (live / post / both). Budgets are set by each client, so the app records what was actually spent.
 - **Boost posts** — Meta names these automatically (`Post: "…"`), so the app looks up which Facebook Page each boosted post belongs to and gives the spend to the client with that Page name. This works even when one ad account boosts posts for many Pages. For *Post + live* clients, boosted posts go in the post row and named campaigns go in the live rows.
 - **Telegram** — the day's report is sent to your group automatically every night (default 21:00), after a fresh sync.
-- **Past days** — on first login the app fills in the whole current month. **Sync whole month** re-reads every day of the month you're viewing (use it after adding a new client). Each morning, auto-sync also re-checks yesterday, since Meta keeps finalizing late-night spend.
+- **Background auto sync** (nothing to tap, nothing shown in the app) — every 5 minutes it checks for **newly created campaigns** and pulls their spend right away; every hour it refreshes today and yesterday; every morning at 05:30 it refreshes the last 30 days, since Meta keeps finalizing late spend. It only runs for admins who have tapped **Sync from Meta** at least once and whose Facebook login is still valid, and it never runs at the same time as a manual sync. Set `AUTO_SYNC=off` to turn it off.
 - **Sync from Meta** — one tap pulls and saves the **last 30 days** (or the whole month when you're looking at an older date).
 - **Dashboard** — every client's spend for **Today, Yesterday, Last 7 / 30 days, This month, Last month or any custom range**: live vs post spend, number of lives, spend per day, share of total, and a spend-per-day chart. Search by client or Page, filter by type, sort any column, tap a day or client to drill in.
 
@@ -60,7 +60,7 @@ Run locally instead: `cp .env.example .env`, fill it in, then `npm install` and 
 ## Good to know
 
 - **Facebook logins last about 60 days.** The Team tab shows when each login expires, and the Telegram report warns a week before. Just log in again.
-- Scheduled syncs and the nightly report use the **most recent login's** access.
+- Background syncs and the nightly report use each admin's own login. Days refreshed in the background show **Auto sync** as "last synced by".
 - Spend is in each ad account's currency (usually USD). Non-USD accounts show their currency on the Ad accounts tab.
 - Meta limits how often apps can call the API. With ~20 ad accounts and hourly sync you're well within limits; if Meta asks you to slow down, the app says so and you can try again a few minutes later.
 - Change `LIVE_GAP_MINUTES` if your lives are closer together or further apart than 30 minutes.
@@ -71,7 +71,7 @@ Run locally instead: `cp .env.example .env`, fill it in, then `npm install` and 
 server.js            routes: Facebook login, API, pages
 src/meta.js          Meta Graph / Marketing API client
 src/sync.js          matching campaigns to clients, live grouping, report text
-src/jobs.js          hourly auto-sync + nightly Telegram report
+src/jobs.js          background auto sync (new campaigns, hourly, daily) + nightly Telegram report
 src/db.js            Postgres tables and queries
 src/crypto.js        encrypts Facebook tokens at rest (AES-256-GCM)
 src/telegram.js      Telegram sender

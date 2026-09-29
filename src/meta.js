@@ -214,6 +214,14 @@ async function campaignPages(token, actId, campaignIds) {
   return Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
 }
 
+// IDs of the account's currently active campaigns — one cheap call, used to spot new campaigns.
+async function activeCampaignIds(token, actId) {
+  const rows = await getAll(`/${actId}/campaigns`, {
+    fields: 'id', filtering: [{ field: 'effective_status', operator: 'IN', value: ['ACTIVE', 'IN_PROCESS'] }], limit: 500,
+  }, token);
+  return rows.map((r) => r.id);
+}
+
 // Names of every Page you can see through Business portfolios (owned + client Pages shared
 // with the business) and Pages you manage directly. Doesn't need access to the Page itself.
 let directoryLoadedAt = 0;
@@ -239,4 +247,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

@@ -167,7 +167,7 @@ api.get('/sync-progress', (req, res) => {
 });
 api.post('/sync-recent', wrap(async (req, res) => {
   const me = req.user.fb_id;
-  if (getProg(me).running) return res.status(409).json({ error: 'Your sync is already running (maybe in another tab). Wait for it to finish.', busy: true });
+  if (getProg(me).running || sync.isBusy(me)) return res.status(409).json({ error: 'A sync is already running for you (another tab or an automatic refresh). Try again in a moment.', busy: true });
   const today = sync.todayIn();
   const from30 = sync.addDays(today, -29);
   const around = isDay(req.body?.around) ? req.body.around : today;
@@ -180,7 +180,10 @@ api.post('/sync-recent', wrap(async (req, res) => {
   const startedAt = Date.now();
   progressByUser.set(me, { running: true, phase: 'starting', done: 0, total: 0, account: '', from, to, startedAt });
   let r;
-  try { r = await sync.syncRange(from, to, req.user, (p) => progressByUser.set(me, { ...getProg(me), ...p })); }
+  try {
+    r = await sync.exclusive(me, () => sync.syncRange(from, to, req.user, (p) => progressByUser.set(me, { ...getProg(me), ...p })));
+    if (!r) return res.status(409).json({ error: 'An automatic refresh is running right now. Try again in a moment.', busy: true });
+  }
   finally { progressByUser.set(me, { running: false, lastSeconds: Math.round((Date.now() - startedAt) / 1000) }); }
   res.json({ ...r, from, to });
 }));

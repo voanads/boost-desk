@@ -224,6 +224,15 @@ async function syncDay(day, user) {
   return applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
 }
 
+// One sync at a time per admin — the Sync button and background syncs share this.
+const busy = new Set();
+const isBusy = (owner) => busy.has(owner);
+async function exclusive(owner, fn) {
+  if (busy.has(owner)) return null;
+  busy.add(owner);
+  try { return await fn(); } finally { busy.delete(owner); }
+}
+
 // Re-match every saved day after clients change — uses the saved campaign rows, no Meta call.
 async function rematch(user) {
   const t0 = Date.now();
@@ -392,4 +401,4 @@ async function buildReport(owner, day) {
   return lines.join('\n');
 }
 
-module.exports = { rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

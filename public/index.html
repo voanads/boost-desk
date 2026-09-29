@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boost Desk</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=8">
+<link rel="stylesheet" href="/assets/app.css?v=9">
 </head>
 <body>
 <div class="wrap">
@@ -52,9 +52,9 @@
     <div class="status" id="syncStatus"></div>
     <div class="summary">
       <div><span class="lbl">Spent</span><span class="val num" id="sSpend">$0.00</span></div>
-      <div><span class="lbl">Planned budget</span><span class="val num" id="sBudget">$0.00</span></div>
+      <div><span class="lbl">Lives with spend</span><span class="val num" id="sLives">0</span></div>
       <div><span class="lbl">Boosts done</span><span class="val num" id="sDone">0 / 0</span></div>
-      <div><span class="lbl">Over budget</span><span class="val num" id="sOver">0</span></div>
+      <div><span class="lbl">Clients with spend</span><span class="val num" id="sActive">0</span></div>
     </div>
     <div class="list" id="list"><div class="empty">Loading…</div></div>
     <div class="panel" id="unmatchedPanel" hidden>
@@ -66,7 +66,7 @@
     <div class="panel">
       <div class="top"><h2 id="monthTitle">This month</h2><span class="hint">Every logged day this month</span></div>
       <div class="tablewrap"><table>
-        <thead><tr><th>Client</th><th class="r">Days</th><th class="r">Lives</th><th class="r">Spend</th><th class="r">Planned</th><th class="r">Diff</th></tr></thead>
+        <thead><tr><th>Client</th><th class="r">Days</th><th class="r">Lives</th><th class="r">Spend</th><th class="r">Per day</th></tr></thead>
         <tbody id="monthBody"></tbody><tfoot id="monthFoot"></tfoot>
       </table></div>
     </div>
@@ -94,7 +94,7 @@
     </div>
     <div class="summary">
       <div><span class="lbl">Total spent</span><span class="val num" id="dSpend">$0.00</span></div>
-      <div><span class="lbl">Planned budget</span><span class="val num" id="dPlanned">$0.00</span></div>
+      <div><span class="lbl">Lives with spend</span><span class="val num" id="dLives">0</span></div>
       <div><span class="lbl">Live / Post</span><span class="val num" id="dSplit">$0 / $0</span></div>
       <div><span class="lbl">Active clients</span><span class="val num" id="dActive">0</span></div>
     </div>
@@ -103,13 +103,13 @@
       <div class="chart" id="dChart"></div>
     </div>
     <div class="panel">
-      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Planned = daily budget × days with spend</span></div>
+      <div class="top"><h2 id="dTableTitle">Clients</h2><span class="hint">Tap a client to see their days</span></div>
       <div class="tablewrap"><table class="dtable">
         <thead><tr>
           <th data-sort="name">Client</th><th>Type</th>
           <th class="r" data-sort="days">Days</th><th class="r" data-sort="lives">Lives</th>
           <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
-          <th class="r" data-sort="spend">Spent</th><th class="r" data-sort="planned">Planned</th><th class="r" data-sort="diff">Diff</th><th>Used</th>
+          <th class="r" data-sort="spend">Spent</th><th class="r">Per day</th><th>Share</th>
         </tr></thead>
         <tbody id="dBody"></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
@@ -126,9 +126,6 @@
         <label>Client name<input type="text" id="newName" required placeholder="e.g. DC Shop"></label>
         <label>Facebook Pages<span class="pages" id="newPages"></span></label>
         <label>Boost type<select id="newType"><option value="live">Boost live</option><option value="post">Boost post</option><option value="both">Post + live</option></select></label>
-        <label>Daily budget ($)<input type="number" id="newBudget" min="0" step="0.5" value="10" style="width:96px"></label>
-        <label>Lives per day<input type="number" id="newLives" min="1" max="6" value="2" style="width:70px"></label>
-        <label>Ad account (fallback)<input type="text" id="newAccount" list="acctList" placeholder="optional"></label>
         <button class="primary" type="submit">Add client</button>
       </form>
       <div class="hint">A client can have several Facebook Pages. Spend from any of them counts for the client. The client name also counts as a Page name.</div>
@@ -136,7 +133,7 @@
       <datalist id="pageList"></datalist>
     </div>
     <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th>$/day</th><th>Lives</th><th>Ad account (fallback)</th><th></th></tr></thead>
+      <thead><tr><th>Client</th><th>Facebook Pages</th><th>Type</th><th></th></tr></thead>
       <tbody id="clientBody"></tbody>
     </table></div></div>
       </div>
@@ -174,6 +171,6 @@
     </div>
   </section>
 </div>
-<script src="/assets/app.js?v=8"></script>
+<script src="/assets/app.js?v=9"></script>
 </body>
 </html>

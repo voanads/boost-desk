@@ -88,7 +88,7 @@ function entryStats(c, e = {}) {
   const lives = [];
   if (hasPost(c)) { const p = e.post || {}; spend += Number(p.spend) || 0; total++; if (p.on) done++; }
   if (hasLive(c)) {
-    const n = e.liveCount ?? c.lives ?? 2;
+    const n = e.liveCount ?? 1;
     for (let i = 1; i <= n; i++) {
       const l = (e.lives || {})['l' + i] || {};
       spend += Number(l.spend) || 0; total++; if (l.on) done++;
@@ -154,7 +154,7 @@ async function applyDay(day, items, errors, user, clients) {
       // Clear spend on slots Meta no longer reports.
       for (const k of Object.keys(e.lives || {})) if (!lives[k]) lives[k] = { ...e.lives[k], spend: 0, campaigns: 0 };
       e.lives = lives;
-      e.liveCount = Math.max(e.liveCount ?? c.lives ?? 2, t.slots.length);
+      e.liveCount = Math.max(e.liveCount ?? 0, t.slots.length);
     }
     if (t.post) e.post = { ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count };
     e.syncedAt = syncedAt;
@@ -223,14 +223,13 @@ async function buildReport(day) {
   const { entries, meta: m } = await db.getDay(day);
   const nice = new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const lines = [`📊 Boost report — ${nice}`, ''];
-  let T = 0, B = 0;
+  let T = 0;
   for (const c of clients) {
     const e = entries[c.id] || {};
     const s = entryStats(c, e);
     if (!s.spend && !s.done) continue;
-    T += s.spend; B += c.budget;
-    const over = c.budget && s.spend > c.budget + 0.009 ? `  ⚠️ over ${money(s.spend - c.budget)}` : '';
-    lines.push(`• ${c.name}: ${money(s.spend)} / ${money(c.budget)}${over}`);
+    T += s.spend;
+    lines.push(`• ${c.name}: ${money(s.spend)}`);
     const parts = [];
     if (hasPost(c)) parts.push(`Post ${money((e.post || {}).spend)}`);
     s.lives.forEach((l, i) => { if (l.spend || l.on) parts.push(`L${i + 1}${l.time ? ' (' + l.time + ')' : ''} ${money(l.spend)}`); });
@@ -238,7 +237,7 @@ async function buildReport(day) {
     if (e.note) lines.push('   📝 ' + e.note);
   }
   if (lines.length === 2) lines.push('No boost spend recorded.');
-  lines.push('', `Total: ${money(T)} / ${money(B)}`);
+  lines.push('', `Total: ${money(T)}`);
   const un = m?.unmatched?.unmatched || [];
   if (un.length) lines.push(`Not matched to a client: ${money(un.reduce((s, u) => s + u.spend, 0))}`);
   return lines.join('\n');

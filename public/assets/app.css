@@ -127,3 +127,5 @@ body{overflow-x:hidden}
   .tools{width:100%}
   .chart .col{flex:0 0 14px}
 }
+.sharecell{display:flex;align-items:center;gap:8px}
+.sharecell .meter{flex:1}

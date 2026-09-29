@@ -35,11 +35,11 @@
   // ---------- checklist helpers ----------
   const active = () => clients.filter((c) => !c.archived);
   const entry = (cid) => day.entries[cid] || {};
-  const liveCount = (c) => { const e = entry(c.id); return e.liveCount ?? c.lives ?? 2; };
+  const liveCount = (c) => { const e = entry(c.id); return e.liveCount ?? 1; };
   function stats(c, e = entry(c.id)) {
     let spend = 0, total = 0, done = 0;
     if (hasPost(c)) { const p = e.post || {}; spend += Number(p.spend) || 0; total++; if (p.on) done++; }
-    if (hasLive(c)) { const n = e.liveCount ?? c.lives ?? 2; for (let i = 1; i <= n; i++) { const l = (e.lives || {})['l' + i] || {}; spend += Number(l.spend) || 0; total++; if (l.on) done++; } }
+    if (hasLive(c)) { const n = e.liveCount ?? 1; for (let i = 1; i <= n; i++) { const l = (e.lives || {})['l' + i] || {}; spend += Number(l.spend) || 0; total++; if (l.on) done++; } }
     return { spend, total, done };
   }
   function merge(t, s) { for (const k in s) { if (s[k] && typeof s[k] === 'object') { t[k] = t[k] || {}; merge(t[k], s[k]); } else t[k] = s[k]; } return t; }
@@ -78,8 +78,8 @@
       const u = un[b.dataset.new];
       $('newName').value = u.page; newPages = [u.page]; drawNewPages();
       $('newType').value = u.kind === 'post' ? 'post' : 'live';
-      showTab('clients'); $('newBudget').focus();
-      toast('Set the budget, then tap Add client');
+      showTab('clients'); $('newType').focus();
+      toast('Check the boost type, then tap Add client');
     });
     document.querySelectorAll('[data-link]').forEach((sel) => sel.onchange = async () => {
       const u = un[sel.dataset.link], c = clients.find((x) => x.id === Number(sel.value));
@@ -91,7 +91,7 @@
 
   function renderChecklist() {
     const list = active();
-    const sig = date + '|' + list.map((c) => [c.id, c.type, c.name, c.budget, hasLive(c) ? liveCount(c) : 0].join(':')).join(',');
+    const sig = date + '|' + list.map((c) => [c.id, c.type, c.name, hasLive(c) ? liveCount(c) : 0].join(':')).join(',');
     if (sig !== structSig) { structSig = sig; buildCards(list); }
     refreshValues();
   }
@@ -101,7 +101,7 @@
     if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add your first client in the <a href="#clients" id="toClients">Clients</a> tab, with their Facebook Page names.</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); showTab('clients'); }; return; }
     for (const c of list) {
       const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id;
-      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip warn" data-f="over" hidden></span><span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><b class="num" data-f="spent"></b><span class="muted num">/ ${money(c.budget)}</span></span></div><div class="bar"><i data-f="bar"></i></div><div class="rows"></div><div class="cfoot"></div>`;
+      card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><span class="hint">Spent</span> <b class="num" data-f="spent"></b></span></div><div class="rows"></div><div class="cfoot"></div>`;
       const rows = card.querySelector('.rows');
       if (hasPost(c)) rows.appendChild(makeRow(c, 'post', 'Boost post', false));
       if (hasLive(c)) for (let i = 1; i <= liveCount(c); i++) rows.appendChild(makeRow(c, 'l' + i, 'Live ' + i, true));
@@ -112,8 +112,7 @@
         minus.onclick = () => { patch(c.id, { liveCount: Math.max(1, n - 1) }); renderChecklist(); };
         const plus = document.createElement('button'); plus.className = 'ghost'; plus.textContent = '+ Live'; plus.disabled = n >= 8;
         plus.onclick = () => { patch(c.id, { liveCount: Math.min(8, n + 1) }); renderChecklist(); };
-        const per = document.createElement('span'); per.className = 'hint num'; per.textContent = '≈ ' + money((c.budget || 0) / n) + ' per live';
-        foot.append(minus, plus, per);
+        foot.append(minus, plus);
       }
       const note = document.createElement('input'); note.type = 'text'; note.className = 'note'; note.id = 'note-' + c.id; note.placeholder = 'Note (e.g. client asked +3 days)'; note.dataset.f = 'note';
       let t; note.oninput = () => { clearTimeout(t); t = setTimeout(() => patch(c.id, { note: note.value }), 700); };
@@ -136,16 +135,14 @@
   }
 
   function refreshValues() {
-    let spend = 0, budget = 0, total = 0, done = 0, over = 0;
+    let spend = 0, total = 0, done = 0, lives = 0, withSpend = 0;
     for (const c of active()) {
       const e = entry(c.id), s = stats(c, e);
-      spend += s.spend; budget += c.budget; total += s.total; done += s.done;
-      const isOver = c.budget > 0 && s.spend > c.budget + 0.009; if (isOver) over++;
+      spend += s.spend; total += s.total; done += s.done; if (s.spend > 0) withSpend++;
+      if (hasLive(c)) lives += Object.values(e.lives || {}).filter((l) => l && Number(l.spend) > 0).length;
       const card = document.querySelector(`.card[data-cid="${c.id}"]`); if (!card) continue;
-      card.classList.toggle('is-over', isOver); card.classList.toggle('is-done', !isOver && s.total > 0 && s.done === s.total);
+      card.classList.toggle('is-done', s.total > 0 && s.done === s.total);
       card.querySelector('[data-f=spent]').textContent = money(s.spend);
-      const bar = card.querySelector('[data-f=bar]'); bar.style.width = (c.budget ? Math.min(100, s.spend / c.budget * 100) : 0) + '%'; bar.classList.toggle('over', isOver);
-      const oc = card.querySelector('[data-f=over]'); oc.hidden = !isOver; if (isOver) oc.textContent = 'Over ' + money(s.spend - c.budget);
       card.querySelector('[data-f=synced]').hidden = !e.syncedAt;
       card.querySelectorAll('.row').forEach((row) => {
         const key = row.dataset.key; const v = key === 'post' ? (e.post || {}) : ((e.lives || {})[key] || {});
@@ -157,9 +154,8 @@
       });
       const note = card.querySelector('[data-f=note]'); if (document.activeElement !== note) note.value = e.note || '';
     }
-    $('sSpend').textContent = money(spend); $('sBudget').textContent = money(budget);
-    $('sDone').textContent = done + ' / ' + total; $('sOver').textContent = over;
-    $('sOver').classList.toggle('over', over > 0); $('sSpend').classList.toggle('over', budget > 0 && spend > budget + 0.009);
+    $('sSpend').textContent = money(spend); $('sLives').textContent = lives;
+    $('sDone').textContent = done + ' / ' + total; $('sActive').textContent = withSpend + ' / ' + active().length;
   }
 
   async function loadMonth() {
@@ -176,10 +172,9 @@
       if (hasLive(c)) p.lives += Object.values(r.data.lives || {}).filter((l) => l && (l.on || Number(l.spend) > 0)).length;
     }
     const list = Object.values(per).sort((a, b) => b.spend - a.spend);
-    const diffCell = (d) => `<td class="r num" style="color:${d > 0.009 ? 'var(--live)' : 'var(--ok)'}">${d > 0 ? '+' : d < 0 ? '−' : ''}${money(Math.abs(d))}</td>`;
-    let T = 0, P = 0;
-    $('monthBody').innerHTML = list.length ? list.map((p) => { const plan = p.days * p.c.budget; T += p.spend; P += plan; return `<tr><td>${esc(p.c.name)}</td><td class="r num">${p.days}</td><td class="r num">${hasLive(p.c) ? p.lives : '–'}</td><td class="r num">${money(p.spend)}</td><td class="r num">${money(plan)}</td>${diffCell(p.spend - plan)}</tr>`; }).join('') : '<tr><td colspan="6" class="muted">Nothing logged this month yet.</td></tr>';
-    $('monthFoot').innerHTML = list.length ? `<tr><td>Total</td><td></td><td></td><td class="r num">${money(T)}</td><td class="r num">${money(P)}</td>${diffCell(T - P)}</tr>` : '';
+    let T = 0, L = 0, D = 0;
+    $('monthBody').innerHTML = list.length ? list.map((p) => { T += p.spend; L += hasLive(p.c) ? p.lives : 0; return `<tr><td>${esc(p.c.name)}</td><td class="r num">${p.days}</td><td class="r num">${hasLive(p.c) ? p.lives : '–'}</td><td class="r num">${money(p.spend)}</td><td class="r num">${money(p.spend / p.days)}</td></tr>`; }).join('') : '<tr><td colspan="5" class="muted">Nothing logged this month yet.</td></tr>';
+    $('monthFoot').innerHTML = list.length ? `<tr><td>Total</td><td></td><td class="r num">${L}</td><td class="r num">${money(T)}</td><td></td></tr>` : '';
   }
 
   // ---------- checklist actions ----------
@@ -283,11 +278,8 @@
       <td><input type="text" data-k="name" value="${esc(c.name)}" style="width:150px">${c.archived ? '<div class="hint">Paused</div>' : ''}</td>
       <td><span class="pages" data-pages></span></td>
       <td>${typeSel(c)}</td>
-      <td><input type="number" data-k="budget" value="${c.budget}" min="0" step="0.5" style="width:80px"></td>
-      <td><input type="number" data-k="lives" value="${c.lives}" min="1" max="6" style="width:60px"></td>
-      <td><input type="text" data-k="account" value="${esc(c.account)}" list="acctList" placeholder="optional" style="width:160px"></td>
       <td><button class="ghost" data-act="pause">${c.archived ? 'Resume' : 'Pause'}</button><button class="ghost" data-act="del">Delete</button></td></tr>`).join('')
-      || '<tr><td colspan="7" class="muted">No clients yet.</td></tr>';
+      || '<tr><td colspan="4" class="muted">No clients yet.</td></tr>';
     document.querySelectorAll('#clientBody tr[data-cid]').forEach((tr) => {
       const id = Number(tr.dataset.cid);
       const c0 = clients.find((c) => c.id === id);
@@ -308,11 +300,11 @@
   }
   $('addForm').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const body = { name: $('newName').value, pages: newPages, type: $('newType').value, budget: $('newBudget').value, lives: $('newLives').value, account: $('newAccount').value };
+    const body = { name: $('newName').value, pages: newPages, type: $('newType').value };
     try {
       const c = await api('/clients', { method: 'POST', body });
       clients.push(c); clients.sort((a, b) => a.name.localeCompare(b.name));
-      $('newName').value = ''; $('newAccount').value = ''; newPages = []; drawNewPages();
+      $('newName').value = ''; newPages = []; drawNewPages();
       renderClients(); structSig = ''; renderChecklist(); toast('Added ' + c.name + '. Tap "Sync whole month" to fill past days.');
     } catch (e) { toast(e.message); }
   });
@@ -413,24 +405,23 @@
     list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
-    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, planned: a.planned + c.planned, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, planned: 0, live: 0, post: 0, lives: 0, active: 0 });
-    $('dSpend').textContent = money(t.spend); $('dPlanned').textContent = money(t.planned);
-    $('dSpend').classList.toggle('over', t.planned > 0 && t.spend > t.planned + 0.009);
+    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0 });
+    $('dSpend').textContent = money(t.spend); $('dLives').textContent = t.lives;
     $('dSplit').textContent = `$${Math.round(t.live).toLocaleString('en-US')} / $${Math.round(t.post).toLocaleString('en-US')}`;
     $('dActive').textContent = t.active;
 
-    const diffCell = (d) => `<td class="r num" style="color:${d > 0.009 ? 'var(--live)' : 'var(--ok)'}">${d > 0.009 ? '+' : d < -0.009 ? '−' : ''}${money(Math.abs(d))}</td>`;
+    const top = Math.max(0.01, ...list.map((c) => c.spend));
     $('dBody').innerHTML = list.map((c) => {
-      const pct = c.planned ? Math.min(100, c.spend / c.planned * 100) : 0, over = c.planned && c.spend > c.planned + 0.009;
+      const share = t.spend ? c.spend / t.spend * 100 : 0;
       const extra = c.pages.filter((p) => p !== c.name);
-      return `<tr class="clickable" data-cid="${c.id}"><td>${esc(c.name)}${extra.length ? `<div class="pg">${esc(extra.join(' · '))}</div>` : ''}${c.overDays && dMode === 'month' ? `<div class="pg" style="color:var(--live)">over budget ${c.overDays} day${c.overDays > 1 ? 's' : ''}</div>` : ''}</td>
+      return `<tr class="clickable" data-cid="${c.id}"><td>${esc(c.name)}${extra.length ? `<div class="pg">${esc(extra.join(' · '))}</div>` : ''}</td>
         <td><span class="chip ${c.type === 'post' ? 'post' : 'live'}">${typeLabel[c.type] || c.type}</span></td>
         <td class="r num">${c.days}</td><td class="r num">${c.type === 'post' ? '–' : c.lives}</td>
         <td class="r num">${c.type === 'post' ? '–' : money(c.liveSpend)}</td><td class="r num">${c.type === 'live' ? '–' : money(c.postSpend)}</td>
-        <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${money(c.planned)}</td>${diffCell(c.diff)}
-        <td><div class="meter" title="${Math.round(c.planned ? c.spend / c.planned * 100 : 0)}% of budget"><i class="${over ? 'over' : ''}" style="width:${pct}%"></i></div></td></tr>`;
-    }).join('') || `<tr><td colspan="10" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.planned)}</td>${diffCell(t.spend - t.planned)}<td></td></tr>` : '';
+        <td class="r num"><b>${money(c.spend)}</b></td><td class="r num">${c.days ? money(c.spend / c.days) : '–'}</td>
+        <td><div class="sharecell"><div class="meter" title="${share.toFixed(1)}% of total spend"><i style="width:${c.spend / top * 100}%"></i></div><span class="hint num">${share.toFixed(0)}%</span></div></td></tr>`;
+    }).join('') || `<tr><td colspan="9" class="muted">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length ? `<tr><td>Total (${list.length})</td><td></td><td></td><td class="r num">${t.lives}</td><td class="r num">${money(t.live)}</td><td class="r num">${money(t.post)}</td><td class="r num">${money(t.spend)}</td><td></td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr[data-cid]').forEach((tr) => tr.onclick = () => {
       if (dMode === 'day') { date = dDate; showTab('checklist'); loadDay(); }
       else { $('dSearch').value = dData.clients.find((c) => c.id === Number(tr.dataset.cid)).name; setMode('day'); }

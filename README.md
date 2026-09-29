@@ -4,14 +4,14 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 
 **What it does**
 
-- **Checklist** — every client's spend for the day, pulled from Ads Manager. Campaigns named `Page name | day` (e.g. `DC Shop | 29`) go to that client. For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Cards turn red when a client goes over their daily budget. Ticks, live times and notes are saved.
+- **Checklist** — every client's spend for the day, pulled from Ads Manager. Campaigns named `Page name | day` (e.g. `DC Shop | 29`) go to that client. For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Ticks, live times and notes are saved.
 - **Ad accounts** — every ad account you can access: status (with the reason if disabled), balance due, spend limit left, lifetime spend, and today's spend. Tick which accounts are included in the spend sync.
-- **Clients** — name, one or more Facebook Pages (spend from any of them counts for that client), type (live / post / both), daily budget and usual lives per day.
+- **Clients** — name, one or more Facebook Pages (spend from any of them counts for that client) and type (live / post / both). Budgets are set by each client, so the app records what was actually spent.
 - **Boost posts** — Meta names these automatically (`Post: "…"`), so the app looks up which Facebook Page each boosted post belongs to and gives the spend to the client with that Page name. This works even when one ad account boosts posts for many Pages. For *Post + live* clients, boosted posts go in the post row and named campaigns go in the live rows.
 - **Telegram** — the day's report is sent to your group automatically every night (default 21:00), after a fresh sync.
 - **Past days** — on first login the app fills in the whole current month. **Sync whole month** re-reads every day of the month you're viewing (use it after adding a new client). Each morning, auto-sync also re-checks yesterday, since Meta keeps finalizing late-night spend.
 - **Auto sync** — switch it on the Checklist page: Off, every 15 min, 30 min, 1 h, 2 h or 4 h (between 08:00 and 23:59). An open Checklist refreshes itself every 2 minutes to show the new numbers.
-- **Dashboard** — every client's spend for a **day** or a **month**: live vs post spend, number of lives, planned budget, over/under, and a spend-per-day chart. Search by client or Page, filter by type, sort any column, tap a day or client to drill in.
+- **Dashboard** — every client's spend for a **day** or a **month**: live vs post spend, number of lives, spend per day, share of total, and a spend-per-day chart. Search by client or Page, filter by type, sort any column, tap a day or client to drill in.
 
 The app only asks for `ads_read` (read-only) and `business_management`. It never changes your ads.
 

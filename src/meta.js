@@ -133,8 +133,12 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
   const starts = {};
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
-    const b = await get('/', { ids: chunk.join(','), fields: 'start_time,created_time' }, token);
-    for (const id of chunk) starts[id] = b[id]?.start_time || b[id]?.created_time || null;
+    // Campaign start times via the account's campaign list (the multi-ID "?ids=" lookup is retired).
+    const camps = await getAll(`/${actId}/campaigns`, {
+      fields: 'id,start_time,created_time',
+      filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100,
+    }, token);
+    for (const c of camps) starts[c.id] = c.start_time || c.created_time || null;
   }
   const pages = await campaignPages(token, actId, ids);
   return withSpend.map((r) => ({
@@ -165,12 +169,10 @@ async function campaignPages(token, actId, campaignIds) {
       }
     }
     const missing = [...new Set(Object.values(pageOf))].filter((p) => !pageNameCache.has(p));
-    for (let i = 0; i < missing.length; i += 50) {
-      const chunk = missing.slice(i, i + 50);
-      try {
-        const b = await get('/', { ids: chunk.join(','), fields: 'name' }, token);
-        for (const p of chunk) pageNameCache.set(p, b[p]?.name || '');
-      } catch (_) { for (const p of chunk) pageNameCache.set(p, ''); }
+    // Page names one by one (cached for the life of the server).
+    for (const p of missing) {
+      try { pageNameCache.set(p, (await get(`/${p}`, { fields: 'name' }, token)).name || ''); }
+      catch (e) { if (e.needsLogin || e.rateLimited) throw e; pageNameCache.set(p, ''); }
     }
   } catch (e) {
     if (e.needsLogin || e.rateLimited) throw e;

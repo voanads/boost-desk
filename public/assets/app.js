@@ -619,11 +619,12 @@
         return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}">✈ Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
   const ease = 'cubic-bezier(.22,.8,.2,1)';
+  const PLANE_SVG = `<svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg>`;
   // The breakdown unfolds, and each live / post line slides in one after another.
   function unfoldClient(id) {
     const tr = document.querySelector(`#dBody tr.drow[data-cid="${id}"]`), box = tr && tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
@@ -634,58 +635,67 @@
       [{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }],
       { duration: 360, delay: 60 + i * 55, easing: ease, fill: 'backwards' }));
   }
-  // Closing folds it back up, then the Report button pops back in.
-  function collapseClient(id, tr) {
-    const box = tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
-    const finish = () => {
-      dOpen.delete(id); renderDash();
-      const rb = document.querySelector(`#dBody [data-report="${id}"]`);
-      if (rb && !calm && rb.animate) rb.animate([{ opacity: 0, transform: 'scale(.6) translateY(6px)' }, { opacity: 1, transform: 'scale(1.08)', offset: .7 }, { transform: 'none' }], { duration: 420, easing: ease });
-    };
-    if (!box || calm || !box.animate) return finish();
-    box.style.overflow = 'hidden';
-    const a = box.animate([{ height: box.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)' });
-    a.onfinish = finish; a.oncancel = finish;
+  // A paper plane flies along an arc between two points, leaving a dotted trail.
+  function flyPlane(from, to, { duration = 820, lift = 70 } = {}) {
+    return new Promise((resolve) => {
+      if (calm || !document.body.animate) return resolve();
+      const sx = scrollX, sy = scrollY;
+      const x0 = from.left + from.width / 2 + sx, y0 = from.top + from.height / 2 + sy;
+      const x1 = to.left + to.width / 2 + sx, y1 = to.top + to.height / 2 + sy;
+      const cx = (x0 + x1) / 2 + (x1 - x0) * .15, cy = Math.min(y0, y1) - lift;       // arc control point
+      const pt = (t) => ({ x: (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t * t * x1, y: (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t * t * y1 });
+      const ang = (t) => { const dx = 2 * (1 - t) * (cx - x0) + 2 * t * (x1 - cx), dy = 2 * (1 - t) * (cy - y0) + 2 * t * (y1 - cy); return Math.atan2(dy, dx) * 180 / Math.PI; };
+      const size0 = Math.max(12, from.height), size1 = Math.max(12, to.height);
+      const p = document.createElement('div'); p.className = 'flyplane'; p.innerHTML = PLANE_SVG; document.body.appendChild(p);
+      const frames = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12, q = pt(t), sc = (size0 + (size1 - size0) * t) / 20 * (1 + Math.sin(t * Math.PI) * .45);
+        frames.push({ transform: `translate(${q.x - 10}px, ${q.y - 10}px) rotate(${ang(Math.min(t, .96))}deg) scale(${sc})`, offset: t });
+      }
+      const last = frames[frames.length - 1]; last.transform = last.transform.replace(/rotate\([^)]*\)/, 'rotate(0deg)');
+      const anim = p.animate(frames, { duration, easing: 'cubic-bezier(.45,.05,.3,1)' });
+      for (let i = 1; i < 10; i++) {
+        const t = i / 10, q = pt(t), d = document.createElement('i'); d.className = 'trail'; document.body.appendChild(d);
+        d.style.left = q.x + 'px'; d.style.top = q.y + 'px';
+        d.animate([{ opacity: 0, transform: 'scale(.4)' }, { opacity: .9, transform: 'scale(1)', offset: .2 }, { opacity: 0, transform: 'scale(.3)' }],
+          { duration: 700, delay: duration * t * .85, easing: 'ease-out', fill: 'both' }).onfinish = () => d.remove();
+      }
+      const done = () => { p.remove(); resolve(); };
+      anim.onfinish = done; anim.oncancel = done;
+    });
   }
-  // The row's Report button lifts, arcs down while turning purple, and lands as Send report.
-  function flyToSend(id, from) {
+  const pop = (el) => { if (el && !calm && el.animate) el.animate([{ transform: 'scale(.4) rotate(-20deg)', opacity: 0 }, { transform: 'scale(1.35) rotate(6deg)', opacity: 1, offset: .55 }, { transform: 'none' }], { duration: 420, easing: ease }); };
+
+  // Open: the plane leaves the Report button and lands in Send report, which then shines.
+  function planeToSend(id, from) {
     const btn = document.querySelector(`#dBody [data-dreport="${id}"]`); if (!btn) return;
+    const slot = btn.querySelector('.plane');
     const land = () => {
-      btn.style.visibility = '';
+      slot.style.visibility = ''; pop(slot);
       btn.classList.remove('glow', 'shine'); void btn.offsetWidth; btn.classList.add('glow', 'shine');
-      if (!calm && btn.animate) btn.animate([{ transform: 'scale(.92)' }, { transform: 'scale(1.06)', offset: .45 }, { transform: 'scale(.98)', offset: .75 }, { transform: 'none' }], { duration: 520, easing: ease });
       const r = btn.getBoundingClientRect();
       if (r.bottom > innerHeight - 70 || r.top < 70) btn.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
     };
-    if (calm || !from || !btn.animate) { land(); return; }
-    // wait for the unfold so we fly to where the button ends up
-    setTimeout(() => {
-      const to = btn.getBoundingClientRect(), sx = scrollX, sy = scrollY;
-      const g = document.createElement('div'); g.className = 'flyghost';
-      g.innerHTML = `<span class="fg-dark">${document.querySelector(`#dBody tr.drow[data-cid="${id}"]`) ? 'Report' : ''}</span><span class="fg-brand">${btn.innerHTML}</span>`;
-      document.body.appendChild(g);
-      btn.style.visibility = 'hidden';
-      const x0 = from.left + sx, y0 = from.top + sy, x1 = to.left + sx, y1 = to.top + sy;
-      const midX = (x0 + x1) / 2 + (x1 < x0 ? -40 : 40), midY = Math.min(y0, y1) - 26;
-      const box = (x, y, w, h, extra) => ({ left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px', ...extra });
-      const anim = g.animate([
-        box(x0, y0, from.width, from.height, { transform: 'scale(1)', boxShadow: '0 2px 6px rgba(0,0,0,.2)' }),
-        box(x0 - 4, y0 - 10, from.width + 8, from.height + 4, { transform: 'scale(1.08)', boxShadow: '0 14px 30px rgba(0,0,0,.35)', offset: .18 }),
-        box(midX - (from.width + to.width) / 4, midY, (from.width + to.width) / 2, (from.height + to.height) / 2, { transform: 'scale(1.04) rotate(-2deg)', offset: .55 }),
-        box(x1, y1, to.width, to.height, { transform: 'scale(1)', boxShadow: '0 6px 18px rgba(91,69,240,.45)' }),
-      ], { duration: 720, easing: ease });
-      g.querySelector('.fg-brand').animate([{ opacity: 0 }, { opacity: 0, offset: .25 }, { opacity: 1, offset: .7 }, { opacity: 1 }], { duration: 720, easing: 'linear' });
-      g.querySelector('.fg-dark').animate([{ opacity: 1 }, { opacity: 1, offset: .25 }, { opacity: 0, offset: .6 }, { opacity: 0 }], { duration: 720, easing: 'linear' });
-      // a few sparks trail behind
-      for (let i = 0; i < 6; i++) {
-        const sp = document.createElement('i'); sp.className = 'spark'; document.body.appendChild(sp);
-        const t = .25 + i * .1, px = x0 + (x1 - x0) * t + (Math.random() - .5) * 30, py = y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 26 + from.height / 2;
-        sp.style.left = px + 'px'; sp.style.top = py + 'px';
-        sp.animate([{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)', offset: .3 }, { opacity: 0, transform: 'scale(.2) translateY(10px)' }], { duration: 600, delay: 120 + i * 70, easing: 'ease-out', fill: 'both' }).onfinish = () => sp.remove();
-      }
-      const done = () => { g.remove(); land(); };
-      anim.onfinish = done; anim.oncancel = done;
-    }, 140);
+    if (calm || !from) return land();
+    slot.style.visibility = 'hidden';
+    setTimeout(() => flyPlane(from, slot.getBoundingClientRect()).then(land), 160); // let the breakdown unfold first
+  }
+  // Close: the plane takes off from Send report, the breakdown folds up, and it lands back in Report.
+  function collapseClient(id, tr) {
+    const box = tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
+    const slot = box && box.querySelector('[data-dreport] .plane'), from = slot && slot.getBoundingClientRect();
+    if (slot) slot.style.visibility = 'hidden';
+    const reopen = () => {
+      dOpen.delete(id); renderDash();
+      const rb = document.querySelector(`#dBody [data-report="${id}"]`), rp = rb && rb.querySelector('.plane');
+      if (!rp || calm || !from) return;
+      rp.style.visibility = 'hidden';
+      flyPlane(from, rp.getBoundingClientRect(), { duration: 700, lift: 60 }).then(() => { rp.style.visibility = ''; pop(rp); rb.animate && rb.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 320, easing: ease }); });
+    };
+    if (!box || calm || !box.animate) return reopen();
+    box.style.overflow = 'hidden';
+    const a = box.animate([{ height: box.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)' });
+    a.onfinish = reopen; a.oncancel = reopen;
   }
 
   function renderDash() {
@@ -721,15 +731,15 @@
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
         <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
-        <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}">${c.telegram ? '✈ ' : ''}Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
+        <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
     }).join('') || `<tr><td colspan="8" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
     $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);
         if (!opening) return collapseClient(id, tr);
-        const rb = tr.querySelector('[data-report]'), from = rb && rb.getBoundingClientRect();
-        dOpen.add(id); renderDash(); unfoldClient(id); flyToSend(id, from);
+        const rp = tr.querySelector('[data-report] .plane'), from = rp && rp.getBoundingClientRect();
+        dOpen.add(id); renderDash(); unfoldClient(id); planeToSend(id, from);
       };
       tr.onclick = (ev) => { if (!ev.target.closest('button')) toggle(); };
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };

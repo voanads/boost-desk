@@ -558,3 +558,12 @@ table.dtable{min-width:0}
 .dexp-foot .glow{outline:none}
 @media (prefers-reduced-motion:no-preference){.dexp-foot .glow{animation:glow 1.2s ease-out 1}}
 @media (prefers-reduced-motion:reduce){.dexp-foot .primary.shine::after{display:none}}
+/* paper-plane flight */
+.plane{display:inline-flex;vertical-align:-3px}
+.plane .pl{width:16px;height:16px}
+.rbtn .plane .pl{width:14px;height:14px;color:var(--brand)}
+.rbtn{display:inline-flex;align-items:center;gap:6px}
+.dexp-foot .primary{display:inline-flex;align-items:center;gap:8px}
+.flyplane{position:absolute;left:0;top:0;width:20px;height:20px;z-index:60;pointer-events:none;color:#A78BFA;filter:drop-shadow(0 0 6px rgba(167,139,250,.9)) drop-shadow(0 3px 6px rgba(0,0,0,.35));will-change:transform}
+.flyplane .pl{width:20px;height:20px}
+.trail{position:absolute;z-index:59;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;pointer-events:none;background:#C4B5FD;box-shadow:0 0 8px #A78BFA}

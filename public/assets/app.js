@@ -190,10 +190,10 @@
     const per = {};
     for (const r of rows) {
       const c = clients.find((x) => x.id === r.client_id); if (!c) continue;
-      const s = stats(c, r.data); if (!s.spend && !s.done) continue;
+      const s = stats(c, r.data); if (!(s.spend > 0)) continue;
       const p = per[c.id] || (per[c.id] = { c, days: 0, spend: 0, lives: 0 });
       p.days++; p.spend += s.spend;
-      if (hasLive(c)) p.lives += Object.values(r.data.lives || {}).filter((l) => l && (l.on || Number(l.spend) > 0)).length;
+      if (hasLive(c)) p.lives += Object.values(r.data.lives || {}).filter((l) => l && Number(l.spend) > 0).length;
     }
     const list = Object.values(per).sort((a, b) => b.spend - a.spend);
     let T = 0, L = 0, D = 0;

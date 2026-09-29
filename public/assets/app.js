@@ -26,7 +26,7 @@
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   function showTab(name) {
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    ['checklist', 'accounts', 'clients', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['checklist', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name === 'team') renderTeam();
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -77,7 +77,7 @@
       const u = un[b.dataset.new];
       $('newName').value = u.page; newPages = [u.page]; drawNewPages();
       $('newType').value = u.kind === 'post' ? 'post' : 'live';
-      showTab('clients'); $('newBudget').focus();
+      showTab('checklist'); $('clientsSection').scrollIntoView({ behavior: 'smooth', block: 'start' }); $('newBudget').focus({ preventScroll: true });
       toast('Set the budget, then tap Add client');
     });
     document.querySelectorAll('[data-link]').forEach((sel) => sel.onchange = async () => {
@@ -97,7 +97,7 @@
 
   function buildCards(list) {
     const box = $('list'); box.innerHTML = '';
-    if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add them in the <b>Clients</b> tab using the same name as the Page in your campaign names (e.g. "DC Shop" for "DC Shop | 29").</div>'; return; }
+    if (!list.length) { box.innerHTML = '<div class="empty">No clients yet. Add your first client in <a href="#clients" id="toClients">Clients</a> below, with their Facebook Page names.</div>'; const tc = $('toClients'); if (tc) tc.onclick = (e) => { e.preventDefault(); $('clientsSection').scrollIntoView({ behavior: 'smooth' }); }; return; }
     for (const c of list) {
       const card = document.createElement('div'); card.className = 'card'; card.dataset.cid = c.id;
       card.innerHTML = `<div class="chead"><span class="name">${esc(c.name)}</span>${hasPost(c) ? '<span class="chip post">Post</span>' : ''}${hasLive(c) ? '<span class="chip live">Live</span>' : ''}<span class="chip warn" data-f="over" hidden></span><span class="chip meta" data-f="synced" hidden>From Meta</span><span class="ctot"><b class="num" data-f="spent"></b><span class="muted num">/ ${money(c.budget)}</span></span></div><div class="bar"><i data-f="bar"></i></div><div class="rows"></div><div class="cfoot"></div>`;
@@ -341,7 +341,9 @@
       renderClients(); renderAccounts(); drawNewPages(); loadPages();
       await loadDay();
       const h = location.hash.slice(1);
-      if (['accounts', 'clients', 'team'].includes(h)) showTab(h);
+      if (['accounts', 'team'].includes(h)) showTab(h);
+      else if (h === 'clients') $('clientsSection').scrollIntoView();
+      else window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();
 })();

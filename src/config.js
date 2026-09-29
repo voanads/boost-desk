@@ -20,7 +20,7 @@ module.exports = {
   fbAppId: req('FB_APP_ID'),
   fbAppSecret: req('FB_APP_SECRET'),
   fbConfigId: process.env.FB_CONFIG_ID || '', // Facebook Login for Business configuration (optional)
-  graphVersion: process.env.GRAPH_VERSION || 'v23.0',
+  graphVersion: process.env.GRAPH_VERSION || 'v25.0',
   allowedFbIds: (process.env.ALLOWED_FB_IDS || '').split(',').map((s) => s.trim()).filter(Boolean),
   tz: process.env.TZ_NAME || 'Asia/Phnom_Penh',
   liveGapMinutes: Number(process.env.LIVE_GAP_MINUTES || 30),

@@ -42,7 +42,8 @@ async function getAll(path, params, token, cap = 50) {
     out.push(...(body.data || []));
     const next = body.paging && body.paging.next;
     if (!next || i >= cap) break;
-    body = await get(next, {}, null); // next already carries token + proof
+    const u = new URL(next); u.searchParams.delete('access_token'); u.searchParams.delete('appsecret_proof');
+    body = await get(u.toString(), {}, token); // re-attach token + proof on every page
   }
   return out;
 }

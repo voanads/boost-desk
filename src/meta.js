@@ -164,7 +164,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
   return withSpend.map((r) => ({
     day: r.date_start,
     account: accountName || actId, accountId: actId,
-    name: r.campaign_name, spend: Number(r.spend),
+    name: r.campaign_name, campaignId: r.campaign_id, spend: Number(r.spend),
     start: parseTime(starts[r.campaign_id]),
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',

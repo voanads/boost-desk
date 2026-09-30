@@ -973,10 +973,10 @@
   }
   function renderAdmin() {
     const d = aData, t = d.totals, tax = (v) => Math.round(Math.round(v * 100) * (100 + (d.taxRate || 0)) / 100) / 100;
-    rollTo($('aSpend'), money(t.spend)); $('aTax').textContent = t.spend && d.taxRate ? `With tax ${d.taxRate}%: ${money(tax(t.spend))}` : '';
+    rollTo($('aSpend'), money(t.spend)); $('aTax').textContent = (t.spend && d.taxRate ? `With tax ${d.taxRate}%: ${money(tax(t.spend))}` : '') + (t.added - t.spend > 0.009 ? ` · ${money(t.added - t.spend)} shared, counted once` : '');
     rollTo($('aLive'), money(t.live)); $('aLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
     rollTo($('aPost'), money(t.post));
-    rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} clients with spend`;
+    rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} client${t.clients === 1 ? '' : 's'} with spend`;
     const dash = '<span class="muted">–</span>';
     const ago = (at) => { if (!at) return '<span class="muted">Never</span>'; const m = Math.round((Date.now() - new Date(at)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
     const userRows = (u) => {
@@ -1000,11 +1000,15 @@
       const groups = teams.map((t) => ({ t, users: d.users.filter((u) => u.team === t.id) }));
       const loose = d.users.filter((u) => !u.team);
       if (loose.length) groups.push({ t: { id: '', name: 'No team' }, users: loose });
-      groups.forEach((g) => { g.sum = g.users.reduce((a, u) => ({ spend: a.spend + u.totals.spend, live: a.live + u.totals.live, post: a.post + u.totals.post, lives: a.lives + u.totals.lives, clients: a.clients + u.totals.active }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0 }); });
+      groups.forEach((g) => {
+        g.sum = g.users.reduce((a, u) => ({ spend: a.spend + u.totals.spend, live: a.live + u.totals.live, post: a.post + u.totals.post, lives: a.lives + u.totals.lives, clients: a.clients + u.totals.active }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0 });
+        const tt = (d.teamTotals || {})[g.t.id];
+        if (tt) { g.shared = Math.max(0, Math.round((g.sum.spend - tt.spend) * 100) / 100); g.sum = { spend: tt.spend, live: tt.live, post: tt.post, lives: tt.lives, clients: tt.clients }; }
+      });
       groups.sort((a, b) => (!a.t.id) - (!b.t.id) || b.sum.spend - a.sum.spend);
       $('aBody').innerHTML = groups.map((g) => `<tr class="teamrow${g.t.id ? '' : ' loose'}"><td><div class="nm"><span class="teamdot"></span><b>${esc(g.t.name)}</b><span class="hint">${g.users.length} ${g.users.length === 1 ? 'person' : 'people'}</span></div></td>
         <td class="r num" data-l="Clients">${g.sum.clients}</td><td class="r num" data-l="Lives">${g.sum.lives || dash}</td><td class="r num" data-l="Live">${g.sum.live > 0 ? money(g.sum.live) : dash}</td><td class="r num" data-l="Post">${g.sum.post > 0 ? money(g.sum.post) : dash}</td>
-        <td class="r num tot" data-l="Total"><b>${money(g.sum.spend)}</b>${g.sum.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(g.sum.spend))}</div>` : ''}</td><td class="hint">${t.spend ? Math.round(g.sum.spend / t.spend * 100) + '% of all' : ''}</td></tr>`
+        <td class="r num tot" data-l="Total"><b>${money(g.sum.spend)}</b>${g.sum.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(g.sum.spend))}</div>` : ''}${g.shared > 0.009 ? `<div class="sharednote" title="Campaigns synced by more than one person in this team are counted once">${money(g.shared)} shared, counted once</div>` : ''}</td><td class="hint">${t.spend ? Math.round(g.sum.spend / t.spend * 100) + '% of all' : ''}</td></tr>`
         + (g.users.map(userRows).join('') || '<tr class="teamempty"><td colspan="7" class="hint">No one in this team yet — add people below.</td></tr>')).join('');
     }
     $('aFoot').innerHTML = d.users.length > 1 ? `<tr><td>Total · ${d.users.length} accounts</td><td class="r num" data-l="Clients">${t.clients}</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${d.taxRate ? `<div class="hint">+tax ${money(tax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';

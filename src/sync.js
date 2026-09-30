@@ -199,7 +199,7 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
 // Learn which client owns each Page ID: a named campaign ("DC Shop | 29") matched by name tells us
 // its Page belongs to that client, so auto-named "Post: …" boosts from the same Page match too —
 // even when Meta hides the Page's name. Learned links are saved and reused on later syncs.
-async function clientsWithLearnedPages(owner, items) {
+async function clientsWithLearnedPages(owner, items, { save = true } = {}) {
   const clients = await db.listClients(owner);
   const learned = await db.getUserSetting(owner, 'pageOwners', {}); // { pageId: clientId }
   for (const it of items) {
@@ -211,7 +211,7 @@ async function clientsWithLearnedPages(owner, items) {
   }
   // A Page the user linked by hand (name or ID on the client) always wins over a learned link.
   for (const c of clients) for (const p of c.pages || []) if (/^\d+$/.test(p)) learned[p] = c.id;
-  await db.setUserSetting(owner, 'pageOwners', learned);
+  if (save) await db.setUserSetting(owner, 'pageOwners', learned);
   const extra = {};
   for (const [pid, cid] of Object.entries(learned)) (extra[cid] = extra[cid] || []).push(pid);
   return clients.map((c) => (extra[c.id] ? { ...c, pages: [...new Set([...(c.pages || []), ...extra[c.id]])] } : c));
@@ -420,4 +420,39 @@ async function buildReport(owner, day) {
   return lines.join('\n');
 }
 
-module.exports = { TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+// Totals for several accounts together where each Meta campaign counts once — used for team and
+// all-account totals on the Admin dashboard, because two people can sync the same ad account.
+async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000) {
+  const seen = new Set(), sessions = new Set(), names = new Set();
+  let spend = 0, live = 0, post = 0;
+  for (const owner of owners) {
+    const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+    if (!all.length) continue;
+    const clients = await clientsWithLearnedPages(owner, all, { save: false });
+    const liveBy = {};
+    for (const r of all) {
+      if (!(Number(r.spend) > 0)) continue;
+      const c = matchClient(r, clients); if (!c) continue;
+      const key = `${r.accountId}|${r.day}|${r.campaignId || r.name + '|' + (r.start || '')}`;
+      const toPost = c.type === 'post' || (c.type === 'both' && isAutoPost(r.name));
+      if (!toPost) (liveBy[c.id + '|' + r.day] = liveBy[c.id + '|' + r.day] || []).push({ key, start: r.start });
+      if (seen.has(key)) continue;
+      seen.add(key); names.add(norm(c.name));
+      spend += Number(r.spend); if (toPost) post += Number(r.spend); else live += Number(r.spend);
+    }
+    // a live = campaigns that start within the live gap; the same live seen by two people counts once
+    for (const list of Object.values(liveBy)) {
+      list.sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity));
+      let cur = null;
+      const flush = () => { if (cur) sessions.add(cur.keys.sort().join(',')); };
+      for (const it of list) {
+        if (cur && it.start != null && cur.start != null && it.start - cur.start <= gapMs) cur.keys.push(it.key);
+        else { flush(); cur = { start: it.start, keys: [it.key] }; }
+      }
+      flush();
+    }
+  }
+  return { spend: round2(spend), live: round2(live), post: round2(post), lives: sessions.size, clients: names.size };
+}
+
+module.exports = { uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

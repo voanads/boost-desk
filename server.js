@@ -177,7 +177,16 @@ api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const totals = out.reduce((t, u) => ({ spend: t.spend + u.totals.spend, live: t.live + u.totals.live, post: t.post + u.totals.post, lives: t.lives + u.totals.lives, clients: t.clients + u.totals.active, accounts: t.accounts + (u.totals.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0, accounts: 0 });
   const teams = await getTeams();
   for (const u of out) { const t = teams.find((x) => x.members.includes(u.id)); u.team = t ? t.id : null; }
-  res.json({ from, to, users: out, totals, teams, taxRate: sync.TAX_RATE });
+  // Team and all-account totals count each Meta campaign once (two people can sync the same ad account).
+  const teamTotals = {};
+  for (const t of teams) {
+    const ids = out.filter((u) => u.team === t.id).map((u) => u.id);
+    const sum = out.filter((u) => u.team === t.id).reduce((a, u) => a + u.totals.spend, 0);
+    teamTotals[t.id] = { ...(await sync.uniqueTotals(ids, from, to)), added: Math.round(sum * 100) / 100 };
+  }
+  const uniq = await sync.uniqueTotals(out.map((u) => u.id), from, to);
+  const allTotals = { ...totals, spend: uniq.spend, live: uniq.live, post: uniq.post, lives: uniq.lives, clients: uniq.clients, added: Math.round(totals.spend * 100) / 100 };
+  res.json({ from, to, users: out, totals: allTotals, teams, teamTotals, taxRate: sync.TAX_RATE });
 }));
 api.get('/blocked', ownerOnly, wrap(async (req, res) => res.json(await db.blockedUsers())));
 api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {

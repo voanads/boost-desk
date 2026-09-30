@@ -665,3 +665,4 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
 .tc-head{flex-wrap:wrap;row-gap:2px}
 .tc-head .tc-name{white-space:normal;overflow:visible;flex:0 1 auto}
 .tc-head .spacer{flex:1}
+.sharednote{font-size:.72rem;color:var(--warn);font-weight:600;margin-top:2px;white-space:nowrap}

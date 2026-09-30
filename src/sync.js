@@ -308,8 +308,9 @@ async function dashboard(owner, from, to) {
     const e = r.data || {};
     const post = hasPost(c) ? Number((e.post || {}).spend) || 0 : 0;
     let live = 0, lives = 0;
-    // resSpend = spend from days synced with results, so cost per result isn't inflated by older days.
-    if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; live += v; if (v > 0) { lives++; addRes(p, l); if ('results' in l) p.resSpend = round2(p.resSpend + v); } }
+    // Cost per result counts boost posts only. resSpend = post spend from days synced with results,
+    // so cost per result isn't inflated by older days.
+    if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; live += v; if (v > 0) lives++; }
     if (post) { addRes(p, e.post || {}); if ('results' in (e.post || {})) p.resSpend = round2(p.resSpend + post); }
     const total = round2(post + live);
     if (!total) continue;

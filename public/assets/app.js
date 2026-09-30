@@ -703,7 +703,7 @@
     if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType });
     return out;
   }
-  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
@@ -717,7 +717,7 @@
       for (const d of Object.keys(days)) {
         const parts = dayParts(c, days[d]); if (!parts.length) continue;
         const m = months[d.slice(0, 7)] || (months[d.slice(0, 7)] = { live: 0, post: 0, lives: 0, days: 0, res: 0, resSpend: 0, type: '' });
-        m.days++; for (const p of parts) { if (p.kind === 'live') { m.live += p.spend; m.lives++; } else m.post += p.spend; if (p.results !== undefined) m.resSpend += p.spend; if (p.results > 0) { m.res += p.results; m.type = mergeType(m.type, p.resultType); } }
+        m.days++; for (const p of parts) { if (p.kind === 'live') { m.live += p.spend; m.lives++; } else m.post += p.spend; if (p.kind === 'post' && p.results !== undefined) m.resSpend += p.spend; if (p.kind === 'post' && p.results > 0) { m.res += p.results; m.type = mergeType(m.type, p.resultType); } }
       }
       const keys = Object.keys(months).sort().reverse();
       body = keys.length ? keys.map((ym) => { const m = months[ym];
@@ -865,11 +865,11 @@
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
-        <td class="r num cprc" data-l="Cost / result">${c.cprV != null ? `<b>${cprMoney(c.cprV)}</b><div class="hint">${esc(resText(c.results, c.resultType))}</div>` : dash}</td>
+        <td class="r num cprc" data-l="Post cost / result">${c.cprV != null ? `<b>${cprMoney(c.cprV)}</b><div class="hint">${esc(resText(c.results, c.resultType))}</div>` : dash}</td>
         <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
         <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
     }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num cprc" data-l="Cost / result">${tCpr != null ? `<b>${cprMoney(tCpr)}</b><div class="hint">${t.type === 'result' ? Math.round(t.res).toLocaleString('en-US') + ' results' : esc(resText(t.res, t.type))}</div>` : ''}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num cprc" data-l="Post cost / result">${tCpr != null ? `<b>${cprMoney(tCpr)}</b><div class="hint">${t.type === 'result' ? Math.round(t.res).toLocaleString('en-US') + ' results' : esc(resText(t.res, t.type))}</div>` : ''}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);

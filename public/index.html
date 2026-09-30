@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=30">
+<link rel="stylesheet" href="/assets/app.css?v=31">
 </head>
 <body>
 <div class="wrap">
@@ -56,7 +56,7 @@
   <section id="tab-dashboard" class="wrap">
     <div class="dhead">
       <div class="chips" id="dChips" role="group" aria-label="Period">
-        <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">Last 7 days</button><button data-preset="30">Last 30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="custom">Custom…</button>
+        <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">Last 7 days</button><button data-preset="30">Last 30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="thisYear">This year</button><button data-preset="lastYear">Last year</button><button data-preset="custom">Custom…</button>
       </div>
       <div class="pnav">
         <button id="dPrev" class="navbtn" aria-label="Previous period">‹</button>
@@ -81,7 +81,7 @@
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="dActive">0</span><span class="sub" id="dActiveSub"></span></div>
     </div>
     <div class="panel" id="dChartPanel">
-      <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint">Tap a bar to see that day</span></div>
+      <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
       <div class="chart" id="dChart"></div>
     </div>
     <div class="panel">
@@ -198,6 +198,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=30"></script>
+<script src="/assets/app.js?v=31"></script>
 </body>
 </html>

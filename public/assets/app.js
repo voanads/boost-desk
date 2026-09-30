@@ -581,13 +581,15 @@
   function dRange() {
     if (dMode === 'day') return [dDate, dDate];
     if (dMode === 'range') return [dFrom, dTo];
+    if (dMode === 'year') { const y = dDate.slice(0, 4); return [y + '-01-01', y + '-12-31']; }
     const ym = dDate.slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))];
   }
-  const periodLabel = () => dMode === 'day' ? nice(dDate) : dMode === 'month' ? monthLabel(dDate.slice(0, 7)) : `${shortD(dFrom)} – ${shortD(dTo)} ${dTo.slice(0, 4)}`;
+  const periodLabel = () => dMode === 'day' ? nice(dDate) : dMode === 'month' ? monthLabel(dDate.slice(0, 7)) : dMode === 'year' ? 'Year ' + dDate.slice(0, 4) : `${shortD(dFrom)} – ${shortD(dTo)} ${dTo.slice(0, 4)}`;
   let forceCustom = false;
   function currentPreset() {
     const t = me.today;
     if (dMode === 'range' && forceCustom) return 'custom';
+    if (dMode === 'year') return dDate.slice(0, 4) === t.slice(0, 4) ? 'thisYear' : String(Number(t.slice(0, 4)) - 1) === dDate.slice(0, 4) ? 'lastYear' : '';
     if (dMode === 'day') return dDate === t ? 'today' : dDate === addD(t, -1) ? 'yesterday' : '';
     if (dMode === 'month') { const lm = parse(t.slice(0, 8) + '01'); lm.setMonth(lm.getMonth() - 1); return dDate.slice(0, 7) === t.slice(0, 7) ? 'thisMonth' : dDate.slice(0, 7) === iso(lm).slice(0, 7) ? 'lastMonth' : ''; }
     if (dTo === t && dFrom === addD(t, -6)) return '7';
@@ -600,6 +602,8 @@
     else if (v === 'yesterday') { dMode = 'day'; dDate = addD(t, -1); }
     else if (v === '7' || v === '30') { dMode = 'range'; dTo = t; dFrom = addD(t, -(Number(v) - 1)); }
     else if (v === 'thisMonth') { dMode = 'month'; dDate = t; }
+    else if (v === 'thisYear') { dMode = 'year'; dDate = t; }
+    else if (v === 'lastYear') { dMode = 'year'; dDate = (Number(t.slice(0, 4)) - 1) + '-06-15'; }
     else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dMode = 'month'; dDate = iso(d); }
     else if (v === 'custom') { if (dMode !== 'range') { dTo = dMode === 'day' ? dDate : t; dFrom = addD(dTo, -13); } dMode = 'range'; forceCustom = true; setTimeout(() => $('dFrom').focus(), 50); }
     loadDash();
@@ -608,12 +612,14 @@
   const dShift = (n) => {
     if (dMode === 'range') { const len = Math.round((parse(dTo) - parse(dFrom)) / 864e5) + 1; dFrom = addD(dFrom, n * len); dTo = addD(dTo, n * len); }
     else if (dMode === 'day') dDate = addD(dDate, n);
+    else if (dMode === 'year') dDate = (Number(dDate.slice(0, 4)) + n) + dDate.slice(4);
     else { const d = parse(dDate); d.setDate(1); d.setMonth(d.getMonth() + n); dDate = iso(d); }
     loadDash();
   };
   $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
   $('dPick').onclick = () => {
     if (dMode === 'range') { applyPreset('custom'); return; }
+    if (dMode === 'year') return;
     const el = dMode === 'month' ? $('dMonth') : $('dDay');
     try { el.showPicker(); } catch (_) { el.focus(); el.click(); }
   };
@@ -643,7 +649,7 @@
     const custom = dMode === 'range' && pre === 'custom';
     $('dRangeBox').hidden = !custom; $('dPick').hidden = custom;
     if (dMode === 'range') { $('dFrom').value = dFrom; $('dTo').value = dTo; }
-    $('dNext').disabled = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'range' && dTo >= me.today);
+    $('dNext').disabled = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);
     $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
     $('dTableTitle').textContent = 'Clients · ' + periodLabel();
@@ -690,6 +696,17 @@
       body = (parts.length ? parts.map(partLine).join('') : '<div class="muted">No boost spend on this day.</div>')
         + (e.note ? `<div class="dnote">📝 ${esc(e.note)}</div>` : '')
         + (e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
+    } else if (dMode === 'year') {
+      const months = {};
+      for (const d of Object.keys(days)) {
+        const parts = dayParts(c, days[d]); if (!parts.length) continue;
+        const m = months[d.slice(0, 7)] || (months[d.slice(0, 7)] = { live: 0, post: 0, lives: 0, days: 0 });
+        m.days++; for (const p of parts) { if (p.kind === 'live') { m.live += p.spend; m.lives++; } else m.post += p.spend; }
+      }
+      const keys = Object.keys(months).sort().reverse();
+      body = keys.length ? keys.map((ym) => { const m = months[ym];
+        return `<div class="dl mrow"><span class="dl-n"><b>${esc(monthLabel(ym))}</b><span class="hint"> · ${m.days} day${m.days === 1 ? '' : 's'}${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}${m.post ? ` · posts ${money(m.post)}` : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${(m.live + m.post).toFixed(2)}</span></span></div>`;
+      }).join('') : '<div class="muted">No boost spend this year.</div>';
     } else {
       const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
       body = list.length ? list.map((x) => {
@@ -846,11 +863,17 @@
     $('dChartPanel').hidden = dMode === 'day';
     if (dMode !== 'day') {
       const ids = new Set(list.map((c) => c.id));
-      const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
+      let days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
+      if (dMode === 'year') { // one bar per month
+        const by = {}; for (const d of days) by[d.day.slice(0, 7)] = (by[d.day.slice(0, 7)] || 0) + d.spend;
+        const y = dDate.slice(0, 4);
+        days = Array.from({ length: 12 }, (_, i) => { const ym = y + '-' + pad(i + 1); return { day: ym + '-01', ym, spend: by[ym] || 0 }; });
+      }
       const max = Math.max(1, ...days.map((d) => d.spend));
-      $('dChartTitle').textContent = 'Spend per day';
-      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}"  aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%" data-tip="${esc(nice(d.day).replace(/ \d{4}$/, ''))} · ${money(d.spend)}"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
-      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dMode = 'day'; dDate = b.dataset.day; loadDash(); });
+      $('dChartTitle').textContent = dMode === 'year' ? 'Spend per month' : 'Spend per day';
+      $('dChartHint').textContent = dMode === 'year' ? 'Tap a bar to see that month' : 'Tap a bar to see that day';
+      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${(d.ym ? d.ym === me.today.slice(0, 7) : d.day === me.today) ? ' today' : ''}" data-day="${d.day}"  aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%" data-tip="${esc(d.ym ? monthLabel(d.ym) : nice(d.day).replace(/ \d{4}$/, ''))} · ${money(d.spend)}"></span><span class="d">${d.ym ? parse(d.day).toLocaleDateString('en-GB', { month: 'short' }) : Number(d.day.slice(8))}</span></button>`).join('');
+      document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dMode = dMode === 'year' ? 'month' : 'day'; dDate = b.dataset.day; loadDash(); });
     }
   }
 

@@ -255,7 +255,7 @@ api.get('/sync-check', wrap(async (req, res) => res.json(await db.getUserSetting
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  if ((Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick at most 3 months.' });
+  if ((Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick at most one year.' });
   res.json(await sync.dashboard(req.user.fb_id, from, to));
 }));
 
@@ -295,7 +295,7 @@ api.post('/accounts/refresh', wrap(async (req, res) => {
 api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); }));
 
 // Reports
-const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 92;
+const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 366;
 api.get('/telegram/chats', wrap(async (req, res) => {
   const saved = await db.getSetting('telegramChats', []);
   const byId = new Map(saved.map((c) => [c.id, c]));

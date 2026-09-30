@@ -324,6 +324,10 @@ function totalWithTax(total) {
   return `💰 Total: ${fmt(cents / 100)} +Tax ${TAX_RATE}% = ${fmt(withTax)}`;
 }
 
+const isWholeYear = (from, to) => from.slice(5) === '01-01' && to.slice(5) === '12-31' && from.slice(0, 4) === to.slice(0, 4);
+const periodName = (from, to) => (isWholeYear(from, to) ? from.slice(0, 4) : isWholeMonth(from, to) ? monthName(from) : shortDay(from) + ' – ' + shortDay(to));
+const byMonthLabel = (ym) => new Date(ym + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+
 async function clientReport(owner, clientId, from, to) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
@@ -346,10 +350,11 @@ async function clientReport(owner, clientId, from, to) {
     lines.push('', totalWithTax(total));
     if (e.note) lines.push(`📝 ${e.note}`);
   } else {
-    const whole = isWholeMonth(from, to);
-    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${whole ? monthName(from) : shortDay(from) + ' – ' + shortDay(to)}`, '');
+    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${periodName(from, to)}`, '');
     let total = 0, live = 0, post = 0, lives = 0, days = 0;
     const daily = [];
+    const long = (Date.parse(to) - Date.parse(from)) / 864e5 > 62; // long periods are listed month by month
+    const monthly = {};
     for (const r of rows) {
       const e = r.data || {};
       let dl = 0, dn = 0, dp = 0;
@@ -362,7 +367,10 @@ async function clientReport(owner, clientId, from, to) {
       if (dn) parts.push(`${dn} live${dn > 1 ? 's' : ''}`);
       if (dp) parts.push('post');
       daily.push(`• ${shortDay(r.day)}: ${fmt(t)}${parts.length ? ' (' + parts.join(' + ') + ')' : ''}`);
+      const m = monthly[r.day.slice(0, 7)] || (monthly[r.day.slice(0, 7)] = { t: 0, n: 0, d: 0, p: 0 });
+      m.t += t; m.n += dn; m.d++; m.p += dp;
     }
+    if (long) daily.splice(0, daily.length, ...Object.keys(monthly).sort().map((ym) => { const m = monthly[ym]; return `• ${byMonthLabel(ym)}: ${fmt(m.t)} (${m.d} day${m.d === 1 ? '' : 's'}${m.n ? ` · ${m.n} live${m.n === 1 ? '' : 's'}` : ''}${m.p ? ' · posts' : ''})`; }));
     if (!total) lines.push('No boost spend in this period.');
     else {
       lines.push(totalWithTax(total));
@@ -380,7 +388,7 @@ async function summaryReport(owner, from, to) {
   if (from === to) return buildReport(owner, from);
   const d = await dashboard(owner, from, to);
   const list = d.clients.filter((c) => c.spend > 0);
-  const lines = [`📊 Boost summary — ${isWholeMonth(from, to) ? monthName(from) : shortDay(from) + ' – ' + shortDay(to)}`, ''];
+  const lines = [`📊 Boost summary — ${periodName(from, to)}`, ''];
   for (const c of list) lines.push(`• ${c.name}: ${fmt(c.spend)}${c.lives ? ` · ${c.lives} live${c.lives > 1 ? 's' : ''}` : ''}`);
   if (!list.length) lines.push('No boost spend in this period.');
   lines.push('', `💰 Total: ${fmt(d.totals.spend)} · ${list.length} client${list.length === 1 ? '' : 's'}`);

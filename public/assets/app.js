@@ -694,7 +694,7 @@
       const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
       body = list.length ? list.map((x) => {
         const tot = x.parts.reduce((s2, p) => s2 + p.spend, 0);
-        return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
+        return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
     return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
@@ -838,7 +838,6 @@
     document.querySelectorAll('#dBody [data-dreport]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.dreport), from, to, label: periodLabel() });
     });
-    document.querySelectorAll('#dBody [data-oneday]').forEach((b) => b.onclick = () => { dMode = 'day'; dDate = b.dataset.oneday; loadDash(); });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel() });
     });

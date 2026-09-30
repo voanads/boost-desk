@@ -483,9 +483,9 @@ table.dtable{min-width:0}
 .dl-t{font-weight:600;color:var(--ink)}
 .dl-v{text-align:right;font-weight:700}
 .dday{display:flex;flex-direction:column;gap:5px;margin-bottom:6px}
-.dday-h{all:unset;cursor:pointer;display:flex;justify-content:space-between;padding:6px 4px 2px;font-size:.88rem;color:var(--muted)}
+.dday-h{cursor:default;display:flex;justify-content:space-between;padding:6px 4px 2px;font-size:.88rem;color:var(--muted)}
 .dday-h b{color:var(--ink)}
-.dday-h:hover b{color:var(--brand)}
+
 .dnote{font-size:.88rem;color:var(--muted);padding:2px 4px}
 .dsent{font-size:.84rem;color:var(--accent);font-weight:600;padding:2px 4px}
 .dexp-foot{display:flex;justify-content:flex-end;padding-top:6px}

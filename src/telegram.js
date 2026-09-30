@@ -29,12 +29,25 @@ async function listChats() {
   const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post"]')}`);
   const body = await res.json().catch(() => ({}));
   if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
-  const found = new Map();
+  const found = new Map(), links = [];
   for (const u of body.result || []) {
-    const chat = (u.message || u.my_chat_member || u.channel_post || {}).chat;
-    if (chat && chat.type !== 'private') found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
+    const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
+    if (!chat || chat.type === 'private') continue;
+    found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
+    // "/link CODE" typed in a group links that group to one Boost Desk account.
+    const t = (u.message || u.channel_post || {}).text || '';
+    const mm = t.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
+    if (mm) links.push({ id: String(chat.id), code: mm[1].toUpperCase(), at: m.date || 0 });
   }
-  return [...found.values()];
+  links.sort((a, b) => a.at - b.at); // the latest /link wins
+  return { chats: [...found.values()], links };
 }
 
-module.exports = { configured, hasBot, send, listChats };
+let botName = null;
+async function username() {
+  if (botName || !cfg.telegramToken) return botName;
+  try { const r = await (await fetch(`${API}/bot${cfg.telegramToken}/getMe`)).json(); if (r.ok) botName = r.result.username; } catch (_) {}
+  return botName;
+}
+
+module.exports = { configured, hasBot, send, listChats, username };

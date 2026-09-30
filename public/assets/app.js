@@ -416,7 +416,8 @@
     const opts = [...tgChats];
     if (cDraft.telegram && !opts.some((o) => o.id === cDraft.telegram)) opts.push({ id: cDraft.telegram, title: cDraft.telegram_title || cDraft.telegram });
     box.innerHTML = `<div class="tgrow"><select id="cTg"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === cDraft.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select><button type="button" id="cTgRefresh">Refresh list</button></div>
-      <small class="hint">Group missing? Add the bot to the client's group, send any message there, then tap Refresh list.</small>`;
+      <div class="linkhelp"><b>Connect a group:</b> add ${tgBot ? '<b>@' + esc(tgBot) + '</b>' : 'the bot'} to the client's Telegram group, send <code class="lcode" title="Tap to copy">/link ${esc(tgCode)}</code> in the group, then tap <b>Refresh list</b>. Only you see groups linked with your code.</div>`;
+    const lc = box.querySelector('.lcode'); if (lc) lc.onclick = async () => { try { await navigator.clipboard.writeText(lc.textContent); toast('Copied — paste it in the Telegram group'); } catch (_) {} };
     $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
     $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
@@ -1002,10 +1003,10 @@
   }
 
   // ---------- Telegram groups for clients ----------
-  let tgChats = [];
+  let tgChats = [], tgCode = '', tgBot = '';
   async function loadChats() {
     if (!me || !me.telegram || !me.telegram.bot) return;
-    try { tgChats = await api('/telegram/chats'); } catch (_) { tgChats = []; }
+    try { const r = await api('/telegram/chats'); tgChats = r.chats || []; tgCode = r.code || ''; tgBot = r.bot || ''; } catch (_) { tgChats = []; }
     renderClients();
   }
 

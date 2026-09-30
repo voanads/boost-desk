@@ -2,7 +2,7 @@
 
 Daily Facebook boost checklist for your agency. Your team logs in with Facebook, and the app reads Ads Manager directly through Meta's official Marketing API — no Supermetrics or other third-party service.
 
-**Each admin has their own workspace.** When someone logs in with Facebook for the first time, their Boost Desk is empty. Tapping **Sync from Meta** loads only the ad accounts and spend that *their* Facebook login can see. Clients, synced days, reports and settings are never shared between admins. (The Telegram bot is shared, so every admin sees the list of groups the bot is in.)
+**Each admin has their own workspace.** When someone logs in with Facebook for the first time, their Boost Desk is empty. Tapping **Sync from Meta** loads only the ad accounts and spend that *their* Facebook login can see. Clients, synced days, reports and settings are never shared between admins. Telegram groups are private too: each account links a group by sending its own **/link CODE** in the group (shown in the client's Edit window), and only that account sees and can use it.
 
 **What it does**
 

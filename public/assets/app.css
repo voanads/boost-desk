@@ -637,3 +637,6 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
 .avatar.sm{width:24px;height:24px;font-size:.62rem;flex:none}
 #aTable .nm{gap:8px}
 @media (max-width:760px){nav.tabs button{padding:6px 2px}nav.tabs button .short{font-size:.62rem}}
+.linkhelp{font-size:.84rem;color:var(--muted);background:var(--bg-2);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;line-height:1.55}
+.linkhelp b{color:var(--ink)}
+.lcode{font-family:var(--f-num);font-weight:800;color:var(--brand);background:var(--brand-soft);padding:2px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}

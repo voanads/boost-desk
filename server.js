@@ -184,15 +184,18 @@ const cleanClient = (b) => {
 };
 api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
 api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.user.fb_id))));
+const groupAllowed = async (fbId, chatId) => !chatId || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && c.owner === fbId) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
+  if (!(await groupAllowed(req.user.fb_id, c.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
   const created = await db.createClient(req.user.fb_id, c);
   await sync.rematch(req.user);
   res.json(created);
 }));
 api.patch('/clients/:id', wrap(async (req, res) => {
   const body = cleanClient(req.body || {});
+  if (body.telegram && !(await groupAllowed(req.user.fb_id, body.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
   const c = await db.updateClient(req.user.fb_id, Number(req.params.id), body);
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   // Only changes that affect matching need a re-match (not e.g. the Telegram group).
@@ -330,13 +333,49 @@ api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled
 
 // Reports
 const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 366;
-api.get('/telegram/chats', wrap(async (req, res) => {
+// Telegram groups are private per account: a group belongs to the account whose link code was sent
+// in it ("/link CODE"), or to the account that already uses it for one of its clients.
+const newCode = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+async function linkCode(fbId) {
+  let c = await db.getUserSetting(fbId, 'tgCode', null);
+  if (!c) { c = newCode(); await db.setUserSetting(fbId, 'tgCode', c); }
+  return c;
+}
+async function refreshChats() {
   const saved = await db.getSetting('telegramChats', []);
   const byId = new Map(saved.map((c) => [c.id, c]));
-  for (const c of await telegram.listChats()) byId.set(c.id, c);
+  let fresh = { chats: [], links: [] };
+  try { fresh = await telegram.listChats(); } catch (e) { if (!saved.length) throw e; }
+  for (const c of fresh.chats) byId.set(c.id, { ...(byId.get(c.id) || {}), ...c });
+  if (fresh.links.length) {
+    const users = await db.allUsers(), byCode = {};
+    for (const u of users) byCode[await linkCode(u.fb_id)] = u;
+    for (const l of fresh.links) {
+      const u = byCode[l.code], c = byId.get(l.id); if (!u || !c) continue;
+      if (c.owner !== u.fb_id || (c.linkedAt || 0) < l.at) {
+        const isNew = c.owner !== u.fb_id;
+        c.owner = u.fb_id; c.linkedAt = l.at;
+        if (isNew) telegram.send(`✅ This group is now linked to ${u.name} in Boost Desk. Reports for their clients can be sent here.`, c.id).catch(() => {});
+      }
+    }
+  }
+  // Groups with no owner yet: give them to the account whose clients already use them.
+  const unowned = [...byId.values()].filter((c) => !c.owner);
+  if (unowned.length) {
+    const rows = (await db.pool.query("SELECT DISTINCT owner, telegram FROM clients WHERE telegram <> ''")).rows;
+    for (const c of unowned) { const users = [...new Set(rows.filter((r) => r.telegram === c.id).map((r) => r.owner))]; if (users.length === 1) c.owner = users[0]; }
+  }
   const all = [...byId.values()].sort((a, b) => a.title.localeCompare(b.title));
   await db.setSetting('telegramChats', all);
-  res.json(all);
+  return all;
+}
+async function myChats(fbId) {
+  const all = await refreshChats();
+  const used = new Set((await db.listClients(fbId)).map((c) => c.telegram).filter(Boolean));
+  return all.filter((c) => c.owner === fbId || used.has(c.id)).map(({ id, title, type }) => ({ id, title, type }));
+}
+api.get('/telegram/chats', wrap(async (req, res) => {
+  res.json({ chats: await myChats(req.user.fb_id), code: await linkCode(req.user.fb_id), bot: await telegram.username() });
 }));
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;

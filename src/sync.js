@@ -48,6 +48,21 @@ function matchClient(item, clients) {
  * `gapMs` of the first campaign in a group count as one live.
  * items: [{name, account, accountId, spend, start(ms|null)}]
  */
+// Add a campaign's results to a live / post total; mixed result types just become "results".
+function addRes(t, it) {
+  if (it.results !== undefined) t.hasRes = true; // row came from a sync that fetched results
+  if (!(it.results > 0)) return;
+  t.results = (t.results || 0) + it.results;
+  t.resultType = !t.resultType || t.resultType === it.resultType ? it.resultType : 'result';
+}
+
+// Store results on a live / post only when the rows carried them (older saved rows don't).
+function withRes(o, t) {
+  delete o.results; delete o.resultType;
+  if (t.hasRes) { o.results = t.results || 0; o.resultType = t.resultType || ''; }
+  return o;
+}
+
 function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
   const groups = new Map();
   const unmatched = new Map();
@@ -78,10 +93,11 @@ function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
     for (const it of liveItems) {
       const last = slots[slots.length - 1];
       if (last && it.start != null && last.start != null && it.start - last.start <= gapMs) {
-        last.spend = round2(last.spend + it.spend); last.count++;
-      } else slots.push({ start: it.start, spend: round2(it.spend), count: 1 });
+        last.spend = round2(last.spend + it.spend); last.count++; addRes(last, it);
+      } else { const sl = { start: it.start, spend: round2(it.spend), count: 1 }; addRes(sl, it); slots.push(sl); }
     }
-    const post = postItems.length ? { spend: round2(postItems.reduce((s, x) => s + x.spend, 0)), count: postItems.length } : null;
+    let post = null;
+    if (postItems.length) { post = { spend: round2(postItems.reduce((s, x) => s + x.spend, 0)), count: postItems.length }; postItems.forEach((it) => addRes(post, it)); }
     targets.push({ clientId: client.id, slots, post });
   }
   return { targets, unmatched: [...unmatched.values()].sort((a, b) => b.spend - a.spend) };
@@ -170,14 +186,14 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
       const lives = {};
       t.slots.forEach((sl, i) => {
         const prev = (e.lives || {})['l' + (i + 1)] || {};
-        lives['l' + (i + 1)] = { ...prev, spend: sl.spend, on: true, campaigns: sl.count, time: sl.start != null ? hhmm(sl.start) : prev.time || '' };
+        lives['l' + (i + 1)] = withRes({ ...prev, spend: sl.spend, on: true, campaigns: sl.count, time: sl.start != null ? hhmm(sl.start) : prev.time || '' }, sl);
       });
       // Clear spend on slots Meta no longer reports.
       for (const k of Object.keys(e.lives || {})) if (!lives[k]) lives[k] = { ...e.lives[k], spend: 0, campaigns: 0 };
       e.lives = lives;
       e.liveCount = Math.max(e.liveCount ?? 0, t.slots.length);
     }
-    if (t.post) e.post = { ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count };
+    if (t.post) e.post = withRes({ ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count }, t.post);
     e.syncedAt = syncedAt;
     await db.putEntry(day, t.clientId, e);
   }
@@ -282,7 +298,7 @@ async function dashboard(owner, from, to) {
   const rows = await db.monthEntries(owner, from, to); // [{day, client_id, data}]
   const per = new Map(clients.map((c) => [c.id, {
     id: c.id, name: c.name, type: c.type, pages: [...new Set([c.name, c.match, ...(c.pages || [])].filter(Boolean))],
-    budget: c.budget, archived: c.archived, telegram: c.telegram || '', days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {},
+    budget: c.budget, archived: c.archived, telegram: c.telegram || '', days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {}, results: 0, resultType: '', resSpend: 0,
   }]));
   const byDay = {};
   for (const r of rows) {
@@ -292,7 +308,9 @@ async function dashboard(owner, from, to) {
     const e = r.data || {};
     const post = hasPost(c) ? Number((e.post || {}).spend) || 0 : 0;
     let live = 0, lives = 0;
-    if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; live += v; if (v > 0) lives++; }
+    // resSpend = spend from days synced with results, so cost per result isn't inflated by older days.
+    if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; live += v; if (v > 0) { lives++; addRes(p, l); if ('results' in l) p.resSpend = round2(p.resSpend + v); } }
+    if (post) { addRes(p, e.post || {}); if ('results' in (e.post || {})) p.resSpend = round2(p.resSpend + post); }
     const total = round2(post + live);
     if (!total) continue;
     p.days++; p.lives += lives; p.liveSpend = round2(p.liveSpend + live); p.postSpend = round2(p.postSpend + post);

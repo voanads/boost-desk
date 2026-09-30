@@ -62,3 +62,19 @@ for (const x of plan.targets) {
   if (x.post) parts.push(`posts $${x.post.spend} (${x.post.count})`);
   console.log(' ', clients.find((c) => c.id === x.clientId).name + ':', parts.join(' + '));
 }
+
+// Results: the action that matches the ad set's optimisation goal (like Ads Manager's "Results").
+const { campaignResult } = require('../src/meta');
+const row = { reach: '900', actions: [{ action_type: 'post_engagement', value: '310' }, { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '42' }] };
+assert.deepStrictEqual(campaignResult(row, 'CONVERSATIONS'), { results: 42, resultType: 'message' });
+assert.deepStrictEqual(campaignResult(row, 'POST_ENGAGEMENT'), { results: 310, resultType: 'engagement' });
+assert.deepStrictEqual(campaignResult(row, 'REACH'), { results: 900, resultType: 'person reached' });
+assert.deepStrictEqual(campaignResult(row, ''), { results: 42, resultType: 'message' }, 'unknown goal falls back to messages');
+const rp = buildPlan([
+  { name: 'DC Shop | 30', account: A, spend: 20, start: 1000, results: 30, resultType: 'message' },
+  { name: 'DC Shop | 30', account: A, spend: 10, start: 2000, results: 10, resultType: 'message' },
+], clients);
+const dcSlot = rp.targets[0].slots[0];
+assert.strictEqual(dcSlot.results, 40, 'results add up within one live');
+assert.strictEqual(dcSlot.resultType, 'message');
+console.log('Results checks passed.');

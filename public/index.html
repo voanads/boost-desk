@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=35">
+<link rel="stylesheet" href="/assets/app.css?v=36">
 </head>
 <body>
 <div class="wrap">
@@ -80,6 +80,7 @@
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Live spend</span><span class="val num" id="dLive">$0.00</span><span class="sub" id="dLives"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 3h6l-1 7 4 3H6l4-3Z"/></svg>Boost post spend</span><span class="val num" id="dPost">$0.00</span><span class="sub" id="dPosts"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="dActive">0</span><span class="sub" id="dActiveSub"></span></div>
+      <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Cost per result</span><span class="val num" id="dCpr">–</span><span class="sub" id="dRes"></span></div>
     </div>
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
@@ -100,9 +101,9 @@
           <th class="r" data-sort="lives">Lives</th>
           <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
           <th class="r multi" data-sort="days">Days</th><th class="r multi" data-sort="perDay">Per day</th>
-          <th class="r" data-sort="spend">Total</th><th></th>
+          <th class="r" data-sort="cpr" title="Spend ÷ results (messages, engagements…) — the result Ads Manager counts for each campaign's goal">Cost / result</th><th class="r" data-sort="spend">Total</th><th></th>
         </tr></thead>
-        <tbody id="dBody"><tr class="skel"><td colspan="8"><div class="sk" style="--w:78%"></div></td></tr><tr class="skel"><td colspan="8"><div class="sk" style="--w:64%"></div></td></tr><tr class="skel"><td colspan="8"><div class="sk" style="--w:88%"></div></td></tr><tr class="skel"><td colspan="8"><div class="sk" style="--w:70%"></div></td></tr><tr class="skel"><td colspan="8"><div class="sk" style="--w:58%"></div></td></tr></tbody><tfoot id="dFoot"></tfoot>
+        <tbody id="dBody"><tr class="skel"><td colspan="9"><div class="sk" style="--w:78%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:64%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:88%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:70%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:58%"></div></td></tr></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
     </div>
     <div class="panel" id="unmatchedPanel" hidden>
@@ -227,6 +228,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=35"></script>
+<script src="/assets/app.js?v=36"></script>
 </body>
 </html>

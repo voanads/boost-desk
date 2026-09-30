@@ -145,20 +145,20 @@ async function accountSpendRange(token, actId, since, until) {
 // Campaign spend per day over a date range (one API call per account, daily breakdown).
 async function campaignSpendRange(token, actId, since, until, accountName = '') {
   const rows = await allStatuses(`/${actId}/insights`, {
-    level: 'campaign', fields: 'campaign_id,campaign_name,spend',
+    level: 'campaign', fields: 'campaign_id,campaign_name,spend,reach,impressions,actions,video_thruplay_watched_actions',
     time_range: { since, until }, time_increment: 1, limit: 500,
   }, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
   const ids = [...new Set(withSpend.map((r) => r.campaign_id))];
-  const starts = {};
+  const starts = {}, goals = {};
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     // Campaign start times via the account's campaign list (the multi-ID "?ids=" lookup is retired).
     const camps = await allStatuses(`/${actId}/campaigns`, {
-      fields: 'id,start_time,created_time',
+      fields: 'id,start_time,created_time,adsets.limit(5){optimization_goal}',
       filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100,
     }, { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
-    for (const c of camps) starts[c.id] = c.start_time || c.created_time || null;
+    for (const c of camps) { starts[c.id] = c.start_time || c.created_time || null; goals[c.id] = (c.adsets?.data || []).map((a) => a.optimization_goal).find(Boolean) || ''; }
   }
   const pages = await campaignPages(token, actId, ids);
   return withSpend.map((r) => ({
@@ -168,7 +168,40 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     start: parseTime(starts[r.campaign_id]),
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',
+    ...campaignResult(r, goals[r.campaign_id]),
   }));
+}
+
+// "Result" the way Ads Manager counts it: the action that matches the ad set's optimisation goal.
+const RESULT_BY_GOAL = {
+  CONVERSATIONS: ['onsite_conversion.messaging_conversation_started_7d', 'message'],
+  REPLIES: ['onsite_conversion.messaging_conversation_started_7d', 'message'],
+  POST_ENGAGEMENT: ['post_engagement', 'engagement'],
+  THRUPLAY: ['@thruplay', 'ThruPlay'],
+  VIDEO_VIEWS: ['video_view', 'video view'],
+  LINK_CLICKS: ['link_click', 'link click'],
+  LANDING_PAGE_VIEWS: ['landing_page_view', 'landing page view'],
+  PAGE_LIKES: ['like', 'Page like'],
+  LEAD_GENERATION: ['lead', 'lead'],
+  QUALITY_LEAD: ['lead', 'lead'],
+  OFFSITE_CONVERSIONS: ['offsite_conversion.fb_pixel_purchase', 'purchase'],
+  REACH: ['@reach', 'person reached'],
+  IMPRESSIONS: ['@impressions', 'impression'],
+};
+function campaignResult(r, goal) {
+  const act = (type) => { const a = (r.actions || []).find((x) => x.action_type === type); return a ? Number(a.value) || 0 : 0; };
+  let [type, label] = RESULT_BY_GOAL[goal] || [];
+  if (!type) { // unknown goal: fall back to messages, then engagement
+    if (act('onsite_conversion.messaging_conversation_started_7d')) [type, label] = RESULT_BY_GOAL.CONVERSATIONS;
+    else if (act('post_engagement')) [type, label] = RESULT_BY_GOAL.POST_ENGAGEMENT;
+    else return { results: 0, resultType: '' };
+  }
+  let n = 0;
+  if (type === '@thruplay') n = Number((r.video_thruplay_watched_actions || [])[0]?.value || 0);
+  else if (type === '@reach') n = Number(r.reach || 0);
+  else if (type === '@impressions') n = Number(r.impressions || 0);
+  else n = act(type);
+  return { results: n, resultType: label };
 }
 
 // Which Facebook Page each campaign promotes, so auto-named "Post: …" boosts can be matched
@@ -247,4 +280,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

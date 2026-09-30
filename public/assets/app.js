@@ -642,11 +642,11 @@
     dTypeF = b.dataset.type; document.querySelectorAll('#dTypeSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); renderDash();
   });
   document.querySelectorAll('.dtable th[data-sort]').forEach((th) => th.onclick = () => {
-    const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' }; renderDash();
+    const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' || k === 'cpr' }; renderDash();
   });
 
   let dEntries = {}, dKey = ''; const dOpen = new Set();
-  const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="8"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
+  const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="9"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
   async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
     // Sync status and "Spend not matched" follow the day you're looking at (today for longer periods).
@@ -682,7 +682,7 @@
         if (inc > 0.009) { const tr = document.querySelector(`#dBody tr.drow[data-cid="${c.id}"]`); if (tr) { tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash'); floatUp(tr.querySelector('td.tot b') || tr, '+' + money(inc), 'up'); } }
       });
     }
-    catch (e) { $('dBody').innerHTML = `<tr><td colspan="8" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
@@ -690,14 +690,20 @@
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 
   // The breakdown under a client: lives (start time, campaigns, spend) and boost posts — one day, or day by day.
+  // Results (messages, engagements…) and cost per result.
+  const resName = (n, type) => { type = type || 'result'; if (n === 1) return type; return type === 'person reached' ? 'people reached' : type + 's'; };
+  const resText = (n, type) => `${Math.round(n).toLocaleString('en-US')} ${resName(n, type)}`;
+  const cpr = (spend, n) => (n > 0 && spend > 0 ? spend / n : null);
+  const cprMoney = (v) => (v == null ? '–' : '$' + (v < 0.1 ? v.toFixed(3) : v.toFixed(2)));
+  const mergeType = (a, b) => (!a ? b : !b || a === b ? a : 'result');
   function dayParts(c, e) {
     const out = [];
     if (hasL(c)) Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
-      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend) }); });
-    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend) });
+      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType }); });
+    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType });
     return out;
   }
-  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span></span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
@@ -710,12 +716,12 @@
       const months = {};
       for (const d of Object.keys(days)) {
         const parts = dayParts(c, days[d]); if (!parts.length) continue;
-        const m = months[d.slice(0, 7)] || (months[d.slice(0, 7)] = { live: 0, post: 0, lives: 0, days: 0 });
-        m.days++; for (const p of parts) { if (p.kind === 'live') { m.live += p.spend; m.lives++; } else m.post += p.spend; }
+        const m = months[d.slice(0, 7)] || (months[d.slice(0, 7)] = { live: 0, post: 0, lives: 0, days: 0, res: 0, resSpend: 0, type: '' });
+        m.days++; for (const p of parts) { if (p.kind === 'live') { m.live += p.spend; m.lives++; } else m.post += p.spend; if (p.results !== undefined) m.resSpend += p.spend; if (p.results > 0) { m.res += p.results; m.type = mergeType(m.type, p.resultType); } }
       }
       const keys = Object.keys(months).sort().reverse();
       body = keys.length ? keys.map((ym) => { const m = months[ym];
-        return `<div class="dl mrow"><span class="dl-n"><b>${esc(monthLabel(ym))}</b><span class="hint"> · ${m.days} day${m.days === 1 ? '' : 's'}${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}${m.post ? ` · posts ${money(m.post)}` : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${(m.live + m.post).toFixed(2)}</span></span></div>`;
+        return `<div class="dl mrow"><span class="dl-n"><b>${esc(monthLabel(ym))}</b><span class="hint"> · ${m.days} day${m.days === 1 ? '' : 's'}${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}${m.post ? ` · posts ${money(m.post)}` : ''}</span>${m.res ? `<span class="dl-r">${esc(resText(m.res, m.type))} · <b class="num">${cprMoney(cpr(m.resSpend, m.res))}</b> each</span>` : ''}</span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${(m.live + m.post).toFixed(2)}</span></span></div>`;
       }).join('') : '<div class="muted">No boost spend this year.</div>';
     } else {
       const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
@@ -724,7 +730,7 @@
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -819,21 +825,24 @@
   function renderDash() {
     if (!dData) return;
     const q = $('dSearch').value.trim().toLowerCase(), idle = !$('dShowIdle').checked; // all clients by default
-    let list = dData.clients.map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0 }))
+    let list = dData.clients.map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0, cprV: cpr(c.resSpend, c.results) }))
       .filter((c) => !c.archived || c.spend > 0)
       .filter((c) => idle || c.spend > 0)
       .filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c)))
       .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
     const k = dSort.key, dir = dSort.asc ? 1 : -1;
-    list.sort((a, b) => ((b.spend > 0) - (a.spend > 0)) || (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
+    list.sort((a, b) => ((b.spend > 0) - (a.spend > 0)) || (k === 'name' ? a.name.localeCompare(b.name) * dir : k === 'cpr' ? ((a.cprV == null) - (b.cprV == null)) || (a.cprV - b.cprV) * dir : (a[k] - b[k]) * dir) || a.name.localeCompare(b.name));
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
-    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0), posters: a.posters + (c.postSpend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0, posters: 0 });
+    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0), posters: a.posters + (c.postSpend > 0 ? 1 : 0), res: a.res + (c.results || 0), resSpend: a.resSpend + (c.results > 0 ? c.resSpend : 0), type: c.results > 0 ? mergeType(a.type, c.resultType) : a.type }), { spend: 0, live: 0, post: 0, lives: 0, active: 0, posters: 0, res: 0, resSpend: 0, type: '' });
+    const tCpr = cpr(t.resSpend, t.res);
     rollTo($('dSpend'), money(t.spend));
     $('dTax').textContent = t.spend && taxRate() ? `With tax ${taxRate()}%: ${money(withTax(t.spend))}` : '';
     rollTo($('dLive'), money(t.live)); $('dLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
     rollTo($('dPost'), money(t.post)); $('dPosts').textContent = `${t.posters} client${t.posters === 1 ? '' : 's'} boosted posts`;
     rollTo($('dActive'), String(t.active)); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
+    rollTo($('dCpr'), tCpr == null ? '–' : cprMoney(tCpr));
+    $('dRes').textContent = t.res ? (t.type === 'result' ? `${Math.round(t.res).toLocaleString('en-US')} results (mixed types)` : resText(t.res, t.type)) : 'Sync from Meta to load results';
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';
@@ -848,10 +857,11 @@
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
+        <td class="r num cprc" data-l="Cost / result">${c.cprV != null ? `<b>${cprMoney(c.cprV)}</b><div class="hint">${esc(resText(c.results, c.resultType))}</div>` : dash}</td>
         <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
         <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
-    }).join('') || `<tr><td colspan="8" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
+    }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num cprc" data-l="Cost / result">${tCpr != null ? `<b>${cprMoney(tCpr)}</b><div class="hint">${t.type === 'result' ? Math.round(t.res).toLocaleString('en-US') + ' results' : esc(resText(t.res, t.type))}</div>` : ''}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);

@@ -90,11 +90,13 @@
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    ['dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (name === 'admin' && !(me && me.isOwner)) name = 'dashboard';
+    ['dashboard', 'clients', 'accounts', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     moveInk();
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     if (name === 'clients') loadClientMonth();
+    if (name === 'admin') loadAdmin();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -938,6 +940,60 @@
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
   };
 
+  // ---------- admin dashboard (owner only) ----------
+  let aPreset = 'today', aData = null; const aOpen = new Set();
+  function aRange(v) {
+    const t = me.today;
+    if (v === 'today') return [t, t];
+    if (v === 'yesterday') { const y = addD(t, -1); return [y, y]; }
+    if (v === '7') return [addD(t, -6), t];
+    if (v === 'thisMonth') return [t.slice(0, 8) + '01', t];
+    if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); const ym = iso(d).slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))]; }
+    if (v === 'thisYear') return [t.slice(0, 4) + '-01-01', t];
+    return [t, t];
+  }
+  const aLabel = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
+  document.querySelectorAll('#aChips button').forEach((b) => b.onclick = () => { aPreset = b.dataset.p; loadAdmin(); });
+  async function loadAdmin() {
+    if (!me || !me.isOwner) return;
+    document.querySelectorAll('#aChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === aPreset)));
+    const [from, to] = aRange(aPreset);
+    $('aTitle').textContent = 'Accounts · ' + (from === to ? nice(from) : aLabel[aPreset]);
+    if (!aData) $('aBody').innerHTML = skelRows(3);
+    try { aData = await api(`/admin/overview?from=${from}&to=${to}`); renderAdmin(); }
+    catch (e) { $('aBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
+  }
+  function renderAdmin() {
+    const d = aData, t = d.totals, tax = (v) => Math.round(Math.round(v * 100) * (100 + (d.taxRate || 0)) / 100) / 100;
+    rollTo($('aSpend'), money(t.spend)); $('aTax').textContent = t.spend && d.taxRate ? `With tax ${d.taxRate}%: ${money(tax(t.spend))}` : '';
+    rollTo($('aLive'), money(t.live)); $('aLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
+    rollTo($('aPost'), money(t.post));
+    rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} clients with spend`;
+    const dash = '<span class="muted">–</span>';
+    const ago = (at) => { if (!at) return '<span class="muted">Never</span>'; const m = Math.round((Date.now() - new Date(at)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+    $('aBody').innerHTML = d.users.map((u) => {
+      const open = aOpen.has(u.id), tt = u.totals;
+      const withSpend = u.clients.filter((c) => c.spend > 0).sort((a, b) => b.spend - a.spend), idle = u.clients.filter((c) => !(c.spend > 0));
+      const row = `<tr class="drow${open ? ' open' : ''}${tt.spend > 0 ? '' : ' nospend'}" data-uid="${esc(u.id)}" tabindex="0">
+        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><span class="avatar sm">${esc((u.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</span><b>${esc(u.name)}</b>${u.you ? '<span class="chip meta">You</span>' : ''}${u.expired ? '<span class="chip live">Login expired</span>' : ''}</div></td>
+        <td class="r num" data-l="Clients">${tt.active} <span class="muted">/ ${u.clientCount}</span></td>
+        <td class="r num" data-l="Lives">${tt.lives || dash}</td>
+        <td class="r num" data-l="Live">${tt.live > 0 ? money(tt.live) : dash}</td>
+        <td class="r num" data-l="Post">${tt.post > 0 ? money(tt.post) : dash}</td>
+        <td class="r num tot" data-l="Total"><b>${money(tt.spend)}</b>${tt.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(tt.spend))}</div>` : ''}</td>
+        <td data-l="Last sync" class="hint">${ago(u.lastSync)}</td></tr>`;
+      const detail = !open ? '' : `<tr class="dexp"><td colspan="7"><div class="dexp-in">${withSpend.length ? withSpend.map((c) => `<div class="dl ${c.type === 'post' ? 'post' : 'live'}"><span class="dl-n"><b>${esc(c.name)}</b><span class="hint">${c.lives ? ' · ' + c.lives + ' live' + (c.lives === 1 ? '' : 's') : ''}${c.postSpend > 0 ? ' · posts ' + money(c.postSpend) : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${c.spend.toFixed(2)}</span></span></div>`).join('') : '<div class="muted">No client spend in this period.</div>'}${idle.length ? `<div class="hint" style="padding:4px 4px 0">No spend: ${idle.map((c) => esc(c.name)).join(', ')}</div>` : ''}</div></td></tr>`;
+      return row + detail;
+    }).join('') || '<tr><td colspan="7" class="empty-row">Nobody has logged in yet.</td></tr>';
+    $('aFoot').innerHTML = d.users.length > 1 ? `<tr><td>Total · ${d.users.length} accounts</td><td class="r num" data-l="Clients">${t.clients}</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${d.taxRate ? `<div class="hint">+tax ${money(tax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
+    document.querySelectorAll('#aBody tr.drow').forEach((tr) => {
+      const toggle = () => { const id = tr.dataset.uid; aOpen.has(id) ? aOpen.delete(id) : aOpen.add(id); renderAdmin();
+        const box = document.querySelector(`#aBody tr.drow[data-uid="${id}"]`)?.nextElementSibling?.querySelector('.dexp-in');
+        if (box && !calm && box.animate) { box.animate([{ opacity: 0, transform: 'translateY(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' }); box.querySelectorAll('.dl').forEach((el, i) => el.animate([{ opacity: 0, transform: 'translateX(-14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 40 + i * 45, fill: 'backwards', easing: 'cubic-bezier(.2,.8,.2,1)' })); } };
+      tr.onclick = toggle; tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
+    });
+  }
+
   // ---------- Telegram groups for clients ----------
   let tgChats = [];
   async function loadChats() {
@@ -958,7 +1014,8 @@
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      showTab(['clients', 'accounts', 'team'].includes(h) ? h : 'dashboard');
+      if (me.isOwner) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
+      showTab(['clients', 'accounts', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

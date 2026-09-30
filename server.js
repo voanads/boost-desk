@@ -119,6 +119,27 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
   for (const u of await db.allUsers()) await jobs.setEnabled(u.fb_id, !!req.body.enabled);
   res.json({ ok: true });
 }));
+// Admin overview: every account's spend for a period (owner only).
+api.get('/admin/overview', ownerOnly, wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
+  const users = await db.allUsers();
+  const out = [];
+  for (const u of users) {
+    const d = await sync.dashboard(u.fb_id, from, to);
+    const last = (await db.pool.query('SELECT max(synced_at) AS at FROM day_meta WHERE owner=$1', [u.fb_id])).rows[0];
+    out.push({
+      id: u.fb_id, name: u.name, you: u.fb_id === req.user.fb_id,
+      expired: !!(u.token_expires && new Date(u.token_expires) < new Date()),
+      lastSync: last && last.at, totals: d.totals,
+      clientCount: d.clients.filter((c) => !c.archived).length,
+      clients: d.clients.filter((c) => c.spend > 0 || !c.archived).map((c) => ({ id: c.id, name: c.name, type: c.type, lives: c.lives, liveSpend: c.liveSpend, postSpend: c.postSpend, spend: c.spend, days: c.days })),
+    });
+  }
+  out.sort((a, b) => b.totals.spend - a.totals.spend || a.name.localeCompare(b.name));
+  const totals = out.reduce((t, u) => ({ spend: t.spend + u.totals.spend, live: t.live + u.totals.live, post: t.post + u.totals.post, lives: t.lives + u.totals.lives, clients: t.clients + u.totals.active, accounts: t.accounts + (u.totals.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0, accounts: 0 });
+  res.json({ from, to, users: out, totals, taxRate: sync.TAX_RATE });
+}));
 api.get('/blocked', ownerOnly, wrap(async (req, res) => res.json(await db.blockedUsers())));
 api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {
   const id = req.params.id;

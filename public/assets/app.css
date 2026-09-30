@@ -633,3 +633,7 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
 @media (prefers-reduced-motion:reduce){.tab-ink{transition:none}}
 .dtable tr.nospend td{opacity:.5}
 .dtable tr.nospend:hover td{opacity:.8}
+/* admin dashboard */
+.avatar.sm{width:24px;height:24px;font-size:.62rem;flex:none}
+#aTable .nm{gap:8px}
+@media (max-width:760px){nav.tabs button{padding:6px 2px}nav.tabs button .short{font-size:.62rem}}

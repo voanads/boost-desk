@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=40">
+<link rel="stylesheet" href="/assets/app.css?v=41">
 </head>
 <body>
 <div class="wrap">
@@ -254,6 +254,16 @@
     </div>
   </section>
 </div>
+<!-- Floating period filter: shows at the bottom once the top filters scroll out of view -->
+<div class="fdock" id="fDock" role="group" aria-label="Period" hidden>
+  <button class="fnav" id="fPrev" aria-label="Previous period">‹</button>
+  <button class="flabel" id="fLabel" title="Back to the top filters"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="fLabelText">…</span></button>
+  <button class="fnav" id="fNext" aria-label="Next period">›</button>
+  <span class="fsep" aria-hidden="true"></span>
+  <div class="fchips" id="fChips">
+    <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">7 days</button><button data-preset="30">30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="thisYear">This year</button><button data-preset="lastYear">Last year</button><button data-preset="custom">Custom…</button>
+  </div>
+</div>
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -265,6 +275,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=40"></script>
+<script src="/assets/app.js?v=41"></script>
 </body>
 </html>

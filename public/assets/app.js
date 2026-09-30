@@ -92,6 +92,7 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
     ['dashboard', 'clients', 'accounts', 'lives', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
@@ -628,6 +629,37 @@
     loadDash();
   };
   $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
+
+  // ---------- floating period filter (bottom of the screen while scrolled down) ----------
+  const dock = $('fDock');
+  function syncDock(pre = currentPreset()) {
+    $('fLabelText').textContent = periodLabel();
+    document.querySelectorAll('#fChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
+    $('fNext').disabled = $('dNext').disabled;
+    const on = dock.querySelector('#fChips [aria-pressed="true"]');
+    if (on && !dock.hidden) on.scrollIntoView({ block: 'nearest', inline: 'center', behavior: calm ? 'auto' : 'smooth' });
+  }
+  $('fPrev').onclick = () => dShift(-1); $('fNext').onclick = () => dShift(1);
+  $('fLabel').onclick = () => scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
+  document.querySelectorAll('#fChips button').forEach((b) => b.onclick = () => {
+    if (b.dataset.preset === 'custom') { scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); }
+    applyPreset(b.dataset.preset);
+  });
+  let dockShown = false;
+  function setDock(show) {
+    show = show && !$('tab-dashboard').hidden;
+    if (show === dockShown) return;
+    dockShown = show; document.body.classList.toggle('has-dock', show || !$('tab-dashboard').hidden);
+    if (show) {
+      dock.hidden = false; syncDock();
+      if (!calm && dock.animate) dock.animate([{ opacity: 0, transform: 'translate(-50%, 24px) scale(.96)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
+    } else if (!calm && dock.animate) {
+      dock.animate([{ opacity: 1, transform: 'translate(-50%, 0)' }, { opacity: 0, transform: 'translate(-50%, 24px) scale(.96)' }], { duration: 260, easing: 'cubic-bezier(.4,0,1,1)' }).onfinish = () => { if (!dockShown) dock.hidden = true; };
+    } else dock.hidden = true;
+  }
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(([en]) => setDock(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: '-70px 0px 0px 0px' }).observe(document.querySelector('#tab-dashboard .dhead'));
+  }
   $('dPick').onclick = () => {
     if (dMode === 'range') { applyPreset('custom'); return; }
     if (dMode === 'year') return;
@@ -656,6 +688,7 @@
     const pre = currentPreset();
     document.querySelectorAll('#dChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
     $('dLabel').textContent = periodLabel();
+    syncDock(pre);
     $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
     const custom = dMode === 'range' && pre === 'custom';
     $('dRangeBox').hidden = !custom; $('dPick').hidden = custom;

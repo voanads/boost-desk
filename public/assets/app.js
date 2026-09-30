@@ -808,14 +808,14 @@
 
   function renderDash() {
     if (!dData) return;
-    const q = $('dSearch').value.trim().toLowerCase(), idle = $('dShowIdle').checked;
+    const q = $('dSearch').value.trim().toLowerCase(), idle = !$('dShowIdle').checked; // all clients by default
     let list = dData.clients.map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0 }))
       .filter((c) => !c.archived || c.spend > 0)
       .filter((c) => idle || c.spend > 0)
       .filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c)))
       .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
     const k = dSort.key, dir = dSort.asc ? 1 : -1;
-    list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
+    list.sort((a, b) => ((b.spend > 0) - (a.spend > 0)) || (k === 'name' ? a.name.localeCompare(b.name) : (a[k] - b[k])) * dir || a.name.localeCompare(b.name));
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
     const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0), posters: a.posters + (c.postSpend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0, posters: 0 });
@@ -831,7 +831,7 @@
       const share = t.spend ? c.spend / t.spend * 100 : 0, pg = pageNames(c);
       const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
-      return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}" tabindex="0" aria-expanded="${open}">
+      return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
         <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>

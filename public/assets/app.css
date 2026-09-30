@@ -631,3 +631,5 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
   .tab-ink{height:3px!important;top:0!important;border-radius:0 0 3px 3px;background:var(--brand);box-shadow:0 0 12px var(--brand)}
 }
 @media (prefers-reduced-motion:reduce){.tab-ink{transition:none}}
+.dtable tr.nospend td{opacity:.5}
+.dtable tr.nospend:hover td{opacity:.8}

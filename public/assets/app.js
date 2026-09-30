@@ -675,7 +675,7 @@
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
       renderDash();
       // 5) the new period slides in from the direction you moved
-      if (dir && !calm) ['#tab-dashboard .summary', '#dChartPanel', '#dTable tbody'].forEach((sel, i) => { const el = document.querySelector(sel); if (el && !el.hidden) el.animate([{ opacity: 0, transform: `translateX(${dir * 46}px)` }, { opacity: 1, transform: 'none' }], { duration: 420, delay: i * 50, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); });
+      if (dir && !calm) ['#tab-dashboard .summary', '#dChartPanel', '#dTable tbody'].forEach((sel, i) => { const el = document.querySelector(sel); if (el && !el.hidden) el.animate([{ opacity: 0, transform: `translateX(${dir * 28}px)` }, { opacity: 1, transform: 'none' }], { duration: 520, delay: i * 60, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' }); });
       // 2) rows whose spend went up since the last refresh flash green with a "+$" label
       if (prevSpend) dData.clients.forEach((c) => {
         const inc = c.spend - (prevSpend[c.id] || 0);
@@ -734,17 +734,22 @@
   }
 
   // ---------- open / close motion ----------
-  const ease = 'cubic-bezier(.22,.8,.2,1)';
+  const ease = 'cubic-bezier(.22,1,.36,1)';
   const PLANE_SVG = `<svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg>`;
   // The breakdown unfolds, and each live / post line slides in one after another.
   function unfoldClient(id) {
     const tr = document.querySelector(`#dBody tr.drow[data-cid="${id}"]`), box = tr && tr.nextElementSibling && tr.nextElementSibling.querySelector('.dexp-in');
     if (!box || calm || !box.animate) return;
     const h = box.offsetHeight;
-    box.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: 380, easing: ease });
-    box.querySelectorAll('.dl, .dday-h, .dnote, .dsent').forEach((el, i) => el.animate(
-      [{ opacity: 0, transform: 'translateX(-18px)' }, { opacity: 1, transform: 'none' }],
-      { duration: 360, delay: 60 + i * 55, easing: ease, fill: 'backwards' }));
+    box.style.overflow = 'hidden';
+    const a = box.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: Math.min(620, 380 + h / 4), easing: ease });
+    a.onfinish = a.oncancel = () => { box.style.overflow = ''; };
+    const chev = tr.querySelector('.chev');
+    if (chev) chev.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(90deg)' }], { duration: 380, easing: ease });
+    tr.querySelectorAll('td').forEach((td) => td.animate([{ backgroundColor: 'transparent' }, {}], { duration: 380, easing: 'ease' }));
+    [...box.querySelectorAll('.dl, .dday-h, .dnote, .dsent, .dexp-foot')].slice(0, 24).forEach((el, i) => el.animate(
+      [{ opacity: 0, transform: 'translateY(8px) scale(.985)' }, { opacity: 1, transform: 'none' }],
+      { duration: 460, delay: 40 + i * 40, easing: ease, fill: 'backwards' }));
   }
   // A paper plane swings out past the right edge, loops back in and lands with a little spin, leaving a dotted trail.
   function flyPlane(from, to, { duration = 1150 } = {}) {
@@ -760,7 +765,7 @@
       const tan = (t) => { const u = 1 - t; return Math.atan2(3 * u * u * (c1.y - y0) + 6 * u * t * (c2.y - c1.y) + 3 * t * t * (y1 - c2.y), 3 * u * u * (c1.x - x0) + 6 * u * t * (c2.x - c1.x) + 3 * t * t * (x1 - c2.x)) * 180 / Math.PI; };
       const size0 = Math.max(12, from.height), size1 = Math.max(12, to.height);
       const p = document.createElement('div'); p.className = 'flyplane'; p.innerHTML = PLANE_SVG; document.body.appendChild(p);
-      const N = 24, frames = []; let prev = null, turn = 0;
+      const N = 64, frames = []; let prev = null, turn = 0;
       for (let i = 0; i <= N; i++) {
         const t = i / N, q = pt(t);
         let a = tan(Math.min(Math.max(t, .02), .9));
@@ -781,7 +786,7 @@
       anim.onfinish = done; anim.oncancel = done;
     });
   }
-  const pop = (el) => { if (el && !calm && el.animate) el.animate([{ transform: 'scale(.4) rotate(-20deg)', opacity: 0 }, { transform: 'scale(1.35) rotate(6deg)', opacity: 1, offset: .55 }, { transform: 'none' }], { duration: 420, easing: ease }); };
+  const pop = (el) => { if (el && !calm && el.animate) el.animate([{ transform: 'scale(.4) rotate(-20deg)', opacity: 0 }, { transform: 'scale(1.15) rotate(4deg)', opacity: 1, offset: .6 }, { transform: 'none' }], { duration: 520, easing: ease }); };
 
   // Open: the plane leaves the Report button and lands in Send report, which then shines.
   function planeToSend(id, from) {
@@ -811,7 +816,10 @@
     };
     if (!box || calm || !box.animate) return reopen();
     box.style.overflow = 'hidden';
-    const a = box.animate([{ height: box.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 260, easing: 'cubic-bezier(.4,0,.6,1)' });
+    const chev = tr.querySelector('.chev');
+    if (chev) chev.animate([{ transform: 'rotate(90deg)' }, { transform: 'rotate(0deg)' }], { duration: 340, easing: ease, fill: 'forwards' });
+    const hh = box.offsetHeight;
+    const a = box.animate([{ height: hh + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: Math.min(460, 280 + hh / 6), easing: 'cubic-bezier(.65,0,.35,1)', fill: 'forwards' });
     a.onfinish = reopen; a.oncancel = reopen;
   }
 
@@ -892,7 +900,8 @@
       const max = Math.max(1, ...days.map((d) => d.spend));
       $('dChartTitle').textContent = dMode === 'year' ? 'Spend per month' : 'Spend per day';
       $('dChartHint').textContent = dMode === 'year' ? 'Tap a bar to see that month' : 'Tap a bar to see that day';
-      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${(d.ym ? d.ym === me.today.slice(0, 7) : d.day === me.today) ? ' today' : ''}" data-day="${d.day}"  aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%" data-tip="${esc(d.ym ? monthLabel(d.ym) : nice(d.day).replace(/ \d{4}$/, ''))} · ${money(d.spend)}"></span><span class="d">${d.ym ? parse(d.day).toLocaleDateString('en-GB', { month: 'short' }) : Number(d.day.slice(8))}</span></button>`).join('');
+      const chartHtml = days.map((d, i) => `<button style="--i:${i}" class="col${(d.ym ? d.ym === me.today.slice(0, 7) : d.day === me.today) ? ' today' : ''}" data-day="${d.day}"  aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%" data-tip="${esc(d.ym ? monthLabel(d.ym) : nice(d.day).replace(/ \d{4}$/, ''))} · ${money(d.spend)}"></span><span class="d">${d.ym ? parse(d.day).toLocaleDateString('en-GB', { month: 'short' }) : Number(d.day.slice(8))}</span></button>`).join('');
+      if ($('dChart')._html !== chartHtml) { $('dChart').innerHTML = chartHtml; $('dChart')._html = chartHtml; }
       document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dMode = dMode === 'year' ? 'month' : 'day'; dDate = b.dataset.day; loadDash(); });
     }
   }

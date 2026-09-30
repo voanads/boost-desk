@@ -283,33 +283,33 @@ tbody tr:hover td{background:color-mix(in srgb,var(--bg-2) 70%,transparent)}
 @keyframes ring{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}100%{box-shadow:0 0 0 7px transparent}}
 
 @media (prefers-reduced-motion:no-preference){
-  section.wrap:not([hidden]){animation:fadeUp .35s ease-out both}
-  .summary>div{animation:fadeUp .45s cubic-bezier(.2,.7,.2,1) backwards}
+  section.wrap:not([hidden]){animation:fadeUp .5s var(--smooth) both}
+  .summary>div{animation:fadeUp .45s var(--smooth) backwards}
   .summary>div:nth-child(2){animation-delay:.05s}.summary>div:nth-child(3){animation-delay:.1s}.summary>div:nth-child(4){animation-delay:.15s}
-  .card{animation:fadeUp .45s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0) * 45ms);transition:transform .2s,box-shadow .2s}
+  .card{animation:fadeUp .45s var(--smooth) backwards;animation-delay:calc(var(--i,0) * 45ms);transition:transform .2s,box-shadow .2s}
   .card:hover,.summary>div:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(20,24,40,.06),0 10px 26px rgba(20,24,40,.09)}
   .summary>div{transition:transform .2s,box-shadow .2s}
-  .card::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--accent);transform:scaleY(0);transform-origin:top;transition:transform .45s cubic-bezier(.2,.7,.2,1)}
+  .card::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--accent);transform:scaleY(0);transform-origin:top;transition:transform .45s var(--smooth)}
   .card.is-done::before,.card.is-over::before{transform:scaleY(1)}
   .row{transition:background-color .3s}
   .row input[type=checkbox]:checked{animation:pop .3s ease-out}
   .chip.live::before{animation:pulse 1.6s ease-in-out infinite}
   .chip.meta:not([hidden]){animation:fadeUp .35s both}
   .syncinfo .dot{animation:ring 2s ease-out infinite}
-  .chart .b{transform-origin:bottom;animation:grow .55s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0) * 14ms);transition:opacity .15s,filter .15s}
+  .chart .b{transform-origin:bottom;animation:grow .55s var(--smooth) both;animation-delay:calc(var(--i,0) * 14ms);transition:opacity .15s,filter .15s}
   .chart .col:hover .b{filter:brightness(1.12)}
-  .meter i,.bar i{transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .meter i,.bar i{transition:width .6s var(--smooth)}
   button{transition:transform .12s,border-color .15s,background .15s,box-shadow .15s,filter .15s}
   button:active:not(:disabled){transform:scale(.96)}
   button.primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 20px color-mix(in srgb,var(--brand) 40%,transparent)}
-  .toast{animation:toastIn .3s cubic-bezier(.2,.7,.2,1) both}
+  .toast{animation:toastIn .3s var(--smooth) both}
   .toast.out{animation:toastOut .3s ease-in both}
   .progress .pbar i{background-image:linear-gradient(90deg,var(--brand-2),var(--brand)),linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);background-size:100% 100%,200px 100%;background-repeat:no-repeat;background-blend-mode:overlay;animation:shimmer 1.2s linear infinite}
   .progress:not([hidden]){animation:fadeUp .3s both}
   .panel{animation:fadeUp .45s backwards}
   nav.tabs .ic{transition:transform .2s}
   nav.tabs button[aria-selected=true] .ic{transform:translateY(-1px) scale(1.08)}
-  .brand .logo{transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+  .brand .logo{transition:transform .35s var(--smooth)}
   .brand:hover .logo{transform:rotate(-8deg) scale(1.06)}
 }
 .card.is-done::before,.card.is-over::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--accent)}
@@ -342,7 +342,7 @@ button.busy::before{content:"";position:absolute;left:16px;top:50%;width:14px;he
 .dlg textarea{width:100%;min-height:260px;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;font-size:.92rem;line-height:1.5;color:var(--ink);resize:vertical}
 .dlg-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media (prefers-reduced-motion:no-preference){
-  .dlg[open] .dlg-in{animation:dlgIn .28s cubic-bezier(.2,.7,.2,1) both}
+  .dlg[open] .dlg-in{animation:dlgIn .28s var(--smooth) both}
   .dlg[open]::backdrop{animation:fadeIn .25s both}
 }
 @keyframes dlgIn{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
@@ -442,7 +442,7 @@ table.dtable{min-width:0}
 .cc-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.84rem;border-top:1px solid var(--line);padding-top:10px;margin-top:auto}
 .cc-month b{font-size:.95rem}
 .tgok{color:var(--brand);font-weight:600;overflow-wrap:anywhere}
-@media (prefers-reduced-motion:no-preference){.ccard{animation:fadeUp .4s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0) * 35ms)}.ccard:hover{transform:translateY(-2px)}}
+@media (prefers-reduced-motion:no-preference){.ccard{animation:fadeUp .4s var(--smooth) backwards;animation-delay:calc(var(--i,0) * 35ms)}.ccard:hover{transform:translateY(-2px)}}
 /* dialog form */
 .fld{display:flex;flex-direction:column;gap:7px}
 .fld>span{font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
@@ -471,7 +471,7 @@ table.dtable{min-width:0}
 .syncbtn{height:40px}
 .dtable tr.drow{cursor:pointer}
 .dtable tr.drow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
-.dtable .chev{display:inline-block;color:var(--muted);font-size:1.1rem;width:12px;transition:transform .2s}
+.dtable .chev{display:inline-block;color:var(--muted);font-size:1.1rem;width:12px;transition:transform .35s var(--smooth)}
 .dtable tr.open .chev{transform:rotate(90deg);color:var(--brand)}
 .dtable tr.open td{background:color-mix(in srgb,var(--brand-soft) 45%,transparent)}
 .dtable tr.dexp td{padding:0 10px 14px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--brand-soft) 45%,transparent)}
@@ -490,7 +490,6 @@ table.dtable{min-width:0}
 .dsent{font-size:.84rem;color:var(--accent);font-weight:600;padding:2px 4px}
 .dexp-foot{display:flex;justify-content:flex-end;padding-top:6px}
 .dexp-foot .primary{padding:9px 16px;font-size:.9rem}
-@media (prefers-reduced-motion:no-preference){.dtable tr.dexp .dexp-in{animation:fadeUp .3s cubic-bezier(.2,.7,.2,1) both}}
 @media (max-width:760px){
   .syncbtn{flex:1}
   .pnav{gap:8px}
@@ -572,7 +571,7 @@ table.dtable{min-width:0}
 /* 1 ticker digits */
 .val{line-height:1.15}
 .rd{display:inline-block;height:1.15em;overflow:hidden;vertical-align:top}
-.rs{display:flex;flex-direction:column;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.rs{display:flex;flex-direction:column;transition:transform 1s var(--smooth)}
 .rs>span{height:1.15em;line-height:1.15em;text-align:center}
 .rc{display:inline-block}
 /* 2 new-spend flash + floating label */
@@ -594,7 +593,7 @@ table.dtable{min-width:0}
 .chart .b::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translate(-50%,6px) scale(.9);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.72rem;font-weight:700;padding:5px 9px;border-radius:8px;white-space:nowrap;transition:opacity .15s,transform .2s cubic-bezier(.2,.8,.2,1);z-index:5;box-shadow:0 6px 16px rgba(0,0,0,.25)}
 .chart .col:hover .b::after,.chart .col:focus-visible .b::after{opacity:1;transform:translate(-50%,0) scale(1)}
 @media (prefers-reduced-motion:no-preference){
-  .chart .b{animation:wave .7s cubic-bezier(.3,1.4,.5,1) both;animation-delay:calc(var(--i,0) * 22ms);transition:transform .2s,filter .15s}
+  .chart .b{animation:wave .8s var(--smooth) both;animation-delay:calc(var(--i,0) * 18ms);transition:transform .3s var(--smooth),filter .2s}
   @keyframes wave{0%{transform:scaleY(0)}100%{transform:scaleY(1)}}
   .chart .col:hover .b{transform:translateY(-4px);filter:brightness(1.15)}
 }
@@ -624,7 +623,7 @@ table.dtable{min-width:0}
 @media (min-width:761px){nav.tabs{position:relative}}
 nav.tabs button{position:relative;z-index:1}
 nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:none!important}
-.tab-ink{position:absolute;z-index:0;border-radius:9px;background:var(--surface);box-shadow:var(--shadow);opacity:0;transition:left .38s cubic-bezier(.3,1.25,.5,1),width .38s cubic-bezier(.3,1.25,.5,1),top .2s,height .2s,opacity .2s}
+.tab-ink{position:absolute;z-index:0;border-radius:9px;background:var(--surface);box-shadow:var(--shadow);opacity:0;transition:left .5s var(--smooth),width .5s var(--smooth),top .3s var(--smooth),height .3s var(--smooth),opacity .3s}
 .tab-ink.on{opacity:1}
 @media (max-width:760px){
   nav.tabs button[aria-selected=true]::after{display:none}
@@ -677,3 +676,14 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
 .dtable td.cprc b{font-weight:700}
 .dtable td.cprc .hint{white-space:nowrap}
 .summary>div:nth-child(5){animation-delay:.2s}
+
+/* ---------- smoother motion ---------- */
+:root{--smooth:cubic-bezier(.22,1,.36,1)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:no-preference){
+  button{transition:transform .25s var(--smooth),border-color .2s,background .2s,box-shadow .25s,filter .2s,color .2s}
+  .card,.summary>div,.ccard{transition:transform .35s var(--smooth),box-shadow .35s var(--smooth)}
+  .dtable tbody tr td{transition:background-color .3s ease}
+  .dexp-in{transform:translateZ(0)}
+}
+.flyplane,.trail{will-change:transform,opacity}

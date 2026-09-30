@@ -91,12 +91,13 @@
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'lives', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     moveInk();
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') loadAdmin();
+    if (name === 'lives') loadLives();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -967,6 +968,162 @@
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
   };
 
+  // ---------- live videos ----------
+  let lPreset = '7', lData = null, lShown = 20, lEnter = false; const lOpen = new Set();
+  const OBJ = { OUTCOME_ENGAGEMENT: 'Engagement', OUTCOME_AWARENESS: 'Awareness', OUTCOME_TRAFFIC: 'Traffic', OUTCOME_LEADS: 'Leads', OUTCOME_SALES: 'Sales', OUTCOME_APP_PROMOTION: 'App promotion', MESSAGES: 'Messages', POST_ENGAGEMENT: 'Post engagement', VIDEO_VIEWS: 'Video views', REACH: 'Reach', BRAND_AWARENESS: 'Brand awareness', LINK_CLICKS: 'Traffic', CONVERSIONS: 'Conversions' };
+  const GOAL = { CONVERSATIONS: 'Messages (conversations)', REPLIES: 'Messages', POST_ENGAGEMENT: 'Post engagement', THRUPLAY: 'ThruPlay', VIDEO_VIEWS: 'Video views', REACH: 'Reach', IMPRESSIONS: 'Impressions', LINK_CLICKS: 'Link clicks', LANDING_PAGE_VIEWS: 'Landing page views', PAGE_LIKES: 'Page likes', LEAD_GENERATION: 'Leads', OFFSITE_CONVERSIONS: 'Conversions' };
+  const nice$ = (v) => '$' + (Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const dur = (m) => (m == null ? '' : m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : ''));
+  const num = (n) => Math.round(n).toLocaleString('en-US');
+  const setupsOf = (l) => l.campaigns.map((c) => lData.setups[c.id]).filter(Boolean);
+  const mainSetup = (l) => setupsOf(l)[0] || null;
+  const lSig = (st) => { if (!st) return ''; const t = st.targeting || {}; return JSON.stringify([st.goal, t.gender, t.ageMin, t.ageMax, [...(t.places || [])].sort(), [...(t.interests || [])].sort(), [...(t.placements || [])].sort(), t.advantage]); };
+  const ageTxt = (t) => (t.ageMin || t.ageMax ? `${t.ageMin || 18}–${t.ageMax && t.ageMax < 65 ? t.ageMax : '65+'}` : 'All ages');
+  const setupName = (st) => { const t = st.targeting || {}; return `${t.gender === 'All' ? 'Everyone' : t.gender} ${ageTxt(t)} · ${(t.places || [])[0] || 'Anywhere'}`; };
+  // "3 campaigns · $180 total · 2h 30m each"
+  function budgetLine(sts) {
+    if (!sts.length) return '';
+    const life = sts.filter((x) => x.lifetimeBudget != null), daily = sts.filter((x) => x.dailyBudget != null && x.lifetimeBudget == null);
+    const mins = [...new Set(sts.map((x) => x.minutes).filter((m) => m != null))].sort((a, b) => a - b);
+    const parts = [sts.length + ' campaign' + (sts.length > 1 ? 's' : '')];
+    if (life.length) parts.push(`${nice$(life.reduce((a, x) => a + x.lifetimeBudget, 0))} total budget`);
+    if (daily.length) parts.push(`${nice$(daily.reduce((a, x) => a + x.dailyBudget, 0))}/day budget`);
+    if (mins.length) parts.push(mins.length === 1 ? `runs ${dur(mins[0])}${sts.length > 1 ? ' each' : ''}` : `runs ${dur(mins[0])}–${dur(mins[mins.length - 1])}`);
+    return parts.join(' · ');
+  }
+  const campBudget = (st) => (!st ? '' : st.lifetimeBudget != null ? `${nice$(st.lifetimeBudget)} budget` : st.dailyBudget != null ? `${nice$(st.dailyBudget)}/day` : '') + (st && st.minutes != null ? ` for ${dur(st.minutes)}` : '');
+  const tags = (xs) => (xs && xs.length ? `<div class="tags">${xs.map((x) => `<i>${esc(x)}</i>`).join('')}</div>` : '<b class="muted">–</b>');
+  function setupText(st, sts = [st]) {
+    const t = st.targeting || {};
+    return [`Objective: ${OBJ[st.objective] || st.objective || '–'}`, `Optimised for: ${GOAL[st.goal] || st.goal || '–'}`, `Budget & run time: ${budgetLine(sts)}`,
+      `Location: ${(t.places || []).join(', ') || '–'}`, `Age: ${ageTxt(t)} · Gender: ${t.gender || 'All'}`, `Interests: ${(t.interests || []).join(', ') || 'None (broad)'}${t.advantage ? ' · Advantage+ audience on' : ''}`,
+      `Placements: ${(t.placements || []).join(', ')}`].join('\n');
+  }
+
+  document.querySelectorAll('#lChips button').forEach((b) => b.onclick = () => { lPreset = b.dataset.p; lShown = 20; loadLives(); });
+  $('lSort').onchange = () => { lShown = 20; renderLives(); fetchSetups(); };
+  $('lClient').onchange = () => { lShown = 20; renderLives(); fetchSetups(); };
+  $('lMore').onclick = () => { lShown += 20; lEnter = true; renderLives(); fetchSetups(); };
+  async function loadLives() {
+    document.querySelectorAll('#lChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === lPreset)));
+    const [from, to] = aRange(lPreset);
+    if (!lData) $('lList').innerHTML = '<div class="sk" style="--w:90%;height:90px"></div><div class="sk" style="--w:80%;height:90px"></div>';
+    try {
+      lData = await api(`/lives?from=${from}&to=${to}`);
+      const cl = [...new Map(lData.lives.map((l) => [l.clientId, l.client])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+      const cur = $('lClient').value;
+      $('lClient').innerHTML = '<option value="">All clients</option>' + cl.map(([id, n]) => `<option value="${id}"${String(id) === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
+      lEnter = true; renderLives(); fetchSetups();
+    } catch (e) { $('lList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+  }
+  function visibleLives() {
+    const cid = $('lClient').value, k = $('lSort').value;
+    const list = lData.lives.filter((l) => !cid || String(l.clientId) === cid);
+    const cmp = { comments: (a, b) => (b.comments ?? -1) - (a.comments ?? -1), messages: (a, b) => (b.messages ?? -1) - (a.messages ?? -1), spend: (a, b) => b.spend - a.spend,
+      cpc: (a, b) => (a.perComment == null) - (b.perComment == null) || (a.perComment - b.perComment), new: (a, b) => (b.day + b.time).localeCompare(a.day + a.time) }[k];
+    return list.sort((a, b) => cmp(a, b) || b.spend - a.spend);
+  }
+  // Load how each shown live was boosted (Meta is only asked once per campaign; after that it's saved).
+  let lFetching = false;
+  async function fetchSetups() {
+    if (!lData || lFetching) return;
+    const need = visibleLives().slice(0, lShown).flatMap((l) => l.campaigns).filter((c) => c.id && c.accountId && !lData.setups[c.id] && !c.tried);
+    if (!need.length) return;
+    need.forEach((c) => { c.tried = true; });
+    lFetching = true; const my = lData;
+    try { const got = await api('/lives/setups', { method: 'POST', body: { campaigns: need.map((c) => ({ id: c.id, accountId: c.accountId })) } }); if (my === lData) { Object.assign(lData.setups, got); renderLives(); } }
+    catch (e) { toast(e.message); }
+    finally { lFetching = false; }
+  }
+  function renderLives() {
+    const all = visibleLives(), list = all.slice(0, lShown);
+    const withC = all.filter((l) => l.comments != null);
+    const T = all.reduce((a, l) => ({ spend: a.spend + l.spend, comments: a.comments + (l.comments || 0), messages: a.messages + (l.messages || 0), cSpend: a.cSpend + (l.comments != null ? l.spend : 0) }), { spend: 0, comments: 0, messages: 0, cSpend: 0 });
+    rollTo($('lCount'), String(all.length)); $('lCountSub').textContent = `from ${new Set(all.map((l) => l.clientId)).size} client${new Set(all.map((l) => l.clientId)).size === 1 ? '' : 's'}`;
+    rollTo($('lComments'), num(T.comments)); rollTo($('lCpc'), T.comments ? '$' + (T.cSpend / T.comments).toFixed(2) : '–');
+    rollTo($('lMsgs'), num(T.messages)); $('lMsgSub').textContent = T.messages ? `$${(T.cSpend / T.messages).toFixed(2)} per message` : 'from boosts';
+    rollTo($('lSpend'), money(T.spend)); $('lSpendSub').textContent = all.length ? `${money(T.spend / all.length)} per live` : '';
+    $('lTitle').textContent = `Live videos · ${{ comments: 'most comments', cpc: 'cheapest per comment', messages: 'most messages', spend: 'most spend', new: 'newest' }[$('lSort').value]}`;
+    const missing = all.length - withC.length;
+    $('lNote').hidden = !missing;
+    $('lNote').textContent = missing ? `${missing} live${missing === 1 ? ' has' : 's have'} no comment counts yet — tap Sync from Meta on the Dashboard (use Custom for older dates) to load them.` : '';
+    const most = withC.length ? withC.reduce((a, b) => (b.comments > a.comments ? b : a)) : null;
+    const cheap = withC.filter((l) => l.comments >= 20).reduce((a, b) => (!a || b.perComment < a.perComment ? b : a), null);
+    $('lList').innerHTML = list.map((l, i) => {
+      const st = mainSetup(l), open = lOpen.has(l.key), thumb = setupsOf(l).map((x) => x.thumb).find(Boolean);
+      const badges = (l === most && l.comments ? '<span class="badge">🏆 Most comments</span>' : '') + (l === cheap ? '<span class="badge g">Cheapest</span>' : '');
+      const text = setupsOf(l).map((x) => x.text).find(Boolean);
+      const stat = (lbl, v, hi) => `<div class="st${hi ? ' hi' : ''}"><span>${lbl}</span><b class="num">${v}</b></div>`;
+      const nd = '<span class="muted" title="Sync from Meta to load">–</span>';
+      return `<div class="lv${lEnter ? ' enter' : ''}${i === 0 && l.comments ? ' top' : ''}${open ? ' open' : ''}" data-lk="${esc(l.key)}" style="--i:${i}">
+        <div class="rank">${i + 1}</div>
+        <div class="thumb">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span class="lb">LIVE</span><span class="rk">#${i + 1}</span>${st && st.minutes != null ? `<span class="dur">${dur(st.minutes)}</span>` : ''}</div>
+        <div class="lv-t"><b>${esc(l.client)}</b>${badges}
+          <div class="meta">${text ? `“${esc(text.length > 70 ? text.slice(0, 70) + '…' : text)}” · ` : ''}${esc(nice(l.day).replace(/ \d{4}$/, ''))}${l.time ? ', ' + esc(l.time) : ''}${l.page && l.page !== l.client ? ' · ' + esc(l.page) : ''}</div>
+          <div class="stats">${stat('Comments', l.comments == null ? nd : num(l.comments), 1)}${stat('Messages', l.messages == null ? nd : num(l.messages))}${stat('Boost spend', money(l.spend))}${stat('Per comment', l.perComment != null ? '$' + l.perComment.toFixed(l.perComment < 0.1 ? 3 : 2) : nd, 1)}${stat('Campaigns', l.campaigns.length)}</div>
+        </div>
+        <div class="lv-a">${st ? `<button class="primary" data-lsave="${esc(l.key)}"${lData.saved.some((x) => x.sig === lSig(st)) ? ' disabled' : ''}>${lData.saved.some((x) => x.sig === lSig(st)) ? '✓ Saved' : '★ Save setup'}</button>` : ''}<button data-ltog="${esc(l.key)}">${open ? 'Hide setup ▴' : 'Show setup ▾'}</button></div>
+        ${open ? liveSetup(l) : ''}
+      </div>`;
+    }).join('') || `<div class="empty-row">No boosted lives in this period${$('lClient').value ? ' for this client' : ''}.</div>`;
+    lEnter = false;
+    $('lMore').hidden = all.length <= lShown;
+    document.querySelectorAll('#lList [data-ltog]').forEach((b) => b.onclick = () => {
+      const k = b.dataset.ltog; if (lOpen.has(k)) lOpen.delete(k); else lOpen.add(k);
+      renderLives();
+      const box = document.querySelector(`#lList .lv[data-lk="${CSS.escape(k)}"] .setup`);
+      if (box && !calm) { const h = box.offsetHeight; box.style.overflow = 'hidden'; const a = box.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' }); a.onfinish = () => { box.style.overflow = ''; }; }
+    });
+    document.querySelectorAll('#lList [data-lsave]').forEach((b) => b.onclick = async () => {
+      const l = lData.lives.find((x) => x.key === b.dataset.lsave), st = mainSetup(l); if (!st) return;
+      const name = prompt('Name this setup', setupName(st)); if (name === null) return;
+      try {
+        lData.saved = await api('/live-setups', { method: 'POST', body: { name: name.trim() || setupName(st), sig: lSig(st), setup: { ...st, budgetLine: budgetLine(setupsOf(l)) }, from: { client: l.client, day: l.day, time: l.time } } });
+        renderLives(); successBadge('Setup saved');
+      } catch (e) { toast(e.message); }
+    });
+    renderSaved();
+  }
+  function liveSetup(l) {
+    const sts = setupsOf(l), st = sts[0];
+    if (!st) return `<div class="setup"><div class="muted" style="grid-column:1/-1">${l.campaigns.some((c) => !c.accountId || !c.id) ? 'This live was synced before setups were saved. Sync this day again from the Dashboard to load it.' : 'Loading how this live was boosted…'}</div></div>`;
+    const t = st.targeting || {};
+    const kv = (k, v) => `<div class="kv"><span>${k}</span>${v}</div>`;
+    return `<div class="setup">
+      <h3>How this live was boosted <button class="ghost sm" data-lcopy="${esc(l.key)}">Copy setup</button></h3>
+      ${kv('Objective', `<b>${esc(OBJ[st.objective] || st.objective || '–')}</b>`)}
+      ${kv('Optimised for', `<b>${esc(GOAL[st.goal] || st.goal || '–')}</b>`)}
+      ${kv('Budget & run time', `<b>${esc(budgetLine(sts))}</b>`)}
+      ${kv('Location', tags(t.places))}
+      ${kv('Age · Gender', `<b>${esc(ageTxt(t))} · ${esc(t.gender || 'All')}</b>`)}
+      ${kv('Placements', tags(t.placements))}
+      ${kv('Interests', (t.interests || []).length ? tags(t.interests) : `<b>None — broad audience${t.advantage ? ' (Advantage+ audience)' : ''}</b>`)}
+      ${(t.customAudiences || []).length ? kv('Custom audiences', tags(t.customAudiences)) : ''}
+      <div class="camps">${l.campaigns.map((c) => { const s2 = lData.setups[c.id]; return `<div><b>${esc(c.time || '–')}</b> · ${esc(campBudget(s2) || 'budget –')} · spent ${money(c.spend)}${c.comments != null ? ` · ${num(c.comments)} comments` : ''}</div>`; }).join('')}</div>
+    </div>`;
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-lcopy]'); if (!b || !lData) return;
+    const l = lData.lives.find((x) => x.key === b.dataset.lcopy), sts = l && setupsOf(l); if (!sts || !sts.length) return;
+    navigator.clipboard.writeText(setupText(sts[0], sts)).then(() => toast('Setup copied'), () => toast('Could not copy'));
+  });
+  function renderSaved() {
+    const saved = lData.saved || [];
+    const bySig = {};
+    for (const l of lData.lives) { const st = mainSetup(l); if (!st) continue; const k = lSig(st); (bySig[k] = bySig[k] || []).push(l); }
+    $('lSaved').innerHTML = saved.map((x) => {
+      const ls = (bySig[x.sig] || []).filter((l) => l.comments != null), c = ls.reduce((a, l) => a + l.comments, 0), sp = ls.reduce((a, l) => a + l.spend, 0);
+      const t = x.setup.targeting || {};
+      return `<div class="tp"><b>★ ${esc(x.name)}</b>
+        <span class="muted">${esc(GOAL[x.setup.goal] || x.setup.goal || '')}${x.setup.budgetLine ? ' · ' + esc(x.setup.budgetLine) : ''}</span>
+        <span class="muted">${esc(ageTxt(t))} · ${esc(t.gender || 'All')} · ${esc((t.places || []).slice(0, 2).join(', ') || 'Anywhere')}${(t.interests || []).length ? ` · ${t.interests.length} interest${t.interests.length === 1 ? '' : 's'}` : ' · broad'}</span>
+        <span class="muted">${ls.length ? `Used on <b>${ls.length} live${ls.length === 1 ? '' : 's'}</b> this period · avg <b style="color:var(--brand)">${c ? '$' + (sp / c).toFixed(2) + ' / comment' : 'no comments'}</b>` : 'Not used on a live in this period'}${x.from ? ` · saved from ${esc(x.from.client)}` : ''}</span>
+        <div class="tp-a"><button data-scopy="${x.id}">Copy setup</button><button class="ghost" data-sdel="${x.id}" aria-label="Remove">Remove</button></div></div>`;
+    }).join('') || '<div class="hint">No saved setups yet.</div>';
+    document.querySelectorAll('#lSaved [data-scopy]').forEach((b) => b.onclick = () => { const x = saved.find((y) => y.id === b.dataset.scopy); navigator.clipboard.writeText(`${x.name}\n` + setupText(x.setup).replace(/Budget & run time: .*/, 'Budget & run time: ' + (x.setup.budgetLine || '–'))).then(() => toast('Setup copied'), () => toast('Could not copy')); });
+    document.querySelectorAll('#lSaved [data-sdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this saved setup?')) return; lData.saved = await api('/live-setups/' + b.dataset.sdel, { method: 'DELETE' }); renderLives(); });
+  }
+
   // ---------- admin dashboard (owner only) ----------
   let aPreset = 'today', aData = null, aTeams = { teams: [], users: [], canEdit: false }; const aOpen = new Set();
   function aRange(v) {
@@ -974,6 +1131,7 @@
     if (v === 'today') return [t, t];
     if (v === 'yesterday') { const y = addD(t, -1); return [y, y]; }
     if (v === '7') return [addD(t, -6), t];
+    if (v === '30') return [addD(t, -29), t];
     if (v === 'thisMonth') return [t.slice(0, 8) + '01', t];
     if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); const ym = iso(d).slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))]; }
     if (v === 'thisYear') return [t.slice(0, 4) + '-01-01', t];
@@ -1087,7 +1245,7 @@
       await loadDay();
       const h = location.hash.slice(1);
       if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
-      showTab(['clients', 'accounts', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      showTab(['clients', 'accounts', 'lives', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

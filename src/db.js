@@ -71,6 +71,13 @@ async function init() {
       rows JSONB NOT NULL DEFAULT '[]',
       PRIMARY KEY (owner, day)
     );
+    CREATE TABLE IF NOT EXISTS campaign_setups (    -- how each boost was set up (Live videos tab), fetched once
+      owner TEXT NOT NULL,
+      campaign_id TEXT NOT NULL,
+      data JSONB NOT NULL,
+      fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (owner, campaign_id)
+    );
   `);
   await migrateToWorkspaces();
 }
@@ -138,7 +145,7 @@ async function removeUser(fbId) {
   try {
     await c.query('BEGIN');
     await c.query('DELETE FROM clients WHERE owner=$1', [fbId]); // day_entries go with them
-    for (const t of ['ad_accounts', 'day_meta', 'pages_seen', 'raw_rows']) await c.query(`DELETE FROM ${t} WHERE owner=$1`, [fbId]);
+    for (const t of ['ad_accounts', 'day_meta', 'pages_seen', 'raw_rows', 'campaign_setups']) await c.query(`DELETE FROM ${t} WHERE owner=$1`, [fbId]);
     await c.query("DELETE FROM settings WHERE starts_with(key, $1)", [fbId + ':']);
     await c.query('DELETE FROM users WHERE fb_id=$1', [fbId]);
     await c.query('COMMIT');
@@ -229,6 +236,9 @@ const putRaw = (owner, day, rows) =>
   q(`INSERT INTO raw_rows (owner, day, rows) VALUES ($1,$2,$3) ON CONFLICT (owner, day) DO UPDATE SET rows=$3`, [owner, day, JSON.stringify(rows)]);
 const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31') =>
   (await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, rows FROM raw_rows WHERE owner=$1 AND day BETWEEN $2 AND $3 ORDER BY day`, [owner, from, to])).rows;
+const getSetups = async (owner, ids) => (ids.length ? (await q('SELECT campaign_id, data FROM campaign_setups WHERE owner=$1 AND campaign_id = ANY($2)', [owner, ids])).rows : []);
+const putSetup = (owner, id, data) =>
+  q(`INSERT INTO campaign_setups (owner, campaign_id, data) VALUES ($1,$2,$3) ON CONFLICT (owner, campaign_id) DO UPDATE SET data=$3, fetched_at=now()`, [owner, id, JSON.stringify(data)]);
 const setDayUnmatched = (owner, day, unmatched) =>
   q(`UPDATE day_meta SET unmatched=$3 WHERE owner=$1 AND day=$2`, [owner, day, JSON.stringify(unmatched)]);
 const monthEntries = async (owner, from, to) =>
@@ -236,7 +246,7 @@ const monthEntries = async (owner, from, to) =>
             WHERE c.owner=$1 AND e.day BETWEEN $2 AND $3`, [owner, from, to])).rows;
 
 module.exports = {
-  pool, init,
+  pool, init, getSetups, putSetup,
   upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,

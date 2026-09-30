@@ -169,6 +169,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',
     ...campaignResult(r, goals[r.campaign_id]),
+    ...engagement(r),
   }));
 }
 
@@ -202,6 +203,69 @@ function campaignResult(r, goal) {
   else if (type === '@impressions') n = Number(r.impressions || 0);
   else n = act(type);
   return { results: n, resultType: label };
+}
+
+// Comments and message conversations a campaign brought in (Live videos tab).
+function engagement(r) {
+  const act = (type) => { const a = (r.actions || []).find((x) => x.action_type === type); return a ? Number(a.value) || 0 : 0; };
+  return { comments: act('comment'), messages: act('onsite_conversion.messaging_conversation_started_7d') };
+}
+
+// How a boost was set up: objective, goal, budget, run time, audience, placements, plus the post it promoted.
+// Budgets come in cents. One call per ad account for up to 50 campaigns.
+const GENDER = { 1: 'Men', 2: 'Women' };
+const cents = (v) => (v == null || v === '' ? null : Number(v) / 100);
+function describeTargeting(t = {}) {
+  const g = t.geo_locations || {};
+  const km = (x) => (x.radius ? ` +${x.radius} ${x.distance_unit === 'mile' ? 'mi' : 'km'}` : '');
+  const places = [
+    ...(g.cities || []).map((c) => c.name + km(c)),
+    ...(g.regions || []).map((r) => r.name),
+    ...(g.custom_locations || []).map((c) => (c.name || c.address_string || 'Pin') + km(c)),
+    ...(g.zips || []).map((z) => z.name || z.key),
+    ...(g.countries || []).map((c) => (c === 'KH' ? 'Cambodia' : c)),
+  ];
+  const interests = [];
+  for (const f of t.flexible_spec || []) for (const k of ['interests', 'behaviors', 'life_events', 'work_positions', 'education_statuses']) for (const x of f[k] || []) interests.push(x.name);
+  for (const x of t.interests || []) interests.push(x.name);
+  const genders = (t.genders || []).map((x) => GENDER[x]).filter(Boolean);
+  const plat = [];
+  const fb = { feed: 'Facebook Feed', video_feeds: 'Video feeds', facebook_reels: 'Facebook Reels', story: 'Stories', marketplace: 'Marketplace', search: 'Search', instream_video: 'In-stream videos', right_hand_column: 'Right column' };
+  for (const p of t.facebook_positions || []) plat.push(fb[p] || p);
+  for (const p of t.instagram_positions || []) plat.push('Instagram ' + p.replace(/_/g, ' '));
+  if (!plat.length) for (const p of t.publisher_platforms || []) plat.push(p === 'facebook' ? 'Facebook' : p === 'instagram' ? 'Instagram' : p === 'messenger' ? 'Messenger' : p === 'audience_network' ? 'Audience Network' : p);
+  return {
+    places: [...new Set(places)], ageMin: t.age_min || null, ageMax: t.age_max || null,
+    gender: genders.length === 1 ? genders[0] : 'All', interests: [...new Set(interests)].slice(0, 20),
+    placements: plat.length ? [...new Set(plat)] : ['Advantage+ placements'],
+    advantage: !!(t.targeting_automation && t.targeting_automation.advantage_audience),
+    customAudiences: (t.custom_audiences || []).map((a) => a.name).filter(Boolean),
+  };
+}
+async function campaignSetups(token, actId, campaignIds) {
+  const out = {};
+  for (let i = 0; i < campaignIds.length; i += 50) {
+    const chunk = campaignIds.slice(i, i + 50);
+    const camps = await allStatuses(`/${actId}/campaigns`, {
+      fields: 'id,name,objective,start_time,stop_time,daily_budget,lifetime_budget,'
+        + 'adsets.limit(3){optimization_goal,daily_budget,lifetime_budget,start_time,end_time,targeting},'
+        + 'ads.limit(1){creative{thumbnail_url,image_url,title,body,effective_object_story_id}}',
+      filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 50,
+    }, { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+    for (const c of camps) {
+      const as = (c.adsets?.data || [])[0] || {};
+      const cr = (c.ads?.data || [])[0]?.creative || {};
+      const start = as.start_time || c.start_time || null, end = as.end_time || c.stop_time || null;
+      out[c.id] = {
+        id: c.id, name: c.name, objective: c.objective || '', goal: as.optimization_goal || '',
+        lifetimeBudget: cents(as.lifetime_budget ?? c.lifetime_budget), dailyBudget: cents(as.daily_budget ?? c.daily_budget),
+        start, end, minutes: start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 60000) : null,
+        targeting: describeTargeting(as.targeting),
+        thumb: cr.thumbnail_url || cr.image_url || '', text: (cr.body || cr.title || '').slice(0, 200), post: cr.effective_object_story_id || '',
+      };
+    }
+  }
+  return out;
 }
 
 // Which Facebook Page each campaign promotes, so auto-named "Post: …" boosts can be matched
@@ -280,4 +344,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

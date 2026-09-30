@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=38">
+<link rel="stylesheet" href="/assets/app.css?v=39">
 </head>
 <body>
 <div class="wrap">
@@ -17,6 +17,7 @@
       <button role="tab" data-tab="dashboard" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
+      <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
       <button role="tab" data-tab="admin" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4 5.5v6c0 4.7 3.3 8.6 8 10 4.7-1.4 8-5.3 8-10v-6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span class="full">Admin</span><span class="short">Admin</span></button>
       <button role="tab" data-tab="team" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span class="full">Team &amp; Telegram</span><span class="short">Team</span></button>
     </nav>
@@ -169,6 +170,38 @@
   </section>
 
   <!-- ADMIN (owner only) -->
+  <!-- LIVE VIDEOS -->
+  <section id="tab-lives" class="wrap" hidden>
+    <div class="dhead">
+      <div class="chead2"><div><h2>Live videos</h2><div class="hint">Every boosted live, ranked by the comments its boost brought in — and how it was boosted, so you can reuse what works.</div></div></div>
+      <div class="chips" id="lChips" role="group" aria-label="Period">
+        <button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button><button data-p="thisYear">This year</button>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="hero"><span class="lbl">Boosted lives</span><span class="val num" id="lCount">0</span><span class="sub" id="lCountSub"></span></div>
+      <div><span class="lbl">Comments</span><span class="val num" id="lComments">0</span><span class="sub">from boosts</span></div>
+      <div><span class="lbl">Cost per comment</span><span class="val num" id="lCpc">–</span><span class="sub">average</span></div>
+      <div><span class="lbl">Messages</span><span class="val num" id="lMsgs">0</span><span class="sub" id="lMsgSub"></span></div>
+      <div><span class="lbl">Live spend</span><span class="val num" id="lSpend">$0.00</span><span class="sub" id="lSpendSub"></span></div>
+    </div>
+    <div class="panel">
+      <div class="thead"><h2 id="lTitle">Live videos</h2>
+        <div class="filters">
+          <select id="lClient" aria-label="Client"><option value="">All clients</option></select>
+          <select id="lSort" aria-label="Sort"><option value="comments">Most comments</option><option value="cpc">Cheapest per comment</option><option value="messages">Most messages</option><option value="spend">Most spend</option><option value="new">Newest</option></select>
+        </div>
+      </div>
+      <div class="lv-note hint" id="lNote" hidden></div>
+      <div class="lv-grid" id="lList"></div>
+      <button id="lMore" hidden>Show more lives</button>
+    </div>
+    <div class="panel" id="lSavedPanel">
+      <div class="thead"><h2>Saved setups</h2><span class="hint">Tap ★ Save setup on a live that worked. Each setup shows how it performs on your lives in this period.</span></div>
+      <div class="tpl" id="lSaved"></div>
+    </div>
+  </section>
+
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
       <div class="chead2"><div><h2>Admin dashboard</h2><div class="hint">Every account's boost spend in one place. Only the app owner and people they allow can see this.</div></div></div>
@@ -228,6 +261,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=38"></script>
+<script src="/assets/app.js?v=39"></script>
 </body>
 </html>

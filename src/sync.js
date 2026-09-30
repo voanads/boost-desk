@@ -474,4 +474,4 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
   return { spend: round2(spend), live: round2(live), post: round2(post), lives: sessions.size, clients: names.size };
 }
 
-module.exports = { uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

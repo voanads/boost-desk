@@ -6,6 +6,7 @@ const cfg = require('./src/config');
 const db = require('./src/db');
 const meta = require('./src/meta');
 const sync = require('./src/sync');
+const lives = require('./src/lives');
 const jobs = require('./src/jobs');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
@@ -324,6 +325,39 @@ api.get('/month/:ym', wrap(async (req, res) => {
 api.get('/sync-check', wrap(async (req, res) => res.json(await db.getUserSetting(req.user.fb_id, 'lastSyncCheck', null))));
 
 // Dashboard: per-client totals for a day or a month (?from=YYYY-MM-DD&to=YYYY-MM-DD, max 93 days)
+// ---- Live videos ----
+api.get('/lives', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
+  const list = await lives.listLives(req.user.fb_id, from, to);
+  const setups = await lives.setupsFor(req.user, list.flatMap((l) => l.campaigns), { fetch: false });
+  res.json({ lives: list, setups, saved: await db.getUserSetting(req.user.fb_id, 'liveSetups', []) });
+}));
+api.post('/lives/setups', wrap(async (req, res) => {
+  const camps = (Array.isArray(req.body?.campaigns) ? req.body.campaigns : []).slice(0, 200)
+    .filter((c) => c && /^\d+$/.test(String(c.id)) && /^act_\d+$/.test(String(c.accountId))).map((c) => ({ id: String(c.id), accountId: String(c.accountId) }));
+  res.json(await lives.setupsFor(req.user, camps));
+}));
+api.post('/live-setups', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!b.setup || typeof b.sig !== 'string') return res.status(400).json({ error: 'Nothing to save.' });
+  const list = await db.getUserSetting(req.user.fb_id, 'liveSetups', []);
+  if (list.some((x) => x.sig === b.sig)) return res.json(list);
+  list.unshift({ id: Date.now().toString(36), name: String(b.name || 'Saved setup').slice(0, 80), sig: b.sig, setup: b.setup, from: b.from || null, savedAt: new Date().toISOString() });
+  await db.setUserSetting(req.user.fb_id, 'liveSetups', list.slice(0, 50));
+  res.json(list.slice(0, 50));
+}));
+api.patch('/live-setups/:id', wrap(async (req, res) => {
+  const list = await db.getUserSetting(req.user.fb_id, 'liveSetups', []);
+  const x = list.find((y) => y.id === req.params.id); if (!x) return res.status(404).json({ error: 'Not found.' });
+  if (req.body?.name) x.name = String(req.body.name).slice(0, 80);
+  await db.setUserSetting(req.user.fb_id, 'liveSetups', list); res.json(list);
+}));
+api.delete('/live-setups/:id', wrap(async (req, res) => {
+  const list = (await db.getUserSetting(req.user.fb_id, 'liveSetups', [])).filter((x) => x.id !== req.params.id);
+  await db.setUserSetting(req.user.fb_id, 'liveSetups', list); res.json(list);
+}));
+
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });

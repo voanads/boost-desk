@@ -6,6 +6,7 @@ Daily Facebook boost checklist for your agency. Your team logs in with Facebook,
 
 **What it does**
 
+- **Motion** — rolling ticker numbers, "+$" flash when new spend arrives, LIVE NOW badge (live started < 2 h ago), chart tooltips, period slide, sync confetti, sent celebration, card flip, loading shimmer, sliding tab highlight. All motion turns off for people who set "reduce motion".
 - **Dashboard (main page)** — tap a client to see each live (start time, campaigns, spend) and boost posts, day by day; Sync from Meta and "Spend not matched" live here too. Every client's spend for the day, pulled from Ads Manager. Live campaigns go to the client whose **Facebook Page** the ad promotes — the same way boost posts match — so a typo in the campaign name doesn't matter. If Meta hides the Page, the campaign name is used instead (`DC Shop | 29` → DC Shop). For live clients, campaigns that start within 30 minutes of each other count as one live (Live 1, Live 2, …). Ticks, live times and notes are saved.
 - **Ad accounts** — every ad account you can access: status (with the reason if disabled), balance due, spend limit left, lifetime spend, and today's spend. Tick which accounts are included in the spend sync.
 - **Clients** — name, one or more Facebook Pages (spend from any of them counts for that client) and type (live / post / both). Budgets are set by each client, so the app records what was actually spent.

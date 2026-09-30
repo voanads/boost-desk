@@ -567,3 +567,67 @@ table.dtable{min-width:0}
 .flyplane{position:absolute;left:0;top:0;width:20px;height:20px;z-index:60;pointer-events:none;color:#A78BFA;filter:drop-shadow(0 0 6px rgba(167,139,250,.9)) drop-shadow(0 3px 6px rgba(0,0,0,.35));will-change:transform}
 .flyplane .pl{width:20px;height:20px}
 .trail{position:absolute;z-index:59;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;pointer-events:none;background:#C4B5FD;box-shadow:0 0 8px #A78BFA}
+
+/* ================= motion kit ================= */
+/* 1 ticker digits */
+.val{line-height:1.15}
+.rd{display:inline-block;height:1.15em;overflow:hidden;vertical-align:top}
+.rs{display:flex;flex-direction:column;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.rs>span{height:1.15em;line-height:1.15em;text-align:center}
+.rc{display:inline-block}
+/* 2 new-spend flash + floating label */
+@keyframes rowflash{0%{background:color-mix(in srgb,var(--accent) 35%,transparent)}100%{background:transparent}}
+.dtable tr.flash td{animation:rowflash 1.8s ease-out}
+.floatup{position:absolute;z-index:70;pointer-events:none;font-weight:800;font-size:.9rem;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.floatup.up{background:var(--accent);color:#04130c;box-shadow:0 6px 16px color-mix(in srgb,var(--accent) 45%,transparent)}
+/* 3 live now */
+.chip.livenow{background:var(--live);color:#fff;position:relative}
+.chip.livenow::before{background:#fff}
+@media (prefers-reduced-motion:no-preference){
+  .chip.livenow{animation:onair 1.6s ease-in-out infinite}
+  @keyframes onair{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 60%,transparent)}50%{box-shadow:0 0 0 6px transparent}}
+}
+/* 4 chart wave + tooltip */
+.chart{overflow:visible;padding-top:34px;height:184px}
+.chart .col{position:relative}
+.chart .b{position:relative}
+.chart .b::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translate(-50%,6px) scale(.9);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.72rem;font-weight:700;padding:5px 9px;border-radius:8px;white-space:nowrap;transition:opacity .15s,transform .2s cubic-bezier(.2,.8,.2,1);z-index:5;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.chart .col:hover .b::after,.chart .col:focus-visible .b::after{opacity:1;transform:translate(-50%,0) scale(1)}
+@media (prefers-reduced-motion:no-preference){
+  .chart .b{animation:wave .7s cubic-bezier(.3,1.4,.5,1) both;animation-delay:calc(var(--i,0) * 22ms);transition:transform .2s,filter .15s}
+  @keyframes wave{0%{transform:scaleY(0)}100%{transform:scaleY(1)}}
+  .chart .col:hover .b{transform:translateY(-4px);filter:brightness(1.15)}
+}
+/* 6 sync: infinity loop, then check + confetti */
+.syncbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.syncbtn .inf{width:28px;height:14px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-dasharray:18 60;animation:infrun 1.2s linear infinite}
+@keyframes infrun{to{stroke-dashoffset:-78}}
+.syncbtn.syncing{opacity:1!important}
+.syncbtn .chk{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;animation:draw .45s .1s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.syncbtn.synced{background:linear-gradient(135deg,#34D399,#10B981)!important;opacity:1!important}
+.confetto{position:absolute;z-index:80;width:8px;height:12px;border-radius:2px;pointer-events:none}
+/* 7 sent celebration */
+.okbadge{position:fixed;right:20px;top:86px;z-index:90;display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#34D399,#10B981);color:#04130c;font-weight:700;padding:12px 18px;border-radius:14px;box-shadow:0 12px 30px rgba(16,185,129,.4)}
+.okbadge .ok-ic{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.55);font-size:.85rem}
+.dexp-foot .primary.sent-ok{background:linear-gradient(135deg,#34D399,#10B981)!important;box-shadow:0 4px 14px rgba(16,185,129,.45)}
+@media (max-width:760px){.okbadge{left:14px;right:14px;top:auto;bottom:90px;justify-content:center}}
+/* 9 skeleton shimmer */
+.sk{height:16px;width:var(--w,70%);border-radius:8px;background:linear-gradient(90deg,var(--bg-2) 0%,color-mix(in srgb,var(--bg-2) 60%,var(--line)) 50%,var(--bg-2) 100%);background-size:300% 100%;margin:10px 0}
+.skel td{border-bottom:1px solid var(--line)}
+.skel-card{cursor:default;gap:4px}
+.skel-v{color:transparent!important;border-radius:8px;background:linear-gradient(90deg,var(--bg-2),color-mix(in srgb,var(--bg-2) 60%,var(--line)),var(--bg-2));background-size:300% 100%;min-width:120px;display:inline-block}
+.hero .skel-v{background:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,.35),rgba(255,255,255,.15));background-size:300% 100%}
+@media (prefers-reduced-motion:no-preference){.sk,.skel-v{animation:skel 1.3s ease-in-out infinite}}
+@keyframes skel{0%{background-position:100% 0}100%{background-position:0 0}}
+/* 10 sliding tab highlight */
+@media (min-width:761px){nav.tabs{position:relative}}
+nav.tabs button{position:relative;z-index:1}
+nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:none!important}
+.tab-ink{position:absolute;z-index:0;border-radius:9px;background:var(--surface);box-shadow:var(--shadow);opacity:0;transition:left .38s cubic-bezier(.3,1.25,.5,1),width .38s cubic-bezier(.3,1.25,.5,1),top .2s,height .2s,opacity .2s}
+.tab-ink.on{opacity:1}
+@media (max-width:760px){
+  nav.tabs button[aria-selected=true]::after{display:none}
+  .tab-ink{height:3px!important;top:0!important;border-radius:0 0 3px 3px;background:var(--brand);box-shadow:0 0 12px var(--brand)}
+}
+@media (prefers-reduced-motion:reduce){.tab-ink{transition:none}}

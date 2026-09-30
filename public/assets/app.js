@@ -22,6 +22,52 @@
     el._raf = requestAnimationFrame(step);
   }
   const intF = (v) => String(Math.round(v));
+
+  // ---------- motion kit ----------
+  // 1) Ticker: digits roll into place like an airport board.
+  function rollTo(el, text) {
+    if (!el) return;
+    el.setAttribute('aria-label', text);
+    if (calm) { el.textContent = text; el._roll = text; return; }
+    const shape = (t) => [...t].map((c) => (/\d/.test(c) ? 'd' : c)).join('');
+    if (!el._roll || shape(el._roll) !== shape(text)) {
+      el.innerHTML = [...text].map((c) => /\d/.test(c)
+        ? '<span class="rd"><span class="rs">' + '0123456789'.split('').map((d) => `<span>${d}</span>`).join('') + '</span></span>'
+        : `<span class="rc">${esc(c)}</span>`).join('');
+      void el.offsetWidth;
+    }
+    const digits = [...text].filter((c) => /\d/.test(c));
+    el.querySelectorAll('.rs').forEach((st, i) => { st.style.transitionDelay = (i * 45) + 'ms'; st.style.transform = `translateY(${-Number(digits[i]) * 1.15}em)`; });
+    el._roll = text;
+  }
+  // Float a little label up from an element (e.g. "+$12.40").
+  function floatUp(anchorEl, text, cls = '') {
+    if (calm || !anchorEl) return;
+    const r = anchorEl.getBoundingClientRect(), f = document.createElement('div');
+    f.className = 'floatup ' + cls; f.textContent = text; document.body.appendChild(f);
+    f.style.left = r.left + scrollX + r.width / 2 + 'px'; f.style.top = r.top + scrollY + 'px';
+    f.animate([{ opacity: 0, transform: 'translate(-50%, 6px) scale(.8)' }, { opacity: 1, transform: 'translate(-50%, -14px) scale(1.05)', offset: .25 }, { opacity: 0, transform: 'translate(-50%, -46px) scale(1)' }], { duration: 1600, easing: 'cubic-bezier(.2,.7,.2,1)' }).onfinish = () => f.remove();
+  }
+  // Confetti burst from an element.
+  function confetti(anchorEl, n = 26) {
+    if (calm || !anchorEl || !document.body.animate) return;
+    const r = anchorEl.getBoundingClientRect(), cx = r.left + scrollX + r.width / 2, cy = r.top + scrollY + r.height / 2;
+    const colors = ['#8B5CF6', '#5B45F0', '#34D399', '#F5B041', '#FF6B6E', '#60A5FA'];
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('i'); c.className = 'confetto'; c.style.background = colors[i % colors.length];
+      c.style.left = cx + 'px'; c.style.top = cy + 'px'; document.body.appendChild(c);
+      const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 90, dx = Math.cos(a) * v, dy = Math.sin(a) * v - 40, rot = (Math.random() - .5) * 720;
+      c.animate([{ transform: 'translate(-50%,-50%) rotate(0) scale(1)', opacity: 1 }, { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) rotate(${rot / 2}deg)`, opacity: 1, offset: .5 }, { transform: `translate(calc(-50% + ${dx * 1.2}px), calc(-50% + ${dy + 90}px)) rotate(${rot}deg) scale(.6)`, opacity: 0 }],
+        { duration: 1100 + Math.random() * 500, easing: 'cubic-bezier(.2,.6,.4,1)' }).onfinish = () => c.remove();
+    }
+  }
+  // Green success badge that slides in from the right.
+  function successBadge(text) {
+    const b = document.createElement('div'); b.className = 'okbadge'; b.innerHTML = `<span class="ok-ic">✓</span>${esc(text)}`; document.body.appendChild(b);
+    const kf = calm ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateX(120%)' }, { opacity: 1, transform: 'translateX(-8px)', offset: .7 }, { opacity: 1, transform: 'none' }];
+    b.animate(kf, { duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+    setTimeout(() => b.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: calm ? 'none' : 'translateX(40px)' }], { duration: 350, fill: 'both' }).onfinish = () => b.remove(), 2800);
+  }
   function status(el, text, isErr) { el.textContent = text; el.classList.toggle('err', !!isErr); }
 
   async function api(path, opts = {}) {
@@ -34,10 +80,18 @@
 
   // ---------- tabs ----------
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+  const ink = document.createElement('span'); ink.className = 'tab-ink'; document.querySelector('nav.tabs').appendChild(ink);
+  function moveInk() {
+    const b = document.querySelector('nav.tabs button[aria-selected=true]'); if (!b) return;
+    ink.style.left = b.offsetLeft + 'px'; ink.style.width = b.offsetWidth + 'px'; ink.style.top = b.offsetTop + 'px'; ink.style.height = b.offsetHeight + 'px';
+    ink.classList.add('on');
+  }
+  addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     ['dashboard', 'clients', 'accounts', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    moveInk();
     if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     if (name === 'clients') loadClientMonth();
@@ -233,7 +287,8 @@
   function stopProgress() { clearInterval(progTimer); progTimer = null; $('syncProg').hidden = true; }
 
   $('syncBtn').onclick = async () => {
-    const b = $('syncBtn'); b.disabled = true; b.classList.add('busy'); b.textContent = 'Syncing 30 days…';
+    const b = $('syncBtn'); b.disabled = true; b.classList.add('syncing'); b.innerHTML = '<svg class="inf" viewBox="0 0 48 24" aria-hidden="true"><path d="M12 4a8 8 0 1 0 0 16c6 0 18-16 24-16a8 8 0 1 1 0 16C30 20 18 4 12 4Z"/></svg>Syncing 30 days…';
+    let ok = false;
     status($('syncStatus'), '');
     showProgress({ phase: 'starting', elapsed: 0 }); watchProgress();
     const t0 = Date.now();
@@ -242,8 +297,16 @@
       await loadDay(); loadPages(); loadCheck(); loadDash();
       try { accounts = await api('/accounts'); renderAccounts(); } catch (_) {}
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);
+      ok = true;
     } catch (e) { status($('syncStatus'), e.message, true); }
-    finally { stopProgress(); b.disabled = false; b.classList.remove('busy'); b.textContent = 'Sync from Meta'; }
+    finally {
+      stopProgress(); b.classList.remove('syncing');
+      if (ok) {
+        b.classList.add('synced'); b.innerHTML = '<svg class="chk" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Synced';
+        confetti(b);
+        setTimeout(() => { b.classList.remove('synced'); b.textContent = 'Sync from Meta'; b.disabled = false; }, 1800);
+      } else { b.disabled = false; b.textContent = 'Sync from Meta'; }
+    }
   };
   // If a sync is already running (started by someone else or another tab), show it.
   (async () => { try { const p = await api('/sync-progress'); if (p.running) { showProgress(p); watchProgress(); const w = setInterval(async () => { const q = await api('/sync-progress').catch(() => ({})); if (!q.running) { clearInterval(w); stopProgress(); loadDay(); loadCheck(); } }, 1500); } } catch (_) {} })();
@@ -335,7 +398,7 @@
         <div class="cc-foot"><span class="cc-month">${m && m.spend ? `This month <b class="num">${money(m.spend)}</b>${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}` : '<span class="muted">No spend this month</span>'}</span>${tg}</div>
       </button>`;
     }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on Home and add the Pages it finds.'}</div>`;
-    document.querySelectorAll('#cGrid [data-edit]').forEach((b) => b.onclick = () => openClientDlg(clients.find((c) => c.id === Number(b.dataset.edit))));
+    document.querySelectorAll('#cGrid [data-edit]').forEach((b) => b.onclick = () => openClientDlg(clients.find((c) => c.id === Number(b.dataset.edit)), null, b));
   }
   $('cSearch').oninput = () => renderClients();
 
@@ -354,7 +417,7 @@
     $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
     $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
-  function openClientDlg(c, preset) {
+  function openClientDlg(c, preset, card) {
     cEdit = c || null;
     cDraft = c ? { name: c.name, type: c.type, pages: [...new Set([...(c.pages || []), c.match].filter(Boolean))], telegram: c.telegram || '', telegram_title: c.telegram_title || '' }
       : { name: '', type: 'live', pages: [], telegram: '', telegram_title: '', ...(preset || {}) };
@@ -364,6 +427,15 @@
     $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
     drawDlgType(); drawDlgPages(); drawDlgTg();
     const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    // 8) the card flips over into the edit form
+    if (card && !calm && d.animate) {
+      const f = $('cForm'), a = card.getBoundingClientRect(), b = f.getBoundingClientRect();
+      const dx = (a.left + a.width / 2) - (b.left + b.width / 2), dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+      card.animate([{ transform: 'perspective(900px) rotateY(0)' }, { transform: 'perspective(900px) rotateY(90deg)', opacity: .4 }], { duration: 220, easing: 'ease-in' });
+      f.animate([{ transform: `translate(${dx}px, ${dy}px) perspective(900px) rotateY(-90deg) scale(${Math.min(1, a.width / b.width)})`, opacity: .2 },
+        { transform: `translate(${dx * .4}px, ${dy * .4}px) perspective(900px) rotateY(-30deg) scale(.9)`, opacity: .9, offset: .45 },
+        { transform: 'none', opacity: 1 }], { duration: 560, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
     setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
   }
   const closeClientDlg = () => $('cDlg').close();
@@ -565,7 +637,8 @@
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' }; renderDash();
   });
 
-  let dEntries = {}; const dOpen = new Set();
+  let dEntries = {}, dKey = ''; const dOpen = new Set();
+  const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="8"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
   async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
     // Sync status and "Spend not matched" follow the day you're looking at (today for longer periods).
@@ -582,11 +655,24 @@
     $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
     $('dTableTitle').textContent = 'Clients · ' + periodLabel();
+    const key = from + '|' + to, samePeriod = key === dKey;
+    const dir = !dKey ? 0 : samePeriod ? 0 : (from > dKey.split('|')[0] ? 1 : -1);
+    const prevSpend = samePeriod && dData ? Object.fromEntries(dData.clients.map((c) => [c.id, c.spend])) : null;
+    // 9) skeleton while a new period loads
+    const skel = !samePeriod ? setTimeout(() => { $('dBody').innerHTML = skelRows(5); $('dFoot').innerHTML = ''; document.querySelectorAll('#tab-dashboard .summary .val').forEach((v) => v.classList.add('skel-v')); }, 120) : null;
     try {
       const [d, rows] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => [])]);
-      dData = d; dEntries = {};
+      clearTimeout(skel); document.querySelectorAll('.skel-v').forEach((v) => v.classList.remove('skel-v'));
+      dData = d; dEntries = {}; dKey = key;
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
       renderDash();
+      // 5) the new period slides in from the direction you moved
+      if (dir && !calm) ['#tab-dashboard .summary', '#dChartPanel', '#dTable tbody'].forEach((sel, i) => { const el = document.querySelector(sel); if (el && !el.hidden) el.animate([{ opacity: 0, transform: `translateX(${dir * 46}px)` }, { opacity: 1, transform: 'none' }], { duration: 420, delay: i * 50, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }); });
+      // 2) rows whose spend went up since the last refresh flash green with a "+$" label
+      if (prevSpend) dData.clients.forEach((c) => {
+        const inc = c.spend - (prevSpend[c.id] || 0);
+        if (inc > 0.009) { const tr = document.querySelector(`#dBody tr.drow[data-cid="${c.id}"]`); if (tr) { tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash'); floatUp(tr.querySelector('td.tot b') || tr, '+' + money(inc), 'up'); } }
+      });
     }
     catch (e) { $('dBody').innerHTML = `<tr><td colspan="8" class="muted">${esc(e.message)}</td></tr>`; }
   }
@@ -619,7 +705,7 @@
         return `<div class="dday"><button class="dday-h" data-oneday="${x.d}" title="Open this day"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></button>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="8"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -704,6 +790,13 @@
     a.onfinish = reopen; a.oncancel = reopen;
   }
 
+  // 3) "Live now": today, a live started less than 2 hours ago.
+  function liveNow(c) {
+    if (dMode !== 'day' || dDate !== me.today) return false;
+    const e = (dEntries[c.id] || {})[dDate] || {}, now = new Date(), mins = now.getHours() * 60 + now.getMinutes();
+    return Object.values(e.lives || {}).some((l) => { if (!l || !(Number(l.spend) > 0) || !/^\d{1,2}:\d{2}$/.test(l.time || '')) return false; const [h, m] = l.time.split(':').map(Number), d = mins - (h * 60 + m); return d >= 0 && d <= 120; });
+  }
+
   function renderDash() {
     if (!dData) return;
     const q = $('dSearch').value.trim().toLowerCase(), idle = $('dShowIdle').checked;
@@ -717,17 +810,17 @@
     document.querySelectorAll('.dtable th[data-sort]').forEach((th) => { th.classList.toggle('sorted', th.dataset.sort === k); th.classList.toggle('asc', th.dataset.sort === k && dSort.asc); });
 
     const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, live: a.live + c.liveSpend, post: a.post + c.postSpend, lives: a.lives + c.lives, active: a.active + (c.spend > 0 ? 1 : 0), posters: a.posters + (c.postSpend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, active: 0, posters: 0 });
-    countTo($('dSpend'), t.spend, money);
+    rollTo($('dSpend'), money(t.spend));
     $('dTax').textContent = t.spend && taxRate() ? `With tax ${taxRate()}%: ${money(withTax(t.spend))}` : '';
-    countTo($('dLive'), t.live, money); $('dLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
-    countTo($('dPost'), t.post, money); $('dPosts').textContent = `${t.posters} client${t.posters === 1 ? '' : 's'} boosted posts`;
-    countTo($('dActive'), t.active, intF); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
+    rollTo($('dLive'), money(t.live)); $('dLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
+    rollTo($('dPost'), money(t.post)); $('dPosts').textContent = `${t.posters} client${t.posters === 1 ? '' : 's'} boosted posts`;
+    rollTo($('dActive'), String(t.active)); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';
     $('dBody').innerHTML = list.map((c) => {
       const share = t.spend ? c.spend / t.spend * 100 : 0, pg = pageNames(c);
-      const tags = (hasL(c) ? '<span class="chip live">Live</span>' : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
+      const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
       return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}" tabindex="0" aria-expanded="${open}">
         <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
@@ -765,7 +858,7 @@
       const days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
       const max = Math.max(1, ...days.map((d) => d.spend));
       $('dChartTitle').textContent = 'Spend per day';
-      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}" title="${nice(d.day)}: ${money(d.spend)}" aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
+      $('dChart').innerHTML = days.map((d, i) => `<button style="--i:${i}" class="col${d.day === me.today ? ' today' : ''}" data-day="${d.day}"  aria-label="${nice(d.day)}: ${money(d.spend)}"><span class="b" style="height:${Math.max(1, d.spend / max * 100)}%" data-tip="${esc(nice(d.day).replace(/ \d{4}$/, ''))} · ${money(d.spend)}"></span><span class="d">${Number(d.day.slice(8))}</span></button>`).join('');
       document.querySelectorAll('#dChart .col').forEach((b) => b.onclick = () => { dMode = 'day'; dDate = b.dataset.day; loadDash(); });
     }
   }
@@ -800,6 +893,14 @@
       $('ckText').focus();
     } catch (e) { $('ckText').value = e.message; }
   }
+  // 7) after sending, a plane zooms off the right side of the screen
+  let sentFlash = null;
+  function planeOff(fromEl) {
+    if (calm || !fromEl || !document.body.animate) return;
+    const r = fromEl.getBoundingClientRect(), p = document.createElement('div'); p.className = 'flyplane'; p.innerHTML = PLANE_SVG; document.body.appendChild(p);
+    const x0 = r.right + scrollX - 40, y0 = r.top + scrollY + r.height / 2 - 10, x1 = scrollX + innerWidth + 80, y1 = y0 - 160;
+    p.animate([{ transform: `translate(${x0}px, ${y0}px) rotate(0deg) scale(1)` }, { transform: `translate(${x0 + 60}px, ${y0 + 12}px) rotate(8deg) scale(1.3)`, offset: .2 }, { transform: `translate(${x1}px, ${y1}px) rotate(-25deg) scale(1.9)` }], { duration: 900, easing: 'cubic-bezier(.5,0,.8,.4)' }).onfinish = () => p.remove();
+  }
   const openDayReport = (cid) => openReportDlg({ kind: 'client', cid, from: date, to: date, label: nice(date) });
   $('dTeamReport').onclick = () => { const [from, to] = dRange(); openReportDlg({ kind: 'team', from, to, label: periodLabel() }); };
   $('ckDlg').addEventListener('close', () => { ckTarget = null; });
@@ -815,10 +916,11 @@
       if (o.kind === 'client') {
         const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
-        toast('Sent to ' + r.sentTo);
-        if (!$('tab-dashboard').hidden) loadDash();
-      } else { await api('/summary/send', { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } }); toast('Sent to the team group'); }
-      $('ckDlg').close();
+        planeOff(b); $('ckDlg').close();
+        successBadge('Sent to ' + r.sentTo);
+        sentFlash = { cid: o.cid, until: Date.now() + 2600 };
+        if (!$('tab-dashboard').hidden) { loadDash(); setTimeout(() => { if (dData) renderDash(); }, 2700); }
+      } else { await api('/summary/send', { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } }); planeOff(b); $('ckDlg').close(); successBadge('Sent to the team group'); }
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.classList.remove('busy'); }
   };
 

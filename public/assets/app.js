@@ -644,7 +644,7 @@
     else if (v === 'thisYear') { dMode = 'year'; dDate = t; }
     else if (v === 'lastYear') { dMode = 'year'; dDate = (Number(t.slice(0, 4)) - 1) + '-06-15'; }
     else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dMode = 'month'; dDate = iso(d); }
-    else if (v === 'custom') { if (dMode !== 'range') { dTo = dMode === 'day' ? dDate : t; dFrom = addD(dTo, -13); } dMode = 'range'; forceCustom = true; setTimeout(() => $('dFrom').focus(), 50); }
+    else if (v === 'custom') { openPeriod(true); return; }
     loadDash();
   }
   document.querySelectorAll('#dChips button').forEach((b) => b.onclick = () => applyPreset(b.dataset.preset));
@@ -661,17 +661,10 @@
   const dock = $('fDock');
   function syncDock(pre = currentPreset()) {
     $('fLabelText').textContent = periodLabel();
-    document.querySelectorAll('#fChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
     $('fNext').disabled = $('dNext').disabled;
-    const on = dock.querySelector('#fChips [aria-pressed="true"]');
-    if (on && !dock.hidden) on.scrollIntoView({ block: 'nearest', inline: 'center', behavior: calm ? 'auto' : 'smooth' });
   }
   $('fPrev').onclick = () => dShift(-1); $('fNext').onclick = () => dShift(1);
-  $('fLabel').onclick = () => scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' });
-  document.querySelectorAll('#fChips button').forEach((b) => b.onclick = () => {
-    if (b.dataset.preset === 'custom') { scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); }
-    applyPreset(b.dataset.preset);
-  });
+  $('fLabel').onclick = () => openPeriod();
   let dockShown = false;
   function setDock(show) {
     show = show && !$('tab-dashboard').hidden;
@@ -687,12 +680,51 @@
   if ('IntersectionObserver' in window) {
     new IntersectionObserver(([en]) => setDock(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: '-70px 0px 0px 0px' }).observe(document.querySelector('#tab-dashboard .dhead'));
   }
-  $('dPick').onclick = () => {
-    if (dMode === 'range') { applyPreset('custom'); return; }
-    if (dMode === 'year') return;
-    const el = dMode === 'month' ? $('dMonth') : $('dDay');
-    try { el.showPicker(); } catch (_) { el.focus(); el.click(); }
+  $('dPick').onclick = () => openPeriod();
+
+  // ---------- period sheet: every way to pick a period, big and in one place ----------
+  const presetRange = (v) => {
+    const t = me.today;
+    if (v === 'today') return [t, t];
+    if (v === 'yesterday') { const y = addD(t, -1); return [y, y]; }
+    if (v === '7') return [addD(t, -6), t];
+    if (v === '30') return [addD(t, -29), t];
+    if (v === 'thisMonth') return [t.slice(0, 8) + '01', t];
+    if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); const ym = iso(d).slice(0, 7); return [ym + '-01', ym + '-' + pad(lastDay(ym))]; }
+    if (v === 'thisYear') return [t.slice(0, 4) + '-01-01', t];
+    if (v === 'lastYear') { const y = Number(t.slice(0, 4)) - 1; return [y + '-01-01', y + '-12-31']; }
   };
+  const subText = (v) => {
+    const [a, b] = presetRange(v);
+    if (v === 'thisYear' || v === 'lastYear') return a.slice(0, 4);
+    if (v === 'lastMonth') return monthLabel(a.slice(0, 7));
+    if (a === b) return parse(a).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    return `${shortD(a)} – ${shortD(b)}`;
+  };
+  function openPeriod(custom) {
+    const dlg = $('pDlg'), pre = currentPreset(), [from, to] = dRange();
+    $('pNow').textContent = periodLabel();
+    document.querySelectorAll('#pGrid button').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.preset === pre)); b.querySelector('span').textContent = subText(b.dataset.preset); });
+    $('pDay').value = dMode === 'day' ? dDate : ''; $('pDay').max = me.today;
+    $('pMonth').value = dMode === 'month' ? dDate.slice(0, 7) : ''; $('pMonth').max = me.today.slice(0, 7);
+    $('pFrom').value = from; $('pTo').value = to; $('pFrom').max = $('pTo').max = me.today;
+    $('pRange').classList.toggle('on', !!custom || pre === 'custom');
+    if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
+    if (custom) setTimeout(() => $('pFrom').focus(), 60);
+    if (!calm) document.querySelectorAll('#pGrid button').forEach((b, i) => b.animate([{ opacity: 0, transform: 'translateY(8px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: 40 + i * 30, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' }));
+  }
+  const closePeriod = () => { const d = $('pDlg'); if (d.open) d.close(); };
+  document.querySelectorAll('#pGrid button').forEach((b) => b.onclick = () => { closePeriod(); applyPreset(b.dataset.preset); });
+  $('pDay').onchange = () => { if ($('pDay').value) { dMode = 'day'; dDate = $('pDay').value; forceCustom = false; closePeriod(); loadDash(); } };
+  $('pMonth').onchange = () => { if ($('pMonth').value) { dMode = 'month'; dDate = $('pMonth').value + '-01'; forceCustom = false; closePeriod(); loadDash(); } };
+  $('pApply').onclick = () => {
+    let a = $('pFrom').value, b = $('pTo').value; if (!a || !b) return toast('Pick both dates.');
+    if (a > b) [a, b] = [b, a];
+    if ((parse(b) - parse(a)) / 864e5 > 366) return toast('Pick at most one year.');
+    dMode = 'range'; dFrom = a; dTo = b; forceCustom = true; closePeriod(); loadDash();
+  };
+  $('pFrom').onfocus = $('pTo').onfocus = () => $('pRange').classList.add('on');
+  $('pDlg').addEventListener('click', (ev) => { if (ev.target === $('pDlg')) closePeriod(); }); // tap outside closes
   $('dDay').onchange = () => { if ($('dDay').value) { dDate = $('dDay').value; loadDash(); } };
   $('dMonth').onchange = () => { if ($('dMonth').value) { dDate = $('dMonth').value + '-01'; loadDash(); } };
   $('dFrom').onchange = () => { if ($('dFrom').value) { dFrom = $('dFrom').value; if (dTo < dFrom) dTo = dFrom; loadDash(); } };

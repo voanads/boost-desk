@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=42">
+<link rel="stylesheet" href="/assets/app.css?v=43">
 </head>
 <body>
 <div class="wrap">
@@ -67,7 +67,7 @@
       </div>
       <div class="pnav">
         <button id="dPrev" class="navbtn" aria-label="Previous period">‹</button>
-        <button id="dPick" class="plabel" aria-label="Pick a date"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="dLabel">…</span></button>
+        <button id="dPick" class="plabel" aria-label="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="dLabel">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
         <input type="date" id="dDay" class="vh" tabindex="-1" aria-hidden="true"><input type="month" id="dMonth" class="vh" tabindex="-1" aria-hidden="true">
         <span class="rangeins" id="dRangeBox" hidden><label>From <input type="date" id="dFrom"></label><label>To <input type="date" id="dTo"></label></span>
         <button id="dNext" class="navbtn" aria-label="Next period">›</button>
@@ -262,13 +262,32 @@
 <!-- Floating period filter: shows at the bottom once the top filters scroll out of view -->
 <div class="fdock" id="fDock" role="group" aria-label="Period" hidden>
   <button class="fnav" id="fPrev" aria-label="Previous period">‹</button>
-  <button class="flabel" id="fLabel" title="Back to the top filters"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="fLabelText">…</span></button>
+  <button class="flabel" id="fLabel" title="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="fLabelText">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
   <button class="fnav" id="fNext" aria-label="Next period">›</button>
-  <span class="fsep" aria-hidden="true"></span>
-  <div class="fchips" id="fChips">
-    <button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">7 days</button><button data-preset="30">30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="thisYear">This year</button><button data-preset="lastYear">Last year</button><button data-preset="custom">Custom…</button>
-  </div>
 </div>
+<dialog id="pDlg" class="dlg pdlg" aria-labelledby="pTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="pTitle">Choose period</h2><div class="hint">Now showing: <b id="pNow">…</b></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="pgrid" id="pGrid">
+      <button type="button" data-preset="today"><b>Today</b><span data-sub="today"></span></button>
+      <button type="button" data-preset="yesterday"><b>Yesterday</b><span data-sub="yesterday"></span></button>
+      <button type="button" data-preset="7"><b>Last 7 days</b><span data-sub="7"></span></button>
+      <button type="button" data-preset="30"><b>Last 30 days</b><span data-sub="30"></span></button>
+      <button type="button" data-preset="thisMonth"><b>This month</b><span data-sub="thisMonth"></span></button>
+      <button type="button" data-preset="lastMonth"><b>Last month</b><span data-sub="lastMonth"></span></button>
+      <button type="button" data-preset="thisYear"><b>This year</b><span data-sub="thisYear"></span></button>
+      <button type="button" data-preset="lastYear"><b>Last year</b><span data-sub="lastYear"></span></button>
+    </div>
+    <div class="ppick">
+      <label><span>One day</span><input type="date" id="pDay"></label>
+      <label><span>One month</span><input type="month" id="pMonth"></label>
+    </div>
+    <div class="prange" id="pRange">
+      <div class="prange-h">Custom range</div>
+      <div class="prange-row"><label><span>From</span><input type="date" id="pFrom"></label><label><span>To</span><input type="date" id="pTo"></label><button type="button" class="primary" id="pApply">Show</button></div>
+    </div>
+  </form>
+</dialog>
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -280,6 +299,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=42"></script>
+<script src="/assets/app.js?v=43"></script>
 </body>
 </html>

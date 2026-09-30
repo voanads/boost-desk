@@ -797,3 +797,31 @@ body.has-dock #tab-dashboard{padding-bottom:84px}
 :root[data-theme-pick=light] .themebtn .t-sun,:root[data-theme-pick=dark] .themebtn .t-moon,:root[data-theme-pick=auto] .themebtn .t-auto{opacity:1;transform:none}
 .themebtn:hover{border-color:var(--brand)}
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+
+/* ---------- period sheet ---------- */
+.pdlg{max-width:620px}
+.pgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.pgrid button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:left;min-height:64px}
+.pgrid button b{font-size:.95rem}
+.pgrid button span{font-size:.78rem;color:var(--muted);font-weight:500}
+.pgrid button:hover{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 6%,var(--surface))}
+.pgrid button[aria-pressed=true]{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 8px 20px color-mix(in srgb,var(--brand) 35%,transparent)}
+.pgrid button[aria-pressed=true] span{color:rgba(255,255,255,.85)}
+.ppick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ppick label,.prange label{display:flex;flex-direction:column;gap:5px;font-size:.8rem;font-weight:600;color:var(--muted)}
+.ppick input,.prange input{font:inherit;font-size:.95rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-height:44px;width:100%}
+.prange{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg-2)}
+.prange.on{border-color:var(--brand)}
+.prange-h{font-weight:700;font-size:.9rem}
+.prange-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.prange-row .primary{min-height:44px;padding-inline:20px}
+.plabel .chev,.flabel .chev{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;opacity:.7;margin-left:2px}
+.fdock{max-width:calc(100vw - 24px)}
+.fdock .flabel{padding-inline:16px;gap:8px}
+@media (max-width:760px){
+  .pgrid{grid-template-columns:1fr 1fr}
+  .prange-row{grid-template-columns:1fr 1fr}.prange-row .primary{grid-column:1/-1}
+  .fdock .flabel{max-width:none}
+}
+.ppick label,.prange label{min-width:0}
+@media (max-width:760px){.fdock .flabel .chev{display:inline-block}}

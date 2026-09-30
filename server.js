@@ -206,7 +206,12 @@ api.post('/sync-recent', wrap(async (req, res) => {
   const from30 = sync.addDays(today, -29);
   const around = isDay(req.body?.around) ? req.body.around : today;
   let from = from30, to = today;
-  if (around < from30) { // looking at an older day: sync that whole month
+  const rf = req.body?.from, rt = req.body?.to;
+  if (isDay(rf) && isDay(rt) && rf <= rt && rf < from30) {
+    // Looking at an older period on the Dashboard: sync exactly that period (up to ~3 months at a time).
+    from = rf; to = rt > today ? today : rt;
+    if ((Date.parse(to) - Date.parse(from)) / 864e5 > 92) from = sync.addDays(to, -92);
+  } else if (around < from30) { // looking at an older day: sync that whole month
     from = around.slice(0, 8) + '01';
     const last = new Date(Date.UTC(Number(around.slice(0, 4)), Number(around.slice(5, 7)), 0)).getUTCDate();
     to = around.slice(0, 8) + String(last).padStart(2, '0');

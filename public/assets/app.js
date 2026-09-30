@@ -293,7 +293,8 @@
     showProgress({ phase: 'starting', elapsed: 0 }); watchProgress();
     const t0 = Date.now();
     try {
-      const r = await api('/sync-recent', { method: 'POST', body: { around: date } });
+      const [vf, vt] = dDate ? dRange() : [date, date];
+      const r = await api('/sync-recent', { method: 'POST', body: { around: date, from: vf, to: vt } });
       await loadDay(); loadPages(); loadCheck(); loadDash();
       try { accounts = await api('/accounts'); renderAccounts(); } catch (_) {}
       toast(`Synced ${nice(r.from).replace(/^\w+, /, '')} – ${nice(r.to).replace(/^\w+, /, '')} in ${Math.round((Date.now() - t0) / 1000)}s · ${r.daysWithSpend} days with spend`);

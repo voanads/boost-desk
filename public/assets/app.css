@@ -10,12 +10,20 @@
   --f-num:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif;
   --r:16px;
 }
-@media (prefers-color-scheme:dark){:root{
+/* Dark theme: follows the device (Auto), or forced with the theme switch (data-theme on <html>). */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --brand:#8F7BFF; --brand-2:#A78BFA; --brand-soft:#241F45; --brand-ink:#0E0C1D;
   --bg:#0C0E15; --bg-2:#181B28; --surface:#141722; --line:#262B3C; --ink:#F1F2F8; --muted:#A2A8BE;
   --accent:#34D399; --accent-soft:#113327; --live:#FF6B6E; --live-soft:#3A1719;
   --warn:#F5B041; --warn-soft:#3A2A10; --ok:#34D399;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}}
+:root[data-theme=dark]{
+  --brand:#8F7BFF; --brand-2:#A78BFA; --brand-soft:#241F45; --brand-ink:#0E0C1D;
+  --bg:#0C0E15; --bg-2:#181B28; --surface:#141722; --line:#262B3C; --ink:#F1F2F8; --muted:#A2A8BE;
+  --accent:#34D399; --accent-soft:#113327; --live:#FF6B6E; --live-soft:#3A1719;
+  --warn:#F5B041; --warn-soft:#3A2A10; --ok:#34D399;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}
+:root[data-theme=light]{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:0 48px}
@@ -780,3 +788,12 @@ button.sm{padding:5px 12px;font-size:.84rem}
 .fdock .ic{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 body.has-dock #tab-dashboard{padding-bottom:84px}
 @media (max-width:760px){body.has-dock #tab-dashboard{padding-bottom:70px}}
+
+/* ---------- theme switch ---------- */
+.themebtn{width:40px;height:40px;padding:0;border-radius:12px;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--ink);flex:none;position:relative;overflow:hidden}
+.themebtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;position:absolute;transition:transform .5s var(--smooth,ease),opacity .3s}
+.themebtn .t-sun{color:#F59E0B}.themebtn .t-moon{color:var(--brand)}
+.themebtn svg{opacity:0;transform:rotate(-90deg) scale(.4)}
+:root[data-theme-pick=light] .themebtn .t-sun,:root[data-theme-pick=dark] .themebtn .t-moon,:root[data-theme-pick=auto] .themebtn .t-auto{opacity:1;transform:none}
+.themebtn:hover{border-color:var(--brand)}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}

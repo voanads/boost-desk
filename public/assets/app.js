@@ -78,6 +78,33 @@
     return body;
   }
 
+  // ---------- theme: Auto → Light → Dark ----------
+  const THEMES = ['auto', 'light', 'dark'], THEME_NAME = { auto: 'Auto (follows your device)', light: 'Light', dark: 'Dark' };
+  const themePick = () => document.documentElement.getAttribute('data-theme-pick') || 'auto';
+  function applyTheme(t) {
+    const r = document.documentElement;
+    r.setAttribute('data-theme-pick', t);
+    if (t === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', t);
+    try { localStorage.setItem('bd-theme', t); } catch (e) {}
+    const b = $('themeBtn'); if (b) { b.title = 'Theme: ' + THEME_NAME[t]; b.setAttribute('aria-label', 'Theme: ' + THEME_NAME[t]); }
+    const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0C0E15' : '#5B45F0');
+  }
+  if ($('themeBtn')) {
+    applyTheme(themePick());
+    $('themeBtn').onclick = (ev) => {
+      const next = THEMES[(THEMES.indexOf(themePick()) + 1) % THEMES.length];
+      // A circle of the new theme grows out from the button.
+      if (calm || !document.startViewTransition) { applyTheme(next); toast('Theme: ' + THEME_NAME[next]); return; }
+      const x = ev.clientX || innerWidth - 60, y = ev.clientY || 30, rad = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      document.startViewTransition(() => applyTheme(next)).ready.then(() => {
+        document.documentElement.animate({ clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${rad}px at ${x}px ${y}px)`] },
+          { duration: 650, easing: 'cubic-bezier(.22,1,.36,1)', pseudoElement: '::view-transition-new(root)' });
+      });
+      toast('Theme: ' + THEME_NAME[next]);
+    };
+  }
+
   // ---------- tabs ----------
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   const ink = document.createElement('span'); ink.className = 'tab-ink'; document.querySelector('nav.tabs').appendChild(ink);

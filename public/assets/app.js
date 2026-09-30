@@ -398,7 +398,7 @@
         <div class="cc-foot"><span class="cc-month">${m && m.spend ? `This month <b class="num">${money(m.spend)}</b>${m.lives ? ` · ${m.lives} live${m.lives === 1 ? '' : 's'}` : ''}` : '<span class="muted">No spend this month</span>'}</span>${tg}</div>
       </button>`;
     }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on Home and add the Pages it finds.'}</div>`;
-    document.querySelectorAll('#cGrid [data-edit]').forEach((b) => b.onclick = () => openClientDlg(clients.find((c) => c.id === Number(b.dataset.edit)), null, b));
+    document.querySelectorAll('#cGrid [data-edit]').forEach((b) => b.onclick = () => openClientDlg(clients.find((c) => c.id === Number(b.dataset.edit))));
   }
   $('cSearch').oninput = () => renderClients();
 
@@ -417,7 +417,7 @@
     $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
     $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
-  function openClientDlg(c, preset, card) {
+  function openClientDlg(c, preset) {
     cEdit = c || null;
     cDraft = c ? { name: c.name, type: c.type, pages: [...new Set([...(c.pages || []), c.match].filter(Boolean))], telegram: c.telegram || '', telegram_title: c.telegram_title || '' }
       : { name: '', type: 'live', pages: [], telegram: '', telegram_title: '', ...(preset || {}) };
@@ -427,15 +427,6 @@
     $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
     drawDlgType(); drawDlgPages(); drawDlgTg();
     const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
-    // 8) the card flips over into the edit form
-    if (card && !calm && d.animate) {
-      const f = $('cForm'), a = card.getBoundingClientRect(), b = f.getBoundingClientRect();
-      const dx = (a.left + a.width / 2) - (b.left + b.width / 2), dy = (a.top + a.height / 2) - (b.top + b.height / 2);
-      card.animate([{ transform: 'perspective(900px) rotateY(0)' }, { transform: 'perspective(900px) rotateY(90deg)', opacity: .4 }], { duration: 220, easing: 'ease-in' });
-      f.animate([{ transform: `translate(${dx}px, ${dy}px) perspective(900px) rotateY(-90deg) scale(${Math.min(1, a.width / b.width)})`, opacity: .2 },
-        { transform: `translate(${dx * .4}px, ${dy * .4}px) perspective(900px) rotateY(-30deg) scale(.9)`, opacity: .9, offset: .45 },
-        { transform: 'none', opacity: 1 }], { duration: 560, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    }
     setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
   }
   const closeClientDlg = () => $('cDlg').close();

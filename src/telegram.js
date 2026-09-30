@@ -22,6 +22,22 @@ async function send(text, chatId = cfg.telegramChatId) {
   }
 }
 
+// A picture with the report as its caption. Telegram captions are limited to 1024 characters,
+// so a longer report goes as a separate message right after the picture.
+async function sendPhoto(png, caption, chatId = cfg.telegramChatId) {
+  if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
+  if (!chatId) throw new Error('No Telegram group chosen.');
+  const fits = caption && caption.length <= 1024;
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  if (fits) form.append('caption', caption);
+  form.append('photo', new Blob([png], { type: 'image/png' }), 'report.png');
+  const res = await fetch(`${API}/bot${cfg.telegramToken}/sendPhoto`, { method: 'POST', body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
+  if (caption && !fits) await send(caption, chatId);
+}
+
 // Groups the bot has seen recently (add the bot to the group and send one message there).
 // Telegram only keeps the last 24 hours of updates, so the server also saves what it finds.
 async function listChats() {
@@ -50,4 +66,4 @@ async function username() {
   return botName;
 }
 
-module.exports = { configured, hasBot, send, listChats, username };
+module.exports = { configured, hasBot, send, sendPhoto, listChats, username };

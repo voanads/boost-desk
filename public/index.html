@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=39">
+<link rel="stylesheet" href="/assets/app.css?v=40">
 </head>
 <body>
 <div class="wrap">
@@ -257,10 +257,14 @@
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="ckpic" id="ckPic" hidden>
+      <div class="ckpic-img" id="ckImgBox"><img id="ckImg" alt="Ads picture that is sent with the report"><span id="ckImgMsg" class="hint">Making the ads picture…</span></div>
+      <div class="ckpic-bar"><label class="chk"><input type="checkbox" id="ckWithImg" checked> Send with ads picture</label><button type="button" class="ghost sm" id="ckImgRefresh" title="Get the latest numbers from Meta">↻ Refresh</button></div>
+    </div>
     <textarea id="ckText" rows="12" aria-label="Report text (you can edit before sending)"></textarea>
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=39"></script>
+<script src="/assets/app.js?v=40"></script>
 </body>
 </html>

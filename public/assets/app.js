@@ -911,7 +911,7 @@
   let ckTarget = null;
   async function openReportDlg(o) {
     const dlg = $('ckDlg'); ckTarget = o;
-    $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
+    $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
     if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
     const bot = me.telegram && me.telegram.bot;
     try {
@@ -925,6 +925,7 @@
           : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;
         $('ckSend').textContent = 'Send to Telegram';
         $('ckSend').disabled = !r.client.telegram || !bot;
+        loadReportPic(o);
       } else {
         const r = await api(`/summary?from=${o.from}&to=${o.to}`);
         if (ckTarget !== o) return;
@@ -953,12 +954,33 @@
     try { await navigator.clipboard.writeText($('ckText').value); toast('Report copied'); }
     catch (_) { $('ckText').select(); try { document.execCommand('copy'); toast('Report copied'); } catch (__) { toast('Select the text and copy it'); } }
   };
+  // The ads picture (a table of the client's ads, drawn by the server from Meta) sent with the report.
+  let picOk = false, picUrl = null;
+  async function loadReportPic(o, fresh = false) {
+    picOk = false; $('ckPic').hidden = false; $('ckImg').hidden = true; $('ckImgMsg').hidden = false;
+    $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
+    $('ckWithImg').disabled = true;
+    try {
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${fresh ? '&fresh=1' : ''}`);
+      if (ckTarget !== o) return;
+      if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }
+      if (picUrl) URL.revokeObjectURL(picUrl);
+      picUrl = URL.createObjectURL(await res.blob());
+      $('ckImg').src = picUrl; $('ckImg').hidden = false; $('ckImgMsg').hidden = true; picOk = true; $('ckWithImg').disabled = false;
+      if (!calm && $('ckImg').animate) $('ckImg').animate([{ opacity: 0, transform: 'scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
+    } catch (e) { if (ckTarget === o) $('ckImgMsg').textContent = e.message + ' The report can still go as text.'; }
+    finally { if (ckTarget === o) $('ckImgBox').classList.remove('loading'); }
+  }
+  $('ckImgRefresh').onclick = () => { if (ckTarget && ckTarget.kind === 'client') loadReportPic(ckTarget, true); };
+  $('ckImg').onclick = () => { if (picUrl) window.open(picUrl, '_blank'); };
+
   $('ckSend').onclick = async () => {
     const o = ckTarget; if (!o) return;
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

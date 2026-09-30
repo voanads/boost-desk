@@ -7,6 +7,7 @@ const db = require('./src/db');
 const meta = require('./src/meta');
 const sync = require('./src/sync');
 const lives = require('./src/lives');
+const reportImage = require('./src/reportImage');
 const jobs = require('./src/jobs');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
@@ -451,19 +452,41 @@ api.get('/client-report/:id', wrap(async (req, res) => {
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to));
 }));
+// The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
+const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
+async function reportPng(user, id, from, to) {
+  const k = `${user.fb_id}|${id}|${from}|${to}`, hit = imgCache.get(k);
+  if (hit && Date.now() - hit.at < 5 * 60000) return hit.png;
+  const png = await reportImage.clientReportImage(user, id, from, to);
+  imgCache.set(k, { png, at: Date.now() });
+  for (const [kk, v] of imgCache) if (Date.now() - v.at > 5 * 60000) imgCache.delete(kk);
+  return png;
+}
+api.get('/client-report/:id/image', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}`);
+  const png = await reportPng(req.user, req.params.id, from, to);
+  if (!png) return res.status(204).end();
+  res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
+}));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text } = req.body || {};
+  const { from, to, text, withImage } = req.body || {};
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
-  await telegram.send(typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text, r.client.telegram);
+  const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
+  let png = null;
+  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
+  if (png) await telegram.sendPhoto(png, body, r.client.telegram);
+  else await telegram.send(body, r.client.telegram);
   const sentAt = new Date().toISOString();
   // A one-day report is remembered on that day's checklist ("Sent 21:05").
   if (from === to && isDay(from)) {
     const id = Number(req.params.id);
     await db.putEntry(from, id, deepMerge(await db.getEntry(from, id), { reportSent: { at: sentAt, by: req.user.name } }));
   }
-  res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram, sentAt });
+  res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram, sentAt, withImage: !!png });
 }));
 api.get('/summary', wrap(async (req, res) => {
   const { from, to } = req.query;

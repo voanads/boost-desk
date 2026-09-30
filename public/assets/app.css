@@ -744,3 +744,15 @@ nav.tabs button[aria-selected=true]{background:transparent!important;box-shadow:
 /* six tabs: short labels on desktop too, so the header fits */
 @media (min-width:761px){nav.tabs .full{display:none}nav.tabs .short{display:inline}}
 @media (min-width:761px) and (max-width:900px){nav.tabs button{padding:7px 9px;gap:5px}nav.tabs .ic{display:none}}
+
+/* ---------- report picture ---------- */
+.ckpic{display:flex;flex-direction:column;gap:8px}
+.ckpic-img{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg-2);min-height:64px;display:grid;place-items:center}
+.ckpic-img img{display:block;width:100%;height:auto;cursor:zoom-in}
+.ckpic-img .hint{padding:18px;text-align:center}
+.ckpic-img.loading{background:linear-gradient(90deg,var(--bg-2),color-mix(in srgb,var(--brand) 8%,var(--bg-2)),var(--bg-2));background-size:200% 100%;animation:skel 1.3s ease-in-out infinite;min-height:140px}
+.ckpic-bar{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ckpic-bar .chk{display:flex;gap:8px;align-items:center;font-size:.9rem;font-weight:500}
+button.sm{padding:5px 12px;font-size:.84rem}
+#ckDlg .dlg-in{max-height:92vh;overflow:auto}
+#ckDlg textarea{min-height:170px}

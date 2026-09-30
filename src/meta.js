@@ -268,6 +268,46 @@ async function campaignSetups(token, actId, campaignIds) {
   return out;
 }
 
+// Ad-level numbers for a report picture: one row per ad, like the Ads tab in Ads Manager.
+async function adInsights(token, actId, campaignIds, since, until) {
+  const out = [];
+  let reach = 0;
+  for (let i = 0; i < campaignIds.length; i += 50) {
+    const chunk = campaignIds.slice(i, i + 50);
+    const filt = [{ field: 'campaign.id', operator: 'IN', value: chunk }];
+    const rows = await allStatuses(`/${actId}/insights`, {
+      level: 'ad', fields: 'ad_id,ad_name,campaign_id,spend,impressions,reach,actions,video_thruplay_watched_actions',
+      time_range: { since, until }, filtering: filt, limit: 500,
+    }, { field: 'ad.effective_status', operator: 'IN', value: AD_STATUSES }, token);
+    const goals = {};
+    const camps = await allStatuses(`/${actId}/campaigns`, { fields: 'id,adsets.limit(5){optimization_goal}', filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100 },
+      { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+    for (const c of camps) goals[c.id] = (c.adsets?.data || []).map((a) => a.optimization_goal).find(Boolean) || '';
+    const thumbs = {};
+    const adIds = rows.map((r) => r.ad_id).filter(Boolean);
+    for (let j = 0; j < adIds.length; j += 50) {
+      try {
+        const ads = await allStatuses(`/${actId}/ads`, { fields: 'id,creative{thumbnail_url,image_url}', filtering: [{ field: 'id', operator: 'IN', value: adIds.slice(j, j + 50) }], limit: 100 },
+          { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
+        for (const a of ads) thumbs[a.id] = a.creative?.thumbnail_url || a.creative?.image_url || '';
+      } catch (e) { if (e.needsLogin) throw e; }
+    }
+    for (const r of rows) {
+      out.push({
+        adId: r.ad_id, name: r.ad_name, campaignId: r.campaign_id, spend: Number(r.spend || 0),
+        impressions: Number(r.impressions || 0), reach: Number(r.reach || 0), thumb: thumbs[r.ad_id] || '',
+        ...campaignResult(r, goals[r.campaign_id]), ...engagement(r),
+      });
+    }
+    // Reach across these ads without double counting people (like Ads Manager's total row).
+    try {
+      const t = await get(`/${actId}/insights`, { fields: 'reach', time_range: { since, until }, filtering: filt }, token);
+      if (reach !== null) reach += Number(t.data?.[0]?.reach || 0);
+    } catch (e) { if (e.needsLogin) throw e; reach = null; }
+  }
+  return { ads: out, reach };
+}
+
 // Which Facebook Page each campaign promotes, so auto-named "Post: …" boosts can be matched
 // to a client by Page. Page names come from the ad account's promoted-Pages list first (works
 // even for client Pages you don't manage), then from the Page itself.
@@ -344,4 +384,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

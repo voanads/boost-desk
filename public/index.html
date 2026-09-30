@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=34">
+<link rel="stylesheet" href="/assets/app.css?v=35">
 </head>
 <body>
 <div class="wrap">
@@ -182,11 +182,16 @@
       <div><span class="lbl">Accounts with spend</span><span class="val num" id="aAcc">0</span><span class="sub" id="aAccSub"></span></div>
     </div>
     <div class="panel">
-      <div class="thead"><h2 id="aTitle">Accounts</h2><span class="hint">Tap an account to see its clients</span></div>
+      <div class="thead"><h2 id="aTitle">Accounts</h2><span class="hint" id="aHint">Tap an account to see its clients</span></div>
       <div class="tablewrap"><table class="dtable" id="aTable">
         <thead><tr><th>Account</th><th class="r">Clients</th><th class="r">Lives</th><th class="r">Live</th><th class="r">Post</th><th class="r">Total</th><th>Last sync</th></tr></thead>
         <tbody id="aBody"></tbody><tfoot id="aFoot"></tfoot>
       </table></div>
+    </div>
+    <div class="panel" id="teamPanel">
+      <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
+      <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The Admin table above then shows spend per team. Each person can be in one team.</div>
+      <div class="teamgrid" id="teamGrid"></div>
     </div>
   </section>
 
@@ -222,6 +227,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=34"></script>
+<script src="/assets/app.js?v=35"></script>
 </body>
 </html>

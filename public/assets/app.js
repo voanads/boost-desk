@@ -949,7 +949,7 @@
   };
 
   // ---------- admin dashboard (owner only) ----------
-  let aPreset = 'today', aData = null; const aOpen = new Set();
+  let aPreset = 'today', aData = null, aTeams = { teams: [], users: [], canEdit: false }; const aOpen = new Set();
   function aRange(v) {
     const t = me.today;
     if (v === 'today') return [t, t];
@@ -968,7 +968,7 @@
     const [from, to] = aRange(aPreset);
     $('aTitle').textContent = 'Accounts · ' + (from === to ? nice(from) : aLabel[aPreset]);
     if (!aData) $('aBody').innerHTML = skelRows(3);
-    try { aData = await api(`/admin/overview?from=${from}&to=${to}`); renderAdmin(); }
+    try { const [o, t] = await Promise.all([api(`/admin/overview?from=${from}&to=${to}`), api('/admin/teams')]); aData = o; aTeams = t; renderAdmin(); renderTeams(); }
     catch (e) { $('aBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
   }
   function renderAdmin() {
@@ -979,7 +979,7 @@
     rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} clients with spend`;
     const dash = '<span class="muted">–</span>';
     const ago = (at) => { if (!at) return '<span class="muted">Never</span>'; const m = Math.round((Date.now() - new Date(at)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
-    $('aBody').innerHTML = d.users.map((u) => {
+    const userRows = (u) => {
       const open = aOpen.has(u.id), tt = u.totals;
       const withSpend = u.clients.filter((c) => c.spend > 0).sort((a, b) => b.spend - a.spend), idle = u.clients.filter((c) => !(c.spend > 0));
       const row = `<tr class="drow${open ? ' open' : ''}${tt.spend > 0 ? '' : ' nospend'}" data-uid="${esc(u.id)}" tabindex="0">
@@ -992,7 +992,21 @@
         <td data-l="Last sync" class="hint">${ago(u.lastSync)}</td></tr>`;
       const detail = !open ? '' : `<tr class="dexp"><td colspan="7"><div class="dexp-in">${withSpend.length ? withSpend.map((c) => `<div class="dl ${c.type === 'post' ? 'post' : 'live'}"><span class="dl-n"><b>${esc(c.name)}</b><span class="hint">${c.lives ? ' · ' + c.lives + ' live' + (c.lives === 1 ? '' : 's') : ''}${c.postSpend > 0 ? ' · posts ' + money(c.postSpend) : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${c.spend.toFixed(2)}</span></span></div>`).join('') : '<div class="muted">No client spend in this period.</div>'}${idle.length ? `<div class="hint" style="padding:4px 4px 0">No spend: ${idle.map((c) => esc(c.name)).join(', ')}</div>` : ''}</div></td></tr>`;
       return row + detail;
-    }).join('') || '<tr><td colspan="7" class="empty-row">Nobody has logged in yet.</td></tr>';
+    };
+    const teams = d.teams || [];
+    if (!teams.length) $('aBody').innerHTML = d.users.map(userRows).join('') || '<tr><td colspan="7" class="empty-row">Nobody has logged in yet.</td></tr>';
+    else {
+      // group accounts by team, with a totals row per team
+      const groups = teams.map((t) => ({ t, users: d.users.filter((u) => u.team === t.id) }));
+      const loose = d.users.filter((u) => !u.team);
+      if (loose.length) groups.push({ t: { id: '', name: 'No team' }, users: loose });
+      groups.forEach((g) => { g.sum = g.users.reduce((a, u) => ({ spend: a.spend + u.totals.spend, live: a.live + u.totals.live, post: a.post + u.totals.post, lives: a.lives + u.totals.lives, clients: a.clients + u.totals.active }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0 }); });
+      groups.sort((a, b) => (!a.t.id) - (!b.t.id) || b.sum.spend - a.sum.spend);
+      $('aBody').innerHTML = groups.map((g) => `<tr class="teamrow${g.t.id ? '' : ' loose'}"><td><div class="nm"><span class="teamdot"></span><b>${esc(g.t.name)}</b><span class="hint">${g.users.length} ${g.users.length === 1 ? 'person' : 'people'}</span></div></td>
+        <td class="r num" data-l="Clients">${g.sum.clients}</td><td class="r num" data-l="Lives">${g.sum.lives || dash}</td><td class="r num" data-l="Live">${g.sum.live > 0 ? money(g.sum.live) : dash}</td><td class="r num" data-l="Post">${g.sum.post > 0 ? money(g.sum.post) : dash}</td>
+        <td class="r num tot" data-l="Total"><b>${money(g.sum.spend)}</b>${g.sum.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(g.sum.spend))}</div>` : ''}</td><td class="hint">${t.spend ? Math.round(g.sum.spend / t.spend * 100) + '% of all' : ''}</td></tr>`
+        + (g.users.map(userRows).join('') || '<tr class="teamempty"><td colspan="7" class="hint">No one in this team yet — add people below.</td></tr>')).join('');
+    }
     $('aFoot').innerHTML = d.users.length > 1 ? `<tr><td>Total · ${d.users.length} accounts</td><td class="r num" data-l="Clients">${t.clients}</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${d.taxRate ? `<div class="hint">+tax ${money(tax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#aBody tr.drow').forEach((tr) => {
       const toggle = () => { const id = tr.dataset.uid; aOpen.has(id) ? aOpen.delete(id) : aOpen.add(id); renderAdmin();
@@ -1001,6 +1015,33 @@
       tr.onclick = toggle; tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } };
     });
   }
+
+  function renderTeams() {
+    const { teams, users, canEdit } = aTeams;
+    $('teamNewForm').hidden = !canEdit;
+    $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Admin table above then shows spend per team. Each person can be in one team.' : 'Teams set up by the app owner.';
+    const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
+    const inTeam = new Set(teams.flatMap((t) => t.members));
+    $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">
+      <div class="tc-head"><b class="tc-name">${esc(t.name)}</b><span class="hint">${t.members.length} ${t.members.length === 1 ? 'person' : 'people'}</span><span class="spacer"></span>${canEdit ? '<button class="ghost" data-rename>Rename</button><button class="ghost danger-t" data-deleteteam>Delete</button>' : ''}</div>
+      <div class="tc-members">${t.members.map((m) => `<span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span>`).join('') || '<span class="hint">No one yet</span>'}</div>
+      ${canEdit ? `<select data-addmember><option value="">+ Add person…</option>${users.filter((u) => !t.members.includes(u.id)).map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${inTeam.has(u.id) ? ' (move from other team)' : ''}</option>`).join('')}</select>` : ''}
+    </div>`).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
+    document.querySelectorAll('#teamGrid .teamcard').forEach((card) => {
+      const id = card.dataset.team, patch = async (body) => { try { await api('/admin/teams/' + id, { method: 'PATCH', body }); await loadAdmin(); } catch (e) { toast(e.message); } };
+      const add = card.querySelector('[data-addmember]'); if (add) add.onchange = () => add.value && patch({ add: add.value }).then(() => toast('Added to team'));
+      card.querySelectorAll('[data-removemember]').forEach((b) => b.onclick = () => patch({ remove: b.dataset.removemember }));
+      const rn = card.querySelector('[data-rename]'); if (rn) rn.onclick = () => { const n = prompt('Team name', card.querySelector('.tc-name').textContent); if (n && n.trim()) patch({ name: n.trim() }); };
+      const del = card.querySelector('[data-deleteteam]'); if (del) del.onclick = async () => {
+        if (!del.dataset.arm) { del.dataset.arm = '1'; del.textContent = 'Tap again'; setTimeout(() => { del.dataset.arm = ''; del.textContent = 'Delete'; }, 3000); return; }
+        try { await api('/admin/teams/' + id, { method: 'DELETE' }); toast('Team deleted — people keep their data'); await loadAdmin(); } catch (e) { toast(e.message); }
+      };
+    });
+  }
+  $('teamNewForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); const name = $('teamNewName').value.trim(); if (!name) return $('teamNewName').focus();
+    try { await api('/admin/teams', { method: 'POST', body: { name } }); $('teamNewName').value = ''; toast('Team created — now add people'); await loadAdmin(); } catch (e) { toast(e.message); }
+  });
 
   // ---------- Telegram groups for clients ----------
   let tgChats = [], tgCode = '', tgBot = '';

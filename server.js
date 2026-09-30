@@ -133,6 +133,30 @@ api.put('/admin/viewers/:id', ownerOnly, wrap(async (req, res) => {
   await db.setSetting('adminViewers', [...v]);
   res.json({ ok: true });
 }));
+// Teams (groups of accounts shown together on the Admin dashboard). The owner manages them.
+const getTeams = () => db.getSetting('teams', []);
+const saveTeams = (t) => db.setSetting('teams', t);
+api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
+  res.json({ teams: await getTeams(), users: (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name })), canEdit: (await db.ownerId()) === req.user.fb_id });
+}));
+api.post('/admin/teams', ownerOnly, wrap(async (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the team a name.' });
+  const teams = await getTeams();
+  const t = { id: 't' + Date.now().toString(36), name, members: [] };
+  teams.push(t); await saveTeams(teams); res.json(t);
+}));
+api.patch('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
+  const teams = await getTeams(), t = teams.find((x) => x.id === req.params.id);
+  if (!t) return res.status(404).json({ error: 'Team not found.' });
+  if (req.body?.name != null) { const n = String(req.body.name).trim().slice(0, 60); if (n) t.name = n; }
+  if (req.body?.add) { const id = String(req.body.add); for (const x of teams) x.members = x.members.filter((m) => m !== id); t.members.push(id); } // one team per person
+  if (req.body?.remove) t.members = t.members.filter((m) => m !== String(req.body.remove));
+  await saveTeams(teams); res.json(t);
+}));
+api.delete('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
+  await saveTeams((await getTeams()).filter((x) => x.id !== req.params.id)); res.json({ ok: true });
+}));
 api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
@@ -151,7 +175,9 @@ api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   }
   out.sort((a, b) => b.totals.spend - a.totals.spend || a.name.localeCompare(b.name));
   const totals = out.reduce((t, u) => ({ spend: t.spend + u.totals.spend, live: t.live + u.totals.live, post: t.post + u.totals.post, lives: t.lives + u.totals.lives, clients: t.clients + u.totals.active, accounts: t.accounts + (u.totals.spend > 0 ? 1 : 0) }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0, accounts: 0 });
-  res.json({ from, to, users: out, totals, taxRate: sync.TAX_RATE });
+  const teams = await getTeams();
+  for (const u of out) { const t = teams.find((x) => x.members.includes(u.id)); u.team = t ? t.id : null; }
+  res.json({ from, to, users: out, totals, teams, taxRate: sync.TAX_RATE });
 }));
 api.get('/blocked', ownerOnly, wrap(async (req, res) => res.json(await db.blockedUsers())));
 api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {

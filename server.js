@@ -98,6 +98,7 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
+    canAdmin: await canSeeAdmin(req.user.fb_id),
     taxRate: sync.TAX_RATE,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
@@ -119,8 +120,20 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
   for (const u of await db.allUsers()) await jobs.setEnabled(u.fb_id, !!req.body.enabled);
   res.json({ ok: true });
 }));
-// Admin overview: every account's spend for a period (owner only).
-api.get('/admin/overview', ownerOnly, wrap(async (req, res) => {
+// Admin overview: every account's spend for a period (owner, or people the owner allowed).
+const adminViewers = async () => new Set(await db.getSetting('adminViewers', []));
+const canSeeAdmin = async (id) => (await db.ownerId()) === id || (await adminViewers()).has(id);
+const adminOnly = wrap(async (req, res, next) => {
+  if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only the app owner and people they allow can see the Admin dashboard.' });
+  next();
+});
+api.put('/admin/viewers/:id', ownerOnly, wrap(async (req, res) => {
+  const v = await adminViewers();
+  if (req.body && req.body.enabled) v.add(req.params.id); else v.delete(req.params.id);
+  await db.setSetting('adminViewers', [...v]);
+  res.json({ ok: true });
+}));
+api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
   const users = await db.allUsers();

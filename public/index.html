@@ -7,7 +7,7 @@
 <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
 <meta name="theme-color" content="#5B45F0">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=33">
+<link rel="stylesheet" href="/assets/app.css?v=34">
 </head>
 <body>
 <div class="wrap">
@@ -170,7 +170,7 @@
   <!-- ADMIN (owner only) -->
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Admin dashboard</h2><div class="hint">Every account's boost spend in one place. Only you (the app owner) can see this.</div></div></div>
+      <div class="chead2"><div><h2>Admin dashboard</h2><div class="hint">Every account's boost spend in one place. Only the app owner and people they allow can see this.</div></div></div>
       <div class="chips" id="aChips" role="group" aria-label="Period">
         <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button><button data-p="thisYear">This year</button>
       </div>
@@ -201,7 +201,7 @@
       <div class="rowx"><h2>Accounts &amp; auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
       <div class="hint">Only you (the app owner) see this. For each account that has logged in: every 5 minutes it checks for new campaigns, every hour it refreshes today and yesterday, and at 05:30 it refreshes the last 30 days. An account is only synced after it has tapped Sync from Meta once, and while its Facebook login is valid.</div>
       <div id="autoMsg" class="hint"></div>
-      <div class="tablewrap"><table><thead><tr><th>Account</th><th>Auto sync</th><th>Status</th><th>Last auto sync</th><th>Login expires</th><th></th></tr></thead><tbody id="autoBody"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>Account</th><th>Auto sync</th><th>Status</th><th>Last auto sync</th><th>Login expires</th><th>Can see Admin</th><th></th></tr></thead><tbody id="autoBody"></tbody></table></div>
       <div id="blockedBox" hidden>
         <h3>Removed accounts</h3>
         <div class="hint">These Facebook accounts can't log in to Boost Desk. Restore one to let them log in again (they start with an empty workspace).</div>
@@ -222,6 +222,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=33"></script>
+<script src="/assets/app.js?v=34"></script>
 </body>
 </html>

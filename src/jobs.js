@@ -138,6 +138,7 @@ async function statusAll() {
       clients: (await db.listClients(u.fb_id)).filter((c) => !c.archived).length,
       lastRun: await db.getUserSetting(u.fb_id, 'autoSyncLast', null),
       lastCheck: await db.getUserSetting(u.fb_id, 'autoSyncChecked', null),
+      adminView: (await db.getSetting('adminViewers', [])).includes(u.fb_id),
     });
   }
   return out;

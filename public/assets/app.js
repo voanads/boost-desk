@@ -90,7 +90,7 @@
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    if (name === 'admin' && !(me && me.isOwner)) name = 'dashboard';
+    if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
     ['dashboard', 'clients', 'accounts', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     moveInk();
     if (name === 'team') renderTeam();
@@ -517,9 +517,10 @@
         <td>${st}</td>
         <td>${last}${u.lastCheck ? `<div class="hint">checked for new campaigns ${esc(ago(u.lastCheck))}</div>` : ''}</td>
         <td>${esc(exp)}</td>
+        <td>${u.id === me.id ? '<span class="chip meta">Owner</span>' : `<label class="chk"><input type="checkbox" data-adminview="${esc(u.id)}" ${u.adminView ? 'checked' : ''}> ${u.adminView ? 'Yes' : 'No'}</label>`}</td>
         <td class="acts"><button data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>Run now</button>${u.id === me.id ? '' : ` <button class="danger" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>`}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6" class="muted">Nobody has logged in yet.</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="muted">Nobody has logged in yet.</td></tr>';
     try {
       const b = Object.entries(await api('/blocked'));
       $('blockedBox').hidden = !b.length;
@@ -532,6 +533,12 @@
     loadAuto();
   });
   $('autoBody').addEventListener('change', async (ev) => {
+    const av = ev.target.dataset.adminview;
+    if (av) {
+      try { await api('/admin/viewers/' + encodeURIComponent(av), { method: 'PUT', body: { enabled: ev.target.checked } }); toast(ev.target.checked ? 'They can now see the Admin dashboard' : 'Admin dashboard access removed'); }
+      catch (e) { toast(e.message); }
+      return loadAuto();
+    }
     const id = ev.target.dataset.auto; if (!id) return;
     try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); }
     catch (e) { toast(e.message); }
@@ -955,7 +962,7 @@
   const aLabel = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
   document.querySelectorAll('#aChips button').forEach((b) => b.onclick = () => { aPreset = b.dataset.p; loadAdmin(); });
   async function loadAdmin() {
-    if (!me || !me.isOwner) return;
+    if (!me || !me.canAdmin) return;
     document.querySelectorAll('#aChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === aPreset)));
     const [from, to] = aRange(aPreset);
     $('aTitle').textContent = 'Accounts · ' + (from === to ? nice(from) : aLabel[aPreset]);
@@ -1014,7 +1021,7 @@
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (me.isOwner) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
+      if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
       showTab(['clients', 'accounts', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }

@@ -221,7 +221,7 @@ const cleanClient = (b) => {
 };
 api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
 api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.user.fb_id))));
-const groupAllowed = async (fbId, chatId) => !chatId || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && c.owner === fbId) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
+const groupAllowed = async (fbId, chatId) => !chatId || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && (c.owners || [c.owner]).includes(fbId)) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
@@ -411,29 +411,42 @@ async function linkCode(fbId) {
   if (!c) { c = newCode(); await db.setUserSetting(fbId, 'tgCode', c); }
   return c;
 }
-async function refreshChats() {
+// One refresh at a time, so two requests never handle the same /link message twice.
+let chatsBusy = Promise.resolve();
+function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow); chatsBusy = run.catch(() => {}); return run; }
+async function refreshChatsNow() {
   const saved = await db.getSetting('telegramChats', []);
   const byId = new Map(saved.map((c) => [c.id, c]));
   let fresh = { chats: [], links: [] };
   try { fresh = await telegram.listChats(); } catch (e) { if (!saved.length) throw e; }
   for (const c of fresh.chats) byId.set(c.id, { ...(byId.get(c.id) || {}), ...c });
+  // A group can be linked to several accounts: everyone who sent "/link CODE" there, until "/unlink CODE".
+  // Each /link message is handled once (by its time), so nothing repeats or flips between people.
+  for (const c of byId.values()) { if (!c.owners) c.owners = c.owner ? [c.owner] : []; if (!c.seen) c.seen = {}; }
   if (fresh.links.length) {
     const users = await db.allUsers(), byCode = {};
     for (const u of users) byCode[await linkCode(u.fb_id)] = u;
     for (const l of fresh.links) {
       const u = byCode[l.code], c = byId.get(l.id); if (!u || !c) continue;
-      if (c.owner !== u.fb_id || (c.linkedAt || 0) < l.at) {
-        const isNew = c.owner !== u.fb_id;
-        c.owner = u.fb_id; c.linkedAt = l.at;
-        if (isNew) telegram.send(`✅ This group is now linked to ${u.name} in Boost Desk. Reports for their clients can be sent here.`, c.id).catch(() => {});
+      if ((c.seen[u.fb_id] || 0) >= l.at) continue; // this message was already handled
+      c.seen[u.fb_id] = l.at;
+      const has = c.owners.includes(u.fb_id);
+      if (l.unlink && has) {
+        c.owners = c.owners.filter((x) => x !== u.fb_id);
+        telegram.send(`👋 ${u.name} is no longer linked to this group in Boost Desk.`, c.id).catch(() => {});
+      } else if (!l.unlink && !has) {
+        c.owners.push(u.fb_id);
+        const others = c.owners.filter((x) => x !== u.fb_id).map((x) => users.find((y) => y.fb_id === x)?.name).filter(Boolean);
+        telegram.send(`✅ This group is now linked to ${u.name} in Boost Desk${others.length ? ` (also linked: ${others.join(', ')})` : ''}. Reports for their clients can be sent here.`, c.id).catch(() => {});
       }
     }
   }
+  for (const c of byId.values()) c.owner = c.owners[0] || '';
   // Groups with no owner yet: give them to the account whose clients already use them.
   const unowned = [...byId.values()].filter((c) => !c.owner);
   if (unowned.length) {
     const rows = (await db.pool.query("SELECT DISTINCT owner, telegram FROM clients WHERE telegram <> ''")).rows;
-    for (const c of unowned) { const users = [...new Set(rows.filter((r) => r.telegram === c.id).map((r) => r.owner))]; if (users.length === 1) c.owner = users[0]; }
+    for (const c of unowned) { const users = [...new Set(rows.filter((r) => r.telegram === c.id).map((r) => r.owner))]; if (users.length) { c.owners = users; c.owner = users[0]; } }
   }
   const all = [...byId.values()].sort((a, b) => a.title.localeCompare(b.title));
   await db.setSetting('telegramChats', all);
@@ -442,7 +455,7 @@ async function refreshChats() {
 async function myChats(fbId) {
   const all = await refreshChats();
   const used = new Set((await db.listClients(fbId)).map((c) => c.telegram).filter(Boolean));
-  return all.filter((c) => c.owner === fbId || used.has(c.id)).map(({ id, title, type }) => ({ id, title, type }));
+  return all.filter((c) => (c.owners || [c.owner]).includes(fbId) || used.has(c.id)).map(({ id, title, type }) => ({ id, title, type }));
 }
 api.get('/telegram/chats', wrap(async (req, res) => {
   res.json({ chats: await myChats(req.user.fb_id), code: await linkCode(req.user.fb_id), bot: await telegram.username() });

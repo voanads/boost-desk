@@ -52,8 +52,8 @@ async function listChats() {
     found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
     // "/link CODE" typed in a group links that group to one Boost Desk account.
     const t = (u.message || u.channel_post || {}).text || '';
-    const mm = t.match(/^\/link(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
-    if (mm) links.push({ id: String(chat.id), code: mm[1].toUpperCase(), at: m.date || 0 });
+    const mm = t.match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
+    if (mm) links.push({ id: String(chat.id), code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink' });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
   return { chats: [...found.values()], links };

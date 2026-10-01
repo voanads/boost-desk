@@ -737,7 +737,7 @@
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' || k === 'cpr' }; renderDash();
   });
 
-  let dEntries = {}, dKey = ''; const dOpen = new Set();
+  let dEntries = {}, dPages = {}, dKey = ''; const dOpen = new Set();
   const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="9"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
   async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
@@ -762,7 +762,8 @@
     // 9) skeleton while a new period loads
     const skel = !samePeriod ? setTimeout(() => { $('dBody').innerHTML = skelRows(5); $('dFoot').innerHTML = ''; document.querySelectorAll('#tab-dashboard .summary .val').forEach((v) => v.classList.add('skel-v')); }, 120) : null;
     try {
-      const [d, rows] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => [])]);
+      const [d, rows, pg] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => []), api(`/dashboard/pages?from=${from}&to=${to}`).catch(() => ({}))]);
+      dPages = pg || {};
       clearTimeout(skel); document.querySelectorAll('.skel-v').forEach((v) => v.classList.remove('skel-v'));
       dData = d; dEntries = {}; dKey = key;
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
@@ -779,6 +780,17 @@
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
+  // Spend per Facebook Page, when a client's spend came from 2 or more Pages.
+  const pageSplit = (c) => { const l = (dPages[c.id] || []).filter((p) => p.spend > 0); return l.length > 1 ? l : null; };
+  const pageLine = (c) => { const l = pageSplit(c); if (!l) return ''; const top = l.slice(0, 3).map((p) => `${esc(p.page)} <b>${money(p.spend)}</b>`); return top.join(' · ') + (l.length > 3 ? ` · +${l.length - 3} more` : ''); };
+  function pageBlock(c) {
+    const l = pageSplit(c); if (!l) return '';
+    const tot = l.reduce((a, p) => a + p.spend, 0) || 1;
+    return `<div class="pgsplit"><div class="pgsplit-h">Spend by Page</div>${l.map((p, i) => `<div class="pgrow" style="--i:${i}">
+      <div class="pgrow-n"><b>${esc(p.page)}</b><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}</span></div>
+      <div class="pgbar"><i style="width:${Math.max(2, p.spend / tot * 100).toFixed(1)}%"></i></div>
+      <div class="pgrow-v num"><b>${money(p.spend)}</b><span class="hint">${Math.round(p.spend / tot * 100)}%</span></div></div>`).join('')}</div>`;
+  }
   const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 
@@ -823,7 +835,7 @@
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -952,7 +964,7 @@
       const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
       return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
-        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
+        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>

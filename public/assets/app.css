@@ -825,3 +825,18 @@ body.has-dock #tab-dashboard{padding-bottom:84px}
 }
 .ppick label,.prange label{min-width:0}
 @media (max-width:760px){.fdock .flabel .chev{display:inline-block}}
+
+/* ---------- spend by Page ---------- */
+.dtable .pg.pgmoney b{color:var(--ink);font-weight:600}
+.pgsplit{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.pgsplit-h{font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.pgrow{display:grid;grid-template-columns:minmax(140px,1.2fr) 2fr auto;gap:14px;align-items:center}
+.pgrow-n{display:flex;flex-direction:column;min-width:0}.pgrow-n b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgbar{height:8px;border-radius:99px;background:var(--bg-2);overflow:hidden}
+.pgbar i{display:block;height:100%;border-radius:99px;background:var(--grad);transform-origin:left}
+.pgrow-v{display:flex;flex-direction:column;align-items:flex-end}
+@media (prefers-reduced-motion:no-preference){.pgbar i{animation:pgGrow .7s var(--smooth) backwards;animation-delay:calc(var(--i) * 70ms + 120ms)}@keyframes pgGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}}
+@media (max-width:760px){.pgrow{grid-template-columns:1fr auto;row-gap:6px}.pgbar{grid-column:1/-1;order:3}}
+.pgrow{grid-template-columns:minmax(140px,1.2fr) 2fr 96px}
+.dtable .pg.pgmoney b{font-size:inherit;font-weight:700}
+@media (max-width:760px){.pgrow{grid-template-columns:1fr auto}}

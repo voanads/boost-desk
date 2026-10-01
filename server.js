@@ -359,6 +359,11 @@ api.delete('/live-setups/:id', wrap(async (req, res) => {
   await db.setUserSetting(req.user.fb_id, 'liveSetups', list); res.json(list);
 }));
 
+api.get('/dashboard/pages', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  res.json(await sync.pageSpend(req.user.fb_id, from, to));
+}));
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });

@@ -474,4 +474,25 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
   return { spend: round2(spend), live: round2(live), post: round2(post), lives: sessions.size, clients: names.size };
 }
 
-module.exports = { matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+// Spend per Facebook Page for each client over [from, to], from the saved campaign rows.
+// { clientId: [{ page, live, post, spend, campaigns }] } — biggest Page first.
+async function pageSpend(owner, from, to) {
+  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+  if (!all.length) return {};
+  const clients = await clientsWithLearnedPages(owner, all, { save: false });
+  const out = {};
+  for (const r of all) {
+    const v = Number(r.spend) || 0; if (!(v > 0)) continue;
+    const c = matchClient(r, clients); if (!c) continue;
+    const toPost = c.type === 'post' || (c.type === 'both' && isAutoPost(r.name));
+    const page = r.page || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
+    const m = (out[c.id] = out[c.id] || {});
+    const p = (m[page] = m[page] || { page, live: 0, post: 0, spend: 0, campaigns: 0 });
+    if (toPost) p.post = round2(p.post + v); else p.live = round2(p.live + v);
+    p.spend = round2(p.spend + v); p.campaigns++;
+  }
+  for (const id of Object.keys(out)) out[id] = Object.values(out[id]).sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
+module.exports = { pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

@@ -9,7 +9,7 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // Group each client's live campaigns into lives (campaigns that start within the live gap), per day.
 async function listLives(owner, from, to, gapMs = cfg.liveGapMinutes * 60000) {
-  const all = await sync.withKinds(owner, (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day }))));
+  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
   if (!all.length) return [];
   const clients = await sync.clientsWithLearnedPages(owner, all, { save: false });
   const by = new Map();

@@ -79,14 +79,13 @@ assert.strictEqual(dcSlot.results, 40, 'results add up within one live');
 assert.strictEqual(dcSlot.resultType, 'message');
 console.log('Results checks passed.');
 
-// Live vs post for clients that do both.
+// Live vs post for clients that do both: the ad decides, whatever the campaign is called.
 const { isPostFor } = require('../src/sync');
 const both = { type: 'both' };
-assert.strictEqual(isPostFor(both, { name: 'Post: "Sale"' }), true, 'Meta auto name = post');
-assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1' }), false, 'Ads Box live name = live');
-assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', creative: 'PHOTO' }), true, 'photo creative = post even with a live-style name');
-assert.strictEqual(isPostFor(both, { name: 'New sofa promo' }), false, 'other names stay live (as before)');
-assert.strictEqual(isPostFor(both, { name: 'New sofa promo', creative: 'PHOTO' }), true, 'photo boost with any name = post');
-assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', kind: 'post' }), true, 'manual choice wins');
-assert.strictEqual(isPostFor({ type: 'live' }, { name: 'Post: x' }), false, 'live-only client');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', boost: 'post' }), true, 'boosted post, any name = post');
+assert.strictEqual(isPostFor(both, { name: 'New sofa promo', boost: 'live' }), false, 'boosted live video = live');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', creative: 'PHOTO' }), true, 'photo creative = post');
+assert.strictEqual(isPostFor(both, { name: 'Post: "Sale"' }), true, 'older rows: Meta auto name = post');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1' }), false, 'older rows: other names = live');
+assert.strictEqual(isPostFor({ type: 'live' }, { name: 'x', boost: 'post' }), false, 'live-only client');
 console.log('Live/post checks passed.');

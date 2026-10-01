@@ -21,25 +21,17 @@ const campaignPrefix = (name) => { const m = String(name).match(/^(.*?)\s*\|/); 
 
 const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
 // Is this campaign a boost post (vs a live) for this client?
-//  1. a manual choice in the app ("Move to Post" / "Move to Live") always wins;
-//  2. Post-only / live-only clients: everything is that kind;
-//  3. Meta's auto names ("Post: …") are posts, and so is any ad whose creative is a photo / link / text post
-//     (whatever the campaign is called) — lives are always video;
-//  4. everything else is a live (as before).
-const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE)$/;
+//  • post-only / live-only clients: everything is that kind;
+//  • otherwise the ad decides: the boosted video was a Facebook live → live; a photo, link, text or
+//    ordinary video post → boost post (checked with Meta on each sync, whatever the campaign is called);
+//  • rows synced before that check: Meta's auto names ("Post: …") are posts, other names are lives.
+const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
 function isPostFor(client, it) {
   if (client.type === 'post') return true;
   if (client.type === 'live') return false;
-  if (it.kind === 'post' || it.kind === 'live') return it.kind === 'post';
-  if (isAutoPost(it.name)) return true;
+  if (it.boost === 'post' || it.boost === 'live') return it.boost === 'post';
   if (it.creative && NON_VIDEO.test(it.creative)) return true;
-  return false;
-}
-// Attach the manual Live/Post choices saved for this account to campaign rows.
-async function withKinds(owner, items) {
-  const k = await db.getUserSetting(owner, 'kindOverrides', {});
-  if (!Object.keys(k).length) return items;
-  return items.map((it) => (it.campaignId && k[it.campaignId] ? { ...it, kind: k[it.campaignId] } : it));
+  return isAutoPost(it.name);
 }
 
 // Match order: the Facebook Page the ad promotes (name, then ID) → campaign name ("DC Shop | 29")
@@ -196,7 +188,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
   if (!rematch) await db.notePages(user.fb_id, items.map((it) => it.page), day);
-  const plan = buildPlan(await withKinds(user.fb_id, items), clients);
+  const plan = buildPlan(items, clients);
   const syncedAt = new Date().toISOString();
   const touched = new Set();
   for (const t of plan.targets) {
@@ -469,7 +461,7 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
   const seen = new Set(), sessions = new Set(), names = new Set();
   let spend = 0, live = 0, post = 0;
   for (const owner of owners) {
-    const all = await withKinds(owner, (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day }))));
+    const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
     if (!all.length) continue;
     const clients = await clientsWithLearnedPages(owner, all, { save: false });
     const liveBy = {};
@@ -501,7 +493,7 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
 // Spend per Facebook Page for each client over [from, to], from the saved campaign rows.
 // { clientId: [{ page, live, post, spend, campaigns }] } — biggest Page first.
 async function pageSpend(owner, from, to) {
-  const all = await withKinds(owner, (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day }))));
+  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
   if (!all.length) return {};
   const clients = await clientsWithLearnedPages(owner, all, { save: false });
   // Page names: from the row, else any name learned since (other rows, Meta lookups, names typed in the app).
@@ -523,4 +515,4 @@ async function pageSpend(owner, from, to) {
   return out;
 }
 
-module.exports = { isPostFor, withKinds, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

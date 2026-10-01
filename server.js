@@ -374,18 +374,6 @@ api.put('/page-names/:id', wrap(async (req, res) => {
   if (name) meta.rememberPageNames({ [id]: name }, true);
   res.json({ ok: true });
 }));
-// Move campaigns between Live and Post for this account ("auto" = let the app decide again).
-api.post('/campaign-kind', wrap(async (req, res) => {
-  const { ids, kind } = req.body || {};
-  const list = (Array.isArray(ids) ? ids : []).map(String).filter((x) => /^\d{1,25}$/.test(x)).slice(0, 200);
-  if (!list.length || !['post', 'live', 'auto'].includes(kind)) return res.status(400).json({ error: 'Nothing to move.' });
-  const k = await db.getUserSetting(req.user.fb_id, 'kindOverrides', {});
-  for (const id of list) { if (kind === 'auto') delete k[id]; else k[id] = kind; }
-  await db.setUserSetting(req.user.fb_id, 'kindOverrides', k);
-  const r = await sync.exclusive(req.user.fb_id, () => sync.rematch(req.user));
-  if (!r) return res.status(409).json({ error: 'A sync is running. Try again in a moment.' });
-  res.json({ ok: true });
-}));
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });

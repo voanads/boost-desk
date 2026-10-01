@@ -168,7 +168,8 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     start: parseTime(starts[r.campaign_id]),
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',
-    creative: pages[r.campaign_id]?.type || '', // PHOTO / VIDEO / SHARE … helps tell a boost post from a live
+    creative: pages[r.campaign_id]?.type || '', // PHOTO / VIDEO / SHARE …
+    boost: pages[r.campaign_id]?.boost || '', // 'live' when the boosted video was a Facebook live, 'post' otherwise
     ...campaignResult(r, goals[r.campaign_id]),
     ...engagement(r),
   }));
@@ -309,18 +310,35 @@ async function adInsights(token, actId, campaignIds, since, until) {
   return { ads: out, reach };
 }
 
+// Was this video a Facebook live? 'live' | 'post' | '' (Meta wouldn't say). Cached for the process.
+const videoKindCache = new Map();
+async function videoKind(id, token) {
+  if (videoKindCache.has(id)) return videoKindCache.get(id);
+  let k = '';
+  try {
+    const v = await get(`/${id}`, { fields: 'live_status' }, token);
+    k = v.live_status ? 'live' : (v.id ? 'post' : '');
+  } catch (e) {
+    if (e.needsLogin || e.rateLimited) throw e;
+    // A photo or text post id isn't a video: Meta answers "nonexisting field" for it — that's a post.
+    if (/nonexisting field|live_status/i.test(e.message)) k = 'post';
+  }
+  videoKindCache.set(id, k);
+  return k;
+}
+
 // Which Facebook Page each campaign promotes, so auto-named "Post: …" boosts can be matched
 // to a client by Page. Page names come from the ad account's promoted-Pages list first (works
 // even for client Pages you don't manage), then from the Page itself.
 const pageNameCache = new Map(); // only successful lookups are cached
 async function campaignPages(token, actId, campaignIds) {
-  const pageOf = {}, typeOf = {};
+  const pageOf = {}, typeOf = {}, videosOf = {};
   if (!campaignIds.length) return pageOf;
   try {
     for (let i = 0; i < campaignIds.length; i += 50) {
       const chunk = campaignIds.slice(i, i + 50);
       const ads = await allStatuses(`/${actId}/ads`, {
-        fields: 'campaign_id,creative{actor_id,effective_object_story_id,object_type,object_story_spec{page_id}},adset{promoted_object{page_id}}',
+        fields: 'campaign_id,creative{actor_id,effective_object_story_id,object_type,video_id,object_story_spec{page_id,video_data{video_id}}},adset{promoted_object{page_id}}',
         filtering: [{ field: 'campaign.id', operator: 'IN', value: chunk }], limit: 500,
       }, { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
       for (const ad of ads) {
@@ -329,6 +347,10 @@ async function campaignPages(token, actId, campaignIds) {
           || String(c.effective_object_story_id || '').split('_')[0];
         if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = String(pid);
         if (c.object_type) { const t = typeOf[ad.campaign_id]; typeOf[ad.campaign_id] = !t || t === c.object_type ? c.object_type : (c.object_type === 'VIDEO' || t === 'VIDEO' ? 'VIDEO' : t); }
+        // The video behind the ad: its own id, or the second half of the boosted post id (video posts share it).
+        const vid = c.video_id || c.object_story_spec?.video_data?.video_id;
+        const story = String(c.effective_object_story_id || '').split('_')[1];
+        if (vid || story) (videosOf[ad.campaign_id] = videosOf[ad.campaign_id] || new Set()).add(String(vid || story));
       }
     }
   } catch (e) {
@@ -352,6 +374,13 @@ async function campaignPages(token, actId, campaignIds) {
   }
   const out = Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
   for (const [cid, t] of Object.entries(typeOf)) (out[cid] = out[cid] || { id: '', name: '' }).type = t;
+  // Live or post? Ask Meta whether the boosted video was a Facebook live broadcast.
+  for (const [cid, set] of Object.entries(videosOf)) {
+    if (typeOf[cid] && typeOf[cid] !== 'VIDEO') { (out[cid] = out[cid] || { id: '', name: '' }).boost = 'post'; continue; }
+    let kind = '';
+    for (const v of set) { const k = await videoKind(v, token); if (k === 'live') { kind = 'live'; break; } if (k === 'post') kind = 'post'; }
+    if (kind) (out[cid] = out[cid] || { id: '', name: '' }).boost = kind;
+  }
   return out;
 }
 
@@ -388,4 +417,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { videoKind, adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

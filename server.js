@@ -570,8 +570,8 @@ db.init().then(() => {
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {
-      if (await db.getUserSetting(u.fb_id, 'kindsV2', false)) continue;
-      try { if (!(await sync.exclusive(u.fb_id, () => sync.rematch(u)))) continue; await db.setUserSetting(u.fb_id, 'kindsV2', true); console.log('[startup] recounted live/post for', u.name); }
+      if (await db.getUserSetting(u.fb_id, 'kindsV3', false)) continue;
+      try { if (!(await sync.exclusive(u.fb_id, () => sync.rematch(u)))) continue; await db.setUserSetting(u.fb_id, 'kindsV3', true); console.log('[startup] recounted live/post for', u.name); }
       catch (e) { console.error('[startup] recount failed for', u.name, e.message); }
     }
   })();

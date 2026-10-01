@@ -23,17 +23,17 @@ const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
 // Is this campaign a boost post (vs a live) for this client?
 //  1. a manual choice in the app ("Move to Post" / "Move to Live") always wins;
 //  2. Post-only / live-only clients: everything is that kind;
-//  3. Meta's auto names ("Post: …") are posts; ads whose creative is a photo / link / text are posts;
-//  4. otherwise lives are the campaigns named the Ads Box way ("DC Shop | 29") or with "live" in the name,
-//     and anything else is a post.
-const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
+//  3. Meta's auto names ("Post: …") are posts, and so is any ad whose creative is a photo / link / text post
+//     (whatever the campaign is called) — lives are always video;
+//  4. everything else is a live (as before).
+const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE)$/;
 function isPostFor(client, it) {
   if (client.type === 'post') return true;
   if (client.type === 'live') return false;
   if (it.kind === 'post' || it.kind === 'live') return it.kind === 'post';
   if (isAutoPost(it.name)) return true;
   if (it.creative && NON_VIDEO.test(it.creative)) return true;
-  return !(/\|/.test(it.name) || /live|ផ្សាយ/i.test(it.name));
+  return false;
 }
 // Attach the manual Live/Post choices saved for this account to campaign rows.
 async function withKinds(owner, items) {

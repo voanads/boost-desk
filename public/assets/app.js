@@ -755,7 +755,7 @@
     $('dNext').disabled = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);
     $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
-    $('dTableTitle').textContent = 'Clients · ' + periodLabel();
+    $('dTableTitle').textContent = 'Clients · ' + periodLabel() + (dTypeF ? (dTypeF === 'live' ? ' · Live only' : ' · Boost posts only') : '');
     const key = from + '|' + to, samePeriod = key === dKey;
     const dir = !dKey ? 0 : samePeriod ? 0 : (from > dKey.split('|')[0] ? 1 : -1);
     const prevSpend = samePeriod && dData ? Object.fromEntries(dData.clients.map((c) => [c.id, c.spend])) : null;
@@ -781,7 +781,10 @@
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
   // Spend per Facebook Page, when a client's spend came from 2 or more Pages.
-  const pageSplit = (c) => { const l = (dPages[c.id] || []).filter((p) => p.spend > 0); return l.length > 1 ? l : null; };
+  const pageSplit = (c) => {
+    const l = (dPages[c.id] || []).map((p) => (dTypeF === 'live' ? { ...p, spend: p.live, post: 0 } : dTypeF === 'post' ? { ...p, spend: p.post, live: 0 } : p)).filter((p) => p.spend > 0.0049).sort((a, b) => b.spend - a.spend);
+    return l.length > 1 ? l : null;
+  };
   const pageLine = (c) => { const l = pageSplit(c); if (!l) return ''; const top = l.slice(0, 3).map((p) => `${esc(p.page)} <b>${money(p.spend)}</b>`); return top.join(' · ') + (l.length > 3 ? ` · +${l.length - 3} more` : ''); };
   function pageBlock(c) {
     const l = pageSplit(c); if (!l) return '';
@@ -810,8 +813,9 @@
   const mergeType = (a, b) => (!a ? b : !b || a === b ? a : 'result');
   function dayParts(c, e) {
     const out = [];
-    if (hasL(c)) Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
+    if (hasL(c) && dTypeF !== 'post') Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
       .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: c.type === 'both' ? l.ids || [] : [] }); });
+    if (dTypeF === 'live') return out;
     if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: c.type === 'both' ? e.post.ids || [] : [] });
     return out;
   }
@@ -942,13 +946,27 @@
     return Object.values(e.lives || {}).some((l) => { if (!l || !(Number(l.spend) > 0) || !/^\d{1,2}:\d{2}$/.test(l.time || '')) return false; const [h, m] = l.time.split(':').map(Number), d = mins - (h * 60 + m); return d >= 0 && d <= 120; });
   }
 
+  // Live / Post filter: show only that kind of spend (a client doing both keeps just that part).
+  function kindDaySpend(c, e) {
+    let live = 0, post = 0;
+    if (hasL(c)) for (const l of Object.values(e.lives || {})) live += Number(l && l.spend) || 0;
+    if (hasP(c)) post += Number((e.post || {}).spend) || 0;
+    return { live, post };
+  }
+  function viewOf(c) {
+    if (!dTypeF) return c;
+    const days = Object.values(dEntries[c.id] || {}).filter((e) => kindDaySpend(c, e)[dTypeF] > 0.0049).length;
+    if (dTypeF === 'live') return { ...c, spend: c.liveSpend, postSpend: 0, results: 0, resSpend: 0, days };
+    return { ...c, spend: c.postSpend, liveSpend: 0, lives: 0, days };
+  }
   function renderDash() {
     if (!dData) return;
+    $('dTableTitle').textContent = 'Clients · ' + periodLabel() + (dTypeF ? (dTypeF === 'live' ? ' · Live only' : ' · Boost posts only') : '');
     const q = $('dSearch').value.trim().toLowerCase(), idle = !$('dShowIdle').checked; // all clients by default
-    let list = dData.clients.map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0, cprV: cpr(c.resSpend, c.results) }))
+    let list = dData.clients.filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c))).map(viewOf)
+      .map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0, cprV: cpr(c.resSpend, c.results) }))
       .filter((c) => !c.archived || c.spend > 0)
       .filter((c) => idle || c.spend > 0)
-      .filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c)))
       .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
     const k = dSort.key, dir = dSort.asc ? 1 : -1;
     list.sort((a, b) => ((b.spend > 0) - (a.spend > 0)) || (k === 'name' ? a.name.localeCompare(b.name) * dir : k === 'cpr' ? ((a.cprV == null) - (b.cprV == null)) || (a.cprV - b.cprV) * dir : (a[k] - b[k]) * dir) || a.name.localeCompare(b.name));
@@ -1003,7 +1021,7 @@
     $('dChartPanel').hidden = dMode === 'day';
     if (dMode !== 'day') {
       const ids = new Set(list.map((c) => c.id));
-      let days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (c.daily[d.day] || 0), 0) }));
+      let days = dData.days.map((d) => ({ day: d.day, spend: dData.clients.filter((c) => ids.has(c.id)).reduce((s, c) => s + (dTypeF ? kindDaySpend(c, (dEntries[c.id] || {})[d.day] || {})[dTypeF] : (c.daily[d.day] || 0)), 0) }));
       if (dMode === 'year') { // one bar per month
         const by = {}; for (const d of days) by[d.day.slice(0, 7)] = (by[d.day.slice(0, 7)] || 0) + d.spend;
         const y = dDate.slice(0, 4);

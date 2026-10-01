@@ -150,15 +150,26 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
   }, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
   const ids = [...new Set(withSpend.map((r) => r.campaign_id))];
-  const starts = {}, goals = {};
+  const starts = {}, goals = {}, runs = {};
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     // Campaign start times via the account's campaign list (the multi-ID "?ids=" lookup is retired).
     const camps = await allStatuses(`/${actId}/campaigns`, {
-      fields: 'id,start_time,created_time,adsets.limit(5){optimization_goal}',
+      fields: 'id,start_time,created_time,stop_time,adsets.limit(5){optimization_goal,start_time,end_time}',
       filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100,
     }, { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
-    for (const c of camps) { starts[c.id] = c.start_time || c.created_time || null; goals[c.id] = (c.adsets?.data || []).map((a) => a.optimization_goal).find(Boolean) || ''; }
+    for (const c of camps) {
+      starts[c.id] = c.start_time || c.created_time || null; goals[c.id] = (c.adsets?.data || []).map((a) => a.optimization_goal).find(Boolean) || '';
+      // Scheduled run time in minutes (longest ad set; null = runs with no end date).
+      let run = 0;
+      for (const a of c.adsets?.data || []) {
+        const st = parseTime(a.start_time || c.start_time), en = parseTime(a.end_time || c.stop_time);
+        if (st == null || en == null) { run = null; break; }
+        run = Math.max(run, Math.round((en - st) / 60000));
+      }
+      if (!(c.adsets?.data || []).length) { const st = parseTime(c.start_time), en = parseTime(c.stop_time); run = st != null && en != null ? Math.round((en - st) / 60000) : null; }
+      runs[c.id] = run;
+    }
   }
   const pages = await campaignPages(token, actId, ids);
   return withSpend.map((r) => ({
@@ -169,6 +180,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',
     creative: pages[r.campaign_id]?.type || '', // PHOTO / VIDEO / SHARE …
+    runMinutes: r.campaign_id in runs ? runs[r.campaign_id] : undefined, // scheduled length: lives 2–3h, posts a day or more
     boost: pages[r.campaign_id]?.boost || '', // 'live' when the boosted video was a Facebook live, 'post' otherwise
     ...campaignResult(r, goals[r.campaign_id]),
     ...engagement(r),

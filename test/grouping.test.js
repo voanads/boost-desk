@@ -88,4 +88,8 @@ assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', creative: 'PHOTO' }
 assert.strictEqual(isPostFor(both, { name: 'Post: "Sale"' }), true, 'older rows: Meta auto name = post');
 assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1' }), false, 'older rows: other names = live');
 assert.strictEqual(isPostFor({ type: 'live' }, { name: 'x', boost: 'post' }), false, 'live-only client');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', runMinutes: 150 }), false, '2.5h run = live');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', runMinutes: 2880 }), true, '2-day run = post');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', runMinutes: null }), true, 'no end date = post');
+assert.strictEqual(isPostFor(both, { name: 'Post: x', runMinutes: 180, boost: 'post' }), false, 'run time wins over everything else');
 console.log('Live/post checks passed.');

@@ -22,13 +22,15 @@ const campaignPrefix = (name) => { const m = String(name).match(/^(.*?)\s*\|/); 
 const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
 // Is this campaign a boost post (vs a live) for this client?
 //  • post-only / live-only clients: everything is that kind;
-//  • otherwise the ad decides: the boosted video was a Facebook live → live; a photo, link, text or
-//    ordinary video post → boost post (checked with Meta on each sync, whatever the campaign is called);
-//  • rows synced before that check: Meta's auto names ("Post: …") are posts, other names are lives.
+//  • otherwise the scheduled run time decides: lives are boosted for a few hours (2–3h), posts for a
+//    day or more — so 12 hours or less = live, longer or no end date = boost post;
+//  • rows synced before run times were saved: the ad check (live video?) or Meta's "Post: …" name.
+const LIVE_MAX_MINUTES = Number(process.env.LIVE_MAX_HOURS || 12) * 60;
 const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
 function isPostFor(client, it) {
   if (client.type === 'post') return true;
   if (client.type === 'live') return false;
+  if (it.runMinutes !== undefined) return it.runMinutes === null || it.runMinutes > LIVE_MAX_MINUTES;
   if (it.boost === 'post' || it.boost === 'live') return it.boost === 'post';
   if (it.creative && NON_VIDEO.test(it.creative)) return true;
   return isAutoPost(it.name);

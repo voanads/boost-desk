@@ -365,16 +365,19 @@ const isWholeYear = (from, to) => from.slice(5) === '01-01' && to.slice(5) === '
 const periodName = (from, to) => (isWholeYear(from, to) ? from.slice(0, 4) : isWholeMonth(from, to) ? monthName(from) : shortDay(from) + ' – ' + shortDay(to));
 const byMonthLabel = (ym) => new Date(ym + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 
-async function clientReport(owner, clientId, from, to) {
+// kind: '' = lives and posts, 'live' = lives only, 'post' = boost posts only (the Dashboard's Live / Post filter).
+async function clientReport(owner, clientId, from, to, kind = '') {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   const rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
   const lines = [];
+  const L = hasLive(c) && kind !== 'post', P = hasPost(c) && kind !== 'live';
+  const head = `📊 ${c.name} — ${kind === 'post' ? 'Boost post report' : kind === 'live' ? 'Live report' : 'Boost report'}`;
   if (from === to) {
     const e = (rows[0] || {}).data || {};
-    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${niceDay(from)}`, '');
+    lines.push(head, `🗓 ${niceDay(from)}`, '');
     let total = 0;
-    if (hasLive(c)) {
+    if (L) {
       const lives = Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)));
       for (const [k, l] of lives) {
         if (!(Number(l.spend) > 0)) continue;
@@ -382,12 +385,12 @@ async function clientReport(owner, clientId, from, to) {
         lines.push(`🔴 Live ${k.slice(1)}${l.time ? ' (' + l.time + ')' : ''}: ${fmt(l.spend)}`);
       }
     }
-    if (hasPost(c) && Number((e.post || {}).spend) > 0) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
+    if (P && Number((e.post || {}).spend) > 0) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
     if (!total) lines.push('No boost spend on this day.');
     lines.push('', totalWithTax(total));
     if (e.note) lines.push(`📝 ${e.note}`);
   } else {
-    lines.push(`📊 ${c.name} — Boost report`, `🗓 ${periodName(from, to)}`, '');
+    lines.push(head, `🗓 ${periodName(from, to)}`, '');
     let total = 0, live = 0, post = 0, lives = 0, days = 0;
     const daily = [];
     const long = (Date.parse(to) - Date.parse(from)) / 864e5 > 62; // long periods are listed month by month
@@ -395,8 +398,8 @@ async function clientReport(owner, clientId, from, to) {
     for (const r of rows) {
       const e = r.data || {};
       let dl = 0, dn = 0, dp = 0;
-      if (hasLive(c)) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; if (v > 0) { dl += v; dn++; } }
-      if (hasPost(c)) dp = Number((e.post || {}).spend) || 0;
+      if (L) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; if (v > 0) { dl += v; dn++; } }
+      if (P) dp = Number((e.post || {}).spend) || 0;
       const t = dl + dp;
       if (!t) continue;
       days++; total += t; live += dl; post += dp; lives += dn;
@@ -412,8 +415,8 @@ async function clientReport(owner, clientId, from, to) {
     else {
       lines.push(totalWithTax(total));
       const sub = [];
-      if (hasLive(c)) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
-      if (hasPost(c)) sub.push(`📌 Boost posts: ${fmt(post)}`);
+      if (L) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
+      if (P) sub.push(`📌 Boost posts: ${fmt(post)}`);
       lines.push(...sub, `📅 ${days} day${days === 1 ? '' : 's'} with boosts`, '', ...daily);
     }
   }

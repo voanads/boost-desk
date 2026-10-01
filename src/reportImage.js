@@ -17,7 +17,7 @@ const cut = (s, n) => { const a = [...String(s || '')]; return a.length > n ? a.
 const plural = (n, t) => (n === 1 ? t : t === 'person reached' ? 'people reached' : t + 's');
 
 // The client's campaigns in the period (from saved sync rows), grouped by ad account.
-async function clientCampaigns(owner, clientId, from, to) {
+async function clientCampaigns(owner, clientId, from, to, kind = '') {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) return { client: null, byAccount: {} };
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
@@ -27,6 +27,7 @@ async function clientCampaigns(owner, clientId, from, to) {
     if (!(Number(r.spend) > 0) || !r.campaignId || !r.accountId) continue;
     const m = sync.matchClient(r, clients);
     if (!m || m.id !== c.id) continue;
+    if (kind && (sync.isPostFor(c, r) ? 'post' : 'live') !== kind) continue; // Live / Post filter
     (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
   }
   return { client: c, byAccount };
@@ -45,8 +46,8 @@ async function fetchThumb(url) {
 }
 
 // Ads for one client and period, straight from Meta.
-async function clientAds(user, clientId, from, to) {
-  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to);
+async function clientAds(user, clientId, from, to, kind = '') {
+  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind);
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   const token = await sync.tokenFor(user);
   const ads = []; let reach = 0;
@@ -134,8 +135,8 @@ async function render({ client, ads, reach }, from, to) {
 }
 
 // PNG for a client's report, or null when there are no ads with spend.
-async function clientReportImage(user, clientId, from, to) {
-  const data = await clientAds(user, clientId, from, to);
+async function clientReportImage(user, clientId, from, to, kind = '') {
+  const data = await clientAds(user, clientId, from, to, kind);
   if (!data.ads.length) return null;
   return render(data, from, to);
 }

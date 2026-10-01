@@ -8,6 +8,7 @@ const meta = require('./src/meta');
 const sync = require('./src/sync');
 const lives = require('./src/lives');
 const reportImage = require('./src/reportImage');
+const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 const jobs = require('./src/jobs');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
@@ -478,14 +479,14 @@ api.get('/telegram/chats', wrap(async (req, res) => {
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kindOf(req.query.kind)));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
-async function reportPng(user, id, from, to) {
-  const k = `${user.fb_id}|${id}|${from}|${to}`, hit = imgCache.get(k);
+async function reportPng(user, id, from, to, kind = '') {
+  const k = `${user.fb_id}|${id}|${from}|${to}|${kind}`, hit = imgCache.get(k);
   if (hit && Date.now() - hit.at < 5 * 60000) return hit.png;
-  const png = await reportImage.clientReportImage(user, id, from, to);
+  const png = await reportImage.clientReportImage(user, id, from, to, kind);
   imgCache.set(k, { png, at: Date.now() });
   for (const [kk, v] of imgCache) if (Date.now() - v.at > 5 * 60000) imgCache.delete(kk);
   return png;
@@ -493,19 +494,20 @@ async function reportPng(user, id, from, to) {
 api.get('/client-report/:id/image', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}`);
-  const png = await reportPng(req.user, req.params.id, from, to);
+  const kind = kindOf(req.query.kind);
+  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}`);
+  const png = await reportPng(req.user, req.params.id, from, to, kind);
   if (!png) return res.status(204).end();
   res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text, withImage } = req.body || {};
+  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind);
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to);
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;
-  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
+  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
   if (png) await telegram.sendPhoto(png, body, r.client.telegram);
   else await telegram.send(body, r.client.telegram);
   const sentAt = new Date().toISOString();

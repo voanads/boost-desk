@@ -846,7 +846,7 @@
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map(partLine).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}</button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -1011,10 +1011,10 @@
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };
     });
     document.querySelectorAll('#dBody [data-dreport]').forEach((b) => b.onclick = () => {
-      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.dreport), from, to, label: periodLabel() });
+      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.dreport), from, to, label: periodLabel(), only: dTypeF });
     });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
-      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel() });
+      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel(), only: dTypeF });
     });
 
     // Daily chart for months and ranges, filtered to the visible clients.
@@ -1045,9 +1045,9 @@
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}`);
         if (ckTarget !== o) return;
-        $('ckTitle').textContent = `${r.client.name} · ${o.label}`;
+        $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}`;
         $('ckText').value = r.text;
         $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
           : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
@@ -1090,7 +1090,7 @@
     $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
     $('ckWithImg').disabled = true;
     try {
-      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${fresh ? '&fresh=1' : ''}`);
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${fresh ? '&fresh=1' : ''}`);
       if (ckTarget !== o) return;
       if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }
@@ -1109,7 +1109,7 @@
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '' } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

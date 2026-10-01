@@ -46,12 +46,12 @@ const plan = buildPlan(items, clients, 30 * 60000);
 const byId = Object.fromEntries(plan.targets.map((x) => [x.clientId, x]));
 
 assert.deepStrictEqual(byId[1].slots.map((s) => [s.count, s.spend]), [[3, 60.91], [2, 147.32]], 'DC Shop = 2 lives');
-assert.deepStrictEqual(byId[1].post, { spend: 4.5, count: 1 }, 'DC Shop post boost matched by Page');
+assert.deepStrictEqual((({ spend, count }) => ({ spend, count }))(byId[1].post), { spend: 4.5, count: 1 }, 'DC Shop post boost matched by Page');
 assert.deepStrictEqual(byId[2].slots.map((s) => [s.count, s.spend]), [[3, 149.7]], 'CosMe = 1 live');
 assert.deepStrictEqual(byId[3].slots.map((s) => [s.count, s.spend]), [[2, 90]], 'LR Shop matched via page name');
 assert.strictEqual(byId[4].post.spend, 2.72, 'post boost matched via ad account');
 assert.strictEqual(byId[5].post.spend, 6.02, 'post boost matched via Page name');
-assert.deepStrictEqual(byId[6].post, { spend: 10, count: 2 }, 'two Pages add up for one client');
+assert.deepStrictEqual((({ spend, count }) => ({ spend, count }))(byId[6].post), { spend: 10, count: 2 }, 'two Pages add up for one client');
 assert.deepStrictEqual(plan.unmatched.map((u) => u.label).sort(), ['LyLy pich shop · ' + A, 'Post boosts (Page unknown) · IP 001', 'Post boosts for Page "Some Other Page" · IP 001'].sort());
 assert.strictEqual(decrypt(encrypt('token-123')), 'token-123');
 assert.match(todayIn('Asia/Phnom_Penh', new Date('2026-09-29T20:00:00Z')), /^2026-09-30$/);
@@ -78,3 +78,15 @@ const dcSlot = rp.targets[0].slots[0];
 assert.strictEqual(dcSlot.results, 40, 'results add up within one live');
 assert.strictEqual(dcSlot.resultType, 'message');
 console.log('Results checks passed.');
+
+// Live vs post for clients that do both.
+const { isPostFor } = require('../src/sync');
+const both = { type: 'both' };
+assert.strictEqual(isPostFor(both, { name: 'Post: "Sale"' }), true, 'Meta auto name = post');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1' }), false, 'Ads Box live name = live');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', creative: 'PHOTO' }), true, 'photo creative = post even with a live-style name');
+assert.strictEqual(isPostFor(both, { name: 'New sofa promo' }), true, 'other names = post');
+assert.strictEqual(isPostFor(both, { name: 'Kabas live 10am' }), false, '"live" in the name = live');
+assert.strictEqual(isPostFor(both, { name: 'Kabas Home | 1', kind: 'post' }), true, 'manual choice wins');
+assert.strictEqual(isPostFor({ type: 'live' }, { name: 'Post: x' }), false, 'live-only client');
+console.log('Live/post checks passed.');

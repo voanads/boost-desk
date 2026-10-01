@@ -798,6 +798,16 @@
     try { await api('/page-names/' + b.dataset.pgid, { method: 'PUT', body: { name: name.trim() } }); dPages = await api(`/dashboard/pages?from=${dRange()[0]}&to=${dRange()[1]}`); renderDash(); toast(name.trim() ? 'Page name saved' : 'Page name removed'); }
     catch (e) { toast(e.message); }
   });
+  // "Move to Post" / "Move to Live": fix how a campaign was counted. Saved, and used by every sync after.
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('.mvkind'); if (!b) return;
+    ev.stopPropagation();
+    const ids = b.dataset.ids.split(',').filter(Boolean), kind = b.dataset.kind;
+    if (!confirm(`Count ${ids.length === 1 ? 'this campaign' : 'these ' + ids.length + ' campaigns'} as ${kind === 'post' ? 'a boost post' : 'a live'}? The app will remember it.`)) return;
+    b.disabled = true; b.classList.add('busy');
+    try { await api('/campaign-kind', { method: 'POST', body: { ids, kind } }); toast(kind === 'post' ? 'Moved to Boost post' : 'Moved to Live'); await loadDash(); }
+    catch (e) { toast(e.message); b.disabled = false; b.classList.remove('busy'); }
+  });
   const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 
@@ -811,11 +821,11 @@
   function dayParts(c, e) {
     const out = [];
     if (hasL(c)) Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
-      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType }); });
-    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType });
+      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: c.type === 'both' ? l.ids || [] : [] }); });
+    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: c.type === 'both' ? e.post.ids || [] : [] });
     return out;
   }
-  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}${p.ids && p.ids.length ? `<button class="mvkind" type="button" data-ids="${p.ids.join(',')}" data-kind="${p.kind === 'live' ? 'post' : 'live'}" title="${p.kind === 'live' ? 'These campaigns are boost posts, not a live' : 'These campaigns are a live, not boost posts'}">${p.kind === 'live' ? 'Move to Post' : 'Move to Live'}</button>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';

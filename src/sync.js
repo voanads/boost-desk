@@ -20,6 +20,27 @@ function hhmm(ms, tz = cfg.tz) {
 const campaignPrefix = (name) => { const m = String(name).match(/^(.*?)\s*\|/); return (m ? m[1] : String(name)).trim(); };
 
 const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
+// Is this campaign a boost post (vs a live) for this client?
+//  1. a manual choice in the app ("Move to Post" / "Move to Live") always wins;
+//  2. Post-only / live-only clients: everything is that kind;
+//  3. Meta's auto names ("Post: …") are posts; ads whose creative is a photo / link / text are posts;
+//  4. otherwise lives are the campaigns named the Ads Box way ("DC Shop | 29") or with "live" in the name,
+//     and anything else is a post.
+const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
+function isPostFor(client, it) {
+  if (client.type === 'post') return true;
+  if (client.type === 'live') return false;
+  if (it.kind === 'post' || it.kind === 'live') return it.kind === 'post';
+  if (isAutoPost(it.name)) return true;
+  if (it.creative && NON_VIDEO.test(it.creative)) return true;
+  return !(/\|/.test(it.name) || /live|ផ្សាយ/i.test(it.name));
+}
+// Attach the manual Live/Post choices saved for this account to campaign rows.
+async function withKinds(owner, items) {
+  const k = await db.getUserSetting(owner, 'kindOverrides', {});
+  if (!Object.keys(k).length) return items;
+  return items.map((it) => (it.campaignId && k[it.campaignId] ? { ...it, kind: k[it.campaignId] } : it));
+}
 
 // Match order: the Facebook Page the ad promotes (name, then ID) → campaign name ("DC Shop | 29")
 // → linked ad account. Lives and boost posts both match by Page first.
@@ -86,18 +107,18 @@ function buildPlan(items, clients, gapMs = cfg.liveGapMinutes * 60000) {
   for (const { client, items: g } of groups.values()) {
     // Post clients: everything is post spend. Live clients: everything is lives.
     // Post + live clients: auto-named "Post: …" boosts are posts, named campaigns are lives.
-    const toPost = (it) => client.type === 'post' || (client.type === 'both' && isAutoPost(it.name));
+    const toPost = (it) => isPostFor(client, it);
     const postItems = g.filter(toPost), liveItems = g.filter((it) => !toPost(it));
     const slots = [];
     liveItems.sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity));
     for (const it of liveItems) {
       const last = slots[slots.length - 1];
       if (last && it.start != null && last.start != null && it.start - last.start <= gapMs) {
-        last.spend = round2(last.spend + it.spend); last.count++; addRes(last, it);
-      } else { const sl = { start: it.start, spend: round2(it.spend), count: 1 }; addRes(sl, it); slots.push(sl); }
+        last.spend = round2(last.spend + it.spend); last.count++; addRes(last, it); if (it.campaignId) last.ids.push(String(it.campaignId));
+      } else { const sl = { start: it.start, spend: round2(it.spend), count: 1, ids: it.campaignId ? [String(it.campaignId)] : [] }; addRes(sl, it); slots.push(sl); }
     }
     let post = null;
-    if (postItems.length) { post = { spend: round2(postItems.reduce((s, x) => s + x.spend, 0)), count: postItems.length }; postItems.forEach((it) => addRes(post, it)); }
+    if (postItems.length) { post = { spend: round2(postItems.reduce((s, x) => s + x.spend, 0)), count: postItems.length, ids: postItems.map((it) => it.campaignId).filter(Boolean).map(String) }; postItems.forEach((it) => addRes(post, it)); }
     targets.push({ clientId: client.id, slots, post });
   }
   return { targets, unmatched: [...unmatched.values()].sort((a, b) => b.spend - a.spend) };
@@ -175,7 +196,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
   if (!rematch) await db.notePages(user.fb_id, items.map((it) => it.page), day);
-  const plan = buildPlan(items, clients);
+  const plan = buildPlan(await withKinds(user.fb_id, items), clients);
   const syncedAt = new Date().toISOString();
   const touched = new Set();
   for (const t of plan.targets) {
@@ -186,14 +207,17 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
       const lives = {};
       t.slots.forEach((sl, i) => {
         const prev = (e.lives || {})['l' + (i + 1)] || {};
-        lives['l' + (i + 1)] = withRes({ ...prev, spend: sl.spend, on: true, campaigns: sl.count, time: sl.start != null ? hhmm(sl.start) : prev.time || '' }, sl);
+        lives['l' + (i + 1)] = withRes({ ...prev, spend: sl.spend, on: true, campaigns: sl.count, ids: sl.ids, time: sl.start != null ? hhmm(sl.start) : prev.time || '' }, sl);
       });
       // Clear spend on slots Meta no longer reports.
       for (const k of Object.keys(e.lives || {})) if (!lives[k]) lives[k] = { ...e.lives[k], spend: 0, campaigns: 0 };
       e.lives = lives;
       e.liveCount = Math.max(e.liveCount ?? 0, t.slots.length);
+    } else if (e.lives) { // no lives any more (e.g. moved to Post): clear their spend
+      for (const k of Object.keys(e.lives)) e.lives[k] = { ...e.lives[k], spend: 0, campaigns: 0, ids: [] };
     }
-    if (t.post) e.post = withRes({ ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count }, t.post);
+    if (t.post) e.post = withRes({ ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count, ids: t.post.ids }, t.post);
+    else if (e.post && Number(e.post.spend) > 0) e.post = { ...e.post, spend: 0, campaigns: 0, ids: [] }; // posts moved to Live
     e.syncedAt = syncedAt;
     await db.putEntry(day, t.clientId, e);
   }
@@ -445,7 +469,7 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
   const seen = new Set(), sessions = new Set(), names = new Set();
   let spend = 0, live = 0, post = 0;
   for (const owner of owners) {
-    const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+    const all = await withKinds(owner, (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day }))));
     if (!all.length) continue;
     const clients = await clientsWithLearnedPages(owner, all, { save: false });
     const liveBy = {};
@@ -453,7 +477,7 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
       if (!(Number(r.spend) > 0)) continue;
       const c = matchClient(r, clients); if (!c) continue;
       const key = `${r.accountId}|${r.day}|${r.campaignId || r.name + '|' + (r.start || '')}`;
-      const toPost = c.type === 'post' || (c.type === 'both' && isAutoPost(r.name));
+      const toPost = isPostFor(c, r);
       if (!toPost) (liveBy[c.id + '|' + r.day] = liveBy[c.id + '|' + r.day] || []).push({ key, start: r.start });
       if (seen.has(key)) continue;
       seen.add(key); names.add(norm(c.name));
@@ -477,7 +501,7 @@ async function uniqueTotals(owners, from, to, gapMs = cfg.liveGapMinutes * 60000
 // Spend per Facebook Page for each client over [from, to], from the saved campaign rows.
 // { clientId: [{ page, live, post, spend, campaigns }] } — biggest Page first.
 async function pageSpend(owner, from, to) {
-  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+  const all = await withKinds(owner, (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day }))));
   if (!all.length) return {};
   const clients = await clientsWithLearnedPages(owner, all, { save: false });
   // Page names: from the row, else any name learned since (other rows, Meta lookups, names typed in the app).
@@ -487,7 +511,7 @@ async function pageSpend(owner, from, to) {
   for (const r of all) {
     const v = Number(r.spend) || 0; if (!(v > 0)) continue;
     const c = matchClient(r, clients); if (!c) continue;
-    const toPost = c.type === 'post' || (c.type === 'both' && isAutoPost(r.name));
+    const toPost = isPostFor(c, r);
     const name = r.page || (r.pageId && names[r.pageId]) || '';
     const page = name || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
     const m = (out[c.id] = out[c.id] || {});
@@ -499,4 +523,4 @@ async function pageSpend(owner, from, to) {
   return out;
 }
 
-module.exports = { pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { isPostFor, withKinds, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

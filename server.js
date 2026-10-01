@@ -374,6 +374,18 @@ api.put('/page-names/:id', wrap(async (req, res) => {
   if (name) meta.rememberPageNames({ [id]: name }, true);
   res.json({ ok: true });
 }));
+// Move campaigns between Live and Post for this account ("auto" = let the app decide again).
+api.post('/campaign-kind', wrap(async (req, res) => {
+  const { ids, kind } = req.body || {};
+  const list = (Array.isArray(ids) ? ids : []).map(String).filter((x) => /^\d{1,25}$/.test(x)).slice(0, 200);
+  if (!list.length || !['post', 'live', 'auto'].includes(kind)) return res.status(400).json({ error: 'Nothing to move.' });
+  const k = await db.getUserSetting(req.user.fb_id, 'kindOverrides', {});
+  for (const id of list) { if (kind === 'auto') delete k[id]; else k[id] = kind; }
+  await db.setUserSetting(req.user.fb_id, 'kindOverrides', k);
+  const r = await sync.exclusive(req.user.fb_id, () => sync.rematch(req.user));
+  if (!r) return res.status(409).json({ error: 'A sync is running. Try again in a moment.' });
+  res.json({ ok: true });
+}));
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });
@@ -555,4 +567,12 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 db.init().then(() => {
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
   jobs.start();
+  // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
+  (async () => {
+    for (const u of await db.allUsers()) {
+      if (await db.getUserSetting(u.fb_id, 'kindsV2', false)) continue;
+      try { if (!(await sync.exclusive(u.fb_id, () => sync.rematch(u)))) continue; await db.setUserSetting(u.fb_id, 'kindsV2', true); console.log('[startup] recounted live/post for', u.name); }
+      catch (e) { console.error('[startup] recount failed for', u.name, e.message); }
+    }
+  })();
 }).catch((e) => { console.error('Database setup failed:', e.message); process.exit(1); });

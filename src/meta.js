@@ -168,6 +168,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '') 
     start: parseTime(starts[r.campaign_id]),
     page: pages[r.campaign_id]?.name || '',
     pageId: pages[r.campaign_id]?.id || '',
+    creative: pages[r.campaign_id]?.type || '', // PHOTO / VIDEO / SHARE … helps tell a boost post from a live
     ...campaignResult(r, goals[r.campaign_id]),
     ...engagement(r),
   }));
@@ -313,13 +314,13 @@ async function adInsights(token, actId, campaignIds, since, until) {
 // even for client Pages you don't manage), then from the Page itself.
 const pageNameCache = new Map(); // only successful lookups are cached
 async function campaignPages(token, actId, campaignIds) {
-  const pageOf = {};
+  const pageOf = {}, typeOf = {};
   if (!campaignIds.length) return pageOf;
   try {
     for (let i = 0; i < campaignIds.length; i += 50) {
       const chunk = campaignIds.slice(i, i + 50);
       const ads = await allStatuses(`/${actId}/ads`, {
-        fields: 'campaign_id,creative{actor_id,effective_object_story_id,object_story_spec{page_id}},adset{promoted_object{page_id}}',
+        fields: 'campaign_id,creative{actor_id,effective_object_story_id,object_type,object_story_spec{page_id}},adset{promoted_object{page_id}}',
         filtering: [{ field: 'campaign.id', operator: 'IN', value: chunk }], limit: 500,
       }, { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
       for (const ad of ads) {
@@ -327,6 +328,7 @@ async function campaignPages(token, actId, campaignIds) {
         const pid = ad.adset?.promoted_object?.page_id || c.object_story_spec?.page_id || c.actor_id
           || String(c.effective_object_story_id || '').split('_')[0];
         if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = String(pid);
+        if (c.object_type) { const t = typeOf[ad.campaign_id]; typeOf[ad.campaign_id] = !t || t === c.object_type ? c.object_type : (c.object_type === 'VIDEO' || t === 'VIDEO' ? 'VIDEO' : t); }
       }
     }
   } catch (e) {
@@ -348,7 +350,9 @@ async function campaignPages(token, actId, campaignIds) {
       catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
     }
   }
-  return Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
+  const out = Object.fromEntries(Object.entries(pageOf).map(([cid, pid]) => [cid, { id: pid, name: pageNameCache.get(pid) || '' }]));
+  for (const [cid, t] of Object.entries(typeOf)) (out[cid] = out[cid] || { id: '', name: '' }).type = t;
+  return out;
 }
 
 // IDs of the account's currently active campaigns — one cheap call, used to spot new campaigns.

@@ -787,10 +787,17 @@
     const l = pageSplit(c); if (!l) return '';
     const tot = l.reduce((a, p) => a + p.spend, 0) || 1;
     return `<div class="pgsplit"><div class="pgsplit-h">Spend by Page</div>${l.map((p, i) => `<div class="pgrow" style="--i:${i}">
-      <div class="pgrow-n"><b>${esc(p.page)}</b><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}</span></div>
+      <div class="pgrow-n"><div class="pgrow-t"><b>${esc(p.page)}</b>${p.pageId ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="${p.named ? esc(p.page) : ''}">${p.named ? 'Rename' : 'Add name'}</button>` : ''}</div><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}</span></div>
       <div class="pgbar"><i style="width:${Math.max(2, p.spend / tot * 100).toFixed(1)}%"></i></div>
       <div class="pgrow-v num"><b>${money(p.spend)}</b><span class="hint">${Math.round(p.spend / tot * 100)}%</span></div></div>`).join('')}</div>`;
   }
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('.pgname'); if (!b) return;
+    ev.stopPropagation();
+    const name = prompt(`Name for Facebook Page ${b.dataset.pgid}:`, b.dataset.pgname || ''); if (name === null) return;
+    try { await api('/page-names/' + b.dataset.pgid, { method: 'PUT', body: { name: name.trim() } }); dPages = await api(`/dashboard/pages?from=${dRange()[0]}&to=${dRange()[1]}`); renderDash(); toast(name.trim() ? 'Page name saved' : 'Page name removed'); }
+    catch (e) { toast(e.message); }
+  });
   const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 

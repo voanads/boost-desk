@@ -480,14 +480,18 @@ async function pageSpend(owner, from, to) {
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
   if (!all.length) return {};
   const clients = await clientsWithLearnedPages(owner, all, { save: false });
+  // Page names: from the row, else any name learned since (other rows, Meta lookups, names typed in the app).
+  const names = { ...(await db.getSetting('pageNames', {})) };
+  for (const r of all) if (r.page && r.pageId && !names[r.pageId]) names[r.pageId] = r.page;
   const out = {};
   for (const r of all) {
     const v = Number(r.spend) || 0; if (!(v > 0)) continue;
     const c = matchClient(r, clients); if (!c) continue;
     const toPost = c.type === 'post' || (c.type === 'both' && isAutoPost(r.name));
-    const page = r.page || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
+    const name = r.page || (r.pageId && names[r.pageId]) || '';
+    const page = name || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
     const m = (out[c.id] = out[c.id] || {});
-    const p = (m[page] = m[page] || { page, live: 0, post: 0, spend: 0, campaigns: 0 });
+    const p = (m[page] = m[page] || { page, pageId: r.pageId || '', named: !!name, live: 0, post: 0, spend: 0, campaigns: 0 });
     if (toPost) p.post = round2(p.post + v); else p.live = round2(p.live + v);
     p.spend = round2(p.spend + v); p.campaigns++;
   }

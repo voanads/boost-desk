@@ -375,7 +375,7 @@ async function loadPageDirectory(token, force = false) {
   }
 }
 const knownPageNames = () => Object.fromEntries(pageNameCache);
-const rememberPageNames = (map) => { for (const [id, n] of Object.entries(map || {})) if (n && !pageNameCache.has(id)) pageNameCache.set(id, n); };
+const rememberPageNames = (map, force = false) => { for (const [id, n] of Object.entries(map || {})) if (n && (force || !pageNameCache.has(id))) pageNameCache.set(id, n); };
 
 // Graph returns "2026-09-29T13:28:04+0700"; add the colon so Date.parse is reliable.
 function parseTime(s) {

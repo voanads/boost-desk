@@ -840,3 +840,7 @@ body.has-dock #tab-dashboard{padding-bottom:84px}
 .pgrow{grid-template-columns:minmax(140px,1.2fr) 2fr 96px}
 .dtable .pg.pgmoney b{font-size:inherit;font-weight:700}
 @media (max-width:760px){.pgrow{grid-template-columns:1fr auto}}
+.pgname{margin-left:8px;padding:2px 9px;min-height:0;font-size:.74rem;font-weight:600;border-radius:99px;border:1px solid var(--line);background:var(--bg-2);color:var(--brand);vertical-align:1px}
+.pgname:hover{border-color:var(--brand)}
+.pgrow-t{display:flex;align-items:center;gap:8px;min-width:0}.pgrow-t b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgrow-t .pgname{margin-left:0;flex:none}

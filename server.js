@@ -364,6 +364,16 @@ api.get('/dashboard/pages', wrap(async (req, res) => {
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   res.json(await sync.pageSpend(req.user.fb_id, from, to));
 }));
+// Name a Page that Meta won't name (client Pages you don't manage). Saved for everyone, used by every sync.
+api.put('/page-names/:id', wrap(async (req, res) => {
+  const id = String(req.params.id), name = String((req.body || {}).name || '').trim().slice(0, 120);
+  if (!/^\d{5,25}$/.test(id)) return res.status(400).json({ error: 'Not a Page ID.' });
+  const names = await db.getSetting('pageNames', {});
+  if (name) names[id] = name; else delete names[id];
+  await db.setSetting('pageNames', names);
+  if (name) meta.rememberPageNames({ [id]: name }, true);
+  res.json({ ok: true });
+}));
 api.get('/dashboard', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid date or month.' });

@@ -105,6 +105,18 @@
     };
   }
 
+  // Sync errors in plain words: the same problem on many accounts is said once.
+  function syncErrText(errs) {
+    const noAccess = errs.filter((e) => /Cannot call API for app/i.test(e.message || ''));
+    const out = [];
+    if (noAccess.length) out.push(`Meta blocked ${noAccess.length} ad account${noAccess.length === 1 ? '' : 's'} because this Facebook account isn't approved for the Ads Box Meta app yet. Ask the app owner to add you as a Tester, accept the invite at developers.facebook.com/requests, then log out, log in and sync again.`);
+    const rest = errs.filter((e) => !noAccess.includes(e)), by = {};
+    for (const e of rest) (by[e.message] = by[e.message] || []).push(e.account);
+    const groups = Object.entries(by).map(([msg, accs]) => `${accs.slice(0, 4).join(', ')}${accs.length > 4 ? ` +${accs.length - 4} more` : ''}: ${msg}`);
+    if (rest.length) out.push(`${rest.length} account(s) failed — ` + groups.join(' · '));
+    return out.join(' ');
+  }
+
   // ---------- tabs ----------
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
   const ink = document.createElement('span'); ink.className = 'tab-ink'; document.querySelector('nav.tabs').appendChild(ink);
@@ -165,7 +177,7 @@
     if (m && m.synced_at) {
       const t = new Date(m.synced_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
       const errs = (m.unmatched && m.unmatched.errors) || [];
-      status($('syncStatus'), `Last synced from Meta ${t} by ${m.synced_by}.` + (errs.length ? ` ${errs.length} account(s) failed — ` + errs.map((e) => `${e.account}: ${e.message}`).join(' · ') : ''), errs.length > 0);
+      status($('syncStatus'), `Last synced from Meta ${t} by ${m.synced_by}.` + (errs.length ? ' ' + syncErrText(errs) : ''), errs.length > 0);
     } else status($('syncStatus'), 'Not synced from Meta yet for this day.');
     const un = (m && m.unmatched && m.unmatched.unmatched) || [];
     $('unmatchedPanel').hidden = !un.length;

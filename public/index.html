@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=52">
+<link rel="stylesheet" href="/assets/app.css?v=53">
 </head>
 <body>
 <div class="wrap">
@@ -314,10 +314,11 @@
     <div class="invcols">
       <div class="invform" id="invForm">
         <div class="fgrid">
+          <label><span>Invoice number</span><input type="text" id="invNumber" maxlength="30" autocomplete="off" spellcheck="false"></label>
           <label><span>Invoice date</span><input type="date" id="invDate"></label>
-          <label><span>Phone</span><input type="text" id="invPhone" maxlength="40"></label>
           <label><span>Customer</span><input type="text" id="invCustomer" maxlength="120"></label>
           <label><span>Company name</span><input type="text" id="invCompany" maxlength="120"></label>
+          <label class="wide"><span>Phone</span><input type="text" id="invPhone" maxlength="40"></label>
         </div>
         <div class="invitems-h"><span>Description</span><span>Qty</span><span>Unit price ($)</span><span></span></div>
         <div class="invitems" id="invItems"></div>
@@ -386,6 +387,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=52"></script>
+<script src="/assets/app.js?v=53"></script>
 </body>
 </html>

@@ -1415,7 +1415,7 @@
   const itemRow = (it = {}) => `<div class="invitem"><input type="text" class="i-d" maxlength="160" placeholder="Description" value="${esc(it.description || '')}"><input type="number" class="i-q" min="0" step="1" inputmode="numeric" value="${it.qty == null ? 1 : it.qty}"><input type="number" class="i-p" min="0" step="0.01" inputmode="decimal" value="${it.price || ''}"><button type="button" class="ghost sm i-x" aria-label="Remove line">✕</button></div>`;
   function invBody() {
     const items = [...document.querySelectorAll('#invItems .invitem')].map((r) => ({ description: r.querySelector('.i-d').value.trim(), qty: Number(r.querySelector('.i-q').value) || 0, price: Number(r.querySelector('.i-p').value) || 0 })).filter((it) => it.description || it.price);
-    return { clientId: invClient.id, date: $('invDate').value, customer: $('invCustomer').value, company: $('invCompany').value, phone: $('invPhone').value, items, discount: Number($('invDiscount').value) || 0 };
+    return { clientId: invClient.id, number: $('invNumber').value.trim(), date: $('invDate').value, customer: $('invCustomer').value, company: $('invCompany').value, phone: $('invPhone').value, items, discount: Number($('invDiscount').value) || 0 };
   }
   function invRecalc() {
     const b = invBody(), sub = b.items.reduce((a, it) => a + it.qty * it.price, 0);
@@ -1438,7 +1438,7 @@
   }
   function invFooter() {
     const f = $('invFoot');
-    if (!invSaved) { f.innerHTML = '<span class="hint">The preview updates as you type. The invoice number is given when you create it.</span><span class="spacer"></span><button type="button" class="primary" id="invCreate">Create invoice</button>'; $('invCreate').onclick = createInvoice; return; }
+    if (!invSaved) { f.innerHTML = '<span class="hint">The preview updates as you type. You can change the invoice number.</span><span class="spacer"></span><button type="button" class="primary" id="invCreate">Create invoice</button>'; $('invCreate').onclick = createInvoice; return; }
     const v = invSaved;
     f.innerHTML = `<span class="hint">${v.paidAt ? 'Paid.' : v.sentAt ? 'Sent to the group.' : 'Created — not sent yet.'}</span><span class="spacer"></span><a class="btn" href="/api/invoices/${v.id}/pdf?download=1">Download PDF</a><a class="btn" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">Open PDF</a><button type="button" class="primary" id="invSend">${v.sentAt ? 'Send again' : 'Send to group'}</button>`;
     $('invSend').onclick = async () => { if (await sendInvoice(v.id, $('invSend'))) $('invDlg').close(); };
@@ -1453,10 +1453,23 @@
     $('invItems').innerHTML = (saved ? v.items : [{ description: s2.description || DEF_DESC, qty: 1, price: s2.price || '' }]).map(itemRow).join('');
     $('invDiscount').value = v.discount || '';
     $('invForm').querySelectorAll('input, button').forEach((el) => { el.disabled = !!saved; });
+    // The invoice number can always be changed: before creating, and on a saved invoice.
+    $('invNumber').disabled = false; $('invNumber').value = saved ? saved.number : ''; $('invNumber').dataset.auto = '';
+    if (!saved) api('/invoice-next?date=' + $('invDate').value).then((n) => { if (invClient === c && !invSaved && !$('invNumber').value) { $('invNumber').value = n.number; $('invNumber').dataset.auto = n.number; invPreview(); } }).catch(() => {});
     $('invPrev').hidden = true; $('invPrevMsg').hidden = false; $('invPrevMsg').textContent = 'Drawing the invoice…';
     invFooter(); dlgOpen($('invDlg')); invRecalc(); invPreview();
   }
   $('invForm').addEventListener('input', invRecalc);
+  // Changing the number of a saved invoice: saved when you leave the box or press Enter.
+  async function saveInvNumber() {
+    if (!invSaved) return; const n = $('invNumber').value.trim();
+    if (!n) { $('invNumber').value = invSaved.number; return; }
+    if (n === invSaved.number) return;
+    try { invSaved = await api('/invoices/' + invSaved.id, { method: 'PATCH', body: { number: n } }); $('invNumber').value = invSaved.number; $('invTitle').textContent = `Invoice ${invSaved.number}`; invPreview(); successBadge('Invoice number changed'); loadPayments(); }
+    catch (e) { toast(e.message); $('invNumber').value = invSaved.number; }
+  }
+  $('invNumber').addEventListener('change', saveInvNumber);
+  $('invNumber').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); $('invNumber').blur(); } });
   $('invForm').addEventListener('click', (ev) => { const x = ev.target.closest('.i-x'); if (x && !invSaved) { if (document.querySelectorAll('#invItems .invitem').length > 1) x.closest('.invitem').remove(); else x.closest('.invitem').querySelectorAll('input').forEach((i) => { i.value = i.classList.contains('i-q') ? 1 : ''; }); invRecalc(); } });
   $('invAdd').onclick = () => { if (document.querySelectorAll('#invItems .invitem').length < 6) { $('invItems').insertAdjacentHTML('beforeend', itemRow({ qty: 1 })); invRecalc(); $('invItems').lastElementChild.querySelector('.i-d').focus(); } };
   async function createInvoice() {
@@ -1465,6 +1478,7 @@
       invSaved = await api('/invoices', { method: 'POST', body: invBody() });
       $('invTitle').textContent = `Invoice ${invSaved.number}`;
       $('invForm').querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+      $('invNumber').disabled = false; $('invNumber').value = invSaved.number;
       invFooter(); invPreview(); successBadge(`Invoice ${invSaved.number} created`); loadPayments();
     } catch (e) { toast(e.message); b.disabled = false; b.classList.remove('busy'); }
   }

@@ -356,7 +356,9 @@ api.put('/invoice-profile', wrap(async (req, res) => {
   if (b.nextNumber != null && (await db.ownerId()) === req.user.fb_id) { const n = parseInt(b.nextNumber, 10); if (n > 0 && n < 1e7) await db.setSetting('invoiceSeq', n - 1); }
   res.json(await invoiceProfile(req.user.fb_id));
 }));
-api.get('/invoice-next', wrap(async (req, res) => res.json({ next: (Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1, canSet: (await db.ownerId()) === req.user.fb_id })));
+const autoNumber = async (date) => `IN${String(date || sync.todayIn()).slice(2, 4)}-${String((Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1).padStart(4, '0')}`;
+const cleanNumber = (v) => String(v == null ? '' : v).replace(/[^\p{L}\p{N} ._/#-]+/gu, '').trim().slice(0, 30);
+api.get('/invoice-next', wrap(async (req, res) => res.json({ next: (Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1, number: await autoNumber(isDay(req.query.date) ? req.query.date : ''), canSet: (await db.ownerId()) === req.user.fb_id })));
 function cleanInvoice(b, c) {
   const str = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
   const items = (Array.isArray(b.items) ? b.items : []).slice(0, 6).map((it) => ({ description: str(it.description, 160), qty: Math.max(0, Number(it.qty) || 0), price: Math.max(0, Number(it.price) || 0) })).filter((it) => it.description || it.price);
@@ -369,7 +371,7 @@ api.post('/invoices/preview', wrap(async (req, res) => { // PNG of an invoice th
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   if (!isDay(b.date)) return res.status(400).json({ error: 'Pick the invoice date.' });
   const { data } = cleanInvoice(b, c);
-  const next = `IN${b.date.slice(2, 4)}-${String((Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1).padStart(4, '0')}`;
+  const next = cleanNumber(b.number) || await autoNumber(b.date);
   res.set('content-type', 'image/png').set('cache-control', 'no-store').send(await invoice.png({ ...data, number: next, date: b.date }, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {})));
 }));
 api.post('/invoices', wrap(async (req, res) => {
@@ -378,7 +380,11 @@ api.post('/invoices', wrap(async (req, res) => {
   if (!isDay(b.date)) return res.status(400).json({ error: 'Pick the invoice date.' });
   const { data, total } = cleanInvoice(b, c);
   if (!data.items.length) return res.status(400).json({ error: 'Add at least one line with a description or price.' });
-  res.json(await db.createInvoice(req.user.fb_id, { clientId: c.id, date: b.date, data, total }, req.user.name));
+  // A typed invoice number is used as it is; left as suggested (or empty), the next running number is taken.
+  let number = cleanNumber(b.number);
+  if (number && number === await autoNumber(b.date)) number = '';
+  if (number && await db.invoiceNumberUsed(number)) return res.status(409).json({ error: `Invoice number ${number} is already used. Type a different one.` });
+  res.json(await db.createInvoice(req.user.fb_id, { clientId: c.id, date: b.date, data, total, number }, req.user.name));
 }));
 const invFile = (inv) => `${String(inv.company || inv.customer || 'Invoice').replace(/[^\p{L}\p{N} ._-]+/gu, '').trim() || 'Invoice'} ${inv.number}.pdf`;
 api.get('/invoices/:id/pdf', wrap(async (req, res) => {
@@ -402,7 +408,14 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
 }));
 api.patch('/invoices/:id', wrap(async (req, res) => {
   const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
-  res.json(await db.markInvoice(req.user.fb_id, inv.id, { paid: (req.body || {}).paid === undefined ? undefined : !!req.body.paid }));
+  const b = req.body || {};
+  if (b.number !== undefined) {
+    const number = cleanNumber(b.number);
+    if (!number) return res.status(400).json({ error: 'Type the invoice number.' });
+    if (await db.invoiceNumberUsed(number, inv.id)) return res.status(409).json({ error: `Invoice number ${number} is already used. Type a different one.` });
+    if (number !== inv.number) await db.renumberInvoice(req.user.fb_id, inv.id, number);
+  }
+  res.json(await db.markInvoice(req.user.fb_id, inv.id, { paid: b.paid === undefined ? undefined : !!b.paid }));
 }));
 api.delete('/invoices/:id', wrap(async (req, res) => { await db.deleteInvoice(req.user.fb_id, Number(req.params.id)); res.json({ ok: true }); }));
 

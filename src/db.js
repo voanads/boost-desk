@@ -201,8 +201,21 @@ async function nextInvoiceNumber(date) {
                      ON CONFLICT (key) DO UPDATE SET value = to_jsonb((settings.value #>> '{}')::int + 1) RETURNING value`);
   return `IN${String(date).slice(2, 4)}-${String(Number(r.rows[0].value)).padStart(4, '0')}`;
 }
+// A typed number like "IN26-1468" moves the running number up to it, so the next invoice follows on.
+async function bumpInvoiceSeq(number) {
+  const m = String(number).match(/(\d+)\s*$/); if (!m) return;
+  const n = parseInt(m[1], 10), cur = Number(await getSetting('invoiceSeq', 0)) || 0;
+  if (n > cur && n < 1e7) await setSetting('invoiceSeq', n);
+}
+const invoiceNumberUsed = async (number, exceptId = 0) => (await q('SELECT 1 FROM invoices WHERE lower(number)=lower($1) AND id<>$2', [number, exceptId])).rowCount > 0;
+async function renumberInvoice(owner, id, number) {
+  await q('UPDATE invoices SET number=$3 WHERE owner=$1 AND id=$2', [owner, id, number]);
+  await bumpInvoiceSeq(number);
+  return getInvoice(owner, id);
+}
 async function createInvoice(owner, inv, by) {
   const number = inv.number || await nextInvoiceNumber(inv.date);
+  if (inv.number) await bumpInvoiceSeq(inv.number);
   const r = await q(`INSERT INTO invoices (owner, client_id, number, date, data, total, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${INV_COLS}`,
     [owner, inv.clientId, number, inv.date, JSON.stringify(inv.data), inv.total, by || '']);
   return invRow(r.rows[0]);
@@ -287,7 +300,7 @@ module.exports = {
   pool, init, getSetups, putSetup,
   upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,
-  createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice,
+  createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice, renumberInvoice, invoiceNumberUsed,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
   getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched,

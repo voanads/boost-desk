@@ -366,7 +366,8 @@ const periodName = (from, to) => (isWholeYear(from, to) ? from.slice(0, 4) : isW
 const byMonthLabel = (ym) => new Date(ym + '-15T12:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 
 // kind: '' = lives and posts, 'live' = lives only, 'post' = boost posts only (the Dashboard's Live / Post filter).
-async function clientReport(owner, clientId, from, to, kind = '') {
+// parts (one-day reports): only these lines, e.g. ['l1', 'l3', 'post'] — the ones ticked on the Dashboard.
+async function clientReport(owner, clientId, from, to, kind = '', parts = null) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   const rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
@@ -377,15 +378,16 @@ async function clientReport(owner, clientId, from, to, kind = '') {
     const e = (rows[0] || {}).data || {};
     lines.push(head, `🗓 ${niceDay(from)}`, '');
     let total = 0;
+    const pick = parts && parts.length ? new Set(parts) : null;
     if (L) {
       const lives = Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)));
       for (const [k, l] of lives) {
-        if (!(Number(l.spend) > 0)) continue;
+        if (!(Number(l.spend) > 0) || (pick && !pick.has(k))) continue;
         total += Number(l.spend);
         lines.push(`🔴 Live ${k.slice(1)}${l.time ? ' (' + l.time + ')' : ''}: ${fmt(l.spend)}`);
       }
     }
-    if (P && Number((e.post || {}).spend) > 0) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
+    if (P && Number((e.post || {}).spend) > 0 && (!pick || pick.has('post'))) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
     if (!total) lines.push('No boost spend on this day.');
     lines.push('', totalWithTax(total));
     if (e.note) lines.push(`📝 ${e.note}`);

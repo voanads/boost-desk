@@ -844,3 +844,14 @@ body.has-dock #tab-dashboard{padding-bottom:84px}
 .pgname:hover{border-color:var(--brand)}
 .pgrow-t{display:flex;align-items:center;gap:8px;min-width:0}.pgrow-t b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pgrow-t .pgname{margin-left:0;flex:none}
+
+/* ---------- tick lines for the report ---------- */
+.dl.pick{cursor:pointer;transition:opacity .25s,filter .25s,background-color .25s}
+.dl.pick:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.dl .tick{width:22px;height:22px;border-radius:7px;background:var(--brand);display:inline-grid;place-items:center;flex:none;margin-right:6px;transition:background-color .2s,box-shadow .2s;box-shadow:0 2px 8px color-mix(in srgb,var(--brand) 35%,transparent)}
+.dl .tick svg{width:15px;height:15px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s var(--smooth,ease),opacity .2s}
+.dl.pick.off{opacity:.55;filter:saturate(.4)}
+.dl.pick.off .tick{background:transparent;box-shadow:inset 0 0 0 2px var(--muted)}
+.dl.pick.off .tick svg{opacity:0;transform:scale(.4)}
+.dl.pick.off .box{text-decoration:line-through}
+.dl-n{align-items:center}

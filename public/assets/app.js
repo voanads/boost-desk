@@ -813,6 +813,18 @@
     try { await api('/page-names/' + b.dataset.pgid, { method: 'PUT', body: { name: name.trim() } }); dPages = await api(`/dashboard/pages?from=${dRange()[0]}&to=${dRange()[1]}`); renderDash(); toast(name.trim() ? 'Page name saved' : 'Page name removed'); }
     catch (e) { toast(e.message); }
   });
+  // Tick / untick a live or the boost post for the report.
+  function togglePick(line) {
+    const cid = Number(line.dataset.cid), off = offSet(cid, dDate), k = line.dataset.pick;
+    if (off.has(k)) off.delete(k); else off.add(k);
+    line.classList.toggle('off', off.has(k)); line.setAttribute('aria-checked', String(!off.has(k)));
+    const lines = [...document.querySelectorAll(`#dBody .dl.pick[data-cid="${cid}"]`)], on = lines.filter((l) => !l.classList.contains('off'));
+    const btn = document.querySelector(`#dBody [data-dreport="${cid}"]`), lab = btn && btn.querySelector('.rlabel');
+    if (lab) lab.textContent = on.length === lines.length ? '' : on.length ? ` · ${on.length} of ${lines.length} ticked · ${money(on.reduce((a, l) => a + Number(l.dataset.spend), 0))}` : ' · nothing ticked';
+    if (!calm && line.animate) line.animate([{ transform: 'scale(.985)' }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' });
+  }
+  document.addEventListener('click', (ev) => { const l = ev.target.closest('.dl.pick'); if (l && !ev.target.closest('button, input, a')) togglePick(l); });
+  document.addEventListener('keydown', (ev) => { if ((ev.key === ' ' || ev.key === 'Enter') && ev.target.classList && ev.target.classList.contains('pick')) { ev.preventDefault(); togglePick(ev.target); } });
   const pageNames = (c) => { const n = c.pages.filter((p) => p !== c.name && !/^\d{6,}$/.test(p)); return n.length > 2 ? n.slice(0, 2).join(' · ') + ` +${n.length - 2}` : n.join(' · '); };
   const hasL = (c) => c.type === 'live' || c.type === 'both', hasP = (c) => c.type === 'post' || c.type === 'both';
 
@@ -826,18 +838,28 @@
   function dayParts(c, e) {
     const out = [];
     if (hasL(c) && dTypeF !== 'post') Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
-      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: c.type === 'both' ? l.ids || [] : [] }); });
+      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ key: k, kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: c.type === 'both' ? l.ids || [] : [] }); });
     if (dTypeF === 'live') return out;
-    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: c.type === 'both' ? e.post.ids || [] : [] });
+    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ key: 'post', kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: c.type === 'both' ? e.post.ids || [] : [] });
     return out;
   }
-  const partLine = (p) => `<div class="dl ${p.kind}"><span class="dl-n"><b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  // Unticked lines per client + day: those are left out of the report. Everything starts ticked.
+  const dOff = {};
+  const offSet = (cid, day) => dOff[cid + '|' + day] || (dOff[cid + '|' + day] = new Set());
+  const partLine = (p, pick) => `<div class="dl ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}" data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}><span class="dl-n">${pick ? '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>' : ''}<b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  function pickLabel(c) {
+    if (dMode !== 'day') return '';
+    const parts = dayParts(c, (dEntries[c.id] || {})[dDate] || {}), off = offSet(c.id, dDate), on = parts.filter((p) => !off.has(p.key));
+    return parts.length < 2 || on.length === parts.length ? '' : on.length ? ` · ${on.length} of ${parts.length} ticked · ${money(on.reduce((a, p) => a + p.spend, 0))}` : ' · nothing ticked';
+  }
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
     if (dMode === 'day') {
       const e = days[dDate] || {}, parts = dayParts(c, e);
-      body = (parts.length ? parts.map(partLine).join('') : '<div class="muted">No boost spend on this day.</div>')
+      const pick = parts.length > 1 ? { cid: c.id, off: offSet(c.id, dDate) } : null; // ticks only make sense with 2+ lines
+      if (pick) for (const k of [...pick.off]) if (!parts.some((p) => p.key === k)) pick.off.delete(k);
+      body = (parts.length ? parts.map((p) => partLine(p, pick)).join('') : '<div class="muted">No boost spend on this day.</div>')
         + (e.note ? `<div class="dnote">📝 ${esc(e.note)}</div>` : '')
         + (e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
     } else if (dMode === 'year') {
@@ -855,10 +877,10 @@
       const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
       body = list.length ? list.map((x) => {
         const tot = x.parts.reduce((s2, p) => s2 + p.spend, 0);
-        return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map(partLine).join('')}</div>`;
+        return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}</button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -1023,7 +1045,10 @@
       tr.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === tr) { ev.preventDefault(); toggle(); } };
     });
     document.querySelectorAll('#dBody [data-dreport]').forEach((b) => b.onclick = () => {
-      const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.dreport), from, to, label: periodLabel(), only: dTypeF });
+      const [from, to] = dRange(), cid = Number(b.dataset.dreport);
+      const lines = [...document.querySelectorAll(`#dBody .dl.pick[data-cid="${cid}"]`)], on = lines.filter((l) => !l.classList.contains('off')).map((l) => l.dataset.pick);
+      if (lines.length && !on.length) return toast('Tick at least one line to send.');
+      openReportDlg({ kind: 'client', cid, from, to, label: periodLabel(), only: dTypeF, parts: lines.length && on.length < lines.length ? on : null });
     });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel(), only: dTypeF });
@@ -1057,9 +1082,9 @@
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}`);
         if (ckTarget !== o) return;
-        $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}`;
+        $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}`;
         $('ckText').value = r.text;
         $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
           : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
@@ -1102,7 +1127,7 @@
     $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
     $('ckWithImg').disabled = true;
     try {
-      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${fresh ? '&fresh=1' : ''}`);
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${fresh ? '&fresh=1' : ''}`);
       if (ckTarget !== o) return;
       if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }
@@ -1121,7 +1146,7 @@
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '' } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

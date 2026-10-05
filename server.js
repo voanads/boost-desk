@@ -9,6 +9,8 @@ const sync = require('./src/sync');
 const lives = require('./src/lives');
 const reportImage = require('./src/reportImage');
 const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
+// Ticked report lines: "l1,l3,post" or ['l1','post'] → clean list, or null for everything.
+const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split(',')).map(String).filter((x) => /^(l\d{1,2}|post)$/.test(x)); return a.length ? [...new Set(a)].sort() : null; };
 const jobs = require('./src/jobs');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
@@ -479,14 +481,14 @@ api.get('/telegram/chats', wrap(async (req, res) => {
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kindOf(req.query.kind)));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kindOf(req.query.kind), partsOf(req.query.parts)));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
-async function reportPng(user, id, from, to, kind = '') {
-  const k = `${user.fb_id}|${id}|${from}|${to}|${kind}`, hit = imgCache.get(k);
+async function reportPng(user, id, from, to, kind = '', parts = null) {
+  const k = `${user.fb_id}|${id}|${from}|${to}|${kind}|${(parts || []).join(',')}`, hit = imgCache.get(k);
   if (hit && Date.now() - hit.at < 5 * 60000) return hit.png;
-  const png = await reportImage.clientReportImage(user, id, from, to, kind);
+  const png = await reportImage.clientReportImage(user, id, from, to, kind, parts);
   imgCache.set(k, { png, at: Date.now() });
   for (const [kk, v] of imgCache) if (Date.now() - v.at > 5 * 60000) imgCache.delete(kk);
   return png;
@@ -494,20 +496,20 @@ async function reportPng(user, id, from, to, kind = '') {
 api.get('/client-report/:id/image', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const kind = kindOf(req.query.kind);
-  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}`);
-  const png = await reportPng(req.user, req.params.id, from, to, kind);
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts);
+  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}|${(parts || []).join(',')}`);
+  const png = await reportPng(req.user, req.params.id, from, to, kind, parts);
   if (!png) return res.status(204).end();
   res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind);
+  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts);
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind);
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;
-  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
+  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind, parts); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
   if (png) await telegram.sendPhoto(png, body, r.client.telegram);
   else await telegram.send(body, r.client.telegram);
   const sentAt = new Date().toISOString();

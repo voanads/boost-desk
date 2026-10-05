@@ -17,7 +17,7 @@ const cut = (s, n) => { const a = [...String(s || '')]; return a.length > n ? a.
 const plural = (n, t) => (n === 1 ? t : t === 'person reached' ? 'people reached' : t + 's');
 
 // The client's campaigns in the period (from saved sync rows), grouped by ad account.
-async function clientCampaigns(owner, clientId, from, to, kind = '') {
+async function clientCampaigns(owner, clientId, from, to, kind = '', only = null) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) return { client: null, byAccount: {} };
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
@@ -28,6 +28,7 @@ async function clientCampaigns(owner, clientId, from, to, kind = '') {
     const m = sync.matchClient(r, clients);
     if (!m || m.id !== c.id) continue;
     if (kind && (sync.isPostFor(c, r) ? 'post' : 'live') !== kind) continue; // Live / Post filter
+    if (only && !only.has(String(r.campaignId))) continue; // only the ticked lives / posts
     (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
   }
   return { client: c, byAccount };
@@ -46,8 +47,16 @@ async function fetchThumb(url) {
 }
 
 // Ads for one client and period, straight from Meta.
-async function clientAds(user, clientId, from, to, kind = '') {
-  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind);
+async function clientAds(user, clientId, from, to, kind = '', parts = null) {
+  // Ticked lines (one-day reports): keep only the campaigns behind those lives / the post.
+  let only = null;
+  if (parts && parts.length && from === to) {
+    const e = await db.getEntry(from, Number(clientId));
+    only = new Set();
+    for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) only.add(String(id));
+    if (!only.size) return { client: (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId)), ads: [], reach: 0 }; // campaign list not saved for this day: no picture rather than a wrong one
+  }
+  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only);
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   const token = await sync.tokenFor(user);
   const ads = []; let reach = 0;
@@ -135,8 +144,8 @@ async function render({ client, ads, reach }, from, to) {
 }
 
 // PNG for a client's report, or null when there are no ads with spend.
-async function clientReportImage(user, clientId, from, to, kind = '') {
-  const data = await clientAds(user, clientId, from, to, kind);
+async function clientReportImage(user, clientId, from, to, kind = '', parts = null) {
+  const data = await clientAds(user, clientId, from, to, kind, parts);
   if (!data.ads.length) return null;
   return render(data, from, to);
 }

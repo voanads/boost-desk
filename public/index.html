@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=54">
+<link rel="stylesheet" href="/assets/app.css?v=55">
 </head>
 <body>
 <div class="wrap">
@@ -350,6 +350,12 @@
       <div class="setimg" data-img="qr"><span>Payment QR</span><div class="thumbbox"><img alt=""></div><input type="file" accept="image/png,image/jpeg" hidden><div><button type="button" class="sm up">Change</button> <button type="button" class="sm ghost rm">Remove</button></div></div>
       <div class="setimg" data-img="sign"><span>Seller signature</span><div class="thumbbox"><img alt=""></div><input type="file" accept="image/png,image/jpeg" hidden><div><button type="button" class="sm up">Add</button> <button type="button" class="sm ghost rm">Remove</button></div></div>
     </div>
+    <div class="msgedit">
+      <div class="msgedit-h"><b>Telegram message</b><button type="button" class="ghost sm" id="setMsgReset">Reset to default</button></div>
+      <div class="hint">Sent with the invoice picture. Tap a word to add it — it is filled in for each invoice.</div>
+      <div class="msgtags" id="setMsgTags"></div>
+      <div class="msgcols"><textarea id="setMessage" rows="12" maxlength="900" spellcheck="false" aria-label="Telegram message"></textarea><div class="msgprev"><span class="hint">Preview</span><div id="setMsgPrev"></div></div></div>
+    </div>
     <div class="dlg-foot"><span class="hint">Pictures: PNG or JPG.</span><span class="spacer"></span><button type="button" id="setSave" class="primary">Save</button></div>
   </form>
 </dialog>
@@ -387,6 +393,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=54"></script>
+<script src="/assets/app.js?v=55"></script>
 </body>
 </html>

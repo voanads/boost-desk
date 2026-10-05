@@ -24,6 +24,23 @@ const DEFAULT_PROFILE = {
 };
 const profileOf = (saved) => { const p = { ...DEFAULT_PROFILE }; for (const [k, v] of Object.entries(saved || {})) if (v != null && (v !== '' || k === 'sign' || k === 'qr' || k === 'logo')) p[k] = v; if (!p.logo) p.logo = DEFAULT_PROFILE.logo; return p; };
 
+// Telegram message sent with an invoice. Words in {curly brackets} are filled in for each invoice.
+const DEFAULT_MESSAGE = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', 'នៅថ្ងៃទី {date} ។', '', 'តម្លៃសេវាកម្ម =$ {price}', 'Page : {pages}', '', '', 'ទឹកប្រាក់ត្រូវបង់ =$ {total}', '', 'សូមអរគុណ!🙏🏼'].join('\n');
+const usd = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? String(v) : v.toFixed(2); };
+// values: what each {word} becomes. Unknown words are left as typed.
+function fillMessage(template, values) {
+  return String(template || DEFAULT_MESSAGE).replace(/\{(\w+)\}/g, (m, k) => (k in values ? String(values[k]) : m)).slice(0, 1024);
+}
+function messageValues(inv, payDay) {
+  const ym = inv.date.slice(0, 7), last = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
+  const day = payDay ? Math.min(payDay, last) : Number(inv.date.slice(8)), dmy = (d) => `${String(d).padStart(2, '0')}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+  const it = (inv.items || [])[0] || { price: inv.total, qty: 1, description: '' };
+  return {
+    date: dmy(day), invoice_date: dmy(Number(inv.date.slice(8))), price: usd(it.price), pages: (inv.items || []).reduce((a, x) => a + (Number(x.qty) || 0), 0) || 1,
+    total: usd(inv.total), discount: usd(inv.discount), subtotal: usd((Number(inv.total) || 0) + (Number(inv.discount) || 0)),
+    customer: inv.customer || '', company: inv.company || '', number: inv.number || '', service: it.description || '',
+  };
+}
 const BLUE = '#2E5FA3', INK = '#111111';
 const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const plain = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -126,4 +143,4 @@ async function png(inv, saved, width = 1240) {
   return new Resvg(await svg(inv, saved), { font: { loadSystemFonts: false }, fitTo: { mode: 'width', value: width } }).render().asPng();
 }
 
-module.exports = { svg, pdf, png, totals, profileOf, DEFAULT_PROFILE, niceDate, money };
+module.exports = { DEFAULT_MESSAGE, fillMessage, messageValues, svg, pdf, png, totals, profileOf, DEFAULT_PROFILE, niceDate, money };

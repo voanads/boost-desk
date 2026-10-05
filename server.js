@@ -347,14 +347,16 @@ api.get('/payments', wrap(async (req, res) => {
     invoices, bot: telegram.hasBot(),
   });
 }));
-api.get('/invoice-profile', wrap(async (req, res) => res.json(await invoiceProfile(req.user.fb_id))));
+const withMessage = async (owner) => { const saved = await db.getUserSetting(owner, 'invoiceProfile', {}); return { ...(await invoiceProfile(owner)), message: saved.message || invoice.DEFAULT_MESSAGE, defaultMessage: invoice.DEFAULT_MESSAGE }; };
+api.get('/invoice-profile', wrap(async (req, res) => res.json(await withMessage(req.user.fb_id))));
 api.put('/invoice-profile', wrap(async (req, res) => {
   const b = req.body || {}, cur = await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}), next = { ...cur };
   for (const k of ['company', 'address1', 'address2', 'phone', 'bankName', 'accountName', 'accountNo', 'seller', 'issuedBy']) if (b[k] != null) next[k] = String(b[k]).trim().slice(0, 160);
   for (const k of ['logo', 'qr', 'sign']) if (b[k] != null) { if (b[k] !== '' && (!IMG.test(b[k]) || b[k].length > 450000)) return res.status(400).json({ error: 'Pictures must be PNG or JPG, up to about 300 KB each.' }); next[k] = b[k]; }
+  if (b.message != null) { const m = String(b.message).replace(/\r/g, '').slice(0, 900); next.message = m.trim() && m !== invoice.DEFAULT_MESSAGE ? m : ''; }
   await db.setUserSetting(req.user.fb_id, 'invoiceProfile', next);
   if (b.nextNumber != null && (await db.ownerId()) === req.user.fb_id) { const n = parseInt(b.nextNumber, 10); if (n > 0 && n < 1e7) await db.setSetting('invoiceSeq', n - 1); }
-  res.json(await invoiceProfile(req.user.fb_id));
+  res.json(await withMessage(req.user.fb_id));
 }));
 const autoNumber = async (date) => `IN${String(date || sync.todayIn()).slice(2, 4)}-${String((Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1).padStart(4, '0')}`;
 const cleanNumber = (v) => String(v == null ? '' : v).replace(/[^\p{L}\p{N} ._/#-]+/gu, '').trim().slice(0, 30);
@@ -402,15 +404,9 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
   if (!c || !c.telegram) return res.status(400).json({ error: `${c ? c.name : 'This client'} has no Telegram group yet. Pick one in the Clients tab.` });
   // The invoice goes to the group as a picture (opens right in the chat); the PDF stays available in the app.
   const buf = await invoice.png(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}), 1654);
-  // Message sent with the picture (the team's Khmer payment reminder):
-  //   pay date = the client's pay day in the invoice's month (or the invoice date), price and Page count
-  //   from the first line, amount to pay = the invoice total.
-  const usd = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? String(v) : v.toFixed(2); };
-  const ym = inv.date.slice(0, 7), day = c.service && c.service.day ? Math.min(c.service.day, Number(lastOfMonth(ym).slice(8))) : Number(inv.date.slice(8));
-  const due = `${String(day).padStart(2, '0')}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
-  const it = inv.items[0] || { price: inv.total, qty: 1 }, pages = inv.items.reduce((a, x) => a + (Number(x.qty) || 0), 0) || 1;
-  const caption = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', `នៅថ្ងៃទី ${due} ។`, '', `តម្លៃសេវាកម្ម =$ ${usd(it.price)}`, `Page : ${pages}`,
-    ...(inv.discount > 0 ? [`បញ្ចុះតម្លៃ =$ ${usd(inv.discount)}`] : []), '', '', `ទឹកប្រាក់ត្រូវបង់ =$ ${usd(inv.total)}`, '', 'សូមអរគុណ!🙏🏼'].join('\n');
+  // Message sent with the picture: the account's own template (Invoice settings), or the default Khmer reminder.
+  const saved = await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {});
+  const caption = invoice.fillMessage(saved.message, invoice.messageValues(inv, c.service && c.service.day));
   await telegram.sendPhoto(buf, caption, c.telegram);
   res.json({ ...(await db.markInvoice(req.user.fb_id, inv.id, { sent: true })), sentTo: c.telegram_title || c.telegram });
 }));

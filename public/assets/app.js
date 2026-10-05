@@ -1582,9 +1582,18 @@
       for (const [id, k] of Object.entries(SET_F)) $(id).value = p[k] || '';
       setImgs = {}; for (const k of ['logo', 'qr', 'sign']) drawSetImg(k, p[k]);
       $('setNext').value = n.next; $('setNext').dataset.was = n.next; $('setNextBox').hidden = !n.canSet;
+      $('setMessage').value = p.message; $('setMessage').dataset.def = p.defaultMessage; drawMsgPrev();
       dlgOpen($('setDlg'));
     } catch (e) { toast(e.message); }
   };
+  // Telegram message template: tap a {word} to insert it; the preview fills it with sample values.
+  const MSG_TAGS = { date: ['Pay date', '30/10/2026'], price: ['Service price', '120'], pages: ['Pages / quantity', '1'], total: ['Amount to pay', '120'], discount: ['Discount', '0'], customer: ['Customer', 'Mut Sopheak'], company: ['Company', 'CosMe'], number: ['Invoice number', 'IN26-1468'], invoice_date: ['Invoice date', '05/10/2026'], service: ['Service', 'សេវាកម្មគ្រប់គ្រង Page'] };
+  $('setMsgTags').innerHTML = Object.entries(MSG_TAGS).map(([k, [label]]) => `<button type="button" data-tag="${k}" title="${esc(label)}">{${k}} <span>${esc(label)}</span></button>`).join('');
+  const drawMsgPrev = () => { $('setMsgPrev').textContent = ($('setMessage').value || $('setMessage').dataset.def || '').replace(/\{(\w+)\}/g, (m, k) => (MSG_TAGS[k] ? MSG_TAGS[k][1] : m)); };
+  $('setMessage').addEventListener('input', drawMsgPrev);
+  $('setMsgTags').addEventListener('click', (ev) => { const b = ev.target.closest('[data-tag]'); if (!b) return; const t = $('setMessage'), a = t.selectionStart ?? t.value.length, z = t.selectionEnd ?? a, ins = `{${b.dataset.tag}}`; t.value = t.value.slice(0, a) + ins + t.value.slice(z); t.focus(); t.setSelectionRange(a + ins.length, a + ins.length); drawMsgPrev(); });
+  $('setMsgReset').onclick = () => { $('setMessage').value = $('setMessage').dataset.def || ''; drawMsgPrev(); };
+
   // Shrink a picked picture in the browser so it stays small.
   const shrink = (file, max = 700) => new Promise((resolve, reject) => {
     const img = new Image(), url = URL.createObjectURL(file);
@@ -1598,7 +1607,7 @@
     const rm = box.querySelector('.rm'); if (rm) rm.onclick = () => { setImgs[k] = ''; drawSetImg(k, ''); };
   });
   $('setSave').onclick = async () => {
-    const body = { ...setImgs }; for (const [id, k] of Object.entries(SET_F)) body[k] = $(id).value;
+    const body = { ...setImgs, message: $('setMessage').value }; for (const [id, k] of Object.entries(SET_F)) body[k] = $(id).value;
     if (!$('setNextBox').hidden && $('setNext').value !== $('setNext').dataset.was) body.nextNumber = $('setNext').value;
     const b = $('setSave'); b.disabled = true;
     try { await api('/invoice-profile', { method: 'PUT', body }); $('setDlg').close(); successBadge('Invoice settings saved'); } catch (e) { toast(e.message); } finally { b.disabled = false; }

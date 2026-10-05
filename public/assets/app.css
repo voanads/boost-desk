@@ -959,3 +959,17 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 .cal button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
 @media (max-width:560px){.cal{width:min(340px,calc(100vw - 20px));padding:16px}.cd{height:42px}}
 .rangeins .datebtn{width:auto;display:inline-flex;min-height:38px}
+
+/* ---------- Telegram message template ---------- */
+.msgedit{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:14px}
+.msgedit-h{display:flex;justify-content:space-between;align-items:center}
+.msgtags{display:flex;flex-wrap:wrap;gap:6px}
+.msgtags button{padding:4px 10px;min-height:0;border-radius:99px;font-size:.78rem;font-weight:700;color:var(--brand);background:var(--brand-soft);border:1px solid transparent}
+.msgtags button span{font-weight:500;color:var(--muted);margin-left:4px}
+.msgtags button:hover{border-color:var(--brand)}
+.msgcols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.msgcols textarea{font:inherit;font-size:.92rem;line-height:1.5;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;resize:vertical;min-height:230px;width:100%}
+.msgprev{display:flex;flex-direction:column;gap:6px;min-width:0}
+#setMsgPrev{flex:1;white-space:pre-wrap;word-break:break-word;background:#1c2733;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 14px;font-size:.92rem;line-height:1.5}
+#setDlg{max-width:680px}
+@media (max-width:700px){.msgcols{grid-template-columns:1fr}}

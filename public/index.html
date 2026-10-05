@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=55">
+<link rel="stylesheet" href="/assets/app.css?v=56">
 </head>
 <body>
 <div class="wrap">
@@ -353,6 +353,7 @@
     <div class="msgedit">
       <div class="msgedit-h"><b>Telegram message</b><button type="button" class="ghost sm" id="setMsgReset">Reset to default</button></div>
       <div class="hint">Sent with the invoice picture. Tap a word to add it — it is filled in for each invoice.</div>
+      <div class="msgpresets"><span class="hint">Ready-made:</span><span id="setMsgPresets"></span></div>
       <div class="msgtags" id="setMsgTags"></div>
       <div class="msgcols"><textarea id="setMessage" rows="12" maxlength="900" spellcheck="false" aria-label="Telegram message"></textarea><div class="msgprev"><span class="hint">Preview</span><div id="setMsgPrev"></div></div></div>
     </div>
@@ -393,6 +394,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=55"></script>
+<script src="/assets/app.js?v=56"></script>
 </body>
 </html>

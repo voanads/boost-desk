@@ -973,3 +973,7 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 #setMsgPrev{flex:1;white-space:pre-wrap;word-break:break-word;background:#1c2733;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 14px;font-size:.92rem;line-height:1.5}
 #setDlg{max-width:680px}
 @media (max-width:700px){.msgcols{grid-template-columns:1fr}}
+.msgpresets{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#setMsgPresets{display:flex;flex-wrap:wrap;gap:6px}
+#setMsgPresets button{padding:5px 12px;min-height:0;border-radius:99px;font-size:.82rem;font-weight:600}
+#setMsgPresets button[aria-pressed=true]{background:var(--grad);color:#fff;border-color:transparent}

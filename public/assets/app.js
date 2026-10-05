@@ -1587,11 +1587,65 @@
     } catch (e) { toast(e.message); }
   };
   // Telegram message template: tap a {word} to insert it; the preview fills it with sample values.
-  const MSG_TAGS = { date: ['Pay date', '30/10/2026'], price: ['Service price', '120'], pages: ['Pages / quantity', '1'], total: ['Amount to pay', '120'], discount: ['Discount', '0'], customer: ['Customer', 'Mut Sopheak'], company: ['Company', 'CosMe'], number: ['Invoice number', 'IN26-1468'], invoice_date: ['Invoice date', '05/10/2026'], service: ['Service', 'សេវាកម្មគ្រប់គ្រង Page'] };
+  const MSG_TAGS = { date: ['Pay date', '30/10/2026'], price: ['Service price', '120'], pages: ['Pages / quantity', '1'], total: ['Amount to pay', '120'], discount: ['Discount', '0'], customer: ['Customer', 'Mut Sopheak'], company: ['Company', 'CosMe'], number: ['Invoice number', 'IN26-1468'], subtotal: ['Price before discount', '120'], invoice_date: ['Invoice date', '05/10/2026'], service: ['Service', 'សេវាកម្មគ្រប់គ្រង Page'] };
   $('setMsgTags').innerHTML = Object.entries(MSG_TAGS).map(([k, [label]]) => `<button type="button" data-tag="${k}" title="${esc(label)}">{${k}} <span>${esc(label)}</span></button>`).join('');
   const drawMsgPrev = () => { $('setMsgPrev').textContent = ($('setMessage').value || $('setMessage').dataset.def || '').replace(/\{(\w+)\}/g, (m, k) => (MSG_TAGS[k] ? MSG_TAGS[k][1] : m)); };
   $('setMessage').addEventListener('input', drawMsgPrev);
   $('setMsgTags').addEventListener('click', (ev) => { const b = ev.target.closest('[data-tag]'); if (!b) return; const t = $('setMessage'), a = t.selectionStart ?? t.value.length, z = t.selectionEnd ?? a, ins = `{${b.dataset.tag}}`; t.value = t.value.slice(0, a) + ins + t.value.slice(z); t.focus(); t.setSelectionRange(a + ins.length, a + ins.length); drawMsgPrev(); });
+  // Ready-made messages: tap one to load it into the box, then edit as you like.
+  const MSG_PRESETS = {
+    'Polite': `សួស្តីបង {customer} 🙏
+
+ខាងក្រុមការងារ Ads Box សូមជម្រាបជូនបងថា សេវាកម្មរបស់បងនឹងដល់ថ្ងៃបង់ប្រាក់ នៅថ្ងៃទី {date}។
+
+🧾 វិក្កយបត្រលេខ ៖ {number}
+📄 សេវាកម្ម ៖ {service}
+📌 ចំនួន Page ៖ {pages}
+💵 តម្លៃសេវាកម្ម ៖ \${price}
+
+💰 ទឹកប្រាក់ត្រូវបង់សរុប ៖ \${total}
+
+បងអាចស្កេន QR ក្នុងវិក្កយបត្រខាងលើ ដើម្បីទូទាត់បាន។
+សូមអរគុណបងសម្រាប់ការគាំទ្រ! 🙏`,
+    'Short': `សួស្តីបង 🙏
+សេវាកម្មរបស់បងដល់ថ្ងៃបង់ នៅថ្ងៃទី {date}។
+
+💰 ទឹកប្រាក់ត្រូវបង់ ៖ \${total}
+
+សូមអរគុណបង!`,
+    'Friendly reminder': `ជម្រាបសួរបង {customer} 😊
+
+ខាងប្អូនសូមរំលឹកបងបន្តិច វិក្កយបត្រសេវាកម្មប្រចាំខែ ត្រូវបង់នៅថ្ងៃទី {date}។
+
+• សេវាកម្ម ៖ {service}
+• តម្លៃ ៖ \${price} x {pages} Page
+• សរុបត្រូវបង់ ៖ \${total}
+
+បើបងបានបង់រួចហើយ សូមផ្ញើវិក្កយបត្របង់ប្រាក់មកខាងប្អូនផង។
+អរគុណច្រើនបង! 🙏`,
+    'With discount': `សួស្តីបង {customer} 🙏
+
+សេវាកម្មរបស់បងដល់ថ្ងៃបង់ នៅថ្ងៃទី {date}។
+
+💵 តម្លៃសេវាកម្ម ៖ \${subtotal}
+🎁 បញ្ចុះតម្លៃ ៖ \${discount}
+💰 ទឹកប្រាក់ត្រូវបង់ ៖ \${total}
+
+សូមអរគុណបង!`,
+    'English': `Hello {customer},
+
+Your service payment is due on {date}.
+
+Invoice: {number}
+Service: {service}
+Price: \${price} x {pages} Page
+Amount due: \${total}
+
+You can pay by scanning the QR code on the invoice.
+Thank you for working with Ads Box!`,
+  };
+  $('setMsgPresets').innerHTML = Object.keys(MSG_PRESETS).map((k) => `<button type="button" data-preset-msg="${esc(k)}">${esc(k)}</button>`).join('');
+  $('setMsgPresets').addEventListener('click', (ev) => { const b = ev.target.closest('[data-preset-msg]'); if (!b) return; $('setMessage').value = MSG_PRESETS[b.dataset.presetMsg]; drawMsgPrev(); $('setMsgPresets').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); });
   $('setMsgReset').onclick = () => { $('setMessage').value = $('setMessage').dataset.def || ''; drawMsgPrev(); };
 
   // Shrink a picked picture in the browser so it stays small.

@@ -1469,6 +1469,17 @@
     rollTo($('payDue'), money(Math.max(0, inv - paid))); $('payDueSub').textContent = `${d.invoices.filter((i) => !i.paidAt).length} waiting`;
     $('payTitle').textContent = 'Service clients · ' + monthLabel(ym);
     const plane = '<svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/></svg>';
+    const invRow = (v, c) => `<div class="payinv" data-inv="${v.id}">
+          <button type="button" class="invno" data-view="${v.id}" title="Open this invoice"><b>${esc(v.number)}</b><span class="hint">${esc(nice(v.date).replace(/ \d{4}$/, ''))} · ${money(v.total)}${v.paidAt ? ' · paid' : v.sentAt ? ' · sent' : ''}</span></button>
+          <span class="spacer"></span>
+          <a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
+          <button type="button" class="sm rbtn${c && c.telegram ? ' tg' : ''}" data-send="${v.id}"><span class="plane">${plane}</span> ${v.sentAt ? 'Send again' : 'Send to group'}</button>
+          <button type="button" class="sm${v.paidAt ? ' paidbtn' : ''}" data-paid="${v.id}" data-on="${v.paidAt ? 1 : 0}">${v.paidAt ? '✓ Paid' : 'Mark paid'}</button>
+          <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div>`;
+    // Invoices whose client no longer has a service fee (or was removed): still shown, so they can be deleted or marked paid.
+    const svcIds = new Set(d.clients.filter(hasSvc).map((c) => c.id)), loose = {};
+    for (const v of d.invoices) if (!svcIds.has(v.clientId)) (loose[v.clientId] = loose[v.clientId] || []).push(v);
+    const looseHtml = q ? '' : Object.entries(loose).map(([id, list]) => { const c = d.clients.find((x) => x.id === Number(id)); return `<div class="payrow"><div class="payrow-top"><div class="payname"><b>${esc(c ? c.name : 'Removed client')}</b><span class="hint">Service fee removed — delete the invoice if it is no longer needed</span></div></div>${list.map((v) => invRow(v, c)).join('')}</div>`; }).join('');
     $('payList').innerHTML = svc.map((c, i) => {
       const due = dueDate(c, ym), list = invOf(c), last = list[0];
       const days = Math.round((parse(due) - parse(d.today)) / 864e5);
@@ -1478,13 +1489,7 @@
       else if (last) { st = 'Invoice ready'; cls = 'info'; }
       else if (cur) { st = days > 0 ? `Due in ${days} day${days === 1 ? '' : 's'}` : days === 0 ? 'Due today' : `Overdue ${-days} day${days === -1 ? '' : 's'}`; cls = days > 3 ? '' : days >= 0 ? 'warn' : 'bad'; }
       else st = 'No invoice';
-      const invs = list.map((v) => `<div class="payinv" data-inv="${v.id}">
-          <button type="button" class="invno" data-view="${v.id}" title="Open this invoice"><b>${esc(v.number)}</b><span class="hint">${esc(nice(v.date).replace(/ \d{4}$/, ''))} · ${money(v.total)}${v.paidAt ? ' · paid' : v.sentAt ? ' · sent' : ''}</span></button>
-          <span class="spacer"></span>
-          <a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
-          <button type="button" class="sm rbtn${c.telegram ? ' tg' : ''}" data-send="${v.id}"><span class="plane">${plane}</span> ${v.sentAt ? 'Send again' : 'Send to group'}</button>
-          <button type="button" class="sm${v.paidAt ? ' paidbtn' : ''}" data-paid="${v.id}" data-on="${v.paidAt ? 1 : 0}">${v.paidAt ? '✓ Paid' : 'Mark paid'}</button>
-          <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div>`).join('');
+      const invs = list.map((v) => invRow(v, c)).join('');
       return `<div class="payrow${payEnter ? ' enter' : ''}" style="--i:${i}">
         <div class="payrow-top">
           <button type="button" class="payname" data-svc="${c.id}" title="Edit service fee"><b>${esc(c.name)}</b><span class="hint">${esc(c.service.company || c.pages[0] || '')}${c.service.description ? ' · ' + esc(c.service.description) : ''}</span></button>
@@ -1493,7 +1498,7 @@
           <span class="paystat ${cls}">${esc(st)}</span>
           <button type="button" class="${last ? '' : 'primary'}" data-newinv="${c.id}">${last ? '+ New invoice' : 'Create invoice'}</button>
         </div>${invs}</div>`;
-    }).join('') || `<div class="empty-row">${d.clients.some(hasSvc) ? 'No client matches your search.' : 'No service clients yet. Add a price and pay date to a client below.'}</div>`;
+    }).join('') + looseHtml || `<div class="empty-row">${d.clients.some(hasSvc) ? 'No client matches your search.' : 'No service clients yet. Add a price and pay date to a client below.'}</div>`;
     payEnter = false;
     const others = d.clients.filter((c) => !hasSvc(c));
     $('payOtherPanel').hidden = !others.length;

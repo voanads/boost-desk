@@ -38,6 +38,19 @@ async function sendPhoto(png, caption, chatId = cfg.telegramChatId) {
   if (caption && !fits) await send(caption, chatId);
 }
 
+// A file (e.g. an invoice PDF) with a caption.
+async function sendDocument(buf, filename, caption, chatId = cfg.telegramChatId, type = 'application/pdf') {
+  if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
+  if (!chatId) throw new Error('No Telegram group chosen.');
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  if (caption) form.append('caption', caption.slice(0, 1024));
+  form.append('document', new Blob([buf], { type }), filename);
+  const res = await fetch(`${API}/bot${cfg.telegramToken}/sendDocument`, { method: 'POST', body: form });
+  const body = await res.json().catch(() => ({}));
+  if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
+}
+
 // Groups the bot has seen recently (add the bot to the group and send one message there).
 // Telegram only keeps the last 24 hours of updates, so the server also saves what it finds.
 async function listChats() {
@@ -66,4 +79,4 @@ async function username() {
   return botName;
 }
 
-module.exports = { configured, hasBot, send, sendPhoto, listChats, username };
+module.exports = { configured, hasBot, send, sendPhoto, sendDocument, listChats, username };

@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=51">
+<link rel="stylesheet" href="/assets/app.css?v=52">
 </head>
 <body>
 <div class="wrap">
@@ -23,6 +23,7 @@
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
       <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
+      <button role="tab" data-tab="payments" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h9l4 4V21l-2.5-1.5L14 21l-2.5-1.5L9 21l-3-1.5Z"/><path d="M9 9h6M9 13h6"/></svg><span class="full">Payments</span><span class="short">Pay</span></button>
       <button role="tab" data-tab="admin" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4 5.5v6c0 4.7 3.3 8.6 8 10 4.7-1.4 8-5.3 8-10v-6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span class="full">Admin</span><span class="short">Admin</span></button>
       <button role="tab" data-tab="team" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span class="full">Team &amp; Telegram</span><span class="short">Team</span></button>
     </nav>
@@ -207,6 +208,34 @@
     </div>
   </section>
 
+  <!-- PAYMENTS -->
+  <section id="tab-payments" class="wrap" hidden>
+    <div class="dhead">
+      <div class="chead2"><div><h2>Payments</h2><div class="hint">Service fees for each client: the pay date, the price, and an invoice you can send to their Telegram group as a PDF.</div></div></div>
+      <div class="pnav">
+        <button id="payPrev" class="navbtn" aria-label="Previous month">‹</button>
+        <span class="plabel" id="payMonth">…</span>
+        <button id="payNext" class="navbtn" aria-label="Next month">›</button>
+        <span class="spacer"></span>
+        <button id="paySettings"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;vertical-align:-3px;margin-right:6px"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2.1-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2.1 1.2l-2.3-.9-2 3.4 2 1.5a7 7 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2.1 1.2L10 21h4l.5-2.6a7 7 0 0 0 2.1-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/></svg>Invoice settings</button>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="hero"><span class="lbl">Expected this month</span><span class="val num" id="payExp">$0.00</span><span class="sub" id="payExpSub"></span></div>
+      <div><span class="lbl">Invoiced</span><span class="val num" id="payInv">$0.00</span><span class="sub" id="payInvSub"></span></div>
+      <div><span class="lbl">Paid</span><span class="val num" id="payPaid">$0.00</span><span class="sub" id="payPaidSub"></span></div>
+      <div><span class="lbl">Not paid yet</span><span class="val num" id="payDue">$0.00</span><span class="sub" id="payDueSub"></span></div>
+    </div>
+    <div class="panel">
+      <div class="thead"><h2 id="payTitle">Service clients</h2><div class="filters"><input type="search" id="paySearch" placeholder="Search client" aria-label="Search clients"></div></div>
+      <div class="paylist" id="payList"></div>
+    </div>
+    <div class="panel" id="payOtherPanel" hidden>
+      <div class="thead"><h2>Clients without a service fee</h2><span class="hint">Add a price and pay date to start sending them invoices.</span></div>
+      <div class="payother" id="payOther"></div>
+    </div>
+  </section>
+
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
       <div class="chead2"><div><h2>Admin dashboard</h2><div class="hint">Every account's boost spend in one place. Only the app owner and people they allow can see this.</div></div></div>
@@ -265,6 +294,64 @@
   <button class="flabel" id="fLabel" title="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span id="fLabelText">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
   <button class="fnav" id="fNext" aria-label="Next period">›</button>
 </div>
+<dialog id="svcDlg" class="dlg" aria-labelledby="svcTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="svcTitle">Service fee</h2><div class="hint">Used to fill in this client's invoices.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="fgrid">
+      <label><span>Price per month ($)</span><input type="number" id="svcPrice" min="0" step="0.01" inputmode="decimal"></label>
+      <label><span>Pay date (day of the month)</span><input type="number" id="svcDay" min="1" max="31" step="1" inputmode="numeric" placeholder="e.g. 5"></label>
+      <label class="wide"><span>Service description</span><input type="text" id="svcDesc" maxlength="160" placeholder="សេវាកម្មគ្រប់គ្រង Page"></label>
+      <label><span>Customer name</span><input type="text" id="svcCustomer" maxlength="120"></label>
+      <label><span>Company name</span><input type="text" id="svcCompany" maxlength="120"></label>
+      <label><span>Phone</span><input type="text" id="svcPhone" maxlength="40" inputmode="tel"></label>
+    </div>
+    <div class="dlg-foot"><button type="button" class="ghost" id="svcRemove">Remove service fee</button><span class="spacer"></span><button type="button" id="svcSave" class="primary">Save</button></div>
+  </form>
+</dialog>
+<dialog id="invDlg" class="dlg invdlg" aria-labelledby="invTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="invTitle">Invoice</h2><div class="hint" id="invSub"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="invcols">
+      <div class="invform" id="invForm">
+        <div class="fgrid">
+          <label><span>Invoice date</span><input type="date" id="invDate"></label>
+          <label><span>Phone</span><input type="text" id="invPhone" maxlength="40"></label>
+          <label><span>Customer</span><input type="text" id="invCustomer" maxlength="120"></label>
+          <label><span>Company name</span><input type="text" id="invCompany" maxlength="120"></label>
+        </div>
+        <div class="invitems-h"><span>Description</span><span>Qty</span><span>Unit price ($)</span><span></span></div>
+        <div class="invitems" id="invItems"></div>
+        <button type="button" class="ghost sm" id="invAdd">+ Add line</button>
+        <div class="invtot"><label><span>Discount ($)</span><input type="number" id="invDiscount" min="0" step="0.01" inputmode="decimal"></label><div class="invtotal">Total <b class="num" id="invTotal">$0.00</b></div></div>
+      </div>
+      <div class="invprev"><div class="invprev-img" id="invPrevBox"><img id="invPrev" alt="Invoice preview"><span class="hint" id="invPrevMsg">Preview</span></div></div>
+    </div>
+    <div class="dlg-foot" id="invFoot"></div>
+  </form>
+</dialog>
+<dialog id="setDlg" class="dlg" aria-labelledby="setTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="setTitle">Invoice settings</h2><div class="hint">Printed on every invoice you create.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="fgrid">
+      <label class="wide"><span>Company name</span><input type="text" id="setCompany" maxlength="160"></label>
+      <label class="wide"><span>Address line 1</span><input type="text" id="setAddress1" maxlength="160"></label>
+      <label class="wide"><span>Address line 2</span><input type="text" id="setAddress2" maxlength="160"></label>
+      <label class="wide"><span>Phone line</span><input type="text" id="setPhone" maxlength="160"></label>
+      <label><span>Bank name</span><input type="text" id="setBankName" maxlength="160"></label>
+      <label><span>Account number</span><input type="text" id="setAccountNo" maxlength="160"></label>
+      <label class="wide"><span>Account name</span><input type="text" id="setAccountName" maxlength="160"></label>
+      <label><span>Seller name (under the signature)</span><input type="text" id="setSeller" maxlength="160"></label>
+      <label><span>Issued by</span><input type="text" id="setIssuedBy" maxlength="160"></label>
+      <label id="setNextBox"><span>Next invoice number</span><input type="number" id="setNext" min="1" step="1" inputmode="numeric"></label>
+    </div>
+    <div class="setimgs">
+      <div class="setimg" data-img="logo"><span>Logo</span><div class="thumbbox"><img alt=""></div><input type="file" accept="image/png,image/jpeg" hidden><div><button type="button" class="sm up">Change</button></div></div>
+      <div class="setimg" data-img="qr"><span>Payment QR</span><div class="thumbbox"><img alt=""></div><input type="file" accept="image/png,image/jpeg" hidden><div><button type="button" class="sm up">Change</button> <button type="button" class="sm ghost rm">Remove</button></div></div>
+      <div class="setimg" data-img="sign"><span>Seller signature</span><div class="thumbbox"><img alt=""></div><input type="file" accept="image/png,image/jpeg" hidden><div><button type="button" class="sm up">Add</button> <button type="button" class="sm ghost rm">Remove</button></div></div>
+    </div>
+    <div class="dlg-foot"><span class="hint">Pictures: PNG or JPG.</span><span class="spacer"></span><button type="button" id="setSave" class="primary">Save</button></div>
+  </form>
+</dialog>
 <dialog id="pDlg" class="dlg pdlg" aria-labelledby="pTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="pTitle">Choose period</h2><div class="hint">Now showing: <b id="pNow">…</b></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -299,6 +386,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=51"></script>
+<script src="/assets/app.js?v=52"></script>
 </body>
 </html>

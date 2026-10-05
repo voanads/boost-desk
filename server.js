@@ -7,6 +7,7 @@ const db = require('./src/db');
 const meta = require('./src/meta');
 const sync = require('./src/sync');
 const lives = require('./src/lives');
+const invoice = require('./src/invoice');
 const reportImage = require('./src/reportImage');
 const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 // Ticked report lines: "l1,l3,post" or ['l1','post'] → clean list, or null for everything.
@@ -17,7 +18,7 @@ const { encrypt } = require('./src/crypto');
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({ limit: '1500kb' })); // room for the invoice logo / QR / signature pictures
 app.use(cookieSession({
   name: 'bd_session', secret: cfg.sessionSecret, maxAge: 30 * 864e5,
   sameSite: 'lax', secure: cfg.baseUrl.startsWith('https'), httpOnly: true,
@@ -220,6 +221,10 @@ const cleanClient = (b) => {
   if (b.telegram_title != null) c.telegram_title = String(b.telegram_title).trim().slice(0, 150);
   if (Array.isArray(b.pages)) c.pages = [...new Set(b.pages.map((x) => String(x).trim().slice(0, 150)).filter(Boolean))].slice(0, 20);
   if (b.archived != null) c.archived = !!b.archived;
+  if (b.service && typeof b.service === 'object') { // service fee + bill-to details (Payments tab)
+    const v = b.service, str = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
+    c.service = { price: Math.max(0, Math.round((Number(v.price) || 0) * 100) / 100), day: Math.min(31, Math.max(0, parseInt(v.day, 10) || 0)), description: str(v.description, 160), customer: str(v.customer, 120), company: str(v.company, 120), phone: str(v.phone, 40) };
+  }
   return c;
 };
 api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
@@ -329,6 +334,78 @@ api.get('/month/:ym', wrap(async (req, res) => {
 api.get('/sync-check', wrap(async (req, res) => res.json(await db.getUserSetting(req.user.fb_id, 'lastSyncCheck', null))));
 
 // Dashboard: per-client totals for a day or a month (?from=YYYY-MM-DD&to=YYYY-MM-DD, max 93 days)
+// ---- Payments: service fees and invoices ----
+const lastOfMonth = (ym) => `${ym}-${String(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate()).padStart(2, '0')}`;
+const IMG = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+async function invoiceProfile(owner) { return invoice.profileOf(await db.getUserSetting(owner, 'invoiceProfile', {})); }
+api.get('/payments', wrap(async (req, res) => {
+  const ym = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : sync.todayIn().slice(0, 7);
+  const [clients, invoices] = await Promise.all([db.listClients(req.user.fb_id), db.listInvoices(req.user.fb_id, ym + '-01', lastOfMonth(ym))]);
+  res.json({
+    month: ym, today: sync.todayIn(),
+    clients: clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name, pages: c.pages, telegram: c.telegram, telegramTitle: c.telegram_title, service: c.service })),
+    invoices, bot: telegram.hasBot(),
+  });
+}));
+api.get('/invoice-profile', wrap(async (req, res) => res.json(await invoiceProfile(req.user.fb_id))));
+api.put('/invoice-profile', wrap(async (req, res) => {
+  const b = req.body || {}, cur = await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}), next = { ...cur };
+  for (const k of ['company', 'address1', 'address2', 'phone', 'bankName', 'accountName', 'accountNo', 'seller', 'issuedBy']) if (b[k] != null) next[k] = String(b[k]).trim().slice(0, 160);
+  for (const k of ['logo', 'qr', 'sign']) if (b[k] != null) { if (b[k] !== '' && (!IMG.test(b[k]) || b[k].length > 450000)) return res.status(400).json({ error: 'Pictures must be PNG or JPG, up to about 300 KB each.' }); next[k] = b[k]; }
+  await db.setUserSetting(req.user.fb_id, 'invoiceProfile', next);
+  if (b.nextNumber != null && (await db.ownerId()) === req.user.fb_id) { const n = parseInt(b.nextNumber, 10); if (n > 0 && n < 1e7) await db.setSetting('invoiceSeq', n - 1); }
+  res.json(await invoiceProfile(req.user.fb_id));
+}));
+api.get('/invoice-next', wrap(async (req, res) => res.json({ next: (Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1, canSet: (await db.ownerId()) === req.user.fb_id })));
+function cleanInvoice(b, c) {
+  const str = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 6).map((it) => ({ description: str(it.description, 160), qty: Math.max(0, Number(it.qty) || 0), price: Math.max(0, Number(it.price) || 0) })).filter((it) => it.description || it.price);
+  const data = { customer: str(b.customer, 120) || c.service.customer || c.name, company: str(b.company, 120), phone: str(b.phone, 40), items, discount: Math.max(0, Number(b.discount) || 0) };
+  const t = invoice.totals(data); data.discount = t.discount;
+  return { data, total: t.total };
+}
+api.post('/invoices/preview', wrap(async (req, res) => { // PNG of an invoice that isn't saved yet
+  const b = req.body || {}, c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(b.clientId));
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  if (!isDay(b.date)) return res.status(400).json({ error: 'Pick the invoice date.' });
+  const { data } = cleanInvoice(b, c);
+  const next = `IN${b.date.slice(2, 4)}-${String((Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1).padStart(4, '0')}`;
+  res.set('content-type', 'image/png').set('cache-control', 'no-store').send(await invoice.png({ ...data, number: next, date: b.date }, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {})));
+}));
+api.post('/invoices', wrap(async (req, res) => {
+  const b = req.body || {}, c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(b.clientId));
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  if (!isDay(b.date)) return res.status(400).json({ error: 'Pick the invoice date.' });
+  const { data, total } = cleanInvoice(b, c);
+  if (!data.items.length) return res.status(400).json({ error: 'Add at least one line with a description or price.' });
+  res.json(await db.createInvoice(req.user.fb_id, { clientId: c.id, date: b.date, data, total }, req.user.name));
+}));
+const invFile = (inv) => `${String(inv.company || inv.customer || 'Invoice').replace(/[^\p{L}\p{N} ._-]+/gu, '').trim() || 'Invoice'} ${inv.number}.pdf`;
+api.get('/invoices/:id/pdf', wrap(async (req, res) => {
+  const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
+  const buf = await invoice.pdf(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
+  res.set('content-type', 'application/pdf').set('content-disposition', `${req.query.download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(invFile(inv))}`).send(buf);
+}));
+api.get('/invoices/:id/png', wrap(async (req, res) => {
+  const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
+  res.set('content-type', 'image/png').set('cache-control', 'no-store').send(await invoice.png(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {})));
+}));
+api.post('/invoices/:id/send', wrap(async (req, res) => {
+  const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
+  const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === inv.clientId);
+  if (!c || !c.telegram) return res.status(400).json({ error: `${c ? c.name : 'This client'} has no Telegram group yet. Pick one in the Clients tab.` });
+  const buf = await invoice.pdf(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
+  const first = inv.items[0] ? inv.items[0].description : '';
+  const caption = [`🧾 Invoice ${inv.number}`, `👤 ${inv.customer}${inv.company ? ' · ' + inv.company : ''}`, `🗓 ${invoice.niceDate(inv.date)}`, first ? `📝 ${first}${inv.items.length > 1 ? ` +${inv.items.length - 1} more` : ''}` : '', `💰 Total: ${invoice.money(inv.total)}`].filter(Boolean).join('\n');
+  await telegram.sendDocument(buf, invFile(inv), caption, c.telegram);
+  res.json({ ...(await db.markInvoice(req.user.fb_id, inv.id, { sent: true })), sentTo: c.telegram_title || c.telegram });
+}));
+api.patch('/invoices/:id', wrap(async (req, res) => {
+  const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
+  res.json(await db.markInvoice(req.user.fb_id, inv.id, { paid: (req.body || {}).paid === undefined ? undefined : !!req.body.paid }));
+}));
+api.delete('/invoices/:id', wrap(async (req, res) => { await db.deleteInvoice(req.user.fb_id, Number(req.params.id)); res.json({ ok: true }); }));
+
 // ---- Live videos ----
 api.get('/lives', wrap(async (req, res) => {
   const { from, to } = req.query;

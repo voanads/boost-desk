@@ -130,7 +130,7 @@
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'lives', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'lives', 'payments', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'team') renderTeam();
@@ -138,6 +138,7 @@
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') loadAdmin();
     if (name === 'lives') loadLives();
+    if (name === 'payments') loadPayments();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -1312,6 +1313,194 @@
     document.querySelectorAll('#lSaved [data-sdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this saved setup?')) return; lData.saved = await api('/live-setups/' + b.dataset.sdel, { method: 'DELETE' }); renderLives(); });
   }
 
+  // ---------- payments: service fees + invoices ----------
+  let payMonth = null, payData = null, payEnter = true;
+  const DEF_DESC = 'សេវាកម្មគ្រប់គ្រង Page';
+  const dlgOpen = (d) => { if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else d.setAttribute('open', ''); };
+  const dueDate = (c, ym) => `${ym}-${pad(Math.min(c.service.day || 1, lastDay(ym)))}`;
+  const hasSvc = (c) => c.service && Number(c.service.price) > 0;
+  $('payPrev').onclick = () => { const d = parse(payMonth + '-01'); d.setMonth(d.getMonth() - 1); payMonth = iso(d).slice(0, 7); payEnter = true; loadPayments(); };
+  $('payNext').onclick = () => { const d = parse(payMonth + '-01'); d.setMonth(d.getMonth() + 1); payMonth = iso(d).slice(0, 7); payEnter = true; loadPayments(); };
+  $('paySearch').oninput = () => renderPayments();
+  async function loadPayments() {
+    if (!payMonth) payMonth = me.today.slice(0, 7);
+    $('payMonth').textContent = monthLabel(payMonth);
+    if (!payData) $('payList').innerHTML = '<div class="sk" style="--w:92%;height:64px"></div><div class="sk" style="--w:84%;height:64px"></div>';
+    try { payData = await api('/payments?month=' + payMonth); renderPayments(); }
+    catch (e) { $('payList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
+  }
+  function renderPayments() {
+    const d = payData; if (!d) return;
+    const q = $('paySearch').value.trim().toLowerCase(), ym = d.month, cur = ym === d.today.slice(0, 7);
+    const invOf = (c) => d.invoices.filter((i) => i.clientId === c.id);
+    const svc = d.clients.filter(hasSvc).filter((c) => !q || [c.name, c.service.company || '', ...c.pages].some((x) => x.toLowerCase().includes(q)))
+      .sort((a, b) => dueDate(a, ym).localeCompare(dueDate(b, ym)) || a.name.localeCompare(b.name));
+    const exp = svc.reduce((a, c) => a + Number(c.service.price), 0), inv = d.invoices.reduce((a, i) => a + i.total, 0), paid = d.invoices.filter((i) => i.paidAt).reduce((a, i) => a + i.total, 0);
+    rollTo($('payExp'), money(exp)); $('payExpSub').textContent = `${svc.length} client${svc.length === 1 ? '' : 's'}`;
+    rollTo($('payInv'), money(inv)); $('payInvSub').textContent = `${d.invoices.length} invoice${d.invoices.length === 1 ? '' : 's'}`;
+    rollTo($('payPaid'), money(paid)); $('payPaidSub').textContent = `${d.invoices.filter((i) => i.paidAt).length} paid`;
+    rollTo($('payDue'), money(Math.max(0, inv - paid))); $('payDueSub').textContent = `${d.invoices.filter((i) => !i.paidAt).length} waiting`;
+    $('payTitle').textContent = 'Service clients · ' + monthLabel(ym);
+    const plane = '<svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/></svg>';
+    $('payList').innerHTML = svc.map((c, i) => {
+      const due = dueDate(c, ym), list = invOf(c), last = list[0];
+      const days = Math.round((parse(due) - parse(d.today)) / 864e5);
+      let st = '', cls = '';
+      if (last && last.paidAt) { st = 'Paid'; cls = 'ok'; }
+      else if (last && last.sentAt) { st = 'Sent · not paid'; cls = 'warn'; }
+      else if (last) { st = 'Invoice ready'; cls = 'info'; }
+      else if (cur) { st = days > 0 ? `Due in ${days} day${days === 1 ? '' : 's'}` : days === 0 ? 'Due today' : `Overdue ${-days} day${days === -1 ? '' : 's'}`; cls = days > 3 ? '' : days >= 0 ? 'warn' : 'bad'; }
+      else st = 'No invoice';
+      const invs = list.map((v) => `<div class="payinv" data-inv="${v.id}">
+          <button type="button" class="invno" data-view="${v.id}" title="Open this invoice"><b>${esc(v.number)}</b><span class="hint">${esc(nice(v.date).replace(/ \d{4}$/, ''))} · ${money(v.total)}${v.paidAt ? ' · paid' : v.sentAt ? ' · sent' : ''}</span></button>
+          <span class="spacer"></span>
+          <a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
+          <button type="button" class="sm rbtn${c.telegram ? ' tg' : ''}" data-send="${v.id}"><span class="plane">${plane}</span> ${v.sentAt ? 'Send again' : 'Send to group'}</button>
+          <button type="button" class="sm${v.paidAt ? ' paidbtn' : ''}" data-paid="${v.id}" data-on="${v.paidAt ? 1 : 0}">${v.paidAt ? '✓ Paid' : 'Mark paid'}</button>
+          <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div>`).join('');
+      return `<div class="payrow${payEnter ? ' enter' : ''}" style="--i:${i}">
+        <div class="payrow-top">
+          <button type="button" class="payname" data-svc="${c.id}" title="Edit service fee"><b>${esc(c.name)}</b><span class="hint">${esc(c.service.company || c.pages[0] || '')}${c.service.description ? ' · ' + esc(c.service.description) : ''}</span></button>
+          <div class="paydate"><span>Pay date</span><b class="num">${esc(parse(due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</b></div>
+          <div class="payprice"><span>Price</span><b class="num">${money(c.service.price)}</b></div>
+          <span class="paystat ${cls}">${esc(st)}</span>
+          <button type="button" class="${last ? '' : 'primary'}" data-newinv="${c.id}">${last ? '+ New invoice' : 'Create invoice'}</button>
+        </div>${invs}</div>`;
+    }).join('') || `<div class="empty-row">${d.clients.some(hasSvc) ? 'No client matches your search.' : 'No service clients yet. Add a price and pay date to a client below.'}</div>`;
+    payEnter = false;
+    const others = d.clients.filter((c) => !hasSvc(c));
+    $('payOtherPanel').hidden = !others.length;
+    $('payOther').innerHTML = others.map((c) => `<button type="button" data-svc="${c.id}">+ ${esc(c.name)}</button>`).join('');
+    document.querySelectorAll('#tab-payments [data-svc]').forEach((b) => b.onclick = () => openSvc(Number(b.dataset.svc)));
+    document.querySelectorAll('#payList [data-newinv]').forEach((b) => b.onclick = () => openInvoice(payData.clients.find((c) => c.id === Number(b.dataset.newinv)), null));
+    document.querySelectorAll('#payList [data-view]').forEach((b) => b.onclick = () => { const v = payData.invoices.find((x) => x.id === Number(b.dataset.view)); openInvoice(payData.clients.find((c) => c.id === v.clientId), v); });
+    document.querySelectorAll('#payList [data-send]').forEach((b) => b.onclick = () => sendInvoice(Number(b.dataset.send), b));
+    document.querySelectorAll('#payList [data-paid]').forEach((b) => b.onclick = async () => { try { await api('/invoices/' + b.dataset.paid, { method: 'PATCH', body: { paid: b.dataset.on !== '1' } }); if (b.dataset.on !== '1') { successBadge('Marked as paid'); if (typeof confetti === 'function') confetti(b); } loadPayments(); } catch (e) { toast(e.message); } });
+    document.querySelectorAll('#payList [data-delinv]').forEach((b) => b.onclick = async () => { if (!confirm('Delete this invoice? Its number will not be used again.')) return; try { await api('/invoices/' + b.dataset.delinv, { method: 'DELETE' }); loadPayments(); } catch (e) { toast(e.message); } });
+  }
+  async function sendInvoice(id, btn) {
+    const v = payData.invoices.find((x) => x.id === id), c = v && payData.clients.find((x) => x.id === v.clientId);
+    if (c && !c.telegram) return toast(`${c.name} has no Telegram group yet. Pick one in the Clients tab.`);
+    if (!payData.bot) return toast('Telegram bot is not set up on the server (TELEGRAM_BOT_TOKEN).');
+    if (btn) { btn.disabled = true; btn.classList.add('busy'); }
+    try { const r = await api(`/invoices/${id}/send`, { method: 'POST' }); if (btn && typeof planeOff === 'function') planeOff(btn); successBadge('Invoice sent to ' + r.sentTo); loadPayments(); return true; }
+    catch (e) { toast(e.message); return false; }
+    finally { if (btn) { btn.disabled = false; btn.classList.remove('busy'); } }
+  }
+
+  // service fee per client
+  let svcId = null;
+  function openSvc(id) {
+    const c = payData.clients.find((x) => x.id === id), v = c.service || {}; svcId = id;
+    $('svcTitle').textContent = `Service fee · ${c.name}`;
+    $('svcPrice').value = v.price || ''; $('svcDay').value = v.day || ''; $('svcDesc').value = v.description || (hasSvc(c) ? '' : DEF_DESC);
+    $('svcCustomer').value = v.customer || c.name; $('svcCompany').value = v.company || c.pages.find((p) => !/^\d{6,}$/.test(p) && p !== c.name) || ''; $('svcPhone').value = v.phone || '';
+    $('svcRemove').hidden = !hasSvc(c);
+    dlgOpen($('svcDlg')); setTimeout(() => $('svcPrice').focus(), 60);
+  }
+  async function saveSvc(remove) {
+    const price = remove ? 0 : Number($('svcPrice').value) || 0, day = parseInt($('svcDay').value, 10) || 0;
+    if (!remove && !(price > 0)) return toast('Type the price.');
+    if (!remove && !(day >= 1 && day <= 31)) return toast('Type the pay date as a day from 1 to 31.');
+    try {
+      await api('/clients/' + svcId, { method: 'PATCH', body: { service: { price, day, description: $('svcDesc').value, customer: $('svcCustomer').value, company: $('svcCompany').value, phone: $('svcPhone').value } } });
+      $('svcDlg').close(); successBadge(remove ? 'Service fee removed' : 'Service fee saved'); loadPayments();
+    } catch (e) { toast(e.message); }
+  }
+  $('svcSave').onclick = () => saveSvc(false);
+  $('svcRemove').onclick = () => { if (confirm('Remove the service fee from this client? Existing invoices stay.')) saveSvc(true); };
+
+  // invoice: create (editable, live preview) or view (saved)
+  let invClient = null, invSaved = null, invPrevUrl = null, invTimer = null;
+  const itemRow = (it = {}) => `<div class="invitem"><input type="text" class="i-d" maxlength="160" placeholder="Description" value="${esc(it.description || '')}"><input type="number" class="i-q" min="0" step="1" inputmode="numeric" value="${it.qty == null ? 1 : it.qty}"><input type="number" class="i-p" min="0" step="0.01" inputmode="decimal" value="${it.price || ''}"><button type="button" class="ghost sm i-x" aria-label="Remove line">✕</button></div>`;
+  function invBody() {
+    const items = [...document.querySelectorAll('#invItems .invitem')].map((r) => ({ description: r.querySelector('.i-d').value.trim(), qty: Number(r.querySelector('.i-q').value) || 0, price: Number(r.querySelector('.i-p').value) || 0 })).filter((it) => it.description || it.price);
+    return { clientId: invClient.id, date: $('invDate').value, customer: $('invCustomer').value, company: $('invCompany').value, phone: $('invPhone').value, items, discount: Number($('invDiscount').value) || 0 };
+  }
+  function invRecalc() {
+    const b = invBody(), sub = b.items.reduce((a, it) => a + it.qty * it.price, 0);
+    $('invTotal').textContent = money(Math.max(0, sub - Math.min(sub, b.discount)));
+    $('invAdd').hidden = !!invSaved || document.querySelectorAll('#invItems .invitem').length >= 6;
+    if (invSaved) return;
+    clearTimeout(invTimer); invTimer = setTimeout(invPreview, 450);
+  }
+  async function invPreview() {
+    const my = invSaved || invClient; $('invPrevBox').classList.add('loading');
+    try {
+      const res = invSaved ? await fetch(`/api/invoices/${invSaved.id}/png`) : await fetch('/api/invoices/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(invBody()) });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Could not draw the invoice.'); }
+      const url = URL.createObjectURL(await res.blob());
+      if (my !== (invSaved || invClient)) return URL.revokeObjectURL(url);
+      if (invPrevUrl) URL.revokeObjectURL(invPrevUrl); invPrevUrl = url;
+      $('invPrev').src = url; $('invPrev').hidden = false; $('invPrevMsg').hidden = true;
+    } catch (e) { $('invPrev').hidden = true; $('invPrevMsg').hidden = false; $('invPrevMsg').textContent = e.message; }
+    finally { $('invPrevBox').classList.remove('loading'); }
+  }
+  function invFooter() {
+    const f = $('invFoot');
+    if (!invSaved) { f.innerHTML = '<span class="hint">The preview updates as you type. The invoice number is given when you create it.</span><span class="spacer"></span><button type="button" class="primary" id="invCreate">Create invoice</button>'; $('invCreate').onclick = createInvoice; return; }
+    const v = invSaved;
+    f.innerHTML = `<span class="hint">${v.paidAt ? 'Paid.' : v.sentAt ? 'Sent to the group.' : 'Created — not sent yet.'}</span><span class="spacer"></span><a class="btn" href="/api/invoices/${v.id}/pdf?download=1">Download PDF</a><a class="btn" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">Open PDF</a><button type="button" class="primary" id="invSend">${v.sentAt ? 'Send again' : 'Send to group'}</button>`;
+    $('invSend').onclick = async () => { if (await sendInvoice(v.id, $('invSend'))) $('invDlg').close(); };
+  }
+  function openInvoice(c, saved) {
+    invClient = c; invSaved = saved || null;
+    const v = saved || {}, s2 = c.service || {};
+    $('invTitle').textContent = saved ? `Invoice ${saved.number}` : `New invoice · ${c.name}`;
+    $('invSub').textContent = c.telegram ? `Sends to Telegram group: ${c.telegramTitle || c.telegram}` : 'No Telegram group for this client yet — you can still download the PDF.';
+    const due = payData && payMonth !== payData.today.slice(0, 7) ? dueDate(c, payMonth) : (payData ? payData.today : me.today);
+    $('invDate').value = v.date || due; $('invCustomer').value = v.customer || s2.customer || c.name; $('invCompany').value = v.company != null && saved ? v.company : (s2.company || ''); $('invPhone').value = v.phone != null && saved ? v.phone : (s2.phone || '');
+    $('invItems').innerHTML = (saved ? v.items : [{ description: s2.description || DEF_DESC, qty: 1, price: s2.price || '' }]).map(itemRow).join('');
+    $('invDiscount').value = v.discount || '';
+    $('invForm').querySelectorAll('input, button').forEach((el) => { el.disabled = !!saved; });
+    $('invPrev').hidden = true; $('invPrevMsg').hidden = false; $('invPrevMsg').textContent = 'Drawing the invoice…';
+    invFooter(); dlgOpen($('invDlg')); invRecalc(); invPreview();
+  }
+  $('invForm').addEventListener('input', invRecalc);
+  $('invForm').addEventListener('click', (ev) => { const x = ev.target.closest('.i-x'); if (x && !invSaved) { if (document.querySelectorAll('#invItems .invitem').length > 1) x.closest('.invitem').remove(); else x.closest('.invitem').querySelectorAll('input').forEach((i) => { i.value = i.classList.contains('i-q') ? 1 : ''; }); invRecalc(); } });
+  $('invAdd').onclick = () => { if (document.querySelectorAll('#invItems .invitem').length < 6) { $('invItems').insertAdjacentHTML('beforeend', itemRow({ qty: 1 })); invRecalc(); $('invItems').lastElementChild.querySelector('.i-d').focus(); } };
+  async function createInvoice() {
+    const b = $('invCreate'); b.disabled = true; b.classList.add('busy');
+    try {
+      invSaved = await api('/invoices', { method: 'POST', body: invBody() });
+      $('invTitle').textContent = `Invoice ${invSaved.number}`;
+      $('invForm').querySelectorAll('input, button').forEach((el) => { el.disabled = true; });
+      invFooter(); invPreview(); successBadge(`Invoice ${invSaved.number} created`); loadPayments();
+    } catch (e) { toast(e.message); b.disabled = false; b.classList.remove('busy'); }
+  }
+
+  // invoice settings (company, bank, pictures)
+  const SET_F = { setCompany: 'company', setAddress1: 'address1', setAddress2: 'address2', setPhone: 'phone', setBankName: 'bankName', setAccountNo: 'accountNo', setAccountName: 'accountName', setSeller: 'seller', setIssuedBy: 'issuedBy' };
+  let setImgs = {};
+  const drawSetImg = (k, src) => { const box = document.querySelector(`.setimg[data-img="${k}"]`), img = box.querySelector('img'); img.src = src || ''; img.hidden = !src; box.classList.toggle('empty', !src); const up = box.querySelector('.up'); if (k !== 'logo') up.textContent = src ? 'Change' : 'Add'; const rm = box.querySelector('.rm'); if (rm) rm.hidden = !src; };
+  $('paySettings').onclick = async () => {
+    try {
+      const [p, n] = await Promise.all([api('/invoice-profile'), api('/invoice-next')]);
+      for (const [id, k] of Object.entries(SET_F)) $(id).value = p[k] || '';
+      setImgs = {}; for (const k of ['logo', 'qr', 'sign']) drawSetImg(k, p[k]);
+      $('setNext').value = n.next; $('setNext').dataset.was = n.next; $('setNextBox').hidden = !n.canSet;
+      dlgOpen($('setDlg'));
+    } catch (e) { toast(e.message); }
+  };
+  // Shrink a picked picture in the browser so it stays small.
+  const shrink = (file, max = 700) => new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)), cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url); resolve(cv.toDataURL('image/png')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That picture could not be read.')); }; img.src = url;
+  });
+  document.querySelectorAll('.setimg').forEach((box) => {
+    const k = box.dataset.img, inp = box.querySelector('input');
+    box.querySelector('.up').onclick = () => inp.click();
+    inp.onchange = async () => { const f = inp.files[0]; inp.value = ''; if (!f) return; try { setImgs[k] = await shrink(f); drawSetImg(k, setImgs[k]); } catch (e) { toast(e.message); } };
+    const rm = box.querySelector('.rm'); if (rm) rm.onclick = () => { setImgs[k] = ''; drawSetImg(k, ''); };
+  });
+  $('setSave').onclick = async () => {
+    const body = { ...setImgs }; for (const [id, k] of Object.entries(SET_F)) body[k] = $(id).value;
+    if (!$('setNextBox').hidden && $('setNext').value !== $('setNext').dataset.was) body.nextNumber = $('setNext').value;
+    const b = $('setSave'); b.disabled = true;
+    try { await api('/invoice-profile', { method: 'PUT', body }); $('setDlg').close(); successBadge('Invoice settings saved'); } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  };
+
   // ---------- admin dashboard (owner only) ----------
   let aPreset = 'today', aData = null, aTeams = { teams: [], users: [], canEdit: false }; const aOpen = new Set();
   function aRange(v) {
@@ -1433,7 +1622,7 @@
       await loadDay();
       const h = location.hash.slice(1);
       if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
-      showTab(['clients', 'accounts', 'lives', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      showTab(['clients', 'accounts', 'lives', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

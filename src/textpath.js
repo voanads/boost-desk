@@ -6,6 +6,7 @@ const path = require('path');
 const FILES = {
   latin: { 400: 'Inter_400Regular.ttf', 600: 'Inter_600SemiBold.ttf' },
   khmer: { 400: 'NotoSansKhmer_400Regular.ttf', 600: 'NotoSansKhmer_600SemiBold.ttf' },
+  serif: { 400: 'NotoSerif_400Regular.ttf', 600: 'NotoSerif_700Bold.ttf' }, // invoices
 };
 let ready = null;
 function load() {
@@ -39,12 +40,12 @@ function runs(text) {
 }
 
 // Shape text → [{d (font units), x (font units, scaled later)}], width in px at `size`.
-async function layout(text, size, weight = 400) {
+async function layout(text, size, weight = 400, family = 'sans') {
   const { hb, fonts } = await load();
   const w = weight >= 600 ? 600 : 400;
   const glyphs = []; let x = 0;
   for (const r of runs(String(text))) {
-    const f = fonts[r.script + w];
+    const f = fonts[(r.script === 'latin' && family === 'serif' ? 'serif' : r.script) + w];
     const s = size / f.upem;
     const buf = new hb.Buffer();
     buf.addText(r.text); buf.guessSegmentProperties();
@@ -63,21 +64,21 @@ async function layout(text, size, weight = 400) {
 }
 
 // SVG for one line of text. anchor: start | middle | end. Returns '' for empty text.
-async function svgText(text, x, y, { size = 16, weight = 400, fill = '#000', anchor = 'start' } = {}) {
+async function svgText(text, x, y, { size = 16, weight = 400, fill = '#000', anchor = 'start', family = 'sans' } = {}) {
   if (!text && text !== 0) return '';
-  const { glyphs, width } = await layout(text, size, weight);
+  const { glyphs, width } = await layout(text, size, weight, family);
   const x0 = anchor === 'end' ? x - width : anchor === 'middle' ? x - width / 2 : x;
   const parts = glyphs.map((g) => `<path transform="translate(${(x0 + g.x).toFixed(2)} ${(y + g.y).toFixed(2)}) scale(${g.s.toFixed(5)} ${(-g.s).toFixed(5)})" d="${g.d}"/>`);
   return `<g fill="${fill}">${parts.join('')}</g>`;
 }
 
 // Cut text to fit a width in px, adding "…".
-async function fit(text, maxW, size, weight = 400) {
+async function fit(text, maxW, size, weight = 400, family = 'sans') {
   const seg = new Intl.Segmenter('km', { granularity: 'grapheme' }); // never split a Khmer letter cluster
   const t = [...seg.segment(String(text || ''))].map((x) => x.segment);
-  if ((await layout(t.join(''), size, weight)).width <= maxW) return t.join('');
+  if ((await layout(t.join(''), size, weight, family)).width <= maxW) return t.join('');
   let lo = 0, hi = t.length;
-  while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if ((await layout(t.slice(0, mid).join('') + '…', size, weight)).width <= maxW) lo = mid; else hi = mid - 1; }
+  while (lo < hi) { const mid = Math.ceil((lo + hi) / 2); if ((await layout(t.slice(0, mid).join('') + '…', size, weight, family)).width <= maxW) lo = mid; else hi = mid - 1; }
   return t.slice(0, lo).join('').trimEnd() + '…';
 }
 

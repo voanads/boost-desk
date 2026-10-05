@@ -71,6 +71,21 @@ async function init() {
       rows JSONB NOT NULL DEFAULT '[]',
       PRIMARY KEY (owner, day)
     );
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS service JSONB NOT NULL DEFAULT '{}';  -- service fee: price, pay day, description, bill-to details
+    CREATE TABLE IF NOT EXISTS invoices (           -- service invoices (Payments tab)
+      id SERIAL PRIMARY KEY,
+      owner TEXT NOT NULL,
+      client_id INT NOT NULL,
+      number TEXT NOT NULL,
+      date DATE NOT NULL,
+      data JSONB NOT NULL,                          -- customer, company, phone, items, discount
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      sent_at TIMESTAMPTZ,
+      paid_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS invoices_owner_date_idx ON invoices (owner, date);
     CREATE TABLE IF NOT EXISTS campaign_setups (    -- how each boost was set up (Live videos tab), fetched once
       owner TEXT NOT NULL,
       campaign_id TEXT NOT NULL,
@@ -145,7 +160,7 @@ async function removeUser(fbId) {
   try {
     await c.query('BEGIN');
     await c.query('DELETE FROM clients WHERE owner=$1', [fbId]); // day_entries go with them
-    for (const t of ['ad_accounts', 'day_meta', 'pages_seen', 'raw_rows', 'campaign_setups']) await c.query(`DELETE FROM ${t} WHERE owner=$1`, [fbId]);
+    for (const t of ['ad_accounts', 'day_meta', 'pages_seen', 'raw_rows', 'campaign_setups', 'invoices']) await c.query(`DELETE FROM ${t} WHERE owner=$1`, [fbId]);
     await c.query("DELETE FROM settings WHERE starts_with(key, $1)", [fbId + ':']);
     await c.query('DELETE FROM users WHERE fb_id=$1', [fbId]);
     await c.query('COMMIT');
@@ -162,7 +177,7 @@ const activeUsers = async () =>
   (await q(`SELECT * FROM users WHERE token_expires IS NULL OR token_expires > now() ORDER BY updated_at DESC`)).rows;
 
 // ---- clients ----
-const clientRow = (r) => ({ ...r, budget: Number(r.budget), pages: Array.isArray(r.pages) ? r.pages : [] });
+const clientRow = (r) => ({ ...r, budget: Number(r.budget), pages: Array.isArray(r.pages) ? r.pages : [], service: r.service && typeof r.service === 'object' ? r.service : {} });
 const listClients = async (owner) => (await q('SELECT * FROM clients WHERE owner=$1 ORDER BY archived, lower(name)', [owner])).rows.map(clientRow);
 async function createClient(owner, c) {
   const r = await q(`INSERT INTO clients (owner, name, match, pages, type, telegram, telegram_title) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -170,13 +185,36 @@ async function createClient(owner, c) {
   return clientRow(r.rows[0]);
 }
 async function updateClient(owner, id, c) {
-  const allowed = ['name', 'match', 'pages', 'type', 'archived', 'telegram', 'telegram_title'];
+  const allowed = ['name', 'match', 'pages', 'type', 'archived', 'telegram', 'telegram_title', 'service'];
   const keys = Object.keys(c).filter((k) => allowed.includes(k));
   if (!keys.length) return null;
   const sets = keys.map((k, i) => `${k}=$${i + 3}`).join(', ');
-  const r = await q(`UPDATE clients SET ${sets} WHERE id=$1 AND owner=$2 RETURNING *`, [id, owner, ...keys.map((k) => (k === 'pages' ? JSON.stringify(c[k]) : c[k]))]);
+  const r = await q(`UPDATE clients SET ${sets} WHERE id=$1 AND owner=$2 RETURNING *`, [id, owner, ...keys.map((k) => (k === 'pages' || k === 'service' ? JSON.stringify(c[k]) : c[k]))]);
   return r.rows[0] ? clientRow(r.rows[0]) : null;
 }
+// ---- invoices ----
+const invRow = (r) => r && ({ id: r.id, clientId: r.client_id, number: r.number, date: r.date, ...r.data, total: Number(r.total), createdBy: r.created_by, createdAt: r.created_at, sentAt: r.sent_at, paidAt: r.paid_at });
+const INV_COLS = "id, client_id, number, to_char(date,'YYYY-MM-DD') AS date, data, total, created_by, created_at, sent_at, paid_at";
+// Invoice numbers are shared by every account (one company): IN<yy>-<running number>.
+async function nextInvoiceNumber(date) {
+  const r = await q(`INSERT INTO settings (key, value) VALUES ('invoiceSeq', '1'::jsonb)
+                     ON CONFLICT (key) DO UPDATE SET value = to_jsonb((settings.value #>> '{}')::int + 1) RETURNING value`);
+  return `IN${String(date).slice(2, 4)}-${String(Number(r.rows[0].value)).padStart(4, '0')}`;
+}
+async function createInvoice(owner, inv, by) {
+  const number = inv.number || await nextInvoiceNumber(inv.date);
+  const r = await q(`INSERT INTO invoices (owner, client_id, number, date, data, total, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${INV_COLS}`,
+    [owner, inv.clientId, number, inv.date, JSON.stringify(inv.data), inv.total, by || '']);
+  return invRow(r.rows[0]);
+}
+const listInvoices = async (owner, from, to) => (await q(`SELECT ${INV_COLS} FROM invoices WHERE owner=$1 AND date BETWEEN $2 AND $3 ORDER BY date DESC, id DESC`, [owner, from, to])).rows.map(invRow);
+const getInvoice = async (owner, id) => invRow((await q(`SELECT ${INV_COLS} FROM invoices WHERE owner=$1 AND id=$2`, [owner, id])).rows[0]);
+const markInvoice = async (owner, id, { sent, paid }) => {
+  if (sent !== undefined) await q('UPDATE invoices SET sent_at=$3 WHERE owner=$1 AND id=$2', [owner, id, sent ? new Date() : null]);
+  if (paid !== undefined) await q('UPDATE invoices SET paid_at=$3 WHERE owner=$1 AND id=$2', [owner, id, paid ? new Date() : null]);
+  return getInvoice(owner, id);
+};
+const deleteInvoice = (owner, id) => q('DELETE FROM invoices WHERE owner=$1 AND id=$2', [owner, id]);
 const deleteClient = (owner, id) => q('DELETE FROM clients WHERE id=$1 AND owner=$2', [id, owner]);
 const ownsClient = async (owner, id) => (await q('SELECT 1 FROM clients WHERE id=$1 AND owner=$2', [id, owner])).rowCount > 0;
 
@@ -249,6 +287,7 @@ module.exports = {
   pool, init, getSetups, putSetup,
   upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,
+  createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
   getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched,

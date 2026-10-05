@@ -401,8 +401,15 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === inv.clientId);
   if (!c || !c.telegram) return res.status(400).json({ error: `${c ? c.name : 'This client'} has no Telegram group yet. Pick one in the Clients tab.` });
   const buf = await invoice.pdf(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
-  const first = inv.items[0] ? inv.items[0].description : '';
-  const caption = [`🧾 Invoice ${inv.number}`, `👤 ${inv.customer}${inv.company ? ' · ' + inv.company : ''}`, `🗓 ${invoice.niceDate(inv.date)}`, first ? `📝 ${first}${inv.items.length > 1 ? ` +${inv.items.length - 1} more` : ''}` : '', `💰 Total: ${invoice.money(inv.total)}`].filter(Boolean).join('\n');
+  // Message sent with the PDF (the team's Khmer payment reminder):
+  //   pay date = the client's pay day in the invoice's month (or the invoice date), price and Page count
+  //   from the first line, amount to pay = the invoice total.
+  const usd = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? String(v) : v.toFixed(2); };
+  const ym = inv.date.slice(0, 7), day = c.service && c.service.day ? Math.min(c.service.day, Number(lastOfMonth(ym).slice(8))) : Number(inv.date.slice(8));
+  const due = `${String(day).padStart(2, '0')}/${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+  const it = inv.items[0] || { price: inv.total, qty: 1 }, pages = inv.items.reduce((a, x) => a + (Number(x.qty) || 0), 0) || 1;
+  const caption = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', `នៅថ្ងៃទី ${due} ។`, '', `តម្លៃសេវាកម្ម =$ ${usd(it.price)}`, `Page : ${pages}`,
+    ...(inv.discount > 0 ? [`បញ្ចុះតម្លៃ =$ ${usd(inv.discount)}`] : []), '', '', `ទឹកប្រាក់ត្រូវបង់ =$ ${usd(inv.total)}`, '', 'សូមអរគុណ!🙏🏼'].join('\n');
   await telegram.sendDocument(buf, invFile(inv), caption, c.telegram);
   res.json({ ...(await db.markInvoice(req.user.fb_id, inv.id, { sent: true })), sentTo: c.telegram_title || c.telegram });
 }));

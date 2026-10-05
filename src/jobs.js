@@ -115,6 +115,8 @@ function start() {
     cron.schedule('30 5 * * *', guard(() => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync')), opts);
     log('Background auto sync on (new campaigns every 5 min, hourly refresh, 30-day refresh at 05:30)');
   }
+  // Each account's own "auto daily report" (time chosen in the app): checked every minute.
+  cron.schedule('* * * * *', () => require('./extras').tick().catch((e) => log('auto report failed:', e.message)), opts);
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
   if (telegram.configured() && m) {
     cron.schedule(`${Number(m[2])} ${Number(m[1])} * * *`, () => sendDailyReport()

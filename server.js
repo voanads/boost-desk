@@ -13,6 +13,7 @@ const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 // Ticked report lines: "l1,l3,post" or ['l1','post'] → clean list, or null for everything.
 const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split(',')).map(String).filter((x) => /^(l\d{1,2}|post)$/.test(x)); return a.length ? [...new Set(a)].sort() : null; };
 const jobs = require('./src/jobs');
+const extras = require('./src/extras');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
 
@@ -636,6 +637,15 @@ api.post('/report/:day/send', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- auto daily report ----------
+api.get('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.autoSettings(req.user.fb_id)), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null), bot: telegram.hasBot(), tz: cfg.tz })));
+api.put('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.saveAutoSettings(req.user.fb_id, req.body || {})), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null) })));
+api.post('/auto-report/run', wrap(async (req, res) => {
+  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.' });
+  const r = await extras.sendClientReports(req.user, sync.todayIn());
+  await db.setUserSetting(req.user.fb_id, 'autoReportLast', r);
+  res.json(r);
+}));
 app.use('/api', api);
 
 // Errors → JSON with a clear message.

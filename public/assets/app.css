@@ -977,3 +977,25 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 #setMsgPresets{display:flex;flex-wrap:wrap;gap:6px}
 #setMsgPresets button{padding:5px 12px;min-height:0;border-radius:99px;font-size:.82rem;font-weight:600}
 #setMsgPresets button[aria-pressed=true]{background:var(--grad);color:#fff;border-color:transparent}
+
+/* auto report */
+.arstate{font-size:.72rem;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:4px;background:var(--bg-2);color:var(--muted)}
+.arstate.on{background:rgba(18,138,74,.14);color:#128a4a}
+:root[data-theme=dark] .arstate.on{color:#5fd699}
+.arrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600}
+.switch input{position:absolute;opacity:0;pointer-events:none}
+.switch i{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;transition:background .25s var(--smooth)}
+.switch i:after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:transform .25s var(--smooth)}
+.switch input:checked+i{background:var(--brand)}.switch input:checked+i:after{transform:translateX(18px)}
+.switch input:focus-visible+i{outline:2px solid var(--brand);outline-offset:2px}
+.artime{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:.9rem}
+.artime input{font:inherit;font-weight:600;font-size:1.05rem;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.arlist-head{display:flex;justify-content:space-between;align-items:baseline}
+.arlist{display:flex;flex-direction:column;max-height:38vh;overflow:auto;border:1px solid var(--line);border-radius:14px}
+.arlist label{display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid var(--line);cursor:pointer}
+.arlist label:first-child{border-top:0}
+.arlist label.off{opacity:.55;cursor:default}
+.arlist b{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arlist small{color:var(--muted);font-size:.8rem;white-space:nowrap;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.arlist input{width:18px;height:18px;accent-color:var(--brand)}

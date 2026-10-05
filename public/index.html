@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=56">
+<link rel="stylesheet" href="/assets/app.css?v=57">
 </head>
 <body>
 <div class="wrap">
@@ -126,6 +126,7 @@
       <div><h2>Clients <span class="countpill" id="cCount">0</span></h2><div class="hint">Spend is matched to a client by the Facebook Page each ad promotes.</div></div>
       <span class="spacer"></span>
       <input type="search" id="cSearch" placeholder="Search client or Page" aria-label="Search clients">
+      <button id="cAutoBtn" title="Send every client's report by itself each day">⏰ Auto report <span class="arstate" id="cAutoState"></span></button>
       <button class="primary" id="cAddBtn">+ Add client</button>
     </div>
     <div class="cgrid" id="cGrid"><div class="ccard skel-card"><div class="sk" style="--w:55%"></div><div class="sk" style="--w:80%"></div><div class="sk" style="--w:40%"></div></div><div class="ccard skel-card"><div class="sk" style="--w:55%"></div><div class="sk" style="--w:80%"></div><div class="sk" style="--w:40%"></div></div><div class="ccard skel-card"><div class="sk" style="--w:55%"></div><div class="sk" style="--w:80%"></div><div class="sk" style="--w:40%"></div></div></div>
@@ -383,6 +384,17 @@
     </div>
   </form>
 </dialog>
+<dialog id="arDlg" class="dlg" aria-labelledby="arTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="arTitle">Auto daily report</h2><div class="hint">Every day at the time you set, each client's report goes to their own Telegram group by itself.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="arrow"><label class="switch"><input type="checkbox" id="arOn"><i></i><span id="arOnTxt">Off</span></label><span class="spacer"></span><label class="artime"><span>Send at</span><input type="time" id="arTime" step="300"></label></div>
+    <label class="chk"><input type="checkbox" id="arImg"> Send with the ads picture</label>
+    <div class="arlist-head"><b>Clients</b><span class="hint" id="arCount"></span></div>
+    <div class="arlist" id="arList"></div>
+    <div class="note" id="arNote"></div>
+    <div class="dlg-foot"><button type="button" id="arRun" title="Send today's reports right now">Send now</button><span class="spacer"></span><button type="button" id="arSave" class="primary">Save</button></div>
+  </form>
+</dialog>
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -394,6 +406,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=56"></script>
+<script src="/assets/app.js?v=57"></script>
 </body>
 </html>

@@ -564,6 +564,44 @@
     const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
   }
+  // ---------- auto daily report ----------
+  let arSet = null;
+  function drawArState() { const el = $('cAutoState'); if (!arSet) { el.textContent = ''; return; } el.textContent = arSet.on ? arSet.time : 'Off'; el.classList.toggle('on', !!arSet.on); }
+  async function loadAr() { try { arSet = await api('/auto-report'); drawArState(); } catch (_) {} }
+  function drawAr() {
+    $('arOn').checked = !!arSet.on; $('arOnTxt').textContent = arSet.on ? 'On' : 'Off'; $('arTime').value = arSet.time; $('arImg').checked = arSet.withImage !== false;
+    const list = clients.filter((c) => !c.archived).sort((a, b) => (!!b.telegram - !!a.telegram) || a.name.localeCompare(b.name));
+    $('arList').innerHTML = list.map((c) => c.telegram
+      ? `<label><input type="checkbox" data-ar="${c.id}" ${arSet.skip.includes(c.id) ? '' : 'checked'}><b>${esc(c.name)}</b><small>✈ ${esc(c.telegram_title || 'Telegram group')}</small></label>`
+      : `<label class="off"><input type="checkbox" disabled><b>${esc(c.name)}</b><small>No Telegram group</small></label>`).join('') || '<div class="empty">No clients yet.</div>';
+    const count = () => { $('arCount').textContent = `${document.querySelectorAll('#arList [data-ar]:checked').length} of ${list.filter((c) => c.telegram).length} with a group`; };
+    document.querySelectorAll('#arList [data-ar]').forEach((x) => x.onchange = count); count();
+    const l = arSet.last, t = (x) => new Date(x).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    $('arNote').innerHTML = !arSet.bot ? 'The Telegram bot is not set up on the server yet, so reports can’t be sent.'
+      : l && l.at ? `<b>Last run ${esc(t(l.at))}:</b> sent ${l.sent.length}${l.sent.length ? ' (' + esc(l.sent.join(', ')) + ')' : ''}${l.already && l.already.length ? ` · ${l.already.length} already sent by hand` : ''}${l.noSpend ? ` · ${l.noSpend} with no spend` : ''}${l.failed && l.failed.length ? `<br>⚠ Failed: ${esc(l.failed.map((f) => f.name + ' — ' + f.error).join('; '))}` : ''}`
+      : `Clients with no boost spend that day get nothing. A report you already sent by hand is not sent again. Time zone: ${esc(arSet.tz || me.tz)}.`;
+  }
+  const arBody = () => ({ on: $('arOn').checked, time: $('arTime').value, withImage: $('arImg').checked, skip: [...document.querySelectorAll('#arList [data-ar]')].filter((x) => !x.checked).map((x) => Number(x.dataset.ar)) });
+  $('arOn').onchange = () => { $('arOnTxt').textContent = $('arOn').checked ? 'On' : 'Off'; };
+  $('cAutoBtn').onclick = async () => {
+    if (!arSet) await loadAr(); if (!arSet) return toast('Could not load the auto report settings.');
+    drawAr(); const d = $('arDlg'); if (typeof d.showModal === 'function') { if (!d.open) d.showModal(); } else d.setAttribute('open', '');
+  };
+  $('arSave').onclick = async () => {
+    try { arSet = { ...arSet, ...(await api('/auto-report', { method: 'PUT', body: arBody() })) }; drawArState(); $('arDlg').close(); successBadge(arSet.on ? `Auto report on · ${arSet.time} every day` : 'Auto report off'); }
+    catch (e) { toast(e.message); }
+  };
+  $('arRun').onclick = async () => {
+    const b = $('arRun'); b.disabled = true; b.textContent = 'Sending…';
+    try {
+      const scr = arBody(), keep = arSet.on; const saved = await api('/auto-report', { method: 'PUT', body: { ...scr, on: keep } }); // use the ticks on screen
+      const r = await api('/auto-report/run', { method: 'POST' });
+      arSet = { ...arSet, ...saved, last: r }; drawAr(); $('arOn').checked = scr.on; $('arOnTxt').textContent = scr.on ? 'On' : 'Off';
+      toast(r.sent.length ? `Sent ${r.sent.length} report${r.sent.length === 1 ? '' : 's'}` : r.already.length ? 'Today’s reports were already sent.' : 'No client has boost spend today.');
+    } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Send now'; }
+  };
+  loadAr();
+
   const closeClientDlg = () => $('cDlg').close();
   $('cAddBtn').onclick = () => openClientDlg(null);
   $('cClose').onclick = closeClientDlg; $('cCancel').onclick = closeClientDlg;

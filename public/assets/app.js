@@ -78,6 +78,95 @@
     return body;
   }
 
+  // ---------- our own calendar (replaces the browser's date / month picker) ----------
+  // Each date input stays in the page (so the rest of the code reads / sets .value as before), but is
+  // hidden behind a button that shows the date nicely and opens this calendar.
+  const Cal = (() => {
+    const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const p2 = (n) => String(n).padStart(2, '0'), isoOf = (y, m, d) => `${y}-${p2(m + 1)}-${p2(d)}`;
+    const todayIso = () => (typeof me !== 'undefined' && me && me.today) || isoOf(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    const show = (inp) => { const v = inp.value; if (!v) return inp.type === 'month' || inp.dataset.cal === 'month' ? 'Pick a month' : 'Pick a day';
+      if (inp.dataset.cal === 'month') { const [y, m] = v.split('-').map(Number); return `${MON[m - 1]} ${y}`; }
+      const [y, m, d] = v.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-GB', inp.dataset.short ? { day: 'numeric', month: 'short', year: 'numeric' } : { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); };
+    let pop = null, cur = null, view = null, mode = 'days', closer = null;
+    function close() { if (!pop) return; const el = pop; pop = null; cur && cur._btn.setAttribute('aria-expanded', 'false'); cur = null; document.removeEventListener('pointerdown', closer, true); document.removeEventListener('keydown', onKey, true);
+      if (!calm && el.animate) el.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(6px) scale(.97)' }], { duration: 160, easing: 'ease-in' }).onfinish = () => el.remove(); else el.remove(); }
+    function onKey(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); const b = cur && cur._btn; close(); b && b.focus(); } }
+    function pick(v) { const inp = cur; inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); const b = inp._btn; close(); b.focus(); }
+    function draw(dir = 0) {
+      const inp = cur, isMonth = inp.dataset.cal === 'month', max = inp.max || '', min = inp.min || '', sel = inp.value, t = todayIso();
+      // range partner (From ↔ To) to shade the days in between
+      const other = inp.dataset.pair ? document.getElementById(inp.dataset.pair) : null, a = other && other.value && sel ? [sel, other.value].sort() : null;
+      let body = '';
+      if (mode === 'days' && !isMonth) {
+        const first = new Date(view.y, view.m, 1), start = new Date(view.y, view.m, 1 - first.getDay());
+        let cells = '';
+        for (let i = 0; i < 42; i++) {
+          const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), v = isoOf(d.getFullYear(), d.getMonth(), d.getDate());
+          const off = (max && v > max) || (min && v < min), out = d.getMonth() !== view.m;
+          cells += `<button type="button" class="cd${out ? ' out' : ''}${v === t ? ' today' : ''}${v === sel ? ' sel' : ''}${a && v > a[0] && v < a[1] ? ' inr' : ''}${a && (v === a[0] || v === a[1]) && v !== sel ? ' edge' : ''}" data-v="${v}"${off ? ' disabled' : ''} aria-label="${d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}"${v === sel ? ' aria-current="date"' : ''}>${d.getDate()}</button>`;
+        }
+        body = `<div class="cal-w">${['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((x) => `<span>${x}</span>`).join('')}</div><div class="cal-g" data-dir="${dir}">${cells}</div>`;
+      } else if (mode === 'years') {
+        const y0 = view.y - (view.y % 12);
+        body = `<div class="cal-m" data-dir="${dir}">${Array.from({ length: 12 }, (_, i) => y0 + i).map((y) => `<button type="button" class="cm${y === view.y ? ' sel' : ''}${String(y) === t.slice(0, 4) ? ' today' : ''}" data-y="${y}"${max && String(y) > max.slice(0, 4) ? ' disabled' : ''}>${y}</button>`).join('')}</div>`;
+      } else { // months
+        body = `<div class="cal-m" data-dir="${dir}">${MON.map((n, i) => { const v = `${view.y}-${p2(i + 1)}`; return `<button type="button" class="cm${(isMonth ? sel : sel.slice(0, 7)) === v ? ' sel' : ''}${t.slice(0, 7) === v ? ' today' : ''}" data-m="${i}"${max && v > max.slice(0, 7) ? ' disabled' : ''}>${n.slice(0, 3)}</button>`; }).join('')}</div>`;
+      }
+      const title = mode === 'years' ? `${view.y - (view.y % 12)} – ${view.y - (view.y % 12) + 11}` : mode === 'months' || isMonth ? String(view.y) : `${MON[view.m]} ${view.y}`;
+      const quick = isMonth ? `<button type="button" data-q="${t.slice(0, 7)}">This month</button>` : `<button type="button" data-q="${t}">Today</button><button type="button" data-q="${(() => { const d = new Date(Number(t.slice(0, 4)), Number(t.slice(5, 7)) - 1, Number(t.slice(8)) - 1); return isoOf(d.getFullYear(), d.getMonth(), d.getDate()); })()}">Yesterday</button>`;
+      pop.innerHTML = `<div class="cal-h"><button type="button" class="cal-nav" data-nav="-1" aria-label="Previous">‹</button><button type="button" class="cal-t" data-up="1" title="Change month / year">${title}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><button type="button" class="cal-nav" data-nav="1" aria-label="Next">›</button></div>${body}<div class="cal-f">${quick}</div>`;
+      const g = pop.querySelector('[data-dir]');
+      if (g && dir && !calm && g.animate) g.animate([{ opacity: 0, transform: `translateX(${dir * 22}px)` }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' });
+    }
+    function place() {
+      const r = cur._btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight, phone = innerWidth <= 560;
+      if (phone) { pop.style.left = Math.round((innerWidth - w) / 2) + 'px'; pop.style.top = Math.max(10, Math.round(Math.min(innerHeight - h - 10, (innerHeight - h) / 2))) + 'px'; return; }
+      let x = Math.min(Math.max(10, r.left), innerWidth - w - 10), y = r.bottom + 8;
+      if (y + h > innerHeight - 10) y = Math.max(10, r.top - h - 8);
+      pop.style.left = Math.round(x) + 'px'; pop.style.top = Math.round(y) + 'px';
+    }
+    function open(inp) {
+      if (cur === inp) return close(); close();
+      cur = inp; const base = inp.value || todayIso(); view = { y: Number(base.slice(0, 4)), m: Number(base.slice(5, 7)) - 1 }; mode = inp.dataset.cal === 'month' ? 'months' : 'days';
+      pop = document.createElement('div'); pop.className = 'cal'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Choose a date');
+      (inp.closest('dialog') || document.body).appendChild(pop);
+      draw(); place(); inp._btn.setAttribute('aria-expanded', 'true');
+      if (!calm && pop.animate) pop.animate([{ opacity: 0, transform: 'translateY(8px) scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.22,1,.36,1)' });
+      pop.addEventListener('click', (ev) => {
+        const b = ev.target.closest('button'); if (!b || b.disabled) return;
+        if (b.dataset.v) return pick(b.dataset.v);
+        if (b.dataset.q) return pick(b.dataset.q);
+        if (b.dataset.m !== undefined) { if (cur.dataset.cal === 'month') return pick(`${view.y}-${p2(Number(b.dataset.m) + 1)}`); view.m = Number(b.dataset.m); mode = 'days'; return draw(); }
+        if (b.dataset.y) { view.y = Number(b.dataset.y); mode = 'months'; return draw(); }
+        if (b.dataset.up) { mode = mode === 'days' ? 'months' : mode === 'months' ? 'years' : (cur.dataset.cal === 'month' ? 'months' : 'days'); return draw(); }
+        if (b.dataset.nav) { const n = Number(b.dataset.nav); if (mode === 'days') { view.m += n; if (view.m < 0) { view.m = 11; view.y--; } if (view.m > 11) { view.m = 0; view.y++; } } else if (mode === 'months') view.y += n; else view.y += n * 12; draw(n); }
+      });
+      closer = (ev) => { if (pop && !pop.contains(ev.target) && !inp._btn.contains(ev.target)) close(); };
+      setTimeout(() => { document.addEventListener('pointerdown', closer, true); document.addEventListener('keydown', onKey, true); }, 0);
+    }
+    function attach(inp) {
+      if (!inp || inp._btn) return;
+      inp.dataset.cal = inp.type === 'month' ? 'month' : 'day';
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'datebtn'; btn.setAttribute('aria-haspopup', 'dialog'); btn.setAttribute('aria-expanded', 'false');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span></span>';
+      if (inp.getAttribute('aria-label')) btn.setAttribute('aria-label', inp.getAttribute('aria-label'));
+      inp._btn = btn; inp.type = 'hidden'; inp.after(btn);
+      const refresh = () => { btn.querySelector('span').textContent = show(inp); btn.classList.toggle('empty', !inp.value); };
+      // keep the button in step when code sets input.value
+      const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      Object.defineProperty(inp, 'value', { get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v == null ? '' : v); refresh(); }, configurable: true });
+      btn.onclick = () => open(inp);
+      refresh();
+    }
+    addEventListener('resize', () => pop && place());
+    addEventListener('scroll', () => pop && place(), true);
+    return { attach, close };
+  })();
+  ['pFrom', 'pTo', 'dFrom', 'dTo'].forEach((id) => { document.getElementById(id).dataset.short = '1'; });
+  ['invDate', 'pDay', 'pMonth', 'pFrom', 'pTo', 'dFrom', 'dTo'].forEach((id) => Cal.attach(document.getElementById(id)));
+  document.getElementById('pFrom').dataset.pair = 'pTo'; document.getElementById('pTo').dataset.pair = 'pFrom';
+
   // ---------- theme: Auto → Light → Dark ----------
   const THEMES = ['auto', 'light', 'dark'], THEME_NAME = { auto: 'Auto (follows your device)', light: 'Light', dark: 'Dark' };
   const themePick = () => document.documentElement.getAttribute('data-theme-pick') || 'auto';
@@ -723,7 +812,7 @@
     $('pFrom').value = from; $('pTo').value = to; $('pFrom').max = $('pTo').max = me.today;
     $('pRange').classList.toggle('on', !!custom || pre === 'custom');
     if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
-    if (custom) setTimeout(() => $('pFrom').focus(), 60);
+    if (custom) setTimeout(() => $('pFrom')._btn.focus(), 60);
     if (!calm) document.querySelectorAll('#pGrid button').forEach((b, i) => b.animate([{ opacity: 0, transform: 'translateY(8px) scale(.97)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: 40 + i * 30, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' }));
   }
   const closePeriod = () => { const d = $('pDlg'); if (d.open) d.close(); };
@@ -736,7 +825,7 @@
     if ((parse(b) - parse(a)) / 864e5 > 366) return toast('Pick at most one year.');
     dMode = 'range'; dFrom = a; dTo = b; forceCustom = true; closePeriod(); loadDash();
   };
-  $('pFrom').onfocus = $('pTo').onfocus = () => $('pRange').classList.add('on');
+  $('pFrom')._btn.onfocus = $('pTo')._btn.onfocus = () => $('pRange').classList.add('on');
   $('pDlg').addEventListener('click', (ev) => { if (ev.target === $('pDlg')) closePeriod(); }); // tap outside closes
   $('dDay').onchange = () => { if ($('dDay').value) { dDate = $('dDay').value; loadDash(); } };
   $('dMonth').onchange = () => { if ($('dMonth').value) { dDate = $('dMonth').value + '-01'; loadDash(); } };

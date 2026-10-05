@@ -920,3 +920,42 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 @media (min-width:761px) and (max-width:1180px){nav.tabs .ic{display:none}nav.tabs button{padding:7px 10px}.wname{display:none}}
 @media (min-width:761px) and (max-width:900px){nav.tabs button{padding:7px 7px;font-size:.84rem}#logoutBtn{padding-inline:8px}}
 @media (min-width:761px) and (max-width:860px){nav.tabs button{padding:7px 6px;font-size:.8rem}nav.tabs{padding:3px;gap:1px}.who{gap:6px}header.appbar{padding-inline:12px}}
+
+/* ---------- our calendar ---------- */
+.datebtn{display:flex;align-items:center;gap:9px;width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem;font-weight:600;text-align:left;white-space:nowrap;overflow:hidden}
+.datebtn svg{width:18px;height:18px;flex:none;fill:none;stroke:var(--brand);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.datebtn span{overflow:hidden;text-overflow:ellipsis}
+.datebtn.empty{color:var(--muted);font-weight:500}
+.datebtn:hover,.datebtn[aria-expanded=true]{border-color:var(--brand)}
+.datebtn[aria-expanded=true]{box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent)}
+.datebtn:disabled{background:var(--bg-2);color:var(--muted);cursor:default}.datebtn:disabled svg{stroke:var(--muted)}
+.cal{position:fixed;z-index:60;width:308px;max-width:calc(100vw - 20px);padding:14px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:0 22px 60px rgba(10,10,30,.32);color:var(--ink);transform-origin:top center;user-select:none}
+.cal button{font:inherit;border:none;background:transparent;color:inherit;min-height:0;padding:0;cursor:pointer;border-radius:10px}
+.cal-h{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.cal-t{flex:1;display:flex!important;align-items:center;justify-content:center;gap:6px;height:38px;font-weight:700!important;font-size:1rem}
+.cal-t svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;opacity:.6}
+.cal-t:hover,.cal-nav:hover{background:var(--bg-2)}
+.cal-nav{width:38px;height:38px;font-size:1.25rem!important;color:var(--ink)}
+.cal-w{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:4px}
+.cal-w span{text-align:center;font-size:.7rem;font-weight:700;letter-spacing:.05em;color:var(--muted);padding:4px 0}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px}
+.cd{height:38px;font-size:.92rem;font-weight:500;font-variant-numeric:tabular-nums;border-radius:12px!important;position:relative;transition:background-color .15s,transform .15s}
+.cd.out{color:var(--muted);opacity:.45}
+.cd:hover:not(:disabled):not(.sel){background:color-mix(in srgb,var(--brand) 12%,transparent)}
+.cd:active:not(:disabled){transform:scale(.92)}
+.cd.today::after{content:"";position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--brand)}
+.cd.sel,.cm.sel{background:var(--grad)!important;color:#fff!important;font-weight:700;box-shadow:0 6px 16px color-mix(in srgb,var(--brand) 40%,transparent);opacity:1}
+.cd.sel.today::after{background:#fff}
+.cd.inr{background:color-mix(in srgb,var(--brand) 12%,transparent);border-radius:0!important}
+.cd.edge{background:color-mix(in srgb,var(--brand) 26%,transparent);font-weight:700}
+.cd:disabled,.cm:disabled{opacity:.25;cursor:default}
+.cal-m{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:6px 0}
+.cm{height:52px;font-weight:600;font-size:.95rem;border-radius:14px!important;border:1px solid var(--line)!important;position:relative}
+.cm:hover:not(:disabled):not(.sel){border-color:var(--brand)!important;background:color-mix(in srgb,var(--brand) 8%,transparent)}
+.cm.today:not(.sel){border-color:var(--brand)!important;color:var(--brand)}
+.cal-f{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.cal-f button{flex:1;height:36px;border-radius:99px!important;background:var(--bg-2);font-size:.85rem;font-weight:600;color:var(--ink)}
+.cal-f button:hover{background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand)}
+.cal button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+@media (max-width:560px){.cal{width:min(340px,calc(100vw - 20px));padding:16px}.cd{height:42px}}
+.rangeins .datebtn{width:auto;display:inline-flex;min-height:38px}

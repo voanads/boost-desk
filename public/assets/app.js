@@ -1529,7 +1529,7 @@
     const f = $('invFoot');
     if (!invSaved) { f.innerHTML = '<span class="hint">The preview updates as you type. You can change the invoice number.</span><span class="spacer"></span><button type="button" class="primary" id="invCreate">Create invoice</button>'; $('invCreate').onclick = createInvoice; return; }
     const v = invSaved;
-    f.innerHTML = `<span class="hint">${v.paidAt ? 'Paid.' : v.sentAt ? 'Sent to the group.' : 'Created — not sent yet.'}</span><span class="spacer"></span><a class="btn" href="/api/invoices/${v.id}/pdf?download=1">Download PDF</a><a class="btn" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">Open PDF</a><button type="button" class="primary" id="invSend">${v.sentAt ? 'Send again' : 'Send to group'}</button>`;
+    f.innerHTML = `<span class="hint">${v.paidAt ? 'Paid.' : v.sentAt ? 'Sent to the group as a picture.' : 'Created — not sent yet.'}</span><span class="spacer"></span><a class="btn" href="/api/invoices/${v.id}/pdf?download=1">Download PDF</a><a class="btn" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">Open PDF</a><button type="button" class="primary" id="invSend">${v.sentAt ? 'Send again' : 'Send to group'}</button>`;
     $('invSend').onclick = async () => { if (await sendInvoice(v.id, $('invSend'))) $('invDlg').close(); };
   }
   function openInvoice(c, saved) {

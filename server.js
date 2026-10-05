@@ -400,8 +400,9 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
   const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === inv.clientId);
   if (!c || !c.telegram) return res.status(400).json({ error: `${c ? c.name : 'This client'} has no Telegram group yet. Pick one in the Clients tab.` });
-  const buf = await invoice.pdf(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
-  // Message sent with the PDF (the team's Khmer payment reminder):
+  // The invoice goes to the group as a picture (opens right in the chat); the PDF stays available in the app.
+  const buf = await invoice.png(inv, await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}), 1654);
+  // Message sent with the picture (the team's Khmer payment reminder):
   //   pay date = the client's pay day in the invoice's month (or the invoice date), price and Page count
   //   from the first line, amount to pay = the invoice total.
   const usd = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? String(v) : v.toFixed(2); };
@@ -410,7 +411,7 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
   const it = inv.items[0] || { price: inv.total, qty: 1 }, pages = inv.items.reduce((a, x) => a + (Number(x.qty) || 0), 0) || 1;
   const caption = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', `នៅថ្ងៃទី ${due} ។`, '', `តម្លៃសេវាកម្ម =$ ${usd(it.price)}`, `Page : ${pages}`,
     ...(inv.discount > 0 ? [`បញ្ចុះតម្លៃ =$ ${usd(inv.discount)}`] : []), '', '', `ទឹកប្រាក់ត្រូវបង់ =$ ${usd(inv.total)}`, '', 'សូមអរគុណ!🙏🏼'].join('\n');
-  await telegram.sendDocument(buf, invFile(inv), caption, c.telegram);
+  await telegram.sendPhoto(buf, caption, c.telegram);
   res.json({ ...(await db.markInvoice(req.user.fb_id, inv.id, { sent: true })), sentTo: c.telegram_title || c.telegram });
 }));
 api.patch('/invoices/:id', wrap(async (req, res) => {

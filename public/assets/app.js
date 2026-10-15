@@ -1135,8 +1135,10 @@
     if (dTypeF === 'live') return { ...c, spend: c.liveSpend, postSpend: 0, results: 0, resSpend: 0, days };
     return { ...c, spend: c.postSpend, liveSpend: 0, lives: 0, days };
   }
+  let rowsKey = '';
   function renderDash() {
     if (!dData) return;
+    const rk = `${dData.from}|${dData.to}|${dTypeF}`, rowsEnter = rk !== rowsKey; rowsKey = rk; // rows slide in only when the period changes
     $('dTableTitle').textContent = 'Clients · ' + periodLabel() + (dTypeF ? (dTypeF === 'live' ? ' · Live only' : ' · Boost posts only') : '');
     const q = $('dSearch').value.trim().toLowerCase(), idle = !$('dShowIdle').checked; // all clients by default
     let list = dData.clients.filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c))).map(viewOf)
@@ -1160,11 +1162,11 @@
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';
-    $('dBody').innerHTML = list.map((c) => {
+    $('dBody').innerHTML = list.map((c, i) => {
       const share = t.spend ? c.spend / t.spend * 100 : 0, pg = pageNames(c);
       const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
-      return `<tr data-cid="${c.id}" class="drow${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
+      return `<tr data-cid="${c.id}" style="--i:${Math.min(i, 14)}" class="drow${rowsEnter ? ' enter' : ''}${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
         <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>

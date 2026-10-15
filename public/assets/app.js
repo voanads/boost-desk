@@ -392,7 +392,7 @@
     let c = null; try { c = await api('/sync-check'); } catch (_) {}
     const el = $('syncCheck');
     if (!c || !c.checks || !c.from || !c.to) { el.textContent = ''; return; }
-    const gaps = c.checks.filter((x) => x.missing > 0.5);
+    const gaps = c.checks.filter((x) => x.missing > (x.tol != null ? x.tol : Math.max(0.5, x.meta * 0.003))); // small gaps = spend that came in during the sync, or cent rounding
     const t = new Date(c.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     if (!gaps.length) { status(el, `✓ Checked at ${t}: all spend from ${c.checks.length} ad account${c.checks.length === 1 ? '' : 's'} was found (${nice(c.from).replace(/^\w+, /, '')} – ${nice(c.to).replace(/^\w+, /, '')}).`); return; }
     status(el, `⚠ Checked at ${t}: some spend was not found — ` + gaps.map((g) => `${g.account}: Meta ${money(g.meta)}, found ${money(g.found)} (missing ${money(g.missing)})`).join(' · ') + '. Tell your developer which accounts.', true);

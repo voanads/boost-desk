@@ -168,14 +168,19 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   for (const [i, id] of ids.entries()) {
     onProgress({ phase: 'accounts', done: i, total: ids.length, account: names[id] || id });
     try {
+      // Completeness check: the account's own total vs what we collect campaign by campaign.
+      // The total is read FIRST: a live that is running keeps spending during the sync, so reading it
+      // afterwards made the account look a dollar or two short when nothing was missing.
+      let total = null;
+      try { total = round2(await meta.accountSpendRange(token, id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
       const rows = await meta.campaignSpendRange(token, id, since, until, names[id]);
       items.push(...rows);
-      // Completeness check: the account's own total vs what we collected campaign by campaign.
-      try {
-        const total = round2(await meta.accountSpendRange(token, id, since, until));
+      if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));
-        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found) });
-      } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+        // Meta rounds each campaign-day to the cent, so many rows can differ from the total by a few cents.
+        const tol = round2(Math.max(0.5, rows.length * 0.005));
+        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol });
+      }
     } catch (e) {
       if (e.needsLogin) throw e;
       console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);

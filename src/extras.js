@@ -3,7 +3,7 @@ const cfg = require('./config');
 const db = require('./db');
 const sync = require('./sync');
 const telegram = require('./telegram');
-const reportImage = require('./reportImage');
+const reports = require('./reports');
 
 const hasLive = (c) => c.type === 'live' || c.type === 'both';
 const hasPost = (c) => c.type === 'post' || c.type === 'both';
@@ -41,16 +41,14 @@ async function sendClientReports(user, day = sync.todayIn(), { refresh = true } 
   const out = { day, at: new Date().toISOString(), sent: [], failed: [], already: [], noSpend: 0, warn: '' };
   if (refresh) { try { await sync.exclusive(user.fb_id, () => sync.syncDay(day, { ...user, name: 'Auto report' })); } catch (e) { out.warn = e.message; } }
   for (const c of await db.listClients(user.fb_id)) {
-    if (c.archived || !c.telegram || set.skip.includes(c.id)) continue;
+    if (c.archived || set.skip.includes(c.id) || !reports.routes(c).some((r) => r.chat)) continue;
     const e = await db.getEntry(day, c.id);
     const spend = (hasLive(c) ? Object.values(e.lives || {}).reduce((s, l) => s + (Number(l && l.spend) || 0), 0) : 0) + (hasPost(c) ? Number((e.post || {}).spend) || 0 : 0);
     if (!(spend > 0)) { out.noSpend++; continue; }
     if (e.reportSent) { out.already.push(c.name); continue; }
     try {
-      const r = await sync.clientReport(user.fb_id, c.id, day, day);
-      let png = null;
-      if (set.withImage) { try { png = await reportImage.clientReportImage(user, c.id, day, day); } catch (err) { console.error('[auto report] picture:', c.name, err.message); } }
-      if (png) await telegram.sendPhoto(png, r.text, c.telegram); else await telegram.send(r.text, c.telegram);
+      const done = await reports.send(user, c, day, day, { withImage: set.withImage }); // one per Page topic, if set
+      if (!done.length) { out.noSpend++; continue; }
       await db.putEntry(day, c.id, { ...(await db.getEntry(day, c.id)), reportSent: { at: new Date().toISOString(), by: 'Auto report' } });
       out.sent.push(c.name);
     } catch (err) { out.failed.push({ name: c.name, error: err.message }); }

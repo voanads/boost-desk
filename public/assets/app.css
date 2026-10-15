@@ -999,3 +999,13 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 .arlist b{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .arlist small{color:var(--muted);font-size:.8rem;white-space:nowrap;max-width:45%;overflow:hidden;text-overflow:ellipsis}
 .arlist input{width:18px;height:18px;accent-color:var(--brand)}
+
+/* Page → Telegram topic */
+.topics{display:flex;flex-direction:column;gap:8px}
+.toprow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px;align-items:center}
+.toprow b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toprow select{width:100%}
+.ckroutes{display:flex;gap:6px;flex-wrap:wrap}
+.ckroutes button{border-radius:99px;padding:6px 12px;font-size:.86rem}
+.ckroutes button[aria-pressed=true]{background:var(--brand);border-color:var(--brand);color:#fff}
+@media (max-width:560px){.toprow{grid-template-columns:1fr}}

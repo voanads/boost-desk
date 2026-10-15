@@ -47,7 +47,19 @@ async function fetchThumb(url) {
 }
 
 // Ads for one client and period, straight from Meta.
-async function clientAds(user, clientId, from, to, kind = '', parts = null) {
+async function clientAds(user, clientId, from, to, kind = '', parts = null, scope = null) {
+  if (scope) { // one Page of the client (its own Telegram topic)
+    const client = (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId));
+    if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
+    const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(from, clientId, parts) : null);
+    const byAccount = {};
+    for (const r of rows) {
+      if (!r.campaignId || !r.accountId) continue;
+      if (kind && (sync.isPostFor(client, r) ? 'post' : 'live') !== kind) continue;
+      (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
+    }
+    return adsFor(user, scope.page ? { ...client, name: `${client.name} · ${scope.page}` } : client, byAccount, from, to);
+  }
   // Ticked lines (one-day reports): keep only the campaigns behind those lives / the post.
   let only = null;
   if (parts && parts.length && from === to) {
@@ -58,6 +70,9 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null) {
   }
   const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only);
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
+  return adsFor(user, client, byAccount, from, to);
+}
+async function adsFor(user, client, byAccount, from, to) {
   const token = await sync.tokenFor(user);
   const ads = []; let reach = 0;
   for (const [act, ids] of Object.entries(byAccount)) {
@@ -144,8 +159,8 @@ async function render({ client, ads, reach }, from, to) {
 }
 
 // PNG for a client's report, or null when there are no ads with spend.
-async function clientReportImage(user, clientId, from, to, kind = '', parts = null) {
-  const data = await clientAds(user, clientId, from, to, kind, parts);
+async function clientReportImage(user, clientId, from, to, kind = '', parts = null, scope = null) {
+  const data = await clientAds(user, clientId, from, to, kind, parts, scope);
   if (!data.ads.length) return null;
   return render(data, from, to);
 }

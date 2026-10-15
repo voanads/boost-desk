@@ -4,6 +4,12 @@ const cfg = require('./config');
 const API = 'https://api.telegram.org';
 const configured = () => !!(cfg.telegramToken && cfg.telegramChatId);
 const hasBot = () => !!cfg.telegramToken;
+// A destination is a group id ("-100123") or a topic in a group with topics ("-100123:45").
+function dest(id) {
+  const [chat, thread] = String(id).split(':');
+  return thread ? { chat_id: chat, message_thread_id: Number(thread) } : { chat_id: chat };
+}
+function addDest(form, id) { const d = dest(id); form.append('chat_id', d.chat_id); if (d.message_thread_id) form.append('message_thread_id', String(d.message_thread_id)); }
 
 // chatId defaults to the team group. Pass a client's group to send it there instead.
 async function send(text, chatId = cfg.telegramChatId) {
@@ -15,7 +21,7 @@ async function send(text, chatId = cfg.telegramChatId) {
     const res = await fetch(`${API}/bot${cfg.telegramToken}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunk, disable_web_page_preview: true }),
+      body: JSON.stringify({ ...dest(chatId), text: chunk, disable_web_page_preview: true }),
     });
     const body = await res.json().catch(() => ({}));
     if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
@@ -29,7 +35,7 @@ async function sendPhoto(png, caption, chatId = cfg.telegramChatId) {
   if (!chatId) throw new Error('No Telegram group chosen.');
   const fits = caption && caption.length <= 1024;
   const form = new FormData();
-  form.append('chat_id', String(chatId));
+  addDest(form, chatId);
   if (fits) form.append('caption', caption);
   form.append('photo', new Blob([png], { type: 'image/png' }), 'report.png');
   const res = await fetch(`${API}/bot${cfg.telegramToken}/sendPhoto`, { method: 'POST', body: form });
@@ -43,7 +49,7 @@ async function sendDocument(buf, filename, caption, chatId = cfg.telegramChatId,
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   if (!chatId) throw new Error('No Telegram group chosen.');
   const form = new FormData();
-  form.append('chat_id', String(chatId));
+  addDest(form, chatId);
   if (caption) form.append('caption', caption.slice(0, 1024));
   form.append('document', new Blob([buf], { type }), filename);
   const res = await fetch(`${API}/bot${cfg.telegramToken}/sendDocument`, { method: 'POST', body: form });
@@ -58,15 +64,26 @@ async function listChats() {
   const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post"]')}`);
   const body = await res.json().catch(() => ({}));
   if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
-  const found = new Map(), links = [];
+  const found = new Map(), links = [], topicNames = {};
   for (const u of body.result || []) {
     const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
     if (!chat || chat.type === 'private') continue;
     found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
-    // "/link CODE" typed in a group links that group to one Boost Desk account.
+    // Groups with topics: a message inside a topic carries its thread id; the topic's name comes from
+    // the "topic created" message it belongs to.
+    const msg = u.message || {};
+    let where = String(chat.id);
+    if (msg.forum_topic_created && msg.message_thread_id) topicNames[`${chat.id}:${msg.message_thread_id}`] = msg.forum_topic_created.name;
+    if (msg.is_topic_message && msg.message_thread_id) {
+      where = `${chat.id}:${msg.message_thread_id}`;
+      const name = msg.reply_to_message?.forum_topic_created?.name || msg.forum_topic_created?.name || topicNames[where];
+      if (name) topicNames[where] = name;
+      found.set(where, { id: where, chat: String(chat.id), title: `${chat.title || chat.id} › ${name || 'Topic ' + msg.message_thread_id}`, topic: name || '', type: 'topic' });
+    }
+    // "/link CODE" typed in a group (or in one topic of it) links it to one Boost Desk account.
     const t = (u.message || u.channel_post || {}).text || '';
     const mm = t.match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
-    if (mm) links.push({ id: String(chat.id), code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink' });
+    if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink' });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
   return { chats: [...found.values()], links };

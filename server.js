@@ -14,6 +14,7 @@ const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split(',')).map(String).filter((x) => /^(l\d{1,2}|post)$/.test(x)); return a.length ? [...new Set(a)].sort() : null; };
 const jobs = require('./src/jobs');
 const extras = require('./src/extras');
+const reports = require('./src/reports');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
 
@@ -222,6 +223,10 @@ const cleanClient = (b) => {
   if (b.telegram_title != null) c.telegram_title = String(b.telegram_title).trim().slice(0, 150);
   if (Array.isArray(b.pages)) c.pages = [...new Set(b.pages.map((x) => String(x).trim().slice(0, 150)).filter(Boolean))].slice(0, 20);
   if (b.archived != null) c.archived = !!b.archived;
+  if (b.topics && typeof b.topics === 'object') { // Telegram topic for each Page: { page: { id, title } }
+    c.topics = {};
+    for (const [pg, v] of Object.entries(b.topics).slice(0, 20)) if (v && /^-?\d+(:\d+)?$/.test(String(v.id || ''))) c.topics[String(pg).slice(0, 150)] = { id: String(v.id), title: String(v.title || '').slice(0, 150) };
+  }
   if (b.service && typeof b.service === 'object') { // service fee + bill-to details (Payments tab)
     const v = b.service, str = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
     c.service = { price: Math.max(0, Math.round((Number(v.price) || 0) * 100) / 100), day: Math.min(31, Math.max(0, parseInt(v.day, 10) || 0)), description: str(v.description, 160), customer: str(v.customer, 120), company: str(v.company, 120), phone: str(v.phone, 40) };
@@ -230,11 +235,12 @@ const cleanClient = (b) => {
 };
 api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
 api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.user.fb_id))));
-const groupAllowed = async (fbId, chatId) => !chatId || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && (c.owners || [c.owner]).includes(fbId)) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
+const groupAllowed = async (fbId, chatId) => !chatId || (String(chatId).includes(':') && (await groupAllowed(fbId, String(chatId).split(':')[0]))) || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && (c.owners || [c.owner]).includes(fbId)) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
   if (!(await groupAllowed(req.user.fb_id, c.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
+  for (const v of Object.values(c.topics || {})) if (!(await groupAllowed(req.user.fb_id, v.id))) return res.status(403).json({ error: 'That Telegram topic is linked to another account.' });
   const created = await db.createClient(req.user.fb_id, c);
   await sync.rematch(req.user);
   res.json(created);
@@ -242,6 +248,7 @@ api.post('/clients', wrap(async (req, res) => {
 api.patch('/clients/:id', wrap(async (req, res) => {
   const body = cleanClient(req.body || {});
   if (body.telegram && !(await groupAllowed(req.user.fb_id, body.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
+  for (const v of Object.values(body.topics || {})) if (!(await groupAllowed(req.user.fb_id, v.id))) return res.status(403).json({ error: 'That Telegram topic is linked to another account.' });
   const c = await db.updateClient(req.user.fb_id, Number(req.params.id), body);
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   // Only changes that affect matching need a re-match (not e.g. the Telegram group).
@@ -532,7 +539,11 @@ async function refreshChatsNow() {
   const byId = new Map(saved.map((c) => [c.id, c]));
   let fresh = { chats: [], links: [] };
   try { fresh = await telegram.listChats(); } catch (e) { if (!saved.length) throw e; }
-  for (const c of fresh.chats) byId.set(c.id, { ...(byId.get(c.id) || {}), ...c });
+  for (const c of fresh.chats) {
+    const old = byId.get(c.id) || {};
+    // A topic seen without its name (e.g. "Topic 45") keeps the name found earlier.
+    byId.set(c.id, { ...old, ...c, ...(c.type === 'topic' && !c.topic && old.topic ? { topic: old.topic, title: old.title } : {}) });
+  }
   // A group can be linked to several accounts: everyone who sent "/link CODE" there, until "/unlink CODE".
   // Each /link message is handled once (by its time), so nothing repeats or flips between people.
   for (const c of byId.values()) { if (!c.owners) c.owners = c.owner ? [c.owner] : []; if (!c.seen) c.seen = {}; }
@@ -546,11 +557,11 @@ async function refreshChatsNow() {
       const has = c.owners.includes(u.fb_id);
       if (l.unlink && has) {
         c.owners = c.owners.filter((x) => x !== u.fb_id);
-        telegram.send(`👋 ${u.name} is no longer linked to this group in Boost Desk.`, c.id).catch(() => {});
+        telegram.send(`👋 ${u.name} is no longer linked to this ${c.type === 'topic' ? 'topic' : 'group'} in Boost Desk.`, c.id).catch(() => {});
       } else if (!l.unlink && !has) {
         c.owners.push(u.fb_id);
         const others = c.owners.filter((x) => x !== u.fb_id).map((x) => users.find((y) => y.fb_id === x)?.name).filter(Boolean);
-        telegram.send(`✅ This group is now linked to ${u.name} in Boost Desk${others.length ? ` (also linked: ${others.join(', ')})` : ''}. Reports for their clients can be sent here.`, c.id).catch(() => {});
+        telegram.send(`✅ This ${c.type === 'topic' ? 'topic' : 'group'} is now linked to ${u.name} in Boost Desk${others.length ? ` (also linked: ${others.join(', ')})` : ''}. Reports for their clients can be sent here.`, c.id).catch(() => {});
       }
     }
   }
@@ -568,7 +579,8 @@ async function refreshChatsNow() {
 async function myChats(fbId) {
   const all = await refreshChats();
   const used = new Set((await db.listClients(fbId)).map((c) => c.telegram).filter(Boolean));
-  return all.filter((c) => (c.owners || [c.owner]).includes(fbId) || used.has(c.id)).map(({ id, title, type }) => ({ id, title, type }));
+  for (const c of await db.listClients(fbId)) for (const v of Object.values(c.topics || {})) used.add(v.id);
+  return all.filter((c) => (c.owners || [c.owner]).includes(fbId) || used.has(c.id)).map(({ id, title, type, chat, topic }) => ({ id, title, type, chat, topic }));
 }
 api.get('/telegram/chats', wrap(async (req, res) => {
   res.json({ chats: await myChats(req.user.fb_id), code: await linkCode(req.user.fb_id), bot: await telegram.username() });
@@ -576,7 +588,15 @@ api.get('/telegram/chats', wrap(async (req, res) => {
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kindOf(req.query.kind), partsOf(req.query.parts)));
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts);
+  const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  const rts = c ? reports.routes(c) : [];
+  if (rts.length > 1) { // Pages that report to their own topics: one text per Page
+    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts });
+    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts);
+    return res.json({ ...r, routes: list });
+  }
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
@@ -592,6 +612,14 @@ api.get('/client-report/:id/image', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts);
+  if (req.query.page != null && req.query.page !== '') { // one Page's picture
+    const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+    const r = c && reports.routes(c).find((x) => x.key === String(req.query.page));
+    if (!r) return res.status(404).json({ error: 'That Page has no topic.' });
+    const png = await reportImage.clientReportImage(req.user, req.params.id, from, to, kind, parts, r.scope);
+    if (!png) return res.status(204).end();
+    return res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
+  }
   if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}|${(parts || []).join(',')}`);
   const png = await reportPng(req.user, req.params.id, from, to, kind, parts);
   if (!png) return res.status(204).end();
@@ -600,6 +628,15 @@ api.get('/client-report/:id/image', wrap(async (req, res) => {
 api.post('/client-report/:id/send', wrap(async (req, res) => {
   const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts);
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  const cl = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  if (cl && reports.routes(cl).length > 1) { // each Page to its own topic (or just the one picked in the dialog)
+    const page = (req.body || {}).page;
+    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text });
+    if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
+    const sentAt = new Date().toISOString();
+    if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
+    return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
+  }
   const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts);
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;

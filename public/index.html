@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=58">
+<link rel="stylesheet" href="/assets/app.css?v=59">
 </head>
 <body>
 <div class="wrap">
@@ -147,6 +147,9 @@
       </div>
       <div class="fld"><span>Telegram group <small class="hint">(where Send report goes)</small></span>
         <div id="cTgBox"></div>
+      </div>
+      <div class="fld" id="cTopicsFld" hidden><span>Topic for each Page <small class="hint">(for groups with topics)</small></span>
+        <div id="cTopics" class="topics"></div>
       </div>
       <div class="dlg-foot">
         <button type="button" class="danger" id="cDel" hidden>Delete</button>
@@ -398,6 +401,7 @@
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="ckroutes" id="ckRoutes" hidden></div>
     <div class="ckpic" id="ckPic" hidden>
       <div class="ckpic-img" id="ckImgBox"><img id="ckImg" alt="Ads picture that is sent with the report"><span id="ckImgMsg" class="hint">Making the ads picture…</span></div>
       <div class="ckpic-bar"><label class="chk"><input type="checkbox" id="ckWithImg" checked> Send with ads picture</label><button type="button" class="ghost sm" id="ckImgRefresh" title="Get the latest numbers from Meta">↻ Refresh</button></div>
@@ -406,6 +410,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=58"></script>
+<script src="/assets/app.js?v=59"></script>
 </body>
 </html>

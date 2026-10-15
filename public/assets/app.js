@@ -538,7 +538,20 @@
 
   // Add / edit dialog
   let cEdit = null, cDraft = null;
-  function drawDlgPages() { pageEditor($('cPages'), cDraft.pages, 'cpg', (p) => { cDraft.pages = p; drawDlgPages(); }); }
+  function drawDlgPages() { pageEditor($('cPages'), cDraft.pages, 'cpg', (p) => { cDraft.pages = p; drawDlgPages(); drawDlgTopics(); }); }
+  // Groups with topics: each Page can send its report to its own topic.
+  function drawDlgTopics() {
+    const topics = tgChats.filter((t) => t.type === 'topic');
+    for (const v of Object.values(cDraft.topics || {})) if (v && v.id && !topics.some((t) => t.id === v.id)) topics.push({ id: v.id, title: v.title || v.id, type: 'topic' });
+    const show = cDraft.pages.length > 0 && topics.length > 0 && me && me.telegram && me.telegram.bot;
+    $('cTopicsFld').hidden = !show; if (!show) return;
+    $('cTopics').innerHTML = cDraft.pages.map((p, i) => `<label class="toprow"><b title="${esc(p)}">${isId(p) ? 'Page ID …' + esc(p.slice(-5)) : esc(p)}</b><select data-tp="${i}"><option value="">Main group</option>${topics.map((t) => `<option value="${esc(t.id)}" ${(cDraft.topics[p] || {}).id === t.id ? 'selected' : ''}>${esc(t.topic ? t.topic + ' · ' + String(t.title).split(' › ')[0] : t.title)}</option>`).join('')}</select></label>`).join('')
+      + '<small class="hint">To see a topic here, send the <b>/link</b> code inside that topic, then tap Refresh list. Pages left on “Main group” go to the group above.</small>';
+    document.querySelectorAll('#cTopics [data-tp]').forEach((sel) => sel.onchange = () => {
+      const p = cDraft.pages[Number(sel.dataset.tp)], t = topics.find((x) => x.id === sel.value);
+      if (t) cDraft.topics[p] = { id: t.id, title: t.title }; else delete cDraft.topics[p];
+    });
+  }
   function drawDlgType() { document.querySelectorAll('#cType button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cDraft.type))); }
   document.querySelectorAll('#cType button').forEach((b) => b.onclick = () => { cDraft.type = b.dataset.v; drawDlgType(); });
   function drawDlgTg() {
@@ -550,17 +563,17 @@
       <div class="linkhelp"><b>Connect a group:</b> add ${tgBot ? '<b>@' + esc(tgBot) + '</b>' : 'the bot'} to the client's Telegram group, send <code class="lcode" title="Tap to copy">/link ${esc(tgCode)}</code> in the group, then tap <b>Refresh list</b>. Only people who linked a group see it, and teammates can each link the same group. To remove yourself, send <code>/unlink ${esc(tgCode)}</code>.</div>`;
     const lc = box.querySelector('.lcode'); if (lc) lc.onclick = async () => { try { await navigator.clipboard.writeText(lc.textContent); toast('Copied — paste it in the Telegram group'); } catch (_) {} };
     $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
-    $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
+    $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); drawDlgTopics(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
   function openClientDlg(c, preset) {
     cEdit = c || null;
-    cDraft = c ? { name: c.name, type: c.type, pages: [...new Set([...(c.pages || []), c.match].filter(Boolean))], telegram: c.telegram || '', telegram_title: c.telegram_title || '' }
-      : { name: '', type: 'live', pages: [], telegram: '', telegram_title: '', ...(preset || {}) };
+    cDraft = c ? { name: c.name, type: c.type, pages: [...new Set([...(c.pages || []), c.match].filter(Boolean))], telegram: c.telegram || '', telegram_title: c.telegram_title || '', topics: { ...(c.topics || {}) } }
+      : { name: '', type: 'live', pages: [], telegram: '', telegram_title: '', topics: {}, ...(preset || {}) };
     $('cDlgTitle').textContent = c ? 'Edit ' + c.name : 'Add client';
     $('cName').value = cDraft.name; $('cSave').textContent = c ? 'Save changes' : 'Add client';
     $('cDel').hidden = !c; $('cPause').hidden = !c; if (c) $('cPause').textContent = c.archived ? 'Resume' : 'Pause';
     $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
-    drawDlgType(); drawDlgPages(); drawDlgTg();
+    drawDlgType(); drawDlgPages(); drawDlgTg(); drawDlgTopics();
     const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
   }
@@ -609,7 +622,8 @@
   $('cForm').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const pending = $('cpg-add') && $('cpg-add').value.trim(); if (pending && !cDraft.pages.includes(pending)) cDraft.pages.push(pending);
-    const body = { name: $('cName').value.trim(), type: cDraft.type, pages: cDraft.pages, telegram: cDraft.telegram, telegram_title: cDraft.telegram_title };
+    const topics = {}; for (const p of cDraft.pages) if (cDraft.topics && cDraft.topics[p]) topics[p] = cDraft.topics[p];
+    const body = { name: $('cName').value.trim(), type: cDraft.type, pages: cDraft.pages, telegram: cDraft.telegram, telegram_title: cDraft.telegram_title, topics };
     if (!body.name) { $('cName').focus(); return; }
     const b = $('cSave'); b.disabled = true;
     try {
@@ -1219,7 +1233,8 @@
           : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;
         $('ckSend').textContent = 'Send to Telegram';
         $('ckSend').disabled = !r.client.telegram || !bot;
-        loadReportPic(o);
+        o.routes = r.routes || null; o.route = null; o.allText = r.text;
+        if (o.routes) drawRoutes(o); else { $('ckRoutes').hidden = true; $('ckText').readOnly = false; loadReportPic(o); }
       } else {
         const r = await api(`/summary?from=${o.from}&to=${o.to}`);
         if (ckTarget !== o) return;
@@ -1231,6 +1246,27 @@
       }
       $('ckText').focus();
     } catch (e) { $('ckText').value = e.message; }
+  }
+  // Pages with their own Telegram topic: send all (one report per topic) or pick one Page.
+  function drawRoutes(o) {
+    const bot = me.telegram && me.telegram.bot, rs = o.routes;
+    $('ckRoutes').hidden = false;
+    $('ckRoutes').innerHTML = `<button type="button" data-rt="" aria-pressed="${o.route == null}">Each Page → its topic (${rs.length})</button>` + rs.map((r, i) => `<button type="button" data-rt="${i + 1}" aria-pressed="${o.route === r.key}">${esc(r.label)}</button>`).join('');
+    document.querySelectorAll('#ckRoutes [data-rt]').forEach((b) => b.onclick = () => { o.route = b.dataset.rt ? rs[Number(b.dataset.rt) - 1].key : null; drawRoutes(o); });
+    const r = o.route != null && rs.find((x) => x.key === o.route);
+    if (!rs.length) { $('ckText').value = o.allText; $('ckText').readOnly = true; $('ckTo').textContent = 'No boost spend to report.'; $('ckSend').disabled = true; $('ckPic').hidden = true; return; }
+    if (!r) {
+      $('ckText').value = rs.map((x) => `➜ ${x.chat ? x.title || 'Telegram' : 'No group — not sent'}\n${x.text}`).join('\n\n────────\n\n');
+      $('ckText').readOnly = true;
+      $('ckTo').textContent = `Sends ${rs.filter((x) => x.chat).length} report${rs.filter((x) => x.chat).length === 1 ? '' : 's'}, one to each Page's topic. Pick a Page above to edit its text.`;
+      $('ckSend').disabled = !bot || !rs.some((x) => x.chat); $('ckSend').textContent = 'Send all';
+      picOk = true; $('ckPic').hidden = false; $('ckImg').hidden = true; $('ckImgMsg').hidden = false; $('ckImgMsg').textContent = 'Each Page gets its own ads picture.'; $('ckWithImg').disabled = false; $('ckImgBox').classList.remove('loading');
+    } else {
+      $('ckText').value = r.text; $('ckText').readOnly = false;
+      $('ckTo').textContent = r.chat ? `Sends to: ${r.title || r.chat}` : 'This part has no Telegram group yet — pick one in the Clients tab.';
+      $('ckSend').disabled = !bot || !r.chat; $('ckSend').textContent = 'Send to Telegram';
+      loadReportPic(o);
+    }
   }
   // 7) after sending, a plane zooms off the right side of the screen
   let sentFlash = null;
@@ -1255,7 +1291,7 @@
     $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
     $('ckWithImg').disabled = true;
     try {
-      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${fresh ? '&fresh=1' : ''}`);
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${fresh ? '&fresh=1' : ''}${o.route != null ? '&page=' + encodeURIComponent(o.route) : ''}`);
       if (ckTarget !== o) return;
       if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }
@@ -1266,7 +1302,7 @@
     } catch (e) { if (ckTarget === o) $('ckImgMsg').textContent = e.message + ' The report can still go as text.'; }
     finally { if (ckTarget === o) $('ckImgBox').classList.remove('loading'); }
   }
-  $('ckImgRefresh').onclick = () => { if (ckTarget && ckTarget.kind === 'client') loadReportPic(ckTarget, true); };
+  $('ckImgRefresh').onclick = () => { if (ckTarget && ckTarget.kind === 'client' && !(ckTarget.routes && ckTarget.route == null)) loadReportPic(ckTarget, true); };
   $('ckImg').onclick = () => { if (picUrl) window.open(picUrl, '_blank'); };
 
   $('ckSend').onclick = async () => {
@@ -1274,7 +1310,7 @@
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, page: o.routes && o.route != null ? o.route : undefined } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

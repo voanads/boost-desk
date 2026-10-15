@@ -71,7 +71,8 @@ async function init() {
       rows JSONB NOT NULL DEFAULT '[]',
       PRIMARY KEY (owner, day)
     );
-    ALTER TABLE clients ADD COLUMN IF NOT EXISTS service JSONB NOT NULL DEFAULT '{}';  -- service fee: price, pay day, description, bill-to details
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS service JSONB NOT NULL DEFAULT '{}';
+    ALTER TABLE clients ADD COLUMN IF NOT EXISTS topics JSONB NOT NULL DEFAULT '{}';   -- Telegram topic per Page: { page: { id, title } }  -- service fee: price, pay day, description, bill-to details
     CREATE TABLE IF NOT EXISTS invoices (           -- service invoices (Payments tab)
       id SERIAL PRIMARY KEY,
       owner TEXT NOT NULL,
@@ -177,7 +178,7 @@ const activeUsers = async () =>
   (await q(`SELECT * FROM users WHERE token_expires IS NULL OR token_expires > now() ORDER BY updated_at DESC`)).rows;
 
 // ---- clients ----
-const clientRow = (r) => ({ ...r, budget: Number(r.budget), pages: Array.isArray(r.pages) ? r.pages : [], service: r.service && typeof r.service === 'object' ? r.service : {} });
+const clientRow = (r) => ({ ...r, budget: Number(r.budget), pages: Array.isArray(r.pages) ? r.pages : [], service: r.service && typeof r.service === 'object' ? r.service : {}, topics: r.topics && typeof r.topics === 'object' ? r.topics : {} });
 const listClients = async (owner) => (await q('SELECT * FROM clients WHERE owner=$1 ORDER BY archived, lower(name)', [owner])).rows.map(clientRow);
 async function createClient(owner, c) {
   const r = await q(`INSERT INTO clients (owner, name, match, pages, type, telegram, telegram_title) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -185,11 +186,11 @@ async function createClient(owner, c) {
   return clientRow(r.rows[0]);
 }
 async function updateClient(owner, id, c) {
-  const allowed = ['name', 'match', 'pages', 'type', 'archived', 'telegram', 'telegram_title', 'service'];
+  const allowed = ['name', 'match', 'pages', 'type', 'archived', 'telegram', 'telegram_title', 'service', 'topics'];
   const keys = Object.keys(c).filter((k) => allowed.includes(k));
   if (!keys.length) return null;
   const sets = keys.map((k, i) => `${k}=$${i + 3}`).join(', ');
-  const r = await q(`UPDATE clients SET ${sets} WHERE id=$1 AND owner=$2 RETURNING *`, [id, owner, ...keys.map((k) => (k === 'pages' || k === 'service' ? JSON.stringify(c[k]) : c[k]))]);
+  const r = await q(`UPDATE clients SET ${sets} WHERE id=$1 AND owner=$2 RETURNING *`, [id, owner, ...keys.map((k) => (k === 'pages' || k === 'service' || k === 'topics' ? JSON.stringify(c[k]) : c[k]))]);
   return r.rows[0] ? clientRow(r.rows[0]) : null;
 }
 // ---- invoices ----

@@ -367,13 +367,56 @@ const byMonthLabel = (ym) => new Date(ym + '-15T12:00:00Z').toLocaleDateString('
 
 // kind: '' = lives and posts, 'live' = lives only, 'post' = boost posts only (the Dashboard's Live / Post filter).
 // parts (one-day reports): only these lines, e.g. ['l1', 'l3', 'post'] — the ones ticked on the Dashboard.
-async function clientReport(owner, clientId, from, to, kind = '', parts = null) {
+// ---- one Page of a client (for clients whose Pages report to different Telegram topics) ----
+// scope: { page } = only that Page; { exclude: [pages] } = everything except those Pages.
+function onPage(r, page, names) {
+  const n = norm(page);
+  return (r.page && norm(r.page) === n) || (r.pageId && (r.pageId === page || (names[r.pageId] && norm(names[r.pageId]) === n)));
+}
+async function scopeRows(owner, c, from, to, scope, onlyIds = null) {
+  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+  const clients = await clientsWithLearnedPages(owner, all, { save: false });
+  const names = { ...(await db.getSetting('pageNames', {})) };
+  for (const r of all) if (r.page && r.pageId && !names[r.pageId]) names[r.pageId] = r.page;
+  const me = clients.find((x) => x.id === c.id) || c;
+  return all.filter((r) => {
+    if (!(Number(r.spend) > 0)) return false;
+    const m = matchClient(r, clients); if (!m || m.id !== c.id) return false;
+    if (onlyIds && !onlyIds.has(String(r.campaignId))) return false;
+    if (scope.page) return onPage(r, scope.page, names);
+    return !(scope.exclude || []).some((p) => onPage(r, p, names));
+  }).map((r) => ({ ...r, _client: me }));
+}
+// Same shape as saved day entries ({ day, data: { lives, post } }), built from one Page's campaigns.
+async function scopeEntries(owner, c, from, to, scope, onlyIds = null) {
+  const rows = await scopeRows(owner, c, from, to, scope, onlyIds);
+  const byDay = {};
+  for (const r of rows) (byDay[r.day] = byDay[r.day] || []).push(r);
+  return Object.keys(byDay).sort().map((day) => {
+    const t = buildPlan(byDay[day], [rows[0]._client]).targets[0] || { slots: [], post: null };
+    const lives = {};
+    t.slots.forEach((sl, i) => { lives['l' + (i + 1)] = { spend: sl.spend, time: sl.start != null ? hhmm(sl.start) : '', ids: sl.ids }; });
+    return { day, client_id: c.id, data: { lives, post: t.post ? { spend: t.post.spend, ids: t.post.ids } : undefined } };
+  });
+}
+// Campaign IDs behind ticked lines on a saved day (l1, l2, post).
+async function partIds(day, clientId, parts) {
+  const e = await db.getEntry(day, Number(clientId)), ids = new Set();
+  for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) ids.add(String(id));
+  return ids;
+}
+
+async function clientReport(owner, clientId, from, to, kind = '', parts = null, scope = null) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
-  const rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
-  const lines = [];
+  let rows;
+  if (scope) { // one Page (or the rest): rebuilt from the synced campaigns; ticked lines become campaign IDs
+    rows = await scopeEntries(owner, c, from, to, scope, parts && parts.length && from === to ? await partIds(from, c.id, parts) : null);
+    parts = null;
+  } else rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
+  const lines = []; let spent = 0;
   const L = hasLive(c) && kind !== 'post', P = hasPost(c) && kind !== 'live';
-  const head = `📊 ${c.name} — ${kind === 'post' ? 'Boost post report' : kind === 'live' ? 'Live report' : 'Boost report'}`;
+  const head = `📊 ${c.name}${scope && scope.page ? ' · ' + scope.page : ''} — ${kind === 'post' ? 'Boost post report' : kind === 'live' ? 'Live report' : 'Boost report'}`;
   if (from === to) {
     const e = (rows[0] || {}).data || {};
     lines.push(head, `🗓 ${niceDay(from)}`, '');
@@ -388,6 +431,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null) 
       }
     }
     if (P && Number((e.post || {}).spend) > 0 && (!pick || pick.has('post'))) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
+    spent = total;
     if (!total) lines.push('No boost spend on this day.');
     lines.push('', totalWithTax(total));
     if (e.note) lines.push(`📝 ${e.note}`);
@@ -413,6 +457,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null) 
       m.t += t; m.n += dn; m.d++; m.p += dp;
     }
     if (long) daily.splice(0, daily.length, ...Object.keys(monthly).sort().map((ym) => { const m = monthly[ym]; return `• ${byMonthLabel(ym)}: ${fmt(m.t)} (${m.d} day${m.d === 1 ? '' : 's'}${m.n ? ` · ${m.n} live${m.n === 1 ? '' : 's'}` : ''}${m.p ? ' · posts' : ''})`; }));
+    spent = total;
     if (!total) lines.push('No boost spend in this period.');
     else {
       lines.push(totalWithTax(total));
@@ -422,7 +467,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null) 
       lines.push(...sub, `📅 ${days} day${days === 1 ? '' : 's'} with boosts`, '', ...daily);
     }
   }
-  return { text: lines.join('\n'), client: { id: c.id, name: c.name, telegram: c.telegram, telegramTitle: c.telegram_title } };
+  return { text: lines.join('\n'), spend: round2(spent), client: { id: c.id, name: c.name, telegram: c.telegram, telegramTitle: c.telegram_title } };
 }
 
 // Team summary: every client's total for a day or a range.
@@ -522,4 +567,4 @@ async function pageSpend(owner, from, to) {
   return out;
 }
 
-module.exports = { isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

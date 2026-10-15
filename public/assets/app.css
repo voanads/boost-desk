@@ -1134,3 +1134,50 @@ body{font-size:15.5px;letter-spacing:0}
   .tab-ink{background:var(--brand-soft)!important;box-shadow:none!important;border-radius:10px!important;transition:top .45s var(--smooth),height .45s var(--smooth),opacity .3s!important}
   .tab-ink::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--brand)}
 }
+
+/* ================= more motion (Oct 2026, part 2) ================= */
+@media (prefers-reduced-motion:no-preference){
+  /* soft purple light drifting slowly behind the whole app */
+  body::before{content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;
+    background:radial-gradient(38vmax 38vmax at 20% 25%,color-mix(in srgb,var(--brand) 13%,transparent),transparent 70%),
+               radial-gradient(34vmax 34vmax at 80% 70%,color-mix(in srgb,#8B5CF6 11%,transparent),transparent 70%),
+               radial-gradient(30vmax 30vmax at 65% 15%,color-mix(in srgb,#34D399 7%,transparent),transparent 70%);
+    animation:aurora 26s ease-in-out infinite alternate}
+  body{background:transparent!important}
+  html{background:var(--bg)}
+  /* ripple when tapping a button */
+  .has-ripple{overflow:hidden}
+  .ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.18;transform:scale(0);pointer-events:none;animation:ripple .6s var(--smooth) forwards}
+  button.primary .ripple,.summary .hero .ripple{background:#fff;opacity:.3}
+  /* light that follows the mouse */
+  .panel,.ccard,.lv,.payrow{position:relative}
+  .summary::after,.panel::after,.ccard::after,.lv::after,.payrow::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .3s;
+    background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),color-mix(in srgb,var(--brand) 9%,transparent),transparent 60%)}
+  .summary{position:relative}
+  .summary:hover::after,.panel:hover::after,.ccard:hover::after,.lv:hover::after,.payrow:hover::after{opacity:1}
+
+  .ccard{transition:transform .25s var(--smooth),box-shadow .25s,border-color .25s!important;transform-style:preserve-3d}
+  .ccard:hover{box-shadow:0 14px 34px color-mix(in srgb,var(--brand) 16%,transparent)!important;border-color:color-mix(in srgb,var(--brand) 35%,var(--line))!important}
+  /* client rows: a purple bar slides in on hover */
+  .dtable tbody tr.drow td:first-child{position:relative}
+  .dtable tbody tr.drow td:first-child::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--brand);transform:scaleY(0);transition:transform .3s var(--smooth)}
+  .dtable tbody tr.drow:hover td:first-child::before,.dtable tbody tr.drow.open td:first-child::before{transform:scaleY(1)}
+  /* report button: the plane takes off a little on hover */
+  .rbtn .plane,.rbtn svg{transition:transform .35s var(--smooth)}
+  .rbtn:hover .plane,.rbtn:hover>svg{transform:translate(3px,-3px) rotate(-12deg)}
+  /* logo floats gently, and spins once when the app opens */
+  .brand .logo{animation:logoIn .9s var(--smooth) both,float 5s 1s ease-in-out infinite}
+  .brand:hover .logo{animation:logoIn .9s var(--smooth) both,wob .6s var(--smooth)}
+  /* phone menu: the selected icon bounces */
+  @media (max-width:760px){nav.tabs button[aria-selected=true] .ic{animation:bounceUp .5s var(--smooth)}}
+  /* section titles: a purple underline draws in */
+  .panel h2{position:relative}
+  /* expand arrow turns smoothly */
+  .dtable .chev,.dtable td:first-child svg{transition:transform .3s var(--smooth)}
+}
+@keyframes aurora{0%{transform:translate(0,0) rotate(0)}50%{transform:translate(3vmax,-2vmax) rotate(8deg)}100%{transform:translate(-3vmax,2vmax) rotate(-6deg)}}
+@keyframes ripple{to{transform:scale(1);opacity:0}}
+@keyframes logoIn{from{transform:rotate(-200deg) scale(.4);opacity:0}to{transform:none;opacity:1}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes wob{0%{transform:rotate(0)}30%{transform:rotate(-14deg) scale(1.08)}60%{transform:rotate(8deg)}100%{transform:none}}
+@keyframes bounceUp{0%{transform:translateY(0)}40%{transform:translateY(-6px) scale(1.12)}70%{transform:translateY(1px)}100%{transform:none}}

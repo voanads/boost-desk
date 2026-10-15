@@ -66,6 +66,7 @@
     const b = document.createElement('div'); b.className = 'okbadge'; b.innerHTML = `<span class="ok-ic">✓</span>${esc(text)}`; document.body.appendChild(b);
     const kf = calm ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 0, transform: 'translateX(120%)' }, { opacity: 1, transform: 'translateX(-8px)', offset: .7 }, { opacity: 1, transform: 'none' }];
     b.animate(kf, { duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+    if (/^Sent|^Auto report on/.test(text)) setTimeout(() => confetti(b, 22), 260); // a small celebration when a report goes out
     setTimeout(() => b.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: calm ? 'none' : 'translateX(40px)' }], { duration: 350, fill: 'both' }).onfinish = () => b.remove(), 2800);
   }
   function status(el, text, isErr) { el.textContent = text; el.classList.toggle('err', !!isErr); }
@@ -1873,4 +1874,26 @@ Thank you for working with Ads Box!`,
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();
+
+  // ---------- extra motion ----------
+  if (!calm) {
+    // Purple ripple from where a button is tapped.
+    document.addEventListener('pointerdown', (ev) => {
+      const b = ev.target.closest('button, a.btn'); if (!b || b.disabled || b.closest('nav.tabs') || b.classList.contains('ccard')) return;
+      const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2, w = document.createElement('span');
+      w.className = 'ripple'; w.style.width = w.style.height = d + 'px'; w.style.left = ev.clientX - r.left - d / 2 + 'px'; w.style.top = ev.clientY - r.top - d / 2 + 'px';
+      if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
+      b.classList.add('has-ripple'); b.appendChild(w); w.addEventListener('animationend', () => w.remove());
+    }, { passive: true });
+    // Light that follows the mouse over the panels and the total card (desktop).
+    if (matchMedia('(hover:hover)').matches) {
+      document.addEventListener('pointermove', (ev) => {
+        const el = ev.target.closest('.summary, .panel, .ccard, .lv, .payrow'); if (!el) return;
+        const r = el.getBoundingClientRect(); el.style.setProperty('--mx', ev.clientX - r.left + 'px'); el.style.setProperty('--my', ev.clientY - r.top + 'px');
+        // Client cards tilt a little toward the mouse.
+        if (el.classList.contains('ccard')) { const x = (ev.clientX - r.left) / r.width - .5, y = (ev.clientY - r.top) / r.height - .5; el.style.transform = `perspective(700px) rotateX(${(-y * 5).toFixed(2)}deg) rotateY(${(x * 6).toFixed(2)}deg) translateY(-3px)`; }
+      }, { passive: true });
+      document.addEventListener('pointerout', (ev) => { const el = ev.target.closest && ev.target.closest('.ccard'); if (el && !el.contains(ev.relatedTarget)) el.style.transform = ''; }, { passive: true });
+    }
+  }
 })();

@@ -1009,3 +1009,107 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:.84rem
 .ckroutes button{border-radius:99px;padding:6px 12px;font-size:.86rem}
 .ckroutes button[aria-pressed=true]{background:var(--brand);border-color:var(--brand);color:#fff}
 @media (max-width:560px){.toprow{grid-template-columns:1fr}}
+
+
+/* ================= v2 look: "quiet desk" (Oct 2026) ================= */
+/* "Quiet desk": one font made for Khmer + English, ink-and-white, colour only where it means something
+   (red = live, blue = boost post, green = good, amber = warning). Brand purple stays in the logo only. */
+:root{
+  --brand:#1F2A44!important; --brand-2:#1F2A44!important; --brand-soft:#EDEFF4!important; --brand-ink:#fff!important;
+  --grad:linear-gradient(#1F2A44,#1F2A44)!important;
+  --bg:#F5F6F8!important; --bg-2:#EEF0F3!important; --surface:#FFFFFF!important; --line:#E4E7EC!important;
+  --ink:#141B2D!important; --muted:#69728A!important;
+  --accent:#1F2A44!important; --accent-soft:#EDEFF4!important; --ok:#16875A!important;
+  --live:#DD3F45!important; --live-soft:#FCECEC!important; --post:#2F6FDE; --post-soft:#EAF1FD;
+  --shadow:none!important; --r:12px!important;
+  --f-ui:"Kantumruy Pro","Noto Sans Khmer",system-ui,sans-serif!important; --f-num:"Kantumruy Pro",system-ui,sans-serif!important;
+}
+:root[data-theme=dark]{
+  --brand:#E9ECF3!important; --brand-2:#E9ECF3!important; --brand-soft:#232A3A!important; --brand-ink:#11151F!important; --grad:linear-gradient(#E9ECF3,#E9ECF3)!important;
+  --bg:#0F131C!important; --bg-2:#171C28!important; --surface:#151A25!important; --line:#262D3D!important; --ink:#EDF0F6!important; --muted:#98A1B6!important;
+  --accent:#E9ECF3!important; --accent-soft:#232A3A!important; --live:#FF6B70!important; --live-soft:#3A1C20!important; --post:#7AA7FF; --post-soft:#1C2740;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --brand:#E9ECF3!important; --brand-2:#E9ECF3!important; --brand-soft:#232A3A!important; --brand-ink:#11151F!important; --grad:linear-gradient(#E9ECF3,#E9ECF3)!important;
+  --bg:#0F131C!important; --bg-2:#171C28!important; --surface:#151A25!important; --line:#262D3D!important; --ink:#EDF0F6!important; --muted:#98A1B6!important;
+  --accent:#E9ECF3!important; --accent-soft:#232A3A!important; --live:#FF6B70!important; --live-soft:#3A1C20!important; --post:#7AA7FF; --post-soft:#1C2740;
+}}
+body{font-size:15.5px;letter-spacing:0}
+/* labels: sentence case, quieter */
+.summary .lbl,th,.dtable td[data-l]::before,.fld>span,.lv .st span,.lv .kv span,.paydate span,.payprice span,.pgsplit-h,.invitems-h{text-transform:none!important;letter-spacing:0!important;font-size:.82rem!important;font-weight:500!important;color:var(--muted)!important}
+.sico{display:none!important}
+/* buttons */
+button.primary{background:var(--ink)!important;color:var(--surface)!important;box-shadow:none!important;border-radius:10px!important}
+.chips button[aria-pressed=true],.seg button[aria-pressed=true],.pgrid button[aria-pressed=true],.fdock .fchips button[aria-pressed=true],.cd.sel,.cm.sel{background:var(--ink)!important;color:var(--surface)!important;box-shadow:none!important}
+/* live / post tags: small coloured text with a dot, not pills */
+.chip.live,.chip.post{background:none!important;padding:0 0 0 2px!important;text-transform:none!important;letter-spacing:0!important;font-weight:600!important;font-size:.78rem!important}
+.chip.live{color:var(--live)!important}
+.chip.post{color:var(--post)!important}
+.chip.post::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:1px}
+.dl.post{border-left-color:var(--post)!important}
+/* the period chips: the date button already opens the period picker */
+#dChips{display:none!important}
+.plabel{font-size:1.25rem!important;font-weight:600!important;border:none!important;background:none!important;padding:0 6px!important}
+.plabel .ic{display:none}
+.navbtn{border-radius:10px!important}
+/* sync line: plain text, no box */
+.syncinfo{background:none!important;border:none!important;padding:0 2px!important;box-shadow:none!important}
+.syncinfo .dot{box-shadow:none!important;width:7px!important;height:7px!important;margin-top:7px!important;background:var(--ok)!important}
+.syncinfo #syncStatus{font-weight:400!important;color:var(--muted)!important}
+/* summary: one big number, the rest as a quiet row */
+.summary{display:grid!important;grid-template-columns:1.6fr!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:0!important;background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:var(--r)!important;overflow:hidden}
+.summary>div{background:none!important;border:none!important;border-left:1px solid var(--line)!important;border-radius:0!important;box-shadow:none!important;padding:18px 20px!important;color:var(--ink)!important}
+.summary>div.hero{border-left:none!important;background:none!important;color:var(--ink)!important}
+.summary>div.hero .lbl,.summary .hero .sub{color:var(--muted)!important}
+.summary .val{font-size:1.45rem!important;font-weight:600!important;letter-spacing:-.01em!important}
+.summary .hero .val{font-size:2.3rem!important;letter-spacing:-.02em!important}
+.panel{box-shadow:none!important}
+.dexp,.dexp-in .dl{background:var(--bg)!important}
+.dl.on,.dl.pick:not(.off){background:var(--surface)!important}
+.dl{border-color:var(--line)!important}
+nav.tabs button[aria-selected=true]{color:var(--ink)!important}
+.avatar{background:var(--ink)!important;color:var(--surface)!important}
+/* desktop: navigation moves to a left sidebar */
+@media (min-width:1100px){
+  body{padding-left:252px!important}
+  header.appbar{position:fixed!important;left:0;top:0;bottom:0;width:232px;margin:0!important;padding:22px 14px!important;flex-direction:column;align-items:stretch!important;justify-content:flex-start!important;flex-wrap:nowrap!important;gap:22px!important;background:var(--surface)!important;backdrop-filter:none!important;border-bottom:none!important;border-right:1px solid var(--line)!important;z-index:20}
+  header.appbar .brand{padding:0 8px}
+  nav.tabs{flex-direction:column!important;background:none!important;border:none!important;padding:0!important;gap:2px!important}
+  nav.tabs button{justify-content:flex-start;padding:10px 12px!important;font-size:.95rem!important;font-weight:500!important;width:100%}
+  nav.tabs .ic{display:block!important}
+  nav.tabs .full{display:inline!important} nav.tabs .short{display:none!important}
+  nav.tabs button[aria-selected=true]{background:var(--bg)!important;box-shadow:none!important;font-weight:600!important}
+  header.appbar .who{margin-top:auto;flex-wrap:wrap;padding:0 8px}
+  .wrap{max-width:1120px!important}
+}
+@media (max-width:760px){
+  .summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}
+  .summary>div:not(.hero) .val{font-size:1.2rem!important}
+  .summary>div{border-left:none!important;border-top:1px solid var(--line)!important;padding:14px 16px!important}
+  .summary>div.hero{grid-column:1 / -1;border-top:none!important}
+  .summary>div:nth-child(2n+1):not(.hero){border-left:1px solid var(--line)!important}
+}
+/* phone: each client is a short card — name and total on top, the details small underneath */
+@media (max-width:760px){
+  .dtable tbody tr{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px 12px!important;padding:14px 16px!important;border-radius:12px!important}
+  .dtable tbody td.cname{grid-column:1 / 3!important;grid-row:1}
+  .dtable tbody td.tot{grid-column:3!important;grid-row:1;text-align:right!important}
+  .dtable tbody td.tot::before{display:none!important}
+  .dtable tbody td.tot b{font-size:1.12rem}
+  .dtable tbody td[data-l]{font-size:.92rem}
+  .dtable td[data-l]::before{font-size:.76rem!important;margin-bottom:1px}
+  .dtable tbody td.cprc:not(:has(b)){display:none!important}
+  .dtable tbody td.cprc{grid-column:1 / 3}
+  .dtable tbody td.actc{grid-column:3!important;justify-self:end;align-self:end}
+  .dtable tbody td.actc .rbtn{width:auto!important;padding:7px 14px!important}
+  header.appbar .bname{font-size:1rem!important}
+}
+@media (min-width:1100px){ body{padding-top:30px!important} }
+
+/* dark mode: things drawn on the (now light) accent need dark text */
+:root[data-theme=dark] .lv.top .rank,:root[data-theme=dark] .flyghost,:root[data-theme=dark] .flyghost .fg-brand,:root[data-theme=dark] #setMsgPresets button[aria-pressed=true]{color:var(--brand-ink)!important}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .lv.top .rank,:root:not([data-theme=light]) .flyghost,:root:not([data-theme=light]) .flyghost .fg-brand,:root:not([data-theme=light]) #setMsgPresets button[aria-pressed=true]{color:var(--brand-ink)!important}}
+@media (max-width:760px){
+  .chead2 input[type=search]{flex:1 1 100%!important;order:3}
+  #paySettings{white-space:nowrap;display:inline-flex!important;align-items:center;justify-content:center;width:100%!important;grid-column:1 / -1}
+}

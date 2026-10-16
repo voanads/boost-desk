@@ -665,7 +665,7 @@
     if (m < 1440) return Math.round(m / 60) + ' h ago';
     return new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
-  const whyLabel = { 'new campaign': 'new campaign found', hourly: 'hourly refresh', 'daily 30-day': '30-day refresh', 'run now': 'run now' };
+  const whyLabel = { 'new ad account': 'new ad account found', 'new campaign': 'new campaign found', hourly: 'hourly refresh', 'daily 30-day': '30-day refresh', 'run now': 'run now' };
   async function loadAuto() {
     $('autoPanel').hidden = false;
     let d;

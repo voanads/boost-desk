@@ -1,5 +1,5 @@
 // Scheduled jobs, all running quietly in the background (nothing shows in the app):
-//   • every 5 min  — spots newly created campaigns and pulls their spend
+//   • every 5 min  — spots new ad accounts (loads their last 30 days) and newly created campaigns
 //   • every hour   — refreshes today + yesterday
 //   • 05:30 daily  — refreshes the last 30 days (Meta keeps finalising late spend)
 //   • REPORT_TIME  — nightly Telegram team report
@@ -48,6 +48,14 @@ async function rangeFor(user, days, why) {
 async function checkNewCampaigns(user) {
   if (sync.isBusy(user.fb_id)) return false;
   const token = await sync.tokenFor(user);
+  // New ad accounts on this Facebook login: reload the account list, and load 30 days for a new one.
+  const before = new Set((await db.listAccounts(user.fb_id)).map((a) => a.id));
+  try { await sync.refreshAccounts(user); } catch (e) { if (e.needsLogin) throw e; log(`account list for ${user.name} failed:`, e.message); }
+  const added = (await db.listAccounts(user.fb_id)).filter((a) => !before.has(a.id) && a.enabled), addedIds = new Set(added.map((a) => a.id));
+  if (before.size && added.length) {
+    log(`new ad account for ${user.name}: ${added.map((a) => a.name || a.id).join(', ')}`);
+    await rangeFor(user, 30, 'new ad account');
+  }
   const accounts = await db.enabledAccountIds(user.fb_id);
   const known = await db.getUserSetting(user.fb_id, 'activeCampaigns', null);
   const now = {};
@@ -59,7 +67,7 @@ async function checkNewCampaigns(user) {
       now[act] = known?.[act] || [];
       continue;
     }
-    if (!known) continue; // first run: just record a baseline
+    if (!known || addedIds.has(act)) continue; // first run / a just-added account (already loaded above): just record a baseline
     const seen = new Set(known[act] || []);
     for (const id of now[act]) if (!seen.has(id)) fresh.push(id);
   }

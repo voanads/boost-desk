@@ -218,15 +218,15 @@
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
+    if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'lives', 'payments', 'admin', 'team'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'lives', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
-    if (name === 'team') renderTeam();
     if (name === 'dashboard') loadDash();
     if (name === 'clients') loadClientMonth();
-    if (name === 'admin') loadAdmin();
+    if (name === 'admin') { loadAdmin(); if (me && me.isOwner) loadAuto(); }
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
@@ -656,18 +656,6 @@
     catch (e) { toast(e.message); }
   }
 
-  // ---------- team ----------
-  async function renderTeam() {
-    const fmt = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-    const soon = me.tokenExpires && new Date(me.tokenExpires) - Date.now() < 7 * 864e5;
-    $('teamBody').innerHTML = `<tr><td>${esc(me.name)}</td><td class="num">${esc(me.id)}</td><td class="${soon ? 'over' : ''}">${fmt(me.tokenExpires)}</td></tr>`;
-    $('tgInfo').textContent = me.telegram.configured
-      ? `Sends automatically every day at ${me.telegram.time} (${me.tz}), after a fresh sync. Preview for ${nice(date)}:`
-      : 'Not set up yet. Add TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME to the server settings (see README). Preview:';
-    try { $('reportPreview').textContent = (await api('/report/' + date)).text; } catch (e) { $('reportPreview').textContent = e.message; }
-    if (me.isOwner) loadAuto();
-  }
-
   // ---------- auto sync (owner only) ----------
   const ago = (t) => {
     if (!t) return '—';
@@ -742,7 +730,7 @@
     try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); }
     catch (e) { toast(e.message); }
     loadAuto();
-    setTimeout(() => { if (!$('tab-team').hidden) loadAuto(); }, 15000);
+    setTimeout(() => { if (!$('tab-admin').hidden) loadAuto(); }, 15000);
   });
   for (const [btn, on] of [['autoAllOn', true], ['autoAllOff', false]]) {
     $(btn).onclick = async () => {

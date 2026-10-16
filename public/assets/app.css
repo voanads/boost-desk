@@ -1181,3 +1181,19 @@ body{font-size:15.5px;letter-spacing:0}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 @keyframes wob{0%{transform:rotate(0)}30%{transform:rotate(-14deg) scale(1.08)}60%{transform:rotate(8deg)}100%{transform:none}}
 @keyframes bounceUp{0%{transform:translateY(0)}40%{transform:translateY(-6px) scale(1.12)}70%{transform:translateY(1px)}100%{transform:none}}
+
+/* ================= today's to-do ================= */
+.todo .top{display:flex;align-items:center;justify-content:space-between}
+.todo h2{display:flex;align-items:center;gap:8px}
+.countpill.done{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.todolist{display:flex;flex-direction:column;gap:8px}
+.todo-it{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);border-left:3px solid var(--brand)}
+.todo-it.warn{border-left-color:var(--warn)}
+.todo-it.bad{border-left-color:var(--live);background:color-mix(in srgb,var(--live) 5%,var(--surface))}
+.todo-ic{font-size:1.15rem;width:28px;text-align:center;flex:none}
+.todo-t{display:flex;flex-direction:column;min-width:0;flex:1}
+.todo-t b{font-weight:600}
+.todo-it button{flex:none;white-space:nowrap}
+.todo-done{padding:10px 4px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.todo-it{animation:rowIn .45s var(--smooth) backwards;animation-delay:calc(var(--i,0) * 50ms)}}
+@media (max-width:760px){.todo-it{flex-wrap:wrap;align-items:flex-start}.todo-t{flex:1 1 calc(100% - 52px)}.todo-it button{margin-left:40px}}

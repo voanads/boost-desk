@@ -15,6 +15,7 @@ const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split
 const jobs = require('./src/jobs');
 const extras = require('./src/extras');
 const reports = require('./src/reports');
+const pm = require('./src/pm');
 const telegram = require('./src/telegram');
 const { encrypt } = require('./src/crypto');
 
@@ -683,6 +684,9 @@ api.post('/auto-report/run', wrap(async (req, res) => {
   await db.setUserSetting(req.user.fb_id, 'autoReportLast', r);
   res.json(r);
 }));
+// ---------- today's to-do ----------
+api.get('/todo', wrap(async (req, res) => res.json(await pm.todo(req.user))));
+
 app.use('/api', api);
 
 // Errors → JSON with a clear message.

@@ -224,7 +224,7 @@
     ['dashboard', 'clients', 'accounts', 'lives', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
-    if (name === 'dashboard') loadDash();
+    if (name === 'dashboard') { loadDash(); loadTodo(); }
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') { loadAdmin(); if (me && me.isOwner) loadAuto(); }
     if (name === 'lives') loadLives();
@@ -615,6 +615,31 @@
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Send now'; }
   };
   loadAr();
+
+  // ---------- today's to-do (Dashboard) ----------
+  const TODO_IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', account: '⚠️', login: '🔑' };
+  let todoHidden = false; try { todoHidden = localStorage.getItem('bd-todo') === 'hide'; } catch (_) {}
+  async function loadTodo() {
+    let d; try { d = await api('/todo'); } catch (_) { return; }
+    const items = d.items, panel = $('todoPanel');
+    panel.hidden = false;
+    $('todoCount').textContent = items.length || '✓';
+    $('todoCount').classList.toggle('done', !items.length);
+    $('todoToggle').textContent = todoHidden ? 'Show' : 'Hide'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
+    $('todoList').hidden = todoHidden;
+    const btn = { report: 'Send report', nogroup: 'Pick group', invoice: 'Open Payments', unpaid: 'Open Payments', account: 'Open accounts', login: 'Log in again' };
+    $('todoList').innerHTML = items.length ? items.map((it, i) => `<div class="todo-it ${it.level}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${TODO_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'Open'}</button></div>`).join('')
+      : '<div class="todo-done">🎉 All done for today. Nothing waiting.</div>';
+    $('todoList').querySelectorAll('[data-todo]').forEach((b) => b.onclick = () => {
+      const it = items[Number(b.dataset.todo)], c = clients.find((x) => x.id === it.clientId);
+      if (it.action === 'report' && c) openReportDlg({ kind: 'client', cid: c.id, from: d.today, to: d.today, label: nice(d.today) });
+      else if (it.action === 'client' && c) { showTab('clients'); openClientDlg(c); }
+      else if (it.action === 'payments') showTab('payments');
+      else if (it.action === 'accounts') showTab('accounts');
+      else if (it.action === 'logout') $('logoutBtn').click();
+    });
+  }
+  $('todoToggle').onclick = () => { todoHidden = !todoHidden; try { localStorage.setItem('bd-todo', todoHidden ? 'hide' : 'show'); } catch (_) {} loadTodo(); };
 
   const closeClientDlg = () => $('cDlg').close();
   $('cAddBtn').onclick = () => openClientDlg(null);
@@ -1305,6 +1330,7 @@
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);
+        loadTodo();
         sentFlash = { cid: o.cid, until: Date.now() + 2600 };
         if (!$('tab-dashboard').hidden) { loadDash(); setTimeout(() => { if (dData) renderDash(); }, 2700); }
       } else { await api('/summary/send', { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value } }); planeOff(b); $('ckDlg').close(); successBadge('Sent to the team group'); }

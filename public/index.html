@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=66">
+<link rel="stylesheet" href="/assets/app.css?v=67">
 </head>
 <body>
 <div class="wrap">
@@ -81,6 +81,10 @@
       <div class="pbar"><i id="syncProgBar"></i></div>
     </div>
     <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
+    <div class="panel todo" id="todoPanel" hidden>
+      <div class="top"><h2>Today's to-do <span class="countpill" id="todoCount"></span></h2><button type="button" class="ghost sm" id="todoToggle" aria-expanded="true">Hide</button></div>
+      <div class="todolist" id="todoList"></div>
+    </div>
     <div class="summary">
       <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span><span class="sub num" id="dTax"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M19 5a10 10 0 0 1 0 14"/><path d="M5 19A10 10 0 0 1 5 5"/></svg>Live spend</span><span class="val num" id="dLive">$0.00</span><span class="sub" id="dLives"></span></div>
@@ -395,6 +399,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=66"></script>
+<script src="/assets/app.js?v=67"></script>
 </body>
 </html>

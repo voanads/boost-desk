@@ -125,8 +125,8 @@ function start() {
   }
   // Each account's own "auto daily report" (time chosen in the app): checked every minute.
   cron.schedule('* * * * *', () => require('./extras').tick().catch((e) => log('auto report failed:', e.message)), opts);
-  // adsbox.biz order counts, every 30 minutes when the API is set up.
-  if (process.env.ADSBOX_API_URL && process.env.ADSBOX_API_KEY) cron.schedule('*/30 * * * *', () => require('./orders').pullApi(3).then((n) => log('adsbox orders:', n, 'rows')).catch((e) => log('adsbox orders failed:', e.message)), opts);
+  // adsbox.biz order counts, every 30 minutes once the API is connected on the Orders page.
+  cron.schedule('*/30 * * * *', () => require('./orders').pullApi(3).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
   if (telegram.configured() && m) {
     cron.schedule(`${Number(m[2])} ${Number(m[1])} * * *`, () => sendDailyReport()

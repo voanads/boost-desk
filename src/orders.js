@@ -61,17 +61,90 @@ async function byClient(owner, from, to) {
   return { clients: out, any: true };
 }
 
-// adsbox.biz API (when ADSBOX_API_URL + ADSBOX_API_KEY are set): pull the last few days of counts.
-async function pullApi(days = 3) {
-  const url = process.env.ADSBOX_API_URL, key = process.env.ADSBOX_API_KEY;
+// ---------- adsbox.biz API ----------
+// The address and key are entered on the Orders page and saved encrypted (Railway variables also work).
+const { encrypt, decrypt } = require('./crypto');
+async function apiConfig() {
+  const c = (await db.getSetting('adsboxApi', null)) || {};
+  let key = '';
+  try { key = c.keyEnc ? decrypt(c.keyEnc) : ''; } catch (_) { key = ''; }
+  return { url: c.url || process.env.ADSBOX_API_URL || '', key: key || process.env.ADSBOX_API_KEY || '', hint: c.keyHint || (process.env.ADSBOX_API_KEY ? '…' + process.env.ADSBOX_API_KEY.slice(-4) : ''), by: c.by || '', at: c.at || '' };
+}
+async function saveApiConfig({ url, key }, by) {
+  const cur = (await db.getSetting('adsboxApi', null)) || {};
+  const next = { ...cur, url: String(url || '').trim().slice(0, 300), by, at: new Date().toISOString() };
+  if (key && String(key).trim()) { next.keyEnc = encrypt(String(key).trim()); next.keyHint = '…' + String(key).trim().slice(-4); }
+  if (key === null) { delete next.keyEnc; delete next.keyHint; }
+  if (next.url && !/^https:\/\//i.test(next.url) && !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/i.test(next.url)) throw Object.assign(new Error('The API address must start with https://'), { status: 400 });
+  await db.setSetting('adsboxApi', next);
+  return publicConfig();
+}
+async function publicConfig() {
+  const c = await apiConfig();
+  return { url: c.url, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null) };
+}
+// Read rows from whatever shape the API returns: [..], {data:[..]}, {rows:[..]}, {orders:[..]}.
+function mapRows(body) {
+  const list = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
+  return list.map((x) => ({
+    day: String(x.date || x.day || x.order_date || x.created_at || '').slice(0, 10),
+    pageId: x.page_id ?? x.pageId ?? x.fb_page_id ?? '', pageName: x.page_name ?? x.pageName ?? x.page ?? '',
+    orders: x.orders ?? x.count ?? x.total_orders ?? 1, newC: x.new_customers ?? x.new ?? 0, oldC: x.old_customers ?? x.old ?? 0, total: x.total ?? x.amount ?? 0,
+  }));
+}
+async function callApi(from, to) {
+  const { url, key } = await apiConfig();
   if (!url || !key) return null;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+  let res;
+  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
+  catch (e) { throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
+  finally { clearTimeout(t); }
+  const text = await res.text();
+  if (res.status === 401 || res.status === 403) throw new Error('adsbox.biz refused the API key (check the key).');
+  if (!res.ok) throw new Error(`adsbox.biz API answered HTTP ${res.status}`);
+  try { return JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
+}
+// Pull the last few days of counts into the database.
+async function pullApi(days = 3) {
   const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
-  const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`adsbox.biz API: HTTP ${res.status}`);
-  const body = await res.json();
-  const list = Array.isArray(body) ? body : body.data || body.rows || [];
-  const rows = list.map((x) => ({ day: String(x.date || x.day || '').slice(0, 10), pageId: x.page_id || x.pageId, pageName: x.page_name || x.pageName, orders: x.orders ?? x.count, newC: x.new_customers ?? x.new, oldC: x.old_customers ?? x.old, total: x.total ?? x.amount }));
-  return importRows(rows, 'api');
+  try {
+    const body = await callApi(from, to);
+    if (body === null) return null;
+    const rows = mapRows(body);
+    // Per-order rows (one row per order) are counted here; summary rows already carry counts.
+    const agg = new Map();
+    for (const r of rows) {
+      const k = r.day + '|' + r.pageId + '|' + r.pageName, a = agg.get(k) || { day: r.day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
+      a.orders += Number(r.orders) || 0; a.newC += Number(r.newC) || 0; a.oldC += Number(r.oldC) || 0; a.total += Number(r.total) || 0; agg.set(k, a);
+    }
+    const n = await importRows([...agg.values()], 'api');
+    await db.setSetting('ordersLastError', null);
+    return n;
+  } catch (e) { await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
+}
+// "Test connection": one call for yesterday + today, report what came back (field names only, no values).
+async function testApi() {
+  const to = sync.todayIn(), from = sync.addDays(to, -1);
+  const body = await callApi(from, to);
+  if (body === null) throw Object.assign(new Error('Enter the API address and key first.'), { status: 400 });
+  const rows = mapRows(body), raw = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
+  const fields = raw[0] && typeof raw[0] === 'object' ? Object.keys(raw[0]) : [];
+  return { rows: rows.length, fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
-module.exports = { importRows, status, byClient, pullApi, tz: cfg.tz };
+// Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.
+async function report(owner, from, to) {
+  const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to)]);
+  const rows = (await q(`SELECT page_id, max(page_name) AS page_name, sum(orders)::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
+  const clients = d.clients.filter((c) => !c.archived || c.spend > 0).map((c) => {
+    const o = oc.clients[c.id] || { orders: 0, newC: 0, oldC: 0, pages: {} };
+    const pg = (pages[c.id] || []).map((p) => ({ page: p.page, pageId: p.pageId, named: p.named, spend: p.spend, live: p.live, post: p.post, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
+    return { id: c.id, name: c.name, type: c.type, spend: c.spend, live: c.liveSpend, post: c.postSpend, orders: o.orders, newC: o.newC, oldC: o.oldC, pages: pg };
+  });
+  const matched = new Set(); for (const c of Object.values(oc.clients)) for (const k of Object.keys(c.pages)) matched.add(k);
+  const unmatched = rows.filter((r) => !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
+  return { from, to, clients, unmatched, hasData: rows.length > 0 };
+}
+
+module.exports = { importRows, status, byClient, pullApi, testApi, report, publicConfig, saveApiConfig, apiConfig };

@@ -1221,7 +1221,6 @@ body{font-size:15.5px;letter-spacing:0}
 .dl-sub .pgname,.psub .pgname{font-size:.74rem;padding:1px 8px}
 
 /* orders from adsbox.biz */
-.dtable:not(.hasord) .ordc{display:none}
 .kgrp.ord{margin-top:10px}
 .kgrp.ord .kgrp-h{color:#0e9f6e}
 .ordsplit{padding:2px 6px}
@@ -1229,3 +1228,9 @@ body{font-size:15.5px;letter-spacing:0}
 .ordup .drop:hover,.ordup .drop.over{border-color:var(--brand);background:var(--brand-soft)}
 .ordup .prev{font-size:.9rem}
 .ordup table{width:100%}
+
+/* Orders page */
+.otable tr.osub td{background:var(--bg);font-size:.9rem}
+.otable tr.osub td.cname{padding-left:34px}
+.otable b.cpo{color:var(--brand)}
+@media (max-width:760px){#oSum>div:nth-child(4){grid-column:1 / -1}}

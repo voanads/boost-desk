@@ -688,18 +688,15 @@ api.post('/auto-report/run', wrap(async (req, res) => {
 // ---------- today's to-do ----------
 api.get('/todo', wrap(async (req, res) => res.json(await pm.todo(req.user))));
 
-// ---------- orders from adsbox.biz (counts per Page per day) ----------
-api.get('/orders/status', wrap(async (req, res) => res.json(await orders.status())));
-api.post('/orders/import', adminOnly, wrap(async (req, res) => {
-  const rows = Array.isArray((req.body || {}).rows) ? req.body.rows : [];
-  if (!rows.length) return res.status(400).json({ error: 'No order counts found in the file.' });
-  res.json({ ok: true, rows: await orders.importRows(rows, 'upload') });
-}));
-api.post('/orders/pull', adminOnly, wrap(async (req, res) => { const n = await orders.pullApi(7); if (n === null) return res.status(400).json({ error: 'The adsbox.biz API is not set up yet (ADSBOX_API_URL and ADSBOX_API_KEY in Railway).' }); res.json({ ok: true, rows: n }); }));
-api.get('/orders/by-client', wrap(async (req, res) => {
+// ---------- Orders page (adsbox.biz API) ----------
+api.get('/orders/api', wrap(async (req, res) => res.json(await orders.publicConfig())));
+api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders.saveApiConfig(req.body || {}, req.user.name))));
+api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
+api.post('/orders/pull', wrap(async (req, res) => { const n = await orders.pullApi(Math.min(31, Number((req.body || {}).days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
+api.get('/orders/report', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid period.' });
-  res.json(await orders.byClient(req.user.fb_id, from, to));
+  res.json(await orders.report(req.user.fb_id, from, to));
 }));
 
 app.use('/api', api);

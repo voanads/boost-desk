@@ -221,14 +221,15 @@
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'lives', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
     if (name === 'clients') loadClientMonth();
-    if (name === 'admin') { loadAdmin(); loadOrdStatus(); if (me && me.isOwner) loadAuto(); }
+    if (name === 'admin') { loadAdmin(); if (me && me.isOwner) loadAuto(); }
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
+    if (name === 'orders') loadOrders();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -682,75 +683,82 @@
     catch (e) { toast(e.message); }
   }
 
-  // ---------- orders from adsbox.biz (Admin) ----------
-  // The CSV is read here in the browser; only counts per Page per day are sent to the server.
-  function parseCsv(text) {
-    const rows = []; let row = [], f = '', q = false;
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
-      else if (ch === '"') q = true;
-      else if (ch === ',') { row.push(f); f = ''; }
-      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; }
-      else f += ch;
-    }
-    if (f || row.length) { row.push(f); rows.push(row); }
-    return rows;
-  }
-  function countOrders(text) {
-    const rows = parseCsv(text.replace(/^﻿/, '')); if (rows.length < 2) throw new Error('The file is empty.');
-    const h = rows[0].map((x) => x.trim().toLowerCase());
-    const col = (...res) => { for (const re of res) { const i = h.findIndex((x) => re.test(x)); if (i >= 0) return i; } return -1; };
-    const cDate = col(/^order.?date$/, /order.?date/, /^date$/, /created/, /date/), cId = col(/page.?id/), cName = col(/page.?name/, /^page$/, /^fan.?page$/);
-    const cType = col(/^type$/, /customer.?type/), cTotal = col(/^total$/, /amount/, /grand.?total/), cStatus = col(/^status$/);
-    if (cDate < 0) throw new Error('No order date column found in the file.');
-    if (cId < 0 && cName < 0) throw new Error('This file has no Page ID or Page name column, so orders can’t be matched to clients. Ask the adsbox.biz developer to add the Page ID to the export.');
-    const agg = new Map(); let skipped = 0;
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i]; if (!r || r.length < 2) continue;
-      const day = String(r[cDate] || '').trim().slice(0, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) { skipped++; continue; }
-      if (cStatus >= 0 && /cancel|reject|spam|delete/i.test(r[cStatus] || '')) { skipped++; continue; }
-      const pageId = cId >= 0 ? String(r[cId] || '').trim() : '', pageName = cName >= 0 ? String(r[cName] || '').trim() : '';
-      if (!pageId && !pageName) { skipped++; continue; }
-      const k = day + '|' + pageId + '|' + pageName, a = agg.get(k) || { day, pageId, pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
-      a.orders++;
-      if (cType >= 0) { const t = String(r[cType] || '').toLowerCase(); if (/new/.test(t)) a.newC++; else if (/old|return/.test(t)) a.oldC++; }
-      if (cTotal >= 0) a.total += Number(String(r[cTotal] || '').replace(/[^0-9.]/g, '')) || 0;
-      agg.set(k, a);
-    }
-    return { rows: [...agg.values()], skipped };
-  }
-  async function loadOrdStatus() {
+  // ---------- Orders page (adsbox.biz) ----------
+  let oPreset = '7', oData2 = null, oCfg = null, oSort = { k: 'orders', asc: false }; const oOpen = new Set();
+  const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
+  const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month' };
+  async function loadOrders() {
+    document.querySelectorAll('#oChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === oPreset)));
+    const [from, to] = aRange(oPreset);
+    $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
     try {
-      const st = await api('/orders/status');
-      $('ordStatus').innerHTML = st.orders ? `Saved: <b>${st.orders.toLocaleString('en-US')}</b> orders from <b>${st.pages}</b> Page${st.pages === 1 ? '' : 's'}, ${esc(nice(st.first))} – ${esc(nice(st.last))}${st.last_import ? ` · last update ${esc(new Date(st.last_import.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))} (${st.last_import.source === 'api' ? 'API' : 'upload'})` : ''}` : 'No orders yet.';
-      $('ordPull').hidden = !st.api;
-    } catch (_) {}
+      const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}`)]);
+      oData2 = d; oCfg = cfg;
+      const note = $('oNote');
+      if (!cfg.url || !cfg.hasKey) { note.hidden = false; note.innerHTML = '<b>Connect adsbox.biz first.</b> Tap <b>⚙ API settings</b> and paste the API address and key from adsbox.biz. After that, orders update by themselves every 30 minutes.'; }
+      else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}`; }
+      else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
+      else note.hidden = true;
+      renderOrders();
+    } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }
   }
-  async function readOrders(file) {
-    const box = $('ordPrev'); box.innerHTML = '<div class="hint">Reading the file…</div>';
+  function renderOrders() {
+    const d = oData2; if (!d) return;
+    const q = ($('oSearch').value || '').trim().toLowerCase();
+    const list = d.clients.filter((c) => c.spend > 0 || c.orders > 0)
+      .filter((c) => !q || [c.name, ...c.pages.map((p) => p.page)].some((x) => String(x).toLowerCase().includes(q)))
+      .map((c) => ({ ...c, cpo: c.orders ? c.spend / c.orders : Infinity, cpn: c.newC ? c.spend / c.newC : Infinity }));
+    const k = oSort.k, dir = oSort.asc ? 1 : -1, v = (x) => (x === Infinity ? 1e12 : x);
+    list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) * dir : (v(a[k]) - v(b[k])) * dir) || b.spend - a.spend);
+    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, newC: a.newC + c.newC, oldC: a.oldC + c.oldC, withOrders: a.withOrders + (c.orders ? 1 : 0), spendW: a.spendW + (c.orders ? c.spend : 0) }), { spend: 0, orders: 0, newC: 0, oldC: 0, withOrders: 0, spendW: 0 });
+    rollTo($('oCpo'), cpoText(t.spendW, t.orders)); $('oCpoSub').textContent = t.orders ? `boost spend ÷ orders · ${t.withOrders} client${t.withOrders === 1 ? '' : 's'} with orders` : 'No orders yet';
+    rollTo($('oOrders'), t.orders.toLocaleString('en-US')); $('oOrdersSub').textContent = t.newC || t.oldC ? `${t.newC.toLocaleString('en-US')} new · ${t.oldC.toLocaleString('en-US')} returning` : '';
+    rollTo($('oSpend'), money(t.spend)); $('oSpendSub').textContent = 'from the synced boosts';
+    rollTo($('oCpn'), cpoText(t.spendW, t.newC)); $('oCpnSub').textContent = t.newC ? `${t.newC.toLocaleString('en-US')} new customers` : '';
+    const dash = '<span class="muted">–</span>';
+    $('oBody').innerHTML = list.map((c) => {
+      const open = oOpen.has(c.id), multi = c.pages.length > 1;
+      return `<tr class="drow${open ? ' open' : ''}" data-oc="${c.id}" tabindex="0"><td class="cname"><div class="nm">${multi ? '<span class="chev" aria-hidden="true">›</span>' : ''}<b>${esc(c.name)}</b>${typeTags(c.type)}</div>${c.pages.length ? `<div class="pg">${c.pages.slice(0, 3).map((p) => pageLabel(p)).join(' · ')}${c.pages.length > 3 ? ` +${c.pages.length - 3}` : ''}</div>` : ''}</td>
+        <td class="r num" data-l="Spend">${money(c.spend)}</td><td class="r num" data-l="Orders"><b>${c.orders ? c.orders.toLocaleString('en-US') : dash}</b></td>
+        <td class="r num" data-l="Cost / order"><b class="cpo">${cpoText(c.spend, c.orders)}</b></td><td class="r num" data-l="New customers">${c.newC || dash}</td><td class="r num" data-l="Cost / new">${cpoText(c.spend, c.newC)}</td></tr>`
+        + (open && multi ? c.pages.map((p) => `<tr class="osub"><td class="cname"><div class="pg">📄 ${pageLabel(p)}</div></td><td class="r num" data-l="Spend">${money(p.spend)}</td><td class="r num" data-l="Orders">${p.orders || dash}</td><td class="r num" data-l="Cost / order">${cpoText(p.spend, p.orders)}</td><td></td><td></td></tr>`).join('') : '');
+    }).join('') || '<tr><td colspan="6" class="empty-row">No spend or orders in this period.</td></tr>';
+    $('oFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Spend">${money(t.spend)}</td><td class="r num" data-l="Orders">${t.orders.toLocaleString('en-US')}</td><td class="r num" data-l="Cost / order">${cpoText(t.spendW, t.orders)}</td><td class="r num" data-l="New customers">${t.newC}</td><td class="r num" data-l="Cost / new">${cpoText(t.spendW, t.newC)}</td></tr>` : '';
+    document.querySelectorAll('#oBody tr[data-oc]').forEach((tr) => tr.onclick = () => { const id = Number(tr.dataset.oc); if (oOpen.has(id)) oOpen.delete(id); else oOpen.add(id); renderOrders(); });
+    document.querySelectorAll('#oTable th[data-os]').forEach((th) => th.classList.toggle('sorted', th.dataset.os === oSort.k));
+    $('oUnPanel').hidden = !d.unmatched.length;
+    $('oUnBody').innerHTML = d.unmatched.map((u) => `<tr><td>${esc(u.page || '—')}</td><td class="num">${esc(u.pageId || '—')}</td><td class="r num">${u.orders.toLocaleString('en-US')}</td></tr>`).join('');
+  }
+  document.querySelectorAll('#oTable th[data-os]').forEach((th) => th.onclick = () => { const k = th.dataset.os; oSort = { k, asc: oSort.k === k ? !oSort.asc : ['name', 'cpo', 'cpn'].includes(k) }; renderOrders(); });
+  document.querySelectorAll('#oChips button').forEach((b) => b.onclick = () => { oPreset = b.dataset.p; loadOrders(); });
+  $('oSearch').oninput = () => renderOrders();
+  $('oSync').onclick = async () => {
+    const b = $('oSync'); b.disabled = true; b.classList.add('busy');
+    try { const r = await api('/orders/pull', { method: 'POST', body: { days: 31 } }); successBadge(`Orders updated (${r.rows} Page-days)`); }
+    catch (e) { toast(e.message); }
+    finally { b.disabled = false; b.classList.remove('busy'); loadOrders(); }
+  };
+  $('oSetBtn').onclick = async () => {
+    const c = oCfg || await api('/orders/api').catch(() => ({}));
+    $('oUrl').value = c.url || ''; $('oKey').value = ''; $('oTestMsg').hidden = true;
+    $('oKeyInfo').textContent = c.hasKey ? `A key is saved (${c.keyHint || 'hidden'})${c.savedBy ? ' by ' + c.savedBy : ''}. Leave the key empty to keep it.` : 'No key saved yet.';
+    $('oKeyDel').hidden = !c.hasKey;
+    const canEdit = !!(me && me.canAdmin); ['oUrl', 'oKey', 'oSave', 'oTest', 'oKeyDel'].forEach((id) => { $(id).disabled = !canEdit; });
+    if (!canEdit) $('oKeyInfo').textContent += ' Only admins can change these settings.';
+    dlgOpen($('oDlg'));
+  };
+  const saveCfg = (extra = {}) => api('/orders/api', { method: 'PUT', body: { url: $('oUrl').value.trim(), key: $('oKey').value.trim(), ...extra } });
+  $('oSave').onclick = async () => { try { oCfg = await saveCfg(); $('oDlg').close(); successBadge('adsbox.biz API saved'); $('oSync').click(); } catch (e) { toast(e.message); } };
+  $('oKeyDel').onclick = async () => { if (!confirm('Remove the saved API key?')) return; try { oCfg = await saveCfg({ key: null }); $('oDlg').close(); toast('API key removed'); loadOrders(); } catch (e) { toast(e.message); } };
+  $('oTest').onclick = async () => {
+    const m = $('oTestMsg'), b = $('oTest'); b.disabled = true; m.hidden = false; m.textContent = 'Testing…';
     try {
-      const { rows, skipped } = countOrders(await file.text());
-      if (!rows.length) throw new Error('No orders with a date and Page were found.');
-      const days = [...new Set(rows.map((r) => r.day))].sort(), total = rows.reduce((a, r) => a + r.orders, 0);
-      const pages = {}; for (const r of rows) { const k = r.pageName || r.pageId; pages[k] = (pages[k] || 0) + r.orders; }
-      const top = Object.entries(pages).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      box.innerHTML = `<p><b>${total.toLocaleString('en-US')}</b> orders on <b>${Object.keys(pages).length}</b> Page${Object.keys(pages).length === 1 ? '' : 's'}, ${esc(nice(days[0]))} – ${esc(nice(days[days.length - 1]))}${skipped ? ` <span class="hint">(${skipped.toLocaleString('en-US')} rows skipped: no date/Page or cancelled)</span>` : ''}</p>
-        <table><tbody>${top.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="r num">${n.toLocaleString('en-US')}</td></tr>`).join('')}</tbody></table>
-        <div class="dlg-foot" style="margin-top:10px"><span class="hint">Saving replaces the counts for these days and Pages.</span><span class="spacer"></span><button type="button" class="primary" id="ordSave">Save order counts</button></div>`;
-      $('ordSave').onclick = async () => {
-        const b = $('ordSave'); b.disabled = true; b.textContent = 'Saving…';
-        try { for (let i = 0; i < rows.length; i += 4000) await api('/orders/import', { method: 'POST', body: { rows: rows.slice(i, i + 4000) } }); box.innerHTML = ''; successBadge(`${total.toLocaleString('en-US')} orders saved`); loadOrdStatus(); }
-        catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Save order counts'; }
-      };
-    } catch (e) { box.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
-  }
-  $('ordFile').onchange = () => { const f = $('ordFile').files[0]; if (f) readOrders(f); $('ordFile').value = ''; };
-  $('ordDrop').addEventListener('dragover', (ev) => { ev.preventDefault(); $('ordDrop').classList.add('over'); });
-  $('ordDrop').addEventListener('dragleave', () => $('ordDrop').classList.remove('over'));
-  $('ordDrop').addEventListener('drop', (ev) => { ev.preventDefault(); $('ordDrop').classList.remove('over'); const f = ev.dataTransfer.files[0]; if (f) readOrders(f); });
-  $('ordPull').onclick = async () => { try { const r = await api('/orders/pull', { method: 'POST' }); successBadge(`${r.rows} rows updated from adsbox.biz`); loadOrdStatus(); } catch (e) { toast(e.message); } };
+      oCfg = await saveCfg();
+      const r = await api('/orders/test', { method: 'POST' });
+      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} row${r.rows === 1 ? '' : 's'} for yesterday and today.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday and today.';
+    } catch (e) { m.textContent = '✕ ' + e.message; }
+    finally { b.disabled = false; }
+  };
 
   // ---------- auto sync (owner only) ----------
   const ago = (t) => {
@@ -976,8 +984,8 @@
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' || k === 'cpr' }; renderDash();
   });
 
-  let dEntries = {}, dPages = {}, dKey = '', oData = { clients: {}, any: false }; const dOpen = new Set();
-  const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="10"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
+  let dEntries = {}, dPages = {}, dKey = ''; const dOpen = new Set();
+  const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="9"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
   async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
     // Sync status and "Spend not matched" follow the day you're looking at (today for longer periods).
@@ -1001,8 +1009,8 @@
     // 9) skeleton while a new period loads
     const skel = !samePeriod ? setTimeout(() => { $('dBody').innerHTML = skelRows(5); $('dFoot').innerHTML = ''; document.querySelectorAll('#tab-dashboard .summary .val').forEach((v) => v.classList.add('skel-v')); }, 120) : null;
     try {
-      const [d, rows, pg, od] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => []), api(`/dashboard/pages?from=${from}&to=${to}`).catch(() => ({})), api(`/orders/by-client?from=${from}&to=${to}`).catch(() => ({ clients: {}, any: false }))]);
-      dPages = pg || {}; oData = od || { clients: {}, any: false };
+      const [d, rows, pg] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => []), api(`/dashboard/pages?from=${from}&to=${to}`).catch(() => ({}))]);
+      dPages = pg || {};
       clearTimeout(skel); document.querySelectorAll('.skel-v').forEach((v) => v.classList.remove('skel-v'));
       dData = d; dEntries = {}; dKey = key;
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
@@ -1015,7 +1023,7 @@
         if (inc > 0.009) { const tr = document.querySelector(`#dBody tr.drow[data-cid="${c.id}"]`); if (tr) { tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash'); floatUp(tr.querySelector('td.tot b') || tr, '+' + money(inc), 'up'); } }
       });
     }
-    catch (e) { $('dBody').innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('dBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
   }
 
   // Page names under the client (hide raw Page ID numbers and the client's own name).
@@ -1106,16 +1114,6 @@
     }
     return html;
   }
-  // Orders (adsbox.biz): count, and boost spend ÷ orders.
-  const ordCell = (spend, n) => (n ? `<b>${Number(n).toLocaleString('en-US')}</b>${spend > 0 ? `<div class="hint">${money(spend / n)} / order</div>` : ''}` : '<span class="muted">–</span>');
-  function ordersBlock(c) {
-    const o = oData.clients[c.id]; if (!o || !o.orders) return '';
-    const pages = (dPages[c.id] || []).map((p) => ({ p, n: o.pages[p.pageId] || o.pages['name:' + String(p.page).toLowerCase().replace(/\s+/g, ' ').trim()] || 0 })).filter((x) => x.n);
-    const spend = (dData.clients.find((x) => x.id === c.id) || {}).spend || 0;
-    return `<div class="kgrp ord"><div class="kgrp-h"><span>📦 Orders <span class="hint">from adsbox.biz</span></span><b class="num">${o.orders.toLocaleString('en-US')}${spend ? ` · ${money(spend / o.orders)} / order` : ''}</b></div>
-      ${pages.length > 1 || (pages.length === 1 && pages[0].n !== o.orders) ? `<div class="psubs">${pages.map(({ p, n }) => `<div class="psub"><span class="psub-n">📄 ${pageLabel(p)}<span class="hint"> · spend ${money(p.spend)}</span></span><b class="num">${n} order${n === 1 ? '' : 's'}${p.spend ? ` · ${money(p.spend / n)}` : ''}</b></div>`).join('')}</div>` : ''}
-      ${o.newC || o.oldC ? `<div class="hint ordsplit">${o.newC} new customer${o.newC === 1 ? '' : 's'}${o.newC && spend ? ` (${money(spend / o.newC)} each)` : ''} · ${o.oldC} returning</div>` : ''}</div>`;
-  }
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
@@ -1144,7 +1142,7 @@
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="10"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${ordersBlock(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -1264,7 +1262,7 @@
     $('dTableTitle').textContent = 'Clients · ' + periodLabel() + (dTypeF ? (dTypeF === 'live' ? ' · Live only' : ' · Boost posts only') : '');
     const q = $('dSearch').value.trim().toLowerCase(), idle = !$('dShowIdle').checked; // all clients by default
     let list = dData.clients.filter((c) => !dTypeF || (dTypeF === 'live' ? hasL(c) : hasP(c))).map(viewOf)
-      .map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0, cprV: cpr(c.resSpend, c.results), orders: (oData.clients[c.id] || {}).orders || 0 }))
+      .map((c) => ({ ...c, perDay: c.days ? c.spend / c.days : 0, cprV: cpr(c.resSpend, c.results) }))
       .filter((c) => !c.archived || c.spend > 0)
       .filter((c) => idle || c.spend > 0)
       .filter((c) => !q || [c.name, ...c.pages].some((x) => x.toLowerCase().includes(q)));
@@ -1280,9 +1278,6 @@
     rollTo($('dPost'), money(t.post)); $('dPosts').textContent = `${t.posters} client${t.posters === 1 ? '' : 's'} boosted posts`;
     rollTo($('dActive'), String(t.active)); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
     rollTo($('dCpr'), tCpr == null ? '–' : cprMoney(tCpr));
-    { const ord = list.reduce((a, c) => a + ((oData.clients[c.id] || {}).orders || 0), 0);
-      $('dTable').classList.toggle('hasord', !!oData.any); $('dOrdTile').hidden = !oData.any;
-      rollTo($('dCpo'), ord && t.spend ? money(t.spend / ord) : '–'); $('dOrders').textContent = `${ord.toLocaleString('en-US')} order${ord === 1 ? '' : 's'} from adsbox.biz`; }
     $('dRes').textContent = t.res ? (t.type === 'result' ? `${Math.round(t.res).toLocaleString('en-US')} results (mixed types)` : resText(t.res, t.type)) : 'Sync from Meta to load results';
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
@@ -1299,11 +1294,10 @@
         <td class="r num multi" data-l="Days">${c.days || dash}</td>
         <td class="r num multi" data-l="Per day">${c.days ? money(c.perDay) : dash}</td>
         <td class="r num cprc" data-l="Post cost / result">${c.cprV != null ? `<b>${cprMoney(c.cprV)}</b><div class="hint">${esc(resText(c.results, c.resultType))}</div>` : dash}</td>
-        <td class="r num ordc" data-l="Orders">${ordCell(c.spend, (oData.clients[c.id] || {}).orders)}</td>
         <td class="r num tot" data-l="Total"><b>${money(c.spend)}</b>${c.spend && taxRate() ? `<div class="hint">+tax ${money(withTax(c.spend))}</div>` : ''}</td>
         <td class="actc">${open ? '' : `<button class="rbtn${c.telegram ? ' tg' : ''}" data-report="${c.id}" title="${c.telegram ? 'Preview and send to the client\u2019s Telegram group' : 'No Telegram group yet \u2014 you can copy the report'}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Report</button>`}</td></tr>${open ? detailRow(c) : ''}`;
-    }).join('') || `<tr><td colspan="10" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
-    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num cprc" data-l="Post cost / result">${tCpr != null ? `<b>${cprMoney(tCpr)}</b><div class="hint">${t.type === 'result' ? Math.round(t.res).toLocaleString('en-US') + ' results' : esc(resText(t.res, t.type))}</div>` : ''}</td><td class="r num ordc" data-l="Orders">${ordCell(t.spend, list.reduce((a, c) => a + ((oData.clients[c.id] || {}).orders || 0), 0))}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
+    }).join('') || `<tr><td colspan="9" class="empty-row">${dData.clients.length ? 'No client spend for this period.' : 'No clients yet. Add them in the Clients tab.'}</td></tr>`;
+    $('dFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="multi"></td><td class="multi"></td><td class="r num cprc" data-l="Post cost / result">${tCpr != null ? `<b>${cprMoney(tCpr)}</b><div class="hint">${t.type === 'result' ? Math.round(t.res).toLocaleString('en-US') + ' results' : esc(resText(t.res, t.type))}</div>` : ''}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${taxRate() ? `<div class="hint">+tax ${money(withTax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#dBody tr.drow').forEach((tr) => {
       const toggle = () => {
         const id = Number(tr.dataset.cid), opening = !dOpen.has(id);
@@ -1996,7 +1990,7 @@ Thank you for working with Ads Box!`,
       await loadDay();
       const h = location.hash.slice(1);
       if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
-      showTab(['clients', 'accounts', 'lives', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

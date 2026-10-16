@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=71">
+<link rel="stylesheet" href="/assets/app.css?v=72">
 </head>
 <body>
 <div class="wrap">
@@ -23,6 +23,7 @@
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
       <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
+      <button role="tab" data-tab="orders" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5"/><path d="M12 12v9"/></svg><span class="full">Orders</span><span class="short">Orders</span></button>
       <button role="tab" data-tab="payments" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h9l4 4V21l-2.5-1.5L14 21l-2.5-1.5L9 21l-3-1.5Z"/><path d="M9 9h6M9 13h6"/></svg><span class="full">Payments</span><span class="short">Pay</span></button>
       <button role="tab" data-tab="admin" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4 5.5v6c0 4.7 3.3 8.6 8 10 4.7-1.4 8-5.3 8-10v-6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span class="full">Admin</span><span class="short">Admin</span></button>
     </nav>
@@ -91,7 +92,6 @@
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 3h6l-1 7 4 3H6l4-3Z"/></svg>Boost post spend</span><span class="val num" id="dPost">$0.00</span><span class="sub" id="dPosts"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="dActive">0</span><span class="sub" id="dActiveSub"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Post cost per result</span><span class="val num" id="dCpr">–</span><span class="sub" id="dRes"></span></div>
-      <div id="dOrdTile" hidden><span class="lbl">Cost per order</span><span class="val num" id="dCpo">–</span><span class="sub" id="dOrders"></span></div>
     </div>
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
@@ -112,9 +112,9 @@
           <th class="r" data-sort="lives">Lives</th>
           <th class="r" data-sort="liveSpend">Live</th><th class="r" data-sort="postSpend">Post</th>
           <th class="r multi" data-sort="days">Days</th><th class="r multi" data-sort="perDay">Per day</th>
-          <th class="r" data-sort="cpr" title="Boost posts only: post spend ÷ results (engagements, messages…), the result Ads Manager counts for each campaign's goal">Post cost / result</th><th class="r ordc" data-sort="orders" title="Orders from adsbox.biz, and boost spend ÷ orders">Orders</th><th class="r" data-sort="spend">Total</th><th></th>
+          <th class="r" data-sort="cpr" title="Boost posts only: post spend ÷ results (engagements, messages…), the result Ads Manager counts for each campaign's goal">Post cost / result</th><th class="r" data-sort="spend">Total</th><th></th>
         </tr></thead>
-        <tbody id="dBody"><tr class="skel"><td colspan="10"><div class="sk" style="--w:78%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:64%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:88%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:70%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:58%"></div></td></tr></tbody><tfoot id="dFoot"></tfoot>
+        <tbody id="dBody"><tr class="skel"><td colspan="9"><div class="sk" style="--w:78%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:64%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:88%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:70%"></div></td></tr><tr class="skel"><td colspan="9"><div class="sk" style="--w:58%"></div></td></tr></tbody><tfoot id="dFoot"></tfoot>
       </table></div>
     </div>
     <div class="panel" id="unmatchedPanel" hidden>
@@ -217,6 +217,35 @@
   </section>
 
   <!-- PAYMENTS -->
+  <!-- ORDERS (adsbox.biz) -->
+  <section id="tab-orders" class="wrap" hidden>
+    <div class="dhead">
+      <div class="chead2"><div><h2>Orders</h2><div class="hint">Orders from adsbox.biz next to boost spend, for each client and Page: what one order costs.</div></div><span class="spacer"></span><button type="button" id="oSync" class="primary">Get latest orders</button><button type="button" id="oSetBtn">⚙ API settings</button></div>
+      <div class="chips" id="oChips" role="group" aria-label="Period">
+        <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button>
+      </div>
+    </div>
+    <div class="note" id="oNote" hidden></div>
+    <div class="summary" id="oSum">
+      <div class="hero"><span class="lbl">Cost per order</span><span class="val num" id="oCpo">–</span><span class="sub" id="oCpoSub"></span></div>
+      <div><span class="lbl">Orders</span><span class="val num" id="oOrders">0</span><span class="sub" id="oOrdersSub"></span></div>
+      <div><span class="lbl">Boost spend</span><span class="val num" id="oSpend">$0.00</span><span class="sub" id="oSpendSub"></span></div>
+      <div><span class="lbl">Cost per new customer</span><span class="val num" id="oCpn">–</span><span class="sub" id="oCpnSub"></span></div>
+    </div>
+    <div class="panel">
+      <div class="thead"><h2 id="oTitle">Clients</h2><div class="filters"><input type="search" id="oSearch" placeholder="Search client or Page" aria-label="Search clients"></div></div>
+      <div class="tablewrap"><table class="dtable otable" id="oTable">
+        <thead><tr><th data-os="name">Client</th><th class="r" data-os="spend">Spend</th><th class="r" data-os="orders">Orders</th><th class="r" data-os="cpo">Cost / order</th><th class="r" data-os="newC">New customers</th><th class="r" data-os="cpn">Cost / new</th></tr></thead>
+        <tbody id="oBody"></tbody><tfoot id="oFoot"></tfoot>
+      </table></div>
+    </div>
+    <div class="panel" id="oUnPanel" hidden>
+      <h2>Orders on Pages without a client</h2>
+      <div class="hint">These Pages have orders in adsbox.biz, but no client in Boost Desk uses them yet. Add the Page to a client (by name or Page ID) to include them.</div>
+      <div class="tablewrap"><table><thead><tr><th>Page</th><th>Page ID</th><th class="r">Orders</th></tr></thead><tbody id="oUnBody"></tbody></table></div>
+    </div>
+  </section>
+
   <section id="tab-payments" class="wrap" hidden>
     <div class="dhead">
       <div class="chead2"><div><h2>Payments</h2><div class="hint">Service fees for each client: the pay date, the price, and an invoice you can send to their Telegram group as a PDF.</div></div></div>
@@ -268,13 +297,6 @@
       <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
       <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The Admin table above then shows spend per team. Each person can be in one team.</div>
       <div class="teamgrid" id="teamGrid"></div>
-    </div>
-    <div class="panel ordup" id="ordPanel">
-      <div class="rowx"><h2>Orders from adsbox.biz</h2><span class="spacer"></span><button type="button" id="ordPull" hidden>Get from API now</button></div>
-      <div class="hint">Upload the orders export from adsbox.biz to see cost per order on the Dashboard. Only the number of orders per Facebook Page per day is saved; customer names, phones and addresses never leave your browser. The file needs an order date and a Page ID (or Page name) column.</div>
-      <div id="ordStatus" class="hint"></div>
-      <label class="drop" id="ordDrop"><input type="file" id="ordFile" accept=".csv,text/csv" hidden><b>Choose the CSV file</b><br><span class="hint">or drop it here</span></label>
-      <div id="ordPrev" class="prev"></div>
     </div>
     <div class="panel" id="autoPanel" hidden>
       <div class="rowx"><h2>Accounts &amp; auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
@@ -395,6 +417,16 @@
     <div class="dlg-foot"><button type="button" id="arRun" title="Send today's reports right now">Send now</button><span class="spacer"></span><button type="button" id="arSave" class="primary">Save</button></div>
   </form>
 </dialog>
+<dialog id="oDlg" class="dlg" aria-labelledby="oDlgTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="oDlgTitle">adsbox.biz API</h2><div class="hint">Paste the API address and key from adsbox.biz. The key is saved encrypted and is never shown again.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <label class="fld"><span>API address</span><input type="url" id="oUrl" placeholder="https://adsbox.biz/api/orders/summary" autocomplete="off"></label>
+    <label class="fld"><span>API key</span><input type="password" id="oKey" placeholder="Paste the key" autocomplete="new-password"></label>
+    <div class="hint" id="oKeyInfo"></div>
+    <div class="note" id="oTestMsg" hidden></div>
+    <div class="dlg-foot"><button type="button" class="ghost" id="oKeyDel">Remove key</button><span class="spacer"></span><button type="button" id="oTest">Test connection</button><button type="button" class="primary" id="oSave">Save</button></div>
+  </form>
+</dialog>
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -407,6 +439,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=71"></script>
+<script src="/assets/app.js?v=72"></script>
 </body>
 </html>

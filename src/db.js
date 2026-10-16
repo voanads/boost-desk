@@ -94,6 +94,18 @@ async function init() {
       fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (owner, campaign_id)
     );
+    CREATE TABLE IF NOT EXISTS page_orders (        -- order counts per Facebook Page per day (from adsbox.biz); no customer data
+      day DATE NOT NULL,
+      page_id TEXT NOT NULL,
+      page_name TEXT NOT NULL DEFAULT '',
+      orders INT NOT NULL DEFAULT 0,
+      new_c INT NOT NULL DEFAULT 0,
+      old_c INT NOT NULL DEFAULT 0,
+      total NUMERIC NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (day, page_id)
+    );
   `);
   await migrateToWorkspaces();
 }

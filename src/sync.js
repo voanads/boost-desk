@@ -29,9 +29,10 @@ const LIVE_MAX_MINUTES = Number(process.env.LIVE_MAX_HOURS || 12) * 60;
 const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
 function isPostFor(client, it) {
   if (client.type === 'post') return true;
-  if (client.type === 'live') return false;
-  if (typeof it.runMinutes === 'number') return it.runMinutes > LIVE_MAX_MINUTES; // a 2–3 hour schedule = live
+  // The schedule decides, even for "Live" clients: a 2–3 hour boost is a live, a boost of days is a post.
+  if (typeof it.runMinutes === 'number') return it.runMinutes > LIVE_MAX_MINUTES;
   if (it.runMinutes === null) return it.boost !== 'live'; // no end date: post, unless the boosted video was a Facebook live
+  if (client.type === 'live') return false; // older rows without a schedule
   if (it.boost === 'post' || it.boost === 'live') return it.boost === 'post';
   if (it.creative && NON_VIDEO.test(it.creative)) return true;
   return isAutoPost(it.name);
@@ -203,6 +204,8 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     touched.add(t.clientId);
     const c = clients.find((x) => x.id === t.clientId);
     const e = await db.getEntry(day, t.clientId);
+    // A "Live" client that also boosted a post (a boost of a day or more): it does both now.
+    if (t.post && c && c.type === 'live') { await db.updateClient(user.fb_id, c.id, { type: 'both' }); c.type = 'both'; for (const x of clients) if (x.id === c.id) x.type = 'both'; }
     if (t.slots.length) {
       const lives = {};
       t.slots.forEach((sl, i) => {

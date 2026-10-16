@@ -1201,3 +1201,21 @@ body{font-size:15.5px;letter-spacing:0}
 .todo-it.tip{border-left-color:var(--brand);background:color-mix(in srgb,var(--brand) 4%,var(--surface))}
 .todo-it.tip.warn{border-left-color:var(--warn)}
 .todo-it.good{border-left-color:var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--surface))}
+
+/* opened client (one day): lives first, then posts split by Page */
+.kgrp{display:flex;flex-direction:column;gap:6px}
+.kgrp+.kgrp{margin-top:8px}
+.kgrp-h{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;font-size:.92rem;padding:2px 4px}
+.kgrp-h .hint{font-weight:600;margin-left:4px}
+.kgrp.live .kgrp-h{color:var(--live)}
+.kgrp.post .kgrp-h{color:var(--brand)}
+.kgrp-h b{color:var(--ink)}
+.kgrp.live .dl{background:color-mix(in srgb,var(--live) 6%,var(--surface))!important;border-left:3px solid var(--live)!important}
+.kgrp.post .dl{background:color-mix(in srgb,var(--brand) 6%,var(--surface))!important;border-left:3px solid var(--brand)!important}
+.dl-sub{grid-column:1 / -1;font-size:.84rem;font-weight:500;color:var(--ink);display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:-2px}
+.psubs{display:flex;flex-direction:column;margin:-2px 0 0 14px;border-left:2px solid color-mix(in srgb,var(--brand) 30%,var(--line));padding-left:10px}
+.psub{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px dashed var(--line);font-size:.9rem}
+.psub:last-child{border-bottom:none}
+.psub-n{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0}
+.psub b{white-space:nowrap}
+.dl-sub .pgname,.psub .pgname{font-size:.74rem;padding:1px 8px}

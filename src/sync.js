@@ -30,7 +30,8 @@ const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSI
 function isPostFor(client, it) {
   if (client.type === 'post') return true;
   if (client.type === 'live') return false;
-  if (it.runMinutes !== undefined) return it.runMinutes === null || it.runMinutes > LIVE_MAX_MINUTES;
+  if (typeof it.runMinutes === 'number') return it.runMinutes > LIVE_MAX_MINUTES; // a 2–3 hour schedule = live
+  if (it.runMinutes === null) return it.boost !== 'live'; // no end date: post, unless the boosted video was a Facebook live
   if (it.boost === 'post' || it.boost === 'live') return it.boost === 'post';
   if (it.creative && NON_VIDEO.test(it.creative)) return true;
   return isAutoPost(it.name);
@@ -564,11 +565,15 @@ async function pageSpend(owner, from, to) {
     const name = r.page || (r.pageId && names[r.pageId]) || '';
     const page = name || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
     const m = (out[c.id] = out[c.id] || {});
-    const p = (m[page] = m[page] || { page, pageId: r.pageId || '', named: !!name, live: 0, post: 0, spend: 0, campaigns: 0 });
+    const p = (m[page] = m[page] || { page, pageId: r.pageId || '', named: !!name, live: 0, post: 0, spend: 0, campaigns: 0, list: {} });
     if (toPost) p.post = round2(p.post + v); else p.live = round2(p.live + v);
     p.spend = round2(p.spend + v); p.campaigns++;
+    // Each campaign behind the Page, so the app can show what was counted as live or post and why.
+    const key = r.campaignId || r.name;
+    const it = (p.list[key] = p.list[key] || { id: r.campaignId || '', name: r.name || '', live: !toPost, spend: 0, run: r.runMinutes === undefined ? 'unknown' : r.runMinutes, start: r.start ?? null, days: 0 });
+    it.spend = round2(it.spend + v); it.days++;
   }
-  for (const id of Object.keys(out)) out[id] = Object.values(out[id]).sort((a, b) => b.spend - a.spend);
+  for (const id of Object.keys(out)) out[id] = Object.values(out[id]).map((p) => ({ ...p, list: Object.values(p.list).sort((a, b) => b.spend - a.spend) })).sort((a, b) => b.spend - a.spend);
   return out;
 }
 

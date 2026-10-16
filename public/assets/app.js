@@ -954,12 +954,12 @@
     const l = (dPages[c.id] || []).map((p) => (dTypeF === 'live' ? { ...p, spend: p.live, post: 0 } : dTypeF === 'post' ? { ...p, spend: p.post, live: 0 } : p)).filter((p) => p.spend > 0.0049).sort((a, b) => b.spend - a.spend);
     return l.length > 1 ? l : null;
   };
-  const pageLine = (c) => { const l = pageSplit(c); if (!l) return ''; const top = l.slice(0, 3).map((p) => `${esc(p.page)} <b>${money(p.spend)}</b>`); return top.join(' · ') + (l.length > 3 ? ` · +${l.length - 3} more` : ''); };
+  const pageLine = (c) => { const l = pageSplit(c); if (!l) return ''; const top = l.slice(0, 3).map((p) => `${pageLabel(p)} <b>${money(p.spend)}</b>`); return top.join(' · ') + (l.length > 3 ? ` · +${l.length - 3} more` : ''); };
   function pageBlock(c) {
     const l = pageSplit(c); if (!l) return '';
     const tot = l.reduce((a, p) => a + p.spend, 0) || 1;
     return `<div class="pgsplit"><div class="pgsplit-h">Spend by Page</div>${l.map((p, i) => `<div class="pgrow" style="--i:${i}">
-      <div class="pgrow-n"><div class="pgrow-t"><b>${esc(p.page)}</b>${p.pageId ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="${p.named ? esc(p.page) : ''}">${p.named ? 'Rename' : 'Add name'}</button>` : ''}</div><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}</span></div>
+      <div class="pgrow-n"><div class="pgrow-t"><b>${pageLabel(p)}</b>${p.pageId ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="${p.named ? esc(p.page) : ''}">${p.named ? 'Rename' : 'Add name'}</button>` : ''}</div><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}</span></div>
       <div class="pgbar"><i style="width:${Math.max(2, p.spend / tot * 100).toFixed(1)}%"></i></div>
       <div class="pgrow-v num"><b>${money(p.spend)}</b><span class="hint">${Math.round(p.spend / tot * 100)}%</span></div></div>`).join('')}</div>`;
   }
@@ -995,19 +995,46 @@
   function dayParts(c, e) {
     const out = [];
     if (hasL(c) && dTypeF !== 'post') Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)))
-      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ key: k, kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: c.type === 'both' ? l.ids || [] : [] }); });
+      .forEach(([k, l]) => { if (l && Number(l.spend) > 0) out.push({ key: k, kind: 'live', label: 'Live ' + k.slice(1), time: l.time || '', n: l.campaigns || 0, spend: Number(l.spend), results: l.results, resultType: l.resultType, ids: l.ids || [] }); });
     if (dTypeF === 'live') return out;
-    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ key: 'post', kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: c.type === 'both' ? e.post.ids || [] : [] });
+    if (hasP(c) && Number((e.post || {}).spend) > 0) out.push({ key: 'post', kind: 'post', label: 'Boost post', time: '', n: e.post.campaigns || 0, spend: Number(e.post.spend), results: e.post.results, resultType: e.post.resultType, ids: e.post.ids || [] });
     return out;
   }
   // Unticked lines per client + day: those are left out of the report. Everything starts ticked.
   const dOff = {};
   const offSet = (cid, day) => dOff[cid + '|' + day] || (dOff[cid + '|' + day] = new Set());
-  const partLine = (p, pick) => `<div class="dl ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}" data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}><span class="dl-n">${pick ? '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>' : ''}<b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span></div>`;
+  const partLine = (p, pick) => `<div class="dl ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}" data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}><span class="dl-n">${pick ? '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>' : ''}<b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span>${p.sub ? `<div class="dl-sub">${p.sub}</div>` : ''}</div>`;
   function pickLabel(c) {
     if (dMode !== 'day') return '';
     const parts = dayParts(c, (dEntries[c.id] || {})[dDate] || {}), off = offSet(c.id, dDate), on = parts.filter((p) => !off.has(p.key));
     return parts.length < 2 || on.length === parts.length ? '' : on.length ? ` · ${on.length} of ${parts.length} ticked · ${money(on.reduce((a, p) => a + p.spend, 0))}` : ' · nothing ticked';
+  }
+  // What Meta says about each campaign (Page, scheduled run time), to show why it counts as live or post.
+  const runText = (m) => (m === 'unknown' || m === undefined ? '' : m === null ? 'no end date' : m < 60 ? `${m} min boost` : m < 1440 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} boost` : `${Math.round(m / 1440)}-day boost`);
+  const pageLabel = (p) => (p.named || !p.pageId ? esc(p.page) : `Page …${esc(p.pageId.slice(-6))}`);
+  const nameBtn = (p) => (p.pageId && !p.named ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="">Add name</button>` : '');
+  function campMap(c) { const m = {}; for (const p of dPages[c.id] || []) for (const x of p.list || []) if (x.id) m[x.id] = { ...x, p }; return m; }
+  function runSummary(list) {
+    const runs = [...new Set(list.map((x) => runText(x.run)).filter(Boolean))];
+    return runs.length === 1 ? runs[0] : runs.length ? runs.slice(0, 2).join(' / ') : '';
+  }
+  // One day, grouped: all lives first (with their Page and boost length), then posts split by Page.
+  function dayGroups(c, parts, pick) {
+    const cm = campMap(c), lives = parts.filter((p) => p.kind === 'live'), posts = parts.filter((p) => p.kind === 'post');
+    for (const p of lives) {
+      const xs = p.ids.map((id) => cm[id]).filter(Boolean), pages = [...new Map(xs.map((x) => [x.p.page, x.p])).values()];
+      p.sub = xs.length ? `${pages.map((pg) => `📄 ${pageLabel(pg)} ${nameBtn(pg)}`).join(' · ')}${runSummary(xs) ? ` <span class="hint">· ${esc(runSummary(xs))}</span>` : ''}` : '';
+      p.title = xs.map((x) => x.name).join('\n');
+    }
+    let html = '';
+    if (lives.length) html += `<div class="kgrp live"><div class="kgrp-h"><span>🔴 Lives <span class="hint">${lives.length}</span></span><b class="num">${money(lives.reduce((a, p) => a + p.spend, 0))}</b></div>${lives.map((p) => partLine(p, pick)).join('')}</div>`;
+    if (posts.length) {
+      const pp = posts[0], pages = (dPages[c.id] || []).filter((p) => p.post > 0.0049).sort((a, b) => b.post - a.post);
+      pp.label = 'All posts'; pp.sub = '';
+      const rows = pages.map((pg) => { const xs = (pg.list || []).filter((x) => !x.live); return `<div class="psub"><span class="psub-n">📄 ${pageLabel(pg)} ${nameBtn(pg)}<span class="hint"> · ${xs.length} campaign${xs.length === 1 ? '' : 's'}${runSummary(xs) ? ' · ' + esc(runSummary(xs)) : ''}</span></span><b class="num">${money(pg.post)}</b></div>`; }).join('');
+      html += `<div class="kgrp post"><div class="kgrp-h"><span>📌 Boost posts</span><b class="num">${money(pp.spend)}</b></div>${partLine(pp, pick)}${pages.length ? `<div class="psubs">${rows}</div>` : ''}</div>`;
+    }
+    return html;
   }
   function detailRow(c) {
     const days = dEntries[c.id] || {};
@@ -1016,7 +1043,7 @@
       const e = days[dDate] || {}, parts = dayParts(c, e);
       const pick = parts.length > 1 ? { cid: c.id, off: offSet(c.id, dDate) } : null; // ticks only make sense with 2+ lines
       if (pick) for (const k of [...pick.off]) if (!parts.some((p) => p.key === k)) pick.off.delete(k);
-      body = (parts.length ? parts.map((p) => partLine(p, pick)).join('') : '<div class="muted">No boost spend on this day.</div>')
+      body = (parts.length ? dayGroups(c, parts, pick) : '<div class="muted">No boost spend on this day.</div>')
         + (e.note ? `<div class="dnote">📝 ${esc(e.note)}</div>` : '')
         + (e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
     } else if (dMode === 'year') {
@@ -1037,7 +1064,7 @@
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------

@@ -1197,3 +1197,7 @@ body{font-size:15.5px;letter-spacing:0}
 .todo-done{padding:10px 4px;color:var(--muted)}
 @media (prefers-reduced-motion:no-preference){.todo-it{animation:rowIn .45s var(--smooth) backwards;animation-delay:calc(var(--i,0) * 50ms)}}
 @media (max-width:760px){.todo-it{flex-wrap:wrap;align-items:flex-start}.todo-t{flex:1 1 calc(100% - 52px)}.todo-it button{margin-left:40px}}
+.todo-sub{font-weight:600;color:var(--muted);font-size:.86rem;margin:6px 2px 0}
+.todo-it.tip{border-left-color:var(--brand);background:color-mix(in srgb,var(--brand) 4%,var(--surface))}
+.todo-it.tip.warn{border-left-color:var(--warn)}
+.todo-it.good{border-left-color:var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--surface))}

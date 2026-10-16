@@ -1,5 +1,5 @@
-// Today's to-do for a PM: reports to send, service invoices due or unpaid, clients without a group,
-// ad accounts that can't spend, and a Facebook login about to expire.
+// Today's to-do for a PM — client work only: reports to send, clients without a group, service invoices
+// due or unpaid — plus suggestions about clients from their recent spend.
 const db = require('./db');
 const sync = require('./sync');
 
@@ -46,20 +46,56 @@ async function todo(user) {
     if (days >= 3) items.push({ kind: 'unpaid', level: days > 10 ? 'bad' : 'warn', clientId: c.id, title: `${c.name} hasn't paid invoice ${v.number}`, detail: `${money(v.total)} · sent ${days} days ago`, action: 'payments' });
   }
 
-  // Ad accounts that can't spend, and a Facebook login about to expire.
-  for (const a of await db.listAccounts(owner)) {
-    const i = a.info || {};
-    if (!a.enabled || !i.statusCode || i.statusCode === 1) continue;
-    items.push({ kind: 'account', level: 'bad', title: `Ad account ${a.name || a.id}: ${i.status || 'not active'}`, detail: i.disableReason ? `Reason: ${i.disableReason}` : 'Check it in Ads Manager', action: 'accounts' });
-  }
-  if (user.token_expires) {
-    const d = Math.ceil((new Date(user.token_expires) - Date.now()) / 864e5);
-    if (d <= 7) items.push({ kind: 'login', level: d <= 0 ? 'bad' : 'warn', title: d <= 0 ? 'Your Facebook login has expired' : `Your Facebook login expires in ${d} day${d === 1 ? '' : 's'}`, detail: 'Log out and log in again to keep syncing', action: 'logout' });
-  }
-
   const order = { bad: 0, warn: 1, todo: 2 };
   items.sort((a, b) => order[a.level] - order[b.level]);
-  return { today, items };
+  return { today, items, tips: await suggestions(owner, clients, today) };
 }
+
+// Suggestions about clients, from the last two weeks of spend: who usually boosts but hasn't today,
+// who went quiet, who spent far more than usual, whose cost per result moved, and the best recent lives.
+async function suggestions(owner, clients, today) {
+  const from = sync.addDays(today, -14), yest = sync.addDays(today, -1);
+  const [past, now] = await Promise.all([sync.dashboard(owner, from, yest), sync.dashboard(owner, today, today)]);
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: require('./config').tz, hour: '2-digit', hour12: false }).format(new Date()));
+  const nice = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const tips = [];
+  for (const c of clients) {
+    const p = past.clients.find((x) => x.id === c.id), t = now.clients.find((x) => x.id === c.id);
+    if (!p) continue;
+    const daily = p.daily || {}, todaySpend = (t && t.spend) || 0;
+    const last7 = Object.keys(daily).filter((d) => d >= sync.addDays(today, -7) && daily[d] > 0).length;
+    const activeDays = Object.keys(daily).filter((d) => daily[d] > 0).sort();
+    const avg = activeDays.length ? activeDays.reduce((s, d) => s + daily[d], 0) / activeDays.length : 0;
+    const lastDay = activeDays[activeDays.length - 1];
+    if (!todaySpend && last7 >= 5 && hour >= 14) {
+      tips.push({ kind: 'missing', level: 'warn', clientId: c.id, title: `${c.name} usually boosts every day, but nothing today`, detail: `Boosted ${last7} of the last 7 days · ask if they want a live or post today`, action: 'client' });
+    } else if (!todaySpend && activeDays.length >= 4 && lastDay && lastDay < sync.addDays(today, -2)) {
+      const gap = Math.round((Date.parse(today) - Date.parse(lastDay)) / 864e5);
+      tips.push({ kind: 'quiet', level: 'warn', clientId: c.id, title: `${c.name} hasn't boosted for ${gap} days`, detail: `Last boost ${nice(lastDay)} · ${activeDays.length} boost days in the 2 weeks before · follow up before they go quiet`, action: 'client' });
+    }
+    if (todaySpend >= 20 && avg > 0 && todaySpend >= avg * 2) {
+      tips.push({ kind: 'high', level: 'warn', clientId: c.id, title: `${c.name} spent ${(todaySpend / avg).toFixed(1)}× their usual today`, detail: `${money(todaySpend)} today vs about ${money(avg)} on a normal boost day · check the budgets are right`, action: 'client' });
+    }
+    // Post cost per result today vs the last two weeks (posts only, like the Dashboard).
+    if (t && t.results > 0 && t.resSpend > 0 && p.results > 0 && p.resSpend > 0) {
+      const cNow = t.resSpend / t.results, cPast = p.resSpend / p.results, ch = Math.round((cNow - cPast) / cPast * 100);
+      const what = t.resultType || 'result';
+      if (ch >= 50) tips.push({ kind: 'cpr-up', level: 'warn', clientId: c.id, title: `${c.name}'s cost per ${what} is up ${ch}% today`, detail: `${money3(cNow)} today vs ${money3(cPast)} over the last 2 weeks · try a new post or audience`, action: 'client' });
+      else if (ch <= -30) tips.push({ kind: 'cpr-down', level: 'good', clientId: c.id, title: `${c.name}'s posts are doing better today`, detail: `Cost per ${what} ${money3(cNow)} vs ${money3(cPast)} usually (${-ch}% cheaper) · good post to boost more`, action: 'client' });
+    }
+  }
+  // Best lives of the last 7 days (by comments): worth reusing how they were boosted.
+  try {
+    const lv = (await require('./lives').listLives(owner, sync.addDays(today, -7), yest)).filter((l) => l.comments > 0 && clients.some((c) => c.id === l.clientId));
+    const seen = new Set();
+    for (const l of lv) {
+      if (seen.has(l.clientId) || seen.size >= 2) continue; seen.add(l.clientId);
+      tips.push({ kind: 'best', level: 'good', clientId: l.clientId, title: `${l.client}'s best live this week: ${nice(l.day)}${l.time ? ' at ' + l.time : ''}`, detail: `${l.comments.toLocaleString('en-US')} comments for ${money(l.spend)} · reuse that boost setup and time`, action: 'lives' });
+    }
+  } catch (_) { /* best lives are a nice-to-have */ }
+  const order = { warn: 0, good: 1 };
+  return tips.sort((a, b) => order[a.level] - order[b.level]).slice(0, 8);
+}
+const money3 = (n) => '$' + (Number(n) || 0).toFixed(3);
 
 module.exports = { todo };

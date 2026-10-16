@@ -617,26 +617,27 @@
   loadAr();
 
   // ---------- today's to-do (Dashboard) ----------
-  const TODO_IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', account: '⚠️', login: '🔑' };
+  const TODO_IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳' };
   let todoHidden = false; try { todoHidden = localStorage.getItem('bd-todo') === 'hide'; } catch (_) {}
   async function loadTodo() {
     let d; try { d = await api('/todo'); } catch (_) { return; }
-    const items = d.items, panel = $('todoPanel');
+    const items = d.items, tips = d.tips || [], all = [...items, ...tips], panel = $('todoPanel');
     panel.hidden = false;
     $('todoCount').textContent = items.length || '✓';
     $('todoCount').classList.toggle('done', !items.length);
     $('todoToggle').textContent = todoHidden ? 'Show' : 'Hide'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
     $('todoList').hidden = todoHidden;
-    const btn = { report: 'Send report', nogroup: 'Pick group', invoice: 'Open Payments', unpaid: 'Open Payments', account: 'Open accounts', login: 'Log in again' };
-    $('todoList').innerHTML = items.length ? items.map((it, i) => `<div class="todo-it ${it.level}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${TODO_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'Open'}</button></div>`).join('')
-      : '<div class="todo-done">🎉 All done for today. Nothing waiting.</div>';
+    const btn = { report: 'Send report', nogroup: 'Pick group', invoice: 'Open Payments', unpaid: 'Open Payments', missing: 'Open client', quiet: 'Open client', high: 'Open client', 'cpr-up': 'Open client', 'cpr-down': 'Open client', best: 'Live videos' };
+    const IC = { ...TODO_IC, missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+    const row = (it, i) => `<div class="todo-it ${it.level}${i >= items.length ? ' tip' : ''}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'Open'}</button></div>`;
+    $('todoList').innerHTML = (items.length ? items.map(row).join('') : '<div class="todo-done">🎉 All client work done for today.</div>')
+      + (tips.length ? `<div class="todo-sub">💡 Suggestions</div>` + tips.map((t, j) => row(t, items.length + j)).join('') : '');
     $('todoList').querySelectorAll('[data-todo]').forEach((b) => b.onclick = () => {
-      const it = items[Number(b.dataset.todo)], c = clients.find((x) => x.id === it.clientId);
+      const it = all[Number(b.dataset.todo)], c = clients.find((x) => x.id === it.clientId);
       if (it.action === 'report' && c) openReportDlg({ kind: 'client', cid: c.id, from: d.today, to: d.today, label: nice(d.today) });
       else if (it.action === 'client' && c) { showTab('clients'); openClientDlg(c); }
       else if (it.action === 'payments') showTab('payments');
-      else if (it.action === 'accounts') showTab('accounts');
-      else if (it.action === 'logout') $('logoutBtn').click();
+      else if (it.action === 'lives') showTab('lives');
     });
   }
   $('todoToggle').onclick = () => { todoHidden = !todoHidden; try { localStorage.setItem('bd-todo', todoHidden ? 'hide' : 'show'); } catch (_) {} loadTodo(); };

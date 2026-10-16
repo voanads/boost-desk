@@ -22,10 +22,10 @@ async function todo(user) {
     const e = entries[c.id] || {};
     const spend = round2((hasLive(c) ? Object.values(e.lives || {}).reduce((s, l) => s + (Number(l && l.spend) || 0), 0) : 0) + (hasPost(c) ? Number((e.post || {}).spend) || 0 : 0));
     if (!(spend > 0) || e.reportSent) continue;
-    if (!c.telegram) items.push({ kind: 'nogroup', level: 'warn', clientId: c.id, title: `${c.name} has spend today but no Telegram group`, detail: `${money(spend)} today · pick a group so the report can be sent`, action: 'client' });
+    if (!c.telegram) items.push({ kind: 'nogroup', level: 'warn', clientId: c.id, title: `${c.name} មានការចំណាយថ្ងៃនេះ ប៉ុន្តែមិនទាន់មានគ្រុប Telegram`, detail: `${money(spend)} ថ្ងៃនេះ · សូមជ្រើសរើសគ្រុប ដើម្បីអាចផ្ញើរបាយការណ៍បាន`, action: 'client' });
     else {
-      const autoNote = auto.on && !(auto.skip || []).includes(c.id) ? ` · auto report sends at ${auto.time}` : '';
-      items.push({ kind: 'report', level: 'todo', clientId: c.id, title: `Send ${c.name}'s report`, detail: `${money(spend)} today${autoNote}`, action: 'report' });
+      const autoNote = auto.on && !(auto.skip || []).includes(c.id) ? ` · របាយការណ៍ស្វ័យប្រវត្តិនឹងផ្ញើនៅម៉ោង ${auto.time}` : '';
+      items.push({ kind: 'report', level: 'todo', clientId: c.id, title: `ផ្ញើរបាយការណ៍របស់ ${c.name}`, detail: `${money(spend)} ថ្ងៃនេះ${autoNote}`, action: 'report' });
     }
   }
 
@@ -37,13 +37,13 @@ async function todo(user) {
     const due = `${ym}-${String(Math.min(sv.day || 1, last)).padStart(2, '0')}`;
     const days = Math.round((Date.parse(due) - Date.parse(today)) / 864e5);
     const thisMonth = invs.some((v) => v.clientId === c.id && v.date.slice(0, 7) === ym);
-    if (!thisMonth && days <= 3) items.push({ kind: 'invoice', level: days < 0 ? 'bad' : 'todo', clientId: c.id, title: `${days < 0 ? 'Overdue' : days === 0 ? 'Due today' : `Due in ${days} day${days === 1 ? '' : 's'}`}: ${c.name}'s service fee`, detail: `${money(sv.price)} · no invoice yet this month`, action: 'payments' });
+    if (!thisMonth && days <= 3) items.push({ kind: 'invoice', level: days < 0 ? 'bad' : 'todo', clientId: c.id, title: `${days < 0 ? 'ហួសកំណត់' : days === 0 ? 'ដល់ថ្ងៃបង់ថ្ងៃនេះ' : `នៅសល់ ${days} ថ្ងៃ`}៖ ថ្លៃសេវារបស់ ${c.name}`, detail: `${money(sv.price)} · មិនទាន់មានវិក្កយបត្រសម្រាប់ខែនេះ`, action: 'payments' });
   }
   for (const v of invs) {
     if (!v.sentAt || v.paidAt) continue;
     const c = clients.find((x) => x.id === v.clientId); if (!c) continue;
     const days = Math.round((Date.parse(today) - Date.parse(v.date)) / 864e5);
-    if (days >= 3) items.push({ kind: 'unpaid', level: days > 10 ? 'bad' : 'warn', clientId: c.id, title: `${c.name} hasn't paid invoice ${v.number}`, detail: `${money(v.total)} · sent ${days} days ago`, action: 'payments' });
+    if (days >= 3) items.push({ kind: 'unpaid', level: days > 10 ? 'bad' : 'warn', clientId: c.id, title: `${c.name} មិនទាន់បង់វិក្កយបត្រ ${v.number}`, detail: `${money(v.total)} · បានផ្ញើ ${days} ថ្ងៃមុន`, action: 'payments' });
   }
 
   const order = { bad: 0, warn: 1, todo: 2 };
@@ -57,7 +57,7 @@ async function suggestions(owner, clients, today) {
   const from = sync.addDays(today, -14), yest = sync.addDays(today, -1);
   const [past, now] = await Promise.all([sync.dashboard(owner, from, yest), sync.dashboard(owner, today, today)]);
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: require('./config').tz, hour: '2-digit', hour12: false }).format(new Date()));
-  const nice = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const nice = (d) => new Date(d + 'T12:00:00Z').toLocaleDateString('km-KH', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   const tips = [];
   for (const c of clients) {
     const p = past.clients.find((x) => x.id === c.id), t = now.clients.find((x) => x.id === c.id);
@@ -68,20 +68,20 @@ async function suggestions(owner, clients, today) {
     const avg = activeDays.length ? activeDays.reduce((s, d) => s + daily[d], 0) / activeDays.length : 0;
     const lastDay = activeDays[activeDays.length - 1];
     if (!todaySpend && last7 >= 5 && hour >= 14) {
-      tips.push({ kind: 'missing', level: 'warn', clientId: c.id, title: `${c.name} usually boosts every day, but nothing today`, detail: `Boosted ${last7} of the last 7 days · ask if they want a live or post today`, action: 'client' });
+      tips.push({ kind: 'missing', level: 'warn', clientId: c.id, title: `${c.name} ធម្មតា Boost រាល់ថ្ងៃ ប៉ុន្តែថ្ងៃនេះមិនទាន់មាន`, detail: `បាន Boost ${last7} ថ្ងៃ ក្នុង 7 ថ្ងៃចុងក្រោយ · សួរអតិថិជនថា ចង់ Live ឬ Boost Post ថ្ងៃនេះទេ`, action: 'client' });
     } else if (!todaySpend && activeDays.length >= 4 && lastDay && lastDay < sync.addDays(today, -2)) {
       const gap = Math.round((Date.parse(today) - Date.parse(lastDay)) / 864e5);
-      tips.push({ kind: 'quiet', level: 'warn', clientId: c.id, title: `${c.name} hasn't boosted for ${gap} days`, detail: `Last boost ${nice(lastDay)} · ${activeDays.length} boost days in the 2 weeks before · follow up before they go quiet`, action: 'client' });
+      tips.push({ kind: 'quiet', level: 'warn', clientId: c.id, title: `${c.name} មិនបាន Boost ${gap} ថ្ងៃហើយ`, detail: `Boost ចុងក្រោយ ${nice(lastDay)} · Boost ${activeDays.length} ថ្ងៃ ក្នុង 2 សប្តាហ៍មុន · សូមទាក់ទងតាមដានអតិថិជន`, action: 'client' });
     }
     if (todaySpend >= 20 && avg > 0 && todaySpend >= avg * 2) {
-      tips.push({ kind: 'high', level: 'warn', clientId: c.id, title: `${c.name} spent ${(todaySpend / avg).toFixed(1)}× their usual today`, detail: `${money(todaySpend)} today vs about ${money(avg)} on a normal boost day · check the budgets are right`, action: 'client' });
+      tips.push({ kind: 'high', level: 'warn', clientId: c.id, title: `${c.name} ចំណាយថ្ងៃនេះ ${(todaySpend / avg).toFixed(1)}× ច្រើនជាងធម្មតា`, detail: `${money(todaySpend)} ថ្ងៃនេះ ធៀបនឹងប្រហែល ${money(avg)} នៅថ្ងៃ Boost ធម្មតា · សូមពិនិត្យថវិកាឡើងវិញ`, action: 'client' });
     }
     // Post cost per result today vs the last two weeks (posts only, like the Dashboard).
     if (t && t.results > 0 && t.resSpend > 0 && p.results > 0 && p.resSpend > 0) {
       const cNow = t.resSpend / t.results, cPast = p.resSpend / p.results, ch = Math.round((cNow - cPast) / cPast * 100);
       const what = t.resultType || 'result';
-      if (ch >= 50) tips.push({ kind: 'cpr-up', level: 'warn', clientId: c.id, title: `${c.name}'s cost per ${what} is up ${ch}% today`, detail: `${money3(cNow)} today vs ${money3(cPast)} over the last 2 weeks · try a new post or audience`, action: 'client' });
-      else if (ch <= -30) tips.push({ kind: 'cpr-down', level: 'good', clientId: c.id, title: `${c.name}'s posts are doing better today`, detail: `Cost per ${what} ${money3(cNow)} vs ${money3(cPast)} usually (${-ch}% cheaper) · good post to boost more`, action: 'client' });
+      if (ch >= 50) tips.push({ kind: 'cpr-up', level: 'warn', clientId: c.id, title: `តម្លៃក្នុងមួយលទ្ធផលរបស់ ${c.name} ឡើង ${ch}% ថ្ងៃនេះ`, detail: `${money3(cNow)} ថ្ងៃនេះ ធៀបនឹង ${money3(cPast)} ក្នុង 2 សប្តាហ៍មុន · សាកល្បង Post ឬ Audience ថ្មី`, action: 'client' });
+      else if (ch <= -30) tips.push({ kind: 'cpr-down', level: 'good', clientId: c.id, title: `Post របស់ ${c.name} ដំណើរការល្អជាងធម្មតាថ្ងៃនេះ`, detail: `តម្លៃក្នុងមួយលទ្ធផល ${money3(cNow)} ធៀបនឹង ${money3(cPast)} ធម្មតា (ថោកជាង ${-ch}%) · Post ល្អ គួរ Boost បន្ថែម`, action: 'client' });
     }
   }
   // Best lives of the last 7 days (by comments): worth reusing how they were boosted.
@@ -90,7 +90,7 @@ async function suggestions(owner, clients, today) {
     const seen = new Set();
     for (const l of lv) {
       if (seen.has(l.clientId) || seen.size >= 2) continue; seen.add(l.clientId);
-      tips.push({ kind: 'best', level: 'good', clientId: l.clientId, title: `${l.client}'s best live this week: ${nice(l.day)}${l.time ? ' at ' + l.time : ''}`, detail: `${l.comments.toLocaleString('en-US')} comments for ${money(l.spend)} · reuse that boost setup and time`, action: 'lives' });
+      tips.push({ kind: 'best', level: 'good', clientId: l.clientId, title: `Live ល្អបំផុតរបស់ ${l.client} សប្តាហ៍នេះ៖ ${nice(l.day)}${l.time ? ' ម៉ោង ' + l.time : ''}`, detail: `${l.comments.toLocaleString('en-US')} Comment ក្នុងតម្លៃ ${money(l.spend)} · អាចប្រើការកំណត់ Boost និងម៉ោងនេះម្តងទៀត`, action: 'lives' });
     }
   } catch (_) { /* best lives are a nice-to-have */ }
   const order = { warn: 0, good: 1 };

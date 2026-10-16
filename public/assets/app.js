@@ -625,13 +625,13 @@
     panel.hidden = false;
     $('todoCount').textContent = items.length || '✓';
     $('todoCount').classList.toggle('done', !items.length);
-    $('todoToggle').textContent = todoHidden ? 'Show' : 'Hide'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
+    $('todoToggle').textContent = todoHidden ? 'បង្ហាញ' : 'លាក់'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
     $('todoList').hidden = todoHidden;
-    const btn = { report: 'Send report', nogroup: 'Pick group', invoice: 'Open Payments', unpaid: 'Open Payments', missing: 'Open client', quiet: 'Open client', high: 'Open client', 'cpr-up': 'Open client', 'cpr-down': 'Open client', best: 'Live videos' };
+    const btn = { report: 'ផ្ញើរបាយការណ៍', nogroup: 'ជ្រើសគ្រុប', invoice: 'បើកការទូទាត់', unpaid: 'បើកការទូទាត់', missing: 'បើកអតិថិជន', quiet: 'បើកអតិថិជន', high: 'បើកអតិថិជន', 'cpr-up': 'បើកអតិថិជន', 'cpr-down': 'បើកអតិថិជន', best: 'មើល Live' };
     const IC = { ...TODO_IC, missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
-    const row = (it, i) => `<div class="todo-it ${it.level}${i >= items.length ? ' tip' : ''}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'Open'}</button></div>`;
-    $('todoList').innerHTML = (items.length ? items.map(row).join('') : '<div class="todo-done">🎉 All client work done for today.</div>')
-      + (tips.length ? `<div class="todo-sub">💡 Suggestions</div>` + tips.map((t, j) => row(t, items.length + j)).join('') : '');
+    const row = (it, i) => `<div class="todo-it ${it.level}${i >= items.length ? ' tip' : ''}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'បើក'}</button></div>`;
+    $('todoList').innerHTML = (items.length ? items.map(row).join('') : '<div class="todo-done">🎉 ការងារអតិថិជនថ្ងៃនេះ រួចរាល់ហើយ</div>')
+      + (tips.length ? `<div class="todo-sub">💡 ការណែនាំ</div>` + tips.map((t, j) => row(t, items.length + j)).join('') : '');
     $('todoList').querySelectorAll('[data-todo]').forEach((b) => b.onclick = () => {
       const it = all[Number(b.dataset.todo)], c = clients.find((x) => x.id === it.clientId);
       if (it.action === 'report' && c) openReportDlg({ kind: 'client', cid: c.id, from: d.today, to: d.today, label: nice(d.today) });

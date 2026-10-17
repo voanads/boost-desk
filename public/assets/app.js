@@ -789,9 +789,23 @@
     $('oUrl').value = c.url || ''; $('oListUrl').value = c.listUrl || ''; $('oKey').value = ''; $('oTestMsg').hidden = true;
     $('oKeyInfo').textContent = c.hasKey ? `A key is saved (${c.keyHint || 'hidden'})${c.savedBy ? ' by ' + c.savedBy : ''}. Leave the key empty to keep it.` : 'No key saved yet.';
     $('oKeyDel').hidden = !c.hasKey;
-    const canEdit = !!(me && me.canAdmin); ['oUrl', 'oListUrl', 'oKey', 'oSave', 'oTest', 'oKeyDel'].forEach((id) => { $(id).disabled = !canEdit; });
+    const canEdit = !!(me && me.canAdmin); ['oUrl', 'oListUrl', 'oKey', 'oSave', 'oTest', 'oKeyDel', 'oPushOn', 'oPushNow'].forEach((id) => { $(id).disabled = !canEdit; });
     if (!canEdit) $('oKeyInfo').textContent += ' Only admins can change these settings.';
+    loadPush();
     dlgOpen($('oDlg'));
+  };
+  function drawPush(p) {
+    $('oPushOn').checked = !!p.on;
+    const l = p.last;
+    $('oPushSt').innerHTML = !l ? (p.on ? 'Waiting for the first send…' : 'Off') : l.error ? `<span class="over">✕ ${esc(ago(l.at))}: ${esc(l.error)}</span>`
+      : `✓ Sent ${esc(ago(l.at))} · ${l.saved} of ${l.received} rows saved (${esc(l.from)} – ${esc(l.to)})${l.noPage ? ` · ${l.noPage} without a Page` : ''}${l.errors && l.errors.length ? ` · <span class="over">${l.errors.length} rows refused: ${esc(l.errors[0].error)}</span>` : ''}`;
+  }
+  async function loadPush() { try { drawPush(await api('/orders/push')); } catch (_) { $('oPushSt').textContent = ''; } }
+  $('oPushOn').onchange = async () => { try { drawPush(await api('/orders/push', { method: 'PUT', body: { on: $('oPushOn').checked } })); toast($('oPushOn').checked ? 'Spend will be sent to adsbox.biz every 30 minutes' : 'Stopped sending spend'); } catch (e) { toast(e.message); } };
+  $('oPushNow').onclick = async () => {
+    const b = $('oPushNow'); b.disabled = true; $('oPushSt').textContent = 'Sending…';
+    try { await api('/orders/push', { method: 'POST', body: { days: 7 } }); successBadge('Spend sent to adsbox.biz'); } catch (e) { toast(e.message); }
+    finally { b.disabled = false; loadPush(); }
   };
   const saveCfg = (extra = {}) => api('/orders/api', { method: 'PUT', body: { url: $('oUrl').value.trim(), listUrl: $('oListUrl').value.trim(), key: $('oKey').value.trim(), ...extra } });
   $('oSave').onclick = async () => { try { oCfg = await saveCfg(); $('oDlg').close(); successBadge('adsbox.biz API saved'); $('oSync').click(); } catch (e) { toast(e.message); } };

@@ -333,6 +333,56 @@ async function testApi() {
   return { month, echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
+// ---------- send boost spend to adsbox.biz (POST /api/adspend/import, scope adspend.write) ----------
+// Every campaign's spend per day, with its Page and ad account, so adsbox.biz can show cost per order too.
+// Re-sending a day corrects it (adsbox upserts on date + page + ad account + ad id), so the last 7 days go
+// out every 30 minutes. Campaigns synced by two people are sent once.
+async function pushSpend(days = 7) {
+  const c = await apiConfig();
+  const on = await db.getSetting('adspendPush', false);
+  if (!on || !c.url || !c.key) return null;
+  const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
+  const rows = new Map();
+  for (const u of await db.allUsers()) {
+    for (const d of await db.listRaw(u.fb_id, from, to)) for (const r of d.rows || []) {
+      const day = r.day || d.day, spend = Math.round((Number(r.spend) || 0) * 100) / 100;
+      if (!day || !(spend > 0)) continue;
+      const id = String(r.campaignId || ''), acct = String(r.accountId || '');
+      const k = `${day}|${r.pageId || ''}|${acct}|${id || r.name}`;
+      if (rows.has(k)) continue;
+      rows.set(k, { date: day, spend, currency: 'USD', page_id: String(r.pageId || ''), ad_account_id: acct ? (acct.startsWith('act_') ? acct : 'act_' + acct) : '',
+        campaign_id: id, ad_id: id, ad_name: String(r.name || '').slice(0, 255), impressions: r.impressions != null ? int(r.impressions) : undefined });
+    }
+  }
+  const list = [...rows.values()];
+  const out = { at: new Date().toISOString(), from, to, received: 0, saved: 0, errors: [], noPage: list.filter((r) => !r.page_id).length, error: '' };
+  const endpoint = new URL(c.url).origin + '/api/adspend/import';
+  try {
+    for (let i = 0; i < list.length; i += 1000) {
+      const batch = list.slice(i, i + 1000);
+      let res, body = {};
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          res = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${c.key}`, 'X-API-Key': c.key, Accept: 'application/json' }, body: JSON.stringify({ rows: batch }) });
+          body = await res.json().catch(() => ({}));
+          if (res.status < 500) break;
+        } catch (e) { if (attempt === 2) throw new Error('Could not reach adsbox.biz: ' + e.message); }
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      }
+      if (res.status === 401) throw new Error('adsbox.biz refused the API key.');
+      if (res.status === 403) throw new Error('The API key cannot send spend — in adsbox.biz give it the "adspend.write" permission (Two-way).');
+      if (!res.ok || body.ok === false) throw new Error(body.error || `adsbox.biz answered HTTP ${res.status}`);
+      out.received += Number(body.received) || batch.length; out.saved += Number(body.saved) || 0;
+      for (const e of body.errors || []) if (out.errors.length < 10) out.errors.push({ row: (Number(e.row) || 0) + i, error: String(e.error || '').slice(0, 120) });
+    }
+  } catch (e) { out.error = e.message; }
+  await db.setSetting('adspendLastPush', out);
+  if (out.error) throw new Error(out.error);
+  return out;
+}
+async function pushStatus() { return { on: !!(await db.getSetting('adspendPush', false)), last: await db.getSetting('adspendLastPush', null) }; }
+async function setPush(on) { await db.setSetting('adspendPush', !!on); return pushStatus(); }
+
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.
 // The period's totals straight from adsbox.biz (one call for the whole period, exactly what adsbox shows),
 // kept 5 minutes. Falls back to the saved daily counts when the API can't be reached.
@@ -375,4 +425,4 @@ async function report(owner, from, to, src = 'all') {
   return { from, to, live: !!(given && given.length), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

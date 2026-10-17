@@ -130,6 +130,8 @@ function start() {
   cron.schedule('* * * * *', () => H.track('Auto reports', () => require('./extras').tick()).catch((e) => log('auto report failed:', e.message)), opts);
   // adsbox.biz order counts, every 30 minutes once the API is connected on the Orders page.
   H.register('adsbox.biz orders', 30, 'every 30 minutes');
+  H.register('Spend to adsbox.biz', 30, 'every 30 minutes, at :15 and :45');
+  cron.schedule('15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
   cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Health check', 5, 'every 5 minutes');

@@ -1364,3 +1364,5 @@ body{font-size:15.5px;letter-spacing:0}
 .hallgood.small{padding:14px;flex-direction:row;justify-content:center;gap:8px}
 .hallgood.small>span:first-child{width:28px;height:28px;font-size:1rem}
 @media (max-width:560px){.serr{grid-template-columns:1fr}}
+.pushbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;margin-top:10px;background:var(--bg-2)}
+.pushst{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}

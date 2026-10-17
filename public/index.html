@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=95">
+<link rel="stylesheet" href="/assets/app.css?v=96">
 </head>
 <body>
 <div class="wrap">
@@ -456,6 +456,11 @@
     <label class="fld"><span>API key</span><input type="password" id="oKey" placeholder="Paste the key" autocomplete="new-password"></label>
     <div class="hint" id="oKeyInfo"></div>
     <div class="note" id="oTestMsg" hidden></div>
+    <div class="pushbox">
+      <label class="switch"><input type="checkbox" id="oPushOn"><span></span> <b>Send boost spend to adsbox.biz</b></label>
+      <div class="hint">Every 30 minutes Boost Desk sends each campaign's spend for the last 7 days (with its Page and ad account), so adsbox.biz can show cost per order too. Re-sending a day corrects it — nothing is doubled. The key needs the <b>adspend.write</b> permission (Two-way) in adsbox.biz → Admin → API Connecting.</div>
+      <div class="pushst"><span id="oPushSt" class="hint"></span><button type="button" class="sm" id="oPushNow">Send now</button></div>
+    </div>
     <div class="dlg-foot"><button type="button" class="ghost" id="oKeyDel">Remove key</button><span class="spacer"></span><button type="button" id="oTest">Test connection</button><button type="button" class="primary" id="oSave">Save</button></div>
   </form>
 </dialog>
@@ -478,6 +483,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=95"></script>
+<script src="/assets/app.js?v=96"></script>
 </body>
 </html>

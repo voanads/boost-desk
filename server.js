@@ -253,6 +253,9 @@ api.get('/admin/health', adminOnly, wrap(async (req, res) => {
   if (!oc.hasKey) add('info', 'Orders', 'adsbox.biz is not connected', 'Connect it to see cost per order.', { kind: 'orders' });
   else if (oc.lastError) add('bad', 'Orders', 'Getting orders from adsbox.biz failed', oc.lastError.message, { kind: 'orders' });
   else if (oc.last && now - Date.parse(oc.last.at) > 2 * 3600e3) add('warn', 'Orders', 'Orders from adsbox.biz have not updated in ' + Math.round((now - Date.parse(oc.last.at)) / 3600e3) + ' hours', 'Usually every 30 minutes.', { kind: 'orders' });
+  const ps = await orders.pushStatus();
+  if (ps.on && ps.last && ps.last.error) add('bad', 'Orders', 'Sending spend to adsbox.biz failed', ps.last.error, { kind: 'orders' });
+  else if (ps.on && ps.last && ps.last.noPage) add('info', 'Orders', `${ps.last.noPage} campaign(s) sent to adsbox.biz without a Page`, 'adsbox.biz can only match spend to orders when the Page is known.', null);
   if (process.env.AUTO_SYNC === 'off') add('warn', 'Sync', 'Auto sync is switched off on the server', 'AUTO_SYNC=off is set in Railway.', null);
   const order = { bad: 0, warn: 1, info: 2 };
   items.sort((a, b) => order[a.level] - order[b.level]);
@@ -817,6 +820,9 @@ api.get('/todo', wrap(async (req, res) => res.json(await pm.todo(req.user))));
 // ---------- Orders page (adsbox.biz API) ----------
 api.get('/orders/api', wrap(async (req, res) => { const c = await orders.publicConfig(); if (!(await canSeeAdmin(req.user.fb_id))) { delete c.keyHint; delete c.url; delete c.savedBy; c.url = c.hasKey ? 'set' : ''; } res.json(c); })); // non-admins only learn whether it is connected
 api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders.saveApiConfig(req.body || {}, req.user.name))));
+api.get('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.pushStatus())));
+api.put('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.setPush(!!(req.body || {}).on))));
+api.post('/orders/push', adminOnly, wrap(async (req, res) => { await orders.setPush(true); res.json(await orders.pushSpend(Math.min(31, Number((req.body || {}).days) || 7))); }));
 api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
 api.post('/orders/pull', wrap(async (req, res) => {
   const b = req.body || {}, today = sync.todayIn();

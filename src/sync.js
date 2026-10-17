@@ -155,6 +155,18 @@ function addDays(day, n) {
   return d.toISOString().slice(0, 10);
 }
 
+// Meta sometimes fails big requests with #1/#2 "unexpected error": ask again for each half of the period.
+async function spendRangeSplit(token, act, since, until, name, depth = 0) {
+  try { return await meta.campaignSpendRange(token, act, since, until, name); }
+  catch (e) {
+    if (!(e.code === 1 || e.code === 2) || since >= until || depth > 4) throw e;
+    const days = Math.round((Date.parse(until) - Date.parse(since)) / 864e5), mid = addDays(since, Math.floor(days / 2));
+    const a = await spendRangeSplit(token, act, since, mid, name, depth + 1);
+    const b = await spendRangeSplit(token, act, addDays(mid, 1), until, name, depth + 1);
+    return a.concat(b);
+  }
+}
+
 // Pull campaign spend for every enabled ad account over [since, until].
 async function fetchRange(since, until, user, onProgress = () => {}) {
   const token = await tokenFor(user);
@@ -176,7 +188,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       // afterwards made the account look a dollar or two short when nothing was missing.
       let total = null;
       try { total = round2(await meta.accountSpendRange(token, id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
-      const rows = await meta.campaignSpendRange(token, id, since, until, names[id]);
+      const rows = await spendRangeSplit(token, id, since, until, names[id]);
       items.push(...rows);
       if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));

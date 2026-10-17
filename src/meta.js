@@ -20,8 +20,16 @@ async function get(pathOrUrl, params = {}, token) {
     url.searchParams.set('access_token', token);
     url.searchParams.set('appsecret_proof', proof(token));
   }
-  const res = await fetch(url);
-  const body = await res.json().catch(() => ({}));
+  // Meta's temporary errors (#1 / #2 "unexpected error", HTTP 5xx, network blips) get two more tries.
+  let res, body;
+  for (let attempt = 0; ; attempt++) {
+    try { res = await fetch(url); body = await res.json().catch(() => ({})); }
+    catch (err) { if (attempt < 2) { await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) ** 2)); continue; } throw new MetaError('Could not reach Meta: ' + err.message, { code: 'network' }); }
+    const c = body && body.error && body.error.code;
+    const transient = c === 1 || c === 2 || (body && body.error && body.error.is_transient) || res.status >= 500;
+    if ((!res.ok || (body && body.error)) && transient && attempt < 2) { await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) ** 2)); continue; }
+    break;
+  }
   if (!res.ok || body.error) {
     const e = body.error || {};
     const code = e.code;

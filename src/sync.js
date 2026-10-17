@@ -180,8 +180,15 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   const items = [];
   const errors = [];
   const checks = [];
+  // Ad accounts Meta refused for permission (#200 "Cannot call API … on behalf of user"): tried again only
+  // every 6 hours, so one lost account doesn't fill the logs every 5 minutes. A manual Sync always tries.
+  const noAccess = (await db.getUserSetting(owner, 'acctNoAccess', {})) || {};
+  const manual = !/^Auto (sync|report)$/.test(String(user.name || ''));
+  let noAccessChanged = false;
   for (const [i, id] of ids.entries()) {
     onProgress({ phase: 'accounts', done: i, total: ids.length, account: names[id] || id });
+    const na = noAccess[id];
+    if (na && !manual && Date.now() - Date.parse(na.at) < 6 * 3600e3) { errors.push({ account: names[id] || id, message: na.message, noAccess: true }); continue; }
     try {
       // Completeness check: the account's own total vs what we collect campaign by campaign.
       // The total is read FIRST: a live that is running keeps spending during the sync, so reading it
@@ -190,6 +197,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       try { total = round2(await meta.accountSpendRange(token, id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
       const rows = await spendRangeSplit(token, id, since, until, names[id]);
       items.push(...rows);
+      if (noAccess[id]) { delete noAccess[id]; noAccessChanged = true; }
       if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));
         // Meta rounds each campaign-day to the cent, so many rows can differ from the total by a few cents.
@@ -198,11 +206,17 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       }
     } catch (e) {
       if (e.needsLogin) throw e;
-      console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);
-      errors.push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message });
+      const perm = e.code === 200 || e.code === 10 || /cannot call api|permission|not authorized|does not exist/i.test(e.message || '');
+      if (perm) {
+        const first = !noAccess[id];
+        noAccess[id] = { at: new Date().toISOString(), name: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message }; noAccessChanged = true;
+        if (first) console.error(`[sync] ${names[id] || id}: no permission —`, e.message); else console.log(`[sync] ${names[id] || id}: still no permission`);
+      } else console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);
+      errors.push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message, noAccess: perm });
       if (e.rateLimited) break;
     }
   }
+  if (noAccessChanged) await db.setUserSetting(owner, 'acctNoAccess', noAccess).catch(() => {});
   try { await db.setSetting('pageNames', meta.knownPageNames()); } catch (_) {}
   return { items, errors, checks };
 }

@@ -147,8 +147,18 @@ async function checkAndAlert(db, telegram) {
       next[x.key] = was[x.key] || new Date().toISOString();
       if (!was[x.key]) await telegram.send(`🩺 Boost Desk alert\n${x.text}`, chat.id).catch(() => {});
     }
-    const fixed = Object.keys(was).filter((k) => !next[k]);
-    if (fixed.length) await telegram.send(`✅ Boost Desk: fixed — ${fixed.map((k) => k.replace(/^(late|fail):/, 'job ')).join(', ')}`, chat.id).catch(() => {});
+    // A problem counts as fixed only after 30 minutes without it, so a flapping one doesn't ping every few minutes.
+    const clear = (await db.getSetting('alertClear', {})) || {};
+    const label = { db: 'the database answers again', dbslow: 'the database is fast again', mem: 'memory is back to normal', meta: 'Meta API usage is back to normal', errors: 'server errors have stopped' };
+    const fixed = [];
+    for (const k of Object.keys(was)) {
+      if (next[k]) { delete clear[k]; continue; }
+      clear[k] = clear[k] || new Date().toISOString();
+      if (Date.now() - Date.parse(clear[k]) >= 30 * 60e3) { fixed.push(label[k] || k.replace(/^late:/, 'job running again: ').replace(/^fail:/, 'job working again: ')); delete clear[k]; }
+      else next[k] = was[k]; // keep it open until the 30 minutes pass
+    }
+    if (fixed.length) await telegram.send(`✅ Boost Desk back to normal: ${fixed.join(', ')}`, chat.id).catch(() => {});
+    await db.setSetting('alertClear', clear);
     await db.setSetting('alertState', next);
   } catch (e) { noteError('health check', e); }
 }

@@ -268,6 +268,8 @@ api.get('/admin/health', adminOnly, wrap(async (req, res) => {
     else if (lr && lr.errors) add('warn', 'Sync', `${u.name}: ${lr.errors} ad account(s) failed in the last sync`, 'Check Ad accounts for disabled or unpaid accounts.', { kind: 'run', id: u.id });
     if (!u.expired && u.enabled && !u.synced) add('info', 'Sync', `${u.name} has never synced`, 'Auto sync starts after they tap Sync from Meta once.', null);
     if (!u.expired && u.enabled && u.synced && lr && lr.at && now - Date.parse(lr.at) > 3 * 3600e3) add('warn', 'Sync', `No auto sync for ${u.name} in ${Math.round((now - Date.parse(lr.at)) / 3600e3)} hours`, 'Usually it runs every hour.', { kind: 'run', id: u.id });
+    const na = Object.values((await db.getUserSetting(u.id, 'acctNoAccess', {})) || {});
+    if (na.length) add('warn', 'Sync', `${u.name}: ${na.length} ad account(s) Boost Desk can't read`, `${na.map((x) => x.name).join(', ')} — Meta says no permission. Untick it in Ad accounts, or ask the account's owner to give ${u.name} access again. Boost Desk retries every 6 hours.`, null);
     const ar = await db.getUserSetting(u.id, 'autoReportLast', null);
     if (ar && ar.failed && ar.failed.length) add('bad', 'Reports', `${ar.failed.length} auto report(s) failed for ${u.name}`, ar.failed.slice(0, 3).map((f) => `${f.name}: ${f.error}`).join(' · '), null);
   }

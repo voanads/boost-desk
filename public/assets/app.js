@@ -1093,6 +1093,17 @@
   const runText = (m) => (m === 'unknown' || m === undefined ? '' : m === null ? 'no end date' : m < 60 ? `${m} min boost` : m < 1440 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} boost` : `${Math.round(m / 1440)}-day boost`);
   const pageLabel = (p) => (p.named || !p.pageId ? esc(p.page) : `Page …${esc(p.pageId.slice(-6))}`);
   const nameBtn = (p) => (p.pageId && !p.named ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="">Add name</button>` : '');
+  // One campaign, with a switch to correct live/post by hand (remembered for future syncs and reports).
+  const campRow = (x) => !x.id ? '' : `<div class="camp${x.set ? ' set' : ''}"><span class="cn" title="${esc(x.name)}">${esc(x.name || 'Campaign')}</span><span class="hint">${[runText(x.run), money(x.spend), x.set ? 'set by you' : ''].filter(Boolean).join(' · ')}</span><span class="camp-b"><button type="button" class="kbtn" data-camp="${esc(x.id)}" data-to="${x.live ? 'post' : 'live'}" title="Correct this campaign">${x.live ? '📌 It’s a post' : '🔴 It’s a live'}</button>${x.set ? `<button type="button" class="kbtn ghost" data-camp="${esc(x.id)}" data-to="" title="Let the app decide again">Auto</button>` : ''}</span></div>`;
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('.kbtn'); if (!b) return;
+    ev.stopPropagation(); b.disabled = true;
+    try {
+      await api('/kind-override', { method: 'PUT', body: { campaignId: b.dataset.camp, kind: b.dataset.to || null } });
+      toast(b.dataset.to === 'post' ? 'Moved to Boost posts' : b.dataset.to === 'live' ? 'Moved to Lives' : 'Back to automatic');
+      loadDash(); loadDay();
+    } catch (e) { toast(e.message); b.disabled = false; }
+  });
   function campMap(c) { const m = {}; for (const p of dPages[c.id] || []) for (const x of p.list || []) if (x.id) m[x.id] = { ...x, p }; return m; }
   function runSummary(list) {
     const runs = [...new Set(list.map((x) => runText(x.run)).filter(Boolean))];
@@ -1103,7 +1114,7 @@
     const cm = campMap(c), lives = parts.filter((p) => p.kind === 'live'), posts = parts.filter((p) => p.kind === 'post');
     for (const p of lives) {
       const xs = p.ids.map((id) => cm[id]).filter(Boolean), pages = [...new Map(xs.map((x) => [x.p.page, x.p])).values()];
-      p.sub = xs.length ? `${pages.map((pg) => `📄 ${pageLabel(pg)} ${nameBtn(pg)}`).join(' · ')}${runSummary(xs) ? ` <span class="hint">· ${esc(runSummary(xs))}</span>` : ''}` : '';
+      p.sub = xs.length ? `${pages.map((pg) => `📄 ${pageLabel(pg)} ${nameBtn(pg)}`).join(' · ')}${runSummary(xs) ? ` <span class="hint">· ${esc(runSummary(xs))}</span>` : ''}<div class="camps">${xs.map(campRow).join('')}</div>` : '';
       p.title = xs.map((x) => x.name).join('\n');
     }
     let html = '';
@@ -1111,7 +1122,7 @@
     if (posts.length) {
       const pp = posts[0], pages = (dPages[c.id] || []).filter((p) => p.post > 0.0049).sort((a, b) => b.post - a.post);
       pp.label = 'All posts'; pp.sub = '';
-      const rows = pages.map((pg) => { const xs = (pg.list || []).filter((x) => !x.live); return `<div class="psub"><span class="psub-n">📄 ${pageLabel(pg)} ${nameBtn(pg)}<span class="hint"> · ${xs.length} campaign${xs.length === 1 ? '' : 's'}${runSummary(xs) ? ' · ' + esc(runSummary(xs)) : ''}</span></span><b class="num">${money(pg.post)}</b></div>`; }).join('');
+      const rows = pages.map((pg) => { const xs = (pg.list || []).filter((x) => !x.live); return `<div class="psub"><span class="psub-n">📄 ${pageLabel(pg)} ${nameBtn(pg)}<span class="hint"> · ${xs.length} campaign${xs.length === 1 ? '' : 's'}${runSummary(xs) ? ' · ' + esc(runSummary(xs)) : ''}</span></span><b class="num">${money(pg.post)}</b></div><div class="camps psub-c">${xs.map(campRow).join('')}</div>`; }).join('');
       html += `<div class="kgrp post"><div class="kgrp-h"><span>📌 Boost posts</span><b class="num">${money(pp.spend)}</b></div>${partLine(pp, pick)}${pages.length ? `<div class="psubs">${rows}</div>` : ''}</div>`;
     }
     return html;

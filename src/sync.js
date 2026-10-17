@@ -25,9 +25,10 @@ const isAutoPost = (name) => /^post:/i.test(String(name || '')) || !name;
 //  • otherwise the scheduled run time decides: lives are boosted for a few hours (2–3h), posts for a
 //    day or more — so 12 hours or less = live, longer or no end date = boost post;
 //  • rows synced before run times were saved: the ad check (live video?) or Meta's "Post: …" name.
-const LIVE_MAX_MINUTES = Number(process.env.LIVE_MAX_HOURS || 12) * 60;
+const LIVE_MAX_MINUTES = Number(process.env.LIVE_MAX_HOURS || 24) * 60; // a boost scheduled for a day or less = live
 const NON_VIDEO = /^(PHOTO|SHARE|STATUS|LINK|EVENT|OFFER|APPLICATION|DOMAIN|MUSIC|NOTE|INVALID|PRIVACY_CHECK_FAIL)$/;
 function isPostFor(client, it) {
+  if (it.kindOverride === 'post' || it.kindOverride === 'live') return it.kindOverride === 'post'; // set by hand
   if (client.type === 'post') return true;
   // The schedule decides, even for "Live" clients: a 2–3 hour boost is a live, a boost of days is a post.
   if (typeof it.runMinutes === 'number') return it.runMinutes > LIVE_MAX_MINUTES;
@@ -196,6 +197,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
+  await db.stampKinds(user.fb_id, items);
   if (!rematch) await db.notePages(user.fb_id, items.map((it) => it.page), day);
   const plan = buildPlan(items, clients);
   const syncedAt = new Date().toISOString();
@@ -573,7 +575,7 @@ async function pageSpend(owner, from, to) {
     p.spend = round2(p.spend + v); p.campaigns++;
     // Each campaign behind the Page, so the app can show what was counted as live or post and why.
     const key = r.campaignId || r.name;
-    const it = (p.list[key] = p.list[key] || { id: r.campaignId || '', name: r.name || '', live: !toPost, spend: 0, run: r.runMinutes === undefined ? 'unknown' : r.runMinutes, start: r.start ?? null, days: 0 });
+    const it = (p.list[key] = p.list[key] || { id: r.campaignId || '', name: r.name || '', live: !toPost, spend: 0, run: r.runMinutes === undefined ? 'unknown' : r.runMinutes, start: r.start ?? null, days: 0, set: r.kindOverride || '' });
     it.spend = round2(it.spend + v); it.days++;
   }
   for (const id of Object.keys(out)) out[id] = Object.values(out[id]).map((p) => ({ ...p, list: Object.values(p.list).sort((a, b) => b.spend - a.spend) })).sort((a, b) => b.spend - a.spend);

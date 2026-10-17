@@ -295,11 +295,20 @@ const putDayMeta = (owner, day, syncedBy, unmatched) =>
   q(`INSERT INTO day_meta (owner, day, synced_at, synced_by, unmatched) VALUES ($1, $2, now(), $3, $4)
      ON CONFLICT (owner, day) DO UPDATE SET synced_at=now(), synced_by=$3, unmatched=$4`, [owner, day, syncedBy, JSON.stringify(unmatched)]);
 // Saved campaign rows, so matching can be re-run when clients change (no Meta call needed).
-const getRaw = async (owner, day) => (await q('SELECT rows FROM raw_rows WHERE owner=$1 AND day=$2', [owner, day])).rows[0]?.rows || null;
+// Campaigns the user set to Live or Post by hand ({ campaignId: 'live' | 'post' }) are stamped on every row read.
+async function stampKinds(owner, rows) {
+  const ov = (await getUserSetting(owner, 'kindOverride', {})) || {};
+  for (const r of rows || []) { const k = r && r.campaignId && ov[r.campaignId]; if (k) r.kindOverride = k; else if (r) delete r.kindOverride; }
+  return rows;
+}
+const getRaw = async (owner, day) => { const r = (await q('SELECT rows FROM raw_rows WHERE owner=$1 AND day=$2', [owner, day])).rows[0]?.rows || null; return r ? stampKinds(owner, r) : r; };
 const putRaw = (owner, day, rows) =>
   q(`INSERT INTO raw_rows (owner, day, rows) VALUES ($1,$2,$3) ON CONFLICT (owner, day) DO UPDATE SET rows=$3`, [owner, day, JSON.stringify(rows)]);
-const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31') =>
-  (await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, rows FROM raw_rows WHERE owner=$1 AND day BETWEEN $2 AND $3 ORDER BY day`, [owner, from, to])).rows;
+const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31') => {
+  const days = (await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, rows FROM raw_rows WHERE owner=$1 AND day BETWEEN $2 AND $3 ORDER BY day`, [owner, from, to])).rows;
+  await stampKinds(owner, days.flatMap((d) => d.rows || []));
+  return days;
+};
 const getSetups = async (owner, ids) => (ids.length ? (await q('SELECT campaign_id, data FROM campaign_setups WHERE owner=$1 AND campaign_id = ANY($2)', [owner, ids])).rows : []);
 const putSetup = (owner, id, data) =>
   q(`INSERT INTO campaign_setups (owner, campaign_id, data) VALUES ($1,$2,$3) ON CONFLICT (owner, campaign_id) DO UPDATE SET data=$3, fetched_at=now()`, [owner, id, JSON.stringify(data)]);
@@ -316,5 +325,5 @@ module.exports = {
   createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice, renumberInvoice, invoiceNumberUsed,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
   saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
-  getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched,
+  getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched, stampKinds,
 };

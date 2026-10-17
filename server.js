@@ -699,6 +699,18 @@ api.get('/orders/report', wrap(async (req, res) => {
   res.json(await orders.report(req.user.fb_id, from, to));
 }));
 
+// Set a campaign to Live or Post by hand (kind: 'live' | 'post' | null to go back to automatic), then recount.
+api.put('/kind-override', wrap(async (req, res) => {
+  const id = String((req.body || {}).campaignId || ''), kind = (req.body || {}).kind;
+  if (!/^\d{3,30}$/.test(id)) return res.status(400).json({ error: 'Pick a campaign.' });
+  const ov = (await db.getUserSetting(req.user.fb_id, 'kindOverride', {})) || {};
+  if (kind === 'live' || kind === 'post') ov[id] = kind; else delete ov[id];
+  await db.setUserSetting(req.user.fb_id, 'kindOverride', ov);
+  const r = await sync.exclusive(req.user.fb_id, () => sync.rematch(req.user));
+  if (!r) return res.status(409).json({ error: 'A sync is running — try again in a moment.' });
+  res.json({ ok: true });
+}));
+// The bigger live/post window (a day or less = live): recount saved days once.
 app.use('/api', api);
 
 // Errors → JSON with a clear message.
@@ -719,8 +731,8 @@ db.init().then(() => {
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {
-      if (await db.getUserSetting(u.fb_id, 'kindsV4', false)) continue;
-      try { if (!(await sync.exclusive(u.fb_id, () => sync.rematch(u)))) continue; await db.setUserSetting(u.fb_id, 'kindsV4', true); console.log('[startup] recounted live/post for', u.name); }
+      if (await db.getUserSetting(u.fb_id, 'kindsV5', false)) continue;
+      try { if (!(await sync.exclusive(u.fb_id, () => sync.rematch(u)))) continue; await db.setUserSetting(u.fb_id, 'kindsV5', true); console.log('[startup] recounted live/post for', u.name); }
       catch (e) { console.error('[startup] recount failed for', u.name, e.message); }
     }
   })();

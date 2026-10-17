@@ -127,12 +127,12 @@ function checkPeriod(body, from, to) {
   const off = (x, y) => Math.abs(Date.parse(x) - Date.parse(y)) > 36 * 3600e3; // a UTC-written date may be a day off
   if (/^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(t) && (off(f, from) || off(t, to))) throw new Error(`adsbox.biz answered for ${f} – ${t} instead of ${from} – ${to}, so its numbers were not used.`);
 }
-async function callApi(from, to, page = 1) {
+async function callApi(from, to, page = 1, extra = '') {
   const { url, key } = await apiConfig();
   if (!url || !key) return null;
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   let res;
-  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
+  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${extra}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
   catch (e) { throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
   finally { clearTimeout(t); }
   const text = await res.text();
@@ -145,8 +145,8 @@ async function callApi(from, to, page = 1) {
 const listOf = (body) => (Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || []);
 // All rows for a period, following the API's pages (Laravel-style current_page/last_page, next links,
 // or a total), so a long list is never cut off at the first page.
-async function fetchAll(from, to) {
-  const first = await callApi(from, to); if (first === null) return null;
+async function fetchAll(from, to, extra = '') {
+  const first = await callApi(from, to, 1, extra); if (first === null) return null;
   const all = [...listOf(first)];
   const meta = (first && !Array.isArray(first) && (first.meta || first.pagination || first)) || {};
   const total = Number(meta.total ?? meta.total_count ?? meta.count) || 0;
@@ -156,11 +156,11 @@ async function fetchAll(from, to) {
   while (page < 200) {
     const more = (last && page < last) || hasNext(body) || (total && all.length < total);
     if (!more) break;
-    page++; body = await callApi(from, to, page); const list = listOf(body);
+    page++; body = await callApi(from, to, page, extra); const list = listOf(body);
     if (!list.length) break;
     all.push(...list); pages++;
   }
-  return { list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [], echo: first && !Array.isArray(first) ? Object.fromEntries(['from', 'to', 'timezone', 'group_by', 'count'].filter((k) => k in first).map((k) => [k, typeof first[k] === 'object' ? JSON.stringify(first[k]) : String(first[k])])) : {} };
+  return { totals: first && !Array.isArray(first) && first.totals && typeof first.totals === 'object' ? first.totals : null, groupBy: first && first.group_by, list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [], echo: first && !Array.isArray(first) ? Object.fromEntries(['from', 'to', 'timezone', 'group_by', 'count'].filter((k) => k in first).map((k) => [k, typeof first[k] === 'object' ? JSON.stringify(first[k]) : String(first[k])])) : {} };
 }
 // Count one period into the database, day by day (each day re-counted from scratch). One pull at a time,
 // so pulls started by the timer, the button and the page never mix.
@@ -214,7 +214,15 @@ async function testApi() {
     const b = (breakdown[k] = breakdown[k] || {}); b[String(v)] = (b[String(v)] || 0) + 1;
   }
   const sumField = raw.reduce((t, x) => t + (Number(x && (x.orders ?? x.count)) || 0), 0);
-  return { echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
+  // Last month two ways: rows per Page per day added up, and one total per Page for the whole month.
+  let month = null;
+  try {
+    const t = sync.todayIn(), m1 = sync.addDays(t.slice(0, 8) + '01', -1).slice(0, 8) + '01', m2 = sync.addDays(t.slice(0, 8) + '01', -1);
+    const [byDay, byPage] = await Promise.all([fetchAll(m1, m2, '&group_by=page_day'), fetchAll(m1, m2, '&group_by=page')]);
+    const sum = (g) => mapRows(g.list).reduce((a, r) => a + int(r.orders), 0);
+    month = { from: m1, to: m2, byDay: sum(byDay), byDayRows: byDay.list.length, byPage: sum(byPage), byPageRows: byPage.list.length, byPageGroup: byPage.groupBy, totals: byPage.totals };
+  } catch (e) { month = { error: e.message }; }
+  return { month, echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.

@@ -23,7 +23,7 @@ async function get(pathOrUrl, params = {}, token) {
   // Meta's temporary errors (#1 / #2 "unexpected error", HTTP 5xx, network blips) get two more tries.
   let res, body;
   for (let attempt = 0; ; attempt++) {
-    try { res = await fetch(url); body = await res.json().catch(() => ({})); }
+    try { const t0 = Date.now(); res = await fetch(url); body = await res.json().catch(() => ({})); try { const h = require('./health'); h.noteMetaHeaders(res.headers); h.noteService('Meta API', res.status < 500, Date.now() - t0, res.status >= 500 ? 'HTTP ' + res.status : ''); } catch (_) {} }
     catch (err) { if (attempt < 2) { await new Promise((r) => setTimeout(r, 1500 * (attempt + 1) ** 2)); continue; } throw new MetaError('Could not reach Meta: ' + err.message, { code: 'network' }); }
     const c = body && body.error && body.error.code;
     const transient = c === 1 || c === 2 || (body && body.error && body.error.is_transient) || res.status >= 500;

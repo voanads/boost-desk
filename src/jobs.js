@@ -115,18 +115,25 @@ async function sendDailyReport(day = sync.todayIn()) {
 
 function start() {
   const opts = { timezone: cfg.tz };
+  const H = require('./health'), T = (name, fn) => () => H.track(name, fn).catch(() => {});
   if (process.env.AUTO_SYNC !== 'off') {
     let running = false;
     const guard = (fn) => async () => { if (running) return; running = true; try { await fn(); } finally { running = false; } };
-    cron.schedule('*/5 * * * *', guard(() => forEachAdmin(checkNewCampaigns, 'new-campaign check')), opts);
-    cron.schedule('7 * * * *', guard(() => forEachAdmin((u) => rangeFor(u, 2, 'hourly'), 'hourly sync')), opts);
-    cron.schedule('30 5 * * *', guard(() => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync')), opts);
+    H.register('New campaigns check', 5, 'every 5 minutes'); H.register('Hourly sync', 60, 'every hour at :07'); H.register('30-day refresh', 1440, 'daily at 05:30');
+    cron.schedule('*/5 * * * *', guard(T('New campaigns check', () => forEachAdmin(checkNewCampaigns, 'new-campaign check'))), opts);
+    cron.schedule('7 * * * *', guard(T('Hourly sync', () => forEachAdmin((u) => rangeFor(u, 2, 'hourly'), 'hourly sync'))), opts);
+    cron.schedule('30 5 * * *', guard(T('30-day refresh', () => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync'))), opts);
     log('Background auto sync on (new campaigns every 5 min, hourly refresh, 30-day refresh at 05:30)');
   }
   // Each account's own "auto daily report" (time chosen in the app): checked every minute.
-  cron.schedule('* * * * *', () => require('./extras').tick().catch((e) => log('auto report failed:', e.message)), opts);
+  H.register('Auto reports', 1, 'every minute');
+  cron.schedule('* * * * *', () => H.track('Auto reports', () => require('./extras').tick()).catch((e) => log('auto report failed:', e.message)), opts);
   // adsbox.biz order counts, every 30 minutes once the API is connected on the Orders page.
-  cron.schedule('*/30 * * * *', () => require('./orders').pullApi(3).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
+  H.register('adsbox.biz orders', 30, 'every 30 minutes');
+  cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
+  // System health: check every 5 minutes, alert the owner on Telegram.
+  H.register('Health check', 5, 'every 5 minutes');
+  cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
   if (telegram.configured() && m) {
     cron.schedule(`${Number(m[2])} ${Number(m[1])} * * *`, () => sendDailyReport()

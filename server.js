@@ -8,6 +8,7 @@ const meta = require('./src/meta');
 const sync = require('./src/sync');
 const lives = require('./src/lives');
 const invoice = require('./src/invoice');
+const health = require('./src/health');
 const reportImage = require('./src/reportImage');
 const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 // Ticked report lines: "l1,l3,post" or ['l1','post'] → clean list, or null for everything.
@@ -88,6 +89,7 @@ app.get('/login', wrap(async (req, res) => {
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
+app.use(health.middleware);
 const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {
@@ -260,6 +262,17 @@ api.get('/admin/health', adminOnly, wrap(async (req, res) => {
   const running = status.filter((u) => u.enabled && u.synced && !u.expired).length;
   ok.push(`Auto sync running for ${running} of ${status.length} account(s)`);
   res.json({ items, ok, checkedAt: new Date().toISOString(), today });
+}));
+// System health (server, database, jobs, outside services, errors) and owner alerts.
+api.get('/admin/system', adminOnly, wrap(async (req, res) => {
+  const snap = await health.snapshot(db);
+  const chat = await db.getSetting('alertChat', null), isOwner = (await db.ownerId()) === req.user.fb_id;
+  res.json({ ...snap, problems: health.problems(snap), alerts: { on: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, bot: await telegram.username(), code: isOwner ? await linkCode(req.user.fb_id) : '', canEdit: isOwner } });
+}));
+api.delete('/admin/alerts', ownerOnly, wrap(async (req, res) => { await db.setSetting('alertChat', null); res.json({ ok: true }); }));
+api.post('/admin/alerts/test', ownerOnly, wrap(async (req, res) => {
+  const chat = await db.getSetting('alertChat', null); if (!chat || !chat.id) return res.status(400).json({ error: 'Connect your Telegram first.' });
+  await telegram.send('🩺 Boost Desk test alert — alerts are working.', chat.id); res.json({ ok: true });
 }));
 // Settings overview for the admin panel.
 api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
@@ -621,7 +634,7 @@ async function linkCode(fbId) {
 // One refresh at a time, so two requests never handle the same /link message twice.
 let chatsBusy = Promise.resolve();
 // Read new Telegram messages every minute, so /link works without opening the website and nothing expires.
-if (telegram.hasBot()) setInterval(() => refreshChats().catch((e) => console.error('[telegram] refresh:', e.message)), 60000).unref();
+if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(() => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 60000).unref(); }
 function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow); chatsBusy = run.catch(() => {}); return run; }
 async function refreshChatsNow() {
   const saved = await db.getSetting('telegramChats', []);
@@ -677,6 +690,14 @@ async function refreshChatsNow() {
   if (unowned.length) {
     const rows = (await db.pool.query("SELECT DISTINCT owner, telegram FROM clients WHERE telegram <> ''")).rows;
     for (const c of unowned) { const users = [...new Set(rows.filter((r) => r.telegram === c.id).map((r) => r.owner))]; if (users.length) { c.owners = users; c.owner = users[0]; } }
+  }
+  // "/alerts CODE" sent to the bot in a private chat by the owner: system alerts go to that chat.
+  if ((fresh.alerts || []).length) {
+    const owner = await db.ownerId(), code = owner && (await linkCode(owner));
+    for (const al of fresh.alerts) if (code && al.code === code) {
+      await db.setSetting('alertChat', { id: al.id, name: al.name, at: new Date().toISOString() });
+      telegram.send('✅ Boost Desk system alerts will come to this chat. Send /alerts again from another chat to move them.', al.id).catch(() => {});
+    }
   }
   const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);
@@ -827,7 +848,7 @@ app.use('/api', api);
 
 // Errors → JSON with a clear message.
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
-  console.error(err);
+  if (!err.status || err.status >= 500) console.error('[' + req.method + ' ' + req.path.slice(0, 40) + ']', err.message || err); else console.log('[' + req.path + ']', err.message);
   if (err instanceof meta.MetaError) {
     return res.status(err.needsLogin ? 401 : 502).json({
       error: err.needsLogin ? 'Your Facebook login has expired. Log in again.' : err.rateLimited ? 'Meta is limiting requests right now. Wait a few minutes and try again.' : 'Meta: ' + err.message,

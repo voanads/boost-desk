@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=92">
+<link rel="stylesheet" href="/assets/app.css?v=93">
 </head>
 <body>
 <div class="wrap">
@@ -323,6 +323,18 @@
         <div id="hList" class="hlist"></div>
         <div id="hOk" class="hok"></div>
       </div>
+      <div class="panel">
+        <div class="thead"><h2>System</h2><span class="hint" id="sysWhen"></span></div>
+        <div class="sysgrid" id="sysGrid"></div>
+      </div>
+      <div class="panel">
+        <div class="thead"><h2>Background jobs</h2></div>
+        <div class="tablewrap"><table class="systable"><thead><tr><th>Job</th><th>Runs</th><th>Status</th><th>Last run</th><th class="r">Took</th><th>Next</th></tr></thead><tbody id="sysJobs"></tbody></table></div>
+      </div>
+      <div class="panel">
+        <div class="thead"><h2>Recent errors</h2><span class="hint">Since the server started</span></div>
+        <div id="sysErrors" class="syserrs"></div>
+      </div>
     </div>
 
     <div id="adm-settings" hidden>
@@ -465,6 +477,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=92"></script>
+<script src="/assets/app.js?v=93"></script>
 </body>
 </html>

@@ -907,14 +907,53 @@
   // Health
   async function loadHealth() {
     let d; try { d = await api('/admin/health'); } catch (e) { $('hList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
-    const n = d.items.filter((x) => x.level !== 'info').length;
+    const sys = $('adm-health').hidden ? null : await loadSystem();
+    const n = d.items.filter((x) => x.level !== 'info').length + (sys ? sys.problems.length : 0);
     $('admHealthN').textContent = n || ''; $('admHealthN').classList.toggle('bad', d.items.some((x) => x.level === 'bad'));
     if ($('adm-health').hidden) return;
     const icon = { bad: '⛔', warn: '⚠️', info: 'ℹ️' };
+    if (sys) for (const p of sys.problems) d.items.unshift({ level: 'bad', area: 'System', title: p.text.replace(/^\S+\s/, ''), detail: '' });
     $('hList').innerHTML = d.items.length ? d.items.map((x, i) => `<div class="hitem ${x.level}" style="--i:${Math.min(i, 12)}"><span class="hi-ic">${icon[x.level]}</span><div class="hi-t"><span class="hi-area">${esc(x.area)}</span><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span></div>${x.action && x.action.kind === 'run' && me.isOwner ? `<button class="sm" data-hrun="${esc(x.action.id)}">↻ Sync now</button>` : x.action && x.action.kind === 'orders' ? '<button class="sm" data-hgo="orders">Open Orders</button>' : ''}</div>`).join('')
       : '<div class="hallgood"><span>✓</span><b>Everything looks good</b><span class="hint">Nothing needs your attention right now.</span></div>';
     $('hOk').innerHTML = d.ok.map((t) => `<div>✓ ${esc(t)}</div>`).join('') + `<div class="hint">Checked ${esc(ago(d.checkedAt))}</div>`;
   }
+  // System part of Health
+  const upDur = (sec) => { const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; };
+  const bar = (pct, warnAt = 70, badAt = 85) => `<div class="sbar"><i class="${pct >= badAt ? 'bad' : pct >= warnAt ? 'warn' : ''}" style="width:${Math.min(100, Math.max(2, pct))}%"></i></div>`;
+  async function loadSystem() {
+    let d; try { d = await api('/admin/system'); } catch (e) { $('sysGrid').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return null; }
+    $('sysWhen').textContent = 'Checked ' + ago(d.now);
+    const sv = d.services || {}, svc = (n) => sv[n] ? `<div class="srow"><span>${esc(n)}</span><b class="${sv[n].ok ? 'okt' : 'over'}">${sv[n].ok ? '● OK' : '● Error'}</b><span class="hint">${sv[n].ms ? sv[n].ms + ' ms · ' : ''}${ago(sv[n].at)}${sv[n].error ? ' · ' + esc(sv[n].error) : ''}</span></div>` : `<div class="srow"><span>${esc(n)}</span><span class="hint">not used yet since the restart</span></div>`;
+    const db = d.db, grow = db.weekAgoMb != null ? db.sizeMb - db.weekAgoMb : null, al = d.alerts;
+    const card = (ic, t, st, body) => `<div class="syscard"><div class="sc-h"><span class="sc-ic">${ic}</span><b>${t}</b>${st}</div><div class="sc-b">${body}</div></div>`;
+    const ok = (t) => `<span class="sc-st ok">${t}</span>`, bad = (t) => `<span class="sc-st bad">${t}</span>`, warn = (t) => `<span class="sc-st warn">${t}</span>`;
+    $('sysGrid').innerHTML = [
+      card('🖥', 'Server', d.memory.pct >= 85 ? bad('Memory high') : ok('Running'),
+        `<div class="srow"><span>Up for</span><b>${upDur(d.uptimeSec)}</b><span class="hint">since ${esc(new Date(d.startedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}${d.deploy ? ' · version ' + esc(d.deploy) : ''}</span></div>
+         <div class="srow"><span>Memory</span><b>${d.memory.rssMb} MB</b><span class="hint">${d.memory.pct}% of the ${d.memory.limitMb} MB alert level</span></div>${bar(d.memory.pct)}
+         <div class="srow"><span>Speed</span><b>${d.speed.n ? d.speed.avg + ' ms' : '—'}</b><span class="hint">${d.speed.n ? `average · slowest 5%: ${d.speed.p95} ms` : ''}</span></div>`),
+      card('🗄', 'Database', !db.ok ? bad('Down') : db.ms > 500 ? warn('Slow') : ok('Connected'),
+        db.ok ? `<div class="srow"><span>Answer time</span><b>${db.ms} ms</b></div><div class="srow"><span>Size</span><b>${db.sizeMb} MB</b><span class="hint">${grow != null ? (grow >= 0 ? '+' : '') + grow.toFixed(1) + ' MB in a week' : 'growth shows after a week'}</span></div>
+          <div class="hint">Biggest: ${db.tables.map((t) => `${esc(t.name)} ${t.mb} MB`).join(' · ')}</div>` : `<div class="over">${esc(db.error)}</div>`),
+      card('🌐', 'Outside services', d.meta.max >= 90 ? bad('Meta limit') : d.meta.max >= 70 ? warn('Meta busy') : ok('OK'),
+        `<div class="srow"><span>Meta API usage</span><b>${d.meta.max}%</b><span class="hint">${d.meta.top.length ? 'of its rate limit, last 2 hours' : 'no data yet'}</span></div>${bar(d.meta.max)}${svc('Meta API')}${svc('adsbox.biz')}${svc('Telegram')}`),
+      card('🔔', 'Alerts to my Telegram', al.on ? ok('On') : warn('Off'),
+        al.on ? `Alerts go to <b>${esc(al.name || 'your Telegram')}</b>${al.at ? ` · since ${esc(new Date(al.at).toLocaleDateString('en-GB'))}` : ''}.<div class="hint">You get a message when the database stops, a background job stops or keeps failing, memory gets high, Meta usage is near its limit, or many errors happen — and another when it’s fixed.</div>${al.canEdit ? '<div class="sc-a"><button class="sm" data-al="test">Send test</button><button class="sm ghost" data-al="off">Turn off</button></div>' : ''}`
+        : al.canEdit ? `Open <b>@${esc(al.bot || 'the bot')}</b> in Telegram (a private chat, not a group) and send:<div class="alcode"><code class="lcode" title="Tap to copy">/alerts ${esc(al.code)}</code></div><div class="hint">Within a minute this turns on. You'll then get a message whenever something serious happens.</div>` : 'Only the app owner can turn alerts on.'),
+    ].join('');
+    const lc = $('sysGrid').querySelector('.lcode'); if (lc) lc.onclick = async () => { try { await navigator.clipboard.writeText(lc.textContent); toast('Copied — send it to the bot in Telegram'); } catch (_) {} };
+    const stl = { ok: '<span class="okt">● OK</span>', running: '<span class="runt">● Running</span>', failed: '<span class="over">● Failed</span>', late: '<span class="over">● Not running</span>', waiting: '<span class="muted">● Waiting</span>' };
+    $('sysJobs').innerHTML = d.jobs.map((j) => `<tr><td><b>${esc(j.name)}</b><div class="hint">${esc(j.schedule || '')}</div></td><td class="num">${j.runs}${j.fails ? ` <span class="over">· ${j.fails} failed</span>` : ''}</td><td>${stl[j.status] || ''}${j.error && j.status === 'failed' ? `<div class="hint over">${esc(j.error)}</div>` : ''}</td><td class="hint">${j.lastEnd ? ago(j.lastEnd) : '—'}</td><td class="r num hint">${j.ms != null ? (j.ms >= 1000 ? (j.ms / 1000).toFixed(1) + ' s' : j.ms + ' ms') : ''}</td><td class="hint">${j.next ? new Date(j.next).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No background jobs yet.</td></tr>';
+    $('sysErrors').innerHTML = d.errors.length ? d.errors.map((e) => `<div class="serr"><span class="hint num">${esc(new Date(e.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</span><span class="serr-w">${esc(e.where)}</span><span class="serr-m">${esc(e.message)}</span></div>`).join('') : '<div class="hallgood small"><span>✓</span><b>No errors</b></div>';
+    return d;
+  }
+  $('sysGrid').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-al]'); if (!b) return;
+    try {
+      if (b.dataset.al === 'test') { await api('/admin/alerts/test', { method: 'POST' }); successBadge('Test alert sent'); }
+      if (b.dataset.al === 'off') { if (!confirm('Turn off system alerts?')) return; await api('/admin/alerts', { method: 'DELETE' }); toast('Alerts off'); loadSystem(); }
+    } catch (e) { toast(e.message); }
+  });
   $('hRefresh').onclick = () => loadHealth();
   $('hList').addEventListener('click', async (ev) => {
     const b = ev.target.closest('button'); if (!b) return;

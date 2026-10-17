@@ -130,11 +130,12 @@ function checkPeriod(body, from, to) {
 async function callApi(from, to, page = 1, extra = '') {
   const { url, key } = await apiConfig();
   if (!url || !key) return null;
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000), t0 = Date.now();
   let res;
   try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${extra}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
-  catch (e) { throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
+  catch (e) { require('./health').noteService('adsbox.biz', false, 20000, e.message); throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
   finally { clearTimeout(t); }
+  require('./health').noteService('adsbox.biz', res.ok, Date.now() - t0, res.ok ? '' : 'HTTP ' + res.status);
   const text = await res.text();
   if (res.status === 401 || res.status === 403) throw new Error('adsbox.biz refused the API key (check the key).');
   if (!res.ok) throw new Error(`adsbox.biz API answered HTTP ${res.status}`);

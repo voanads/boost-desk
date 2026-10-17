@@ -25,6 +25,7 @@ async function send(text, chatId = cfg.telegramChatId) {
       body: JSON.stringify({ ...dest(chatId), text: chunk, disable_web_page_preview: true }),
     });
     const body = await res.json().catch(() => ({}));
+    try { require('./health').noteService('Telegram', !!body.ok || res.status < 500, 0, body.ok ? '' : body.description); } catch (_) {}
     if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
     lastId = body.result && body.result.message_id;
   }
@@ -83,10 +84,15 @@ async function listChats(offset = 0) {
     if (list.length) next = list[list.length - 1].update_id + 1;
     if (list.length < 100) break;
   }
-  const found = new Map(), links = [], topicNames = {}, moved = [];
+  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [];
   for (const u of result) {
     const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
-    if (!chat || chat.type === 'private') continue;
+    if (chat && chat.type === 'private') {
+      const pt = ((u.message || {}).text || '').trim().match(/^\/alerts(?:@\w+)?\s+([A-Za-z0-9]{6})\b/i);
+      if (pt) alerts.push({ id: String(chat.id), code: pt[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
+      continue;
+    }
+    if (!chat) continue;
     // A group upgraded to a supergroup gets a new id; reports must follow it.
     if (u.message && u.message.migrate_to_chat_id) { moved.push({ from: String(chat.id), to: String(u.message.migrate_to_chat_id) }); continue; }
     found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
@@ -107,7 +113,7 @@ async function listChats(offset = 0) {
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links, moved, next };
+  return { chats: [...found.values()], links, moved, alerts, next };
 }
 
 let botName = null;

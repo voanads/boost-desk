@@ -90,6 +90,29 @@ app.get('/login', wrap(async (req, res) => {
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
 app.use(health.middleware);
+// ---- Public read-only API: boost spend per Page per day, for adsbox.biz (or any outside site) ----
+// Auth with a key made in Admin → Settings (X-API-Key, Authorization: Bearer, or ?api_key=). Keys are kept as
+// SHA-256 only. Numbers only: date, Page ID, spend.
+const sha = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
+app.get('/public-api/spend', wrap(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  const key = String(req.get('x-api-key') || (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.api_key || '').trim();
+  const keys = (await db.getSetting('spendApiKeys', [])) || [];
+  const k = key && keys.find((x) => x.hash === sha(key) && x.active !== false);
+  if (!k) return res.status(401).json({ ok: false, error: 'API key missing or not valid.' });
+  const today = sync.todayIn();
+  const to = isDay(req.query.to) ? req.query.to : today, from = isDay(req.query.from) ? req.query.from : sync.addDays(to, -6);
+  if (from > to) return res.status(400).json({ ok: false, error: '"from" is after "to".' });
+  if ((Date.parse(to) - Date.parse(from)) / 864e5 > 185) return res.status(400).json({ ok: false, error: 'At most 185 days per call.' });
+  const pid = String(req.query.page_id || '').trim();
+  if (pid && !/^\d{5,25}$/.test(pid)) return res.status(400).json({ ok: false, error: 'page_id must be numeric.' });
+  let { list } = await orders.spendRows(from, to);
+  if (pid) list = list.filter((r) => r.page_id === pid);
+  list.sort((a, b) => a.date.localeCompare(b.date) || a.page_id.localeCompare(b.page_id));
+  k.calls = (k.calls || 0) + 1; k.lastUsed = new Date().toISOString(); k.lastIp = String(req.ip || '').slice(0, 45);
+  db.setSetting('spendApiKeys', keys).catch(() => {});
+  res.json({ ok: true, from, to, timezone: cfg.tz, currency: 'USD', totals: { spend: Math.round(list.reduce((t, r) => t + r.spend, 0) * 100) / 100 }, count: list.length, rows: list });
+}));
 const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {
@@ -276,6 +299,21 @@ api.delete('/admin/alerts', ownerOnly, wrap(async (req, res) => { await db.setSe
 api.post('/admin/alerts/test', ownerOnly, wrap(async (req, res) => {
   const chat = await db.getSetting('alertChat', null); if (!chat || !chat.id) return res.status(400).json({ error: 'Connect your Telegram first.' });
   await telegram.send('🩺 Boost Desk test alert — alerts are working.', chat.id); res.json({ ok: true });
+}));
+// Keys for the public spend API (owner only). The key is shown once, at creation.
+const pubKeys = (list) => list.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, at: k.at, by: k.by, calls: k.calls || 0, lastUsed: k.lastUsed || null }));
+api.get('/admin/spend-keys', ownerOnly, wrap(async (req, res) => res.json({ keys: pubKeys((await db.getSetting('spendApiKeys', [])) || []), base: cfg.baseUrl })));
+api.post('/admin/spend-keys', ownerOnly, wrap(async (req, res) => {
+  const name = String((req.body || {}).name || 'adsbox.biz').trim().slice(0, 60) || 'adsbox.biz';
+  const plain = 'bd_' + crypto.randomBytes(24).toString('hex');
+  const keys = (await db.getSetting('spendApiKeys', [])) || [];
+  keys.push({ id: 'k' + Date.now().toString(36), name, prefix: plain.slice(0, 10), hash: sha(plain), at: new Date().toISOString(), by: req.user.name, calls: 0 });
+  await db.setSetting('spendApiKeys', keys);
+  res.json({ key: plain, keys: pubKeys(keys), base: cfg.baseUrl });
+}));
+api.delete('/admin/spend-keys/:id', ownerOnly, wrap(async (req, res) => {
+  const keys = ((await db.getSetting('spendApiKeys', [])) || []).filter((k) => k.id !== req.params.id);
+  await db.setSetting('spendApiKeys', keys); res.json({ keys: pubKeys(keys) });
 }));
 // Settings overview for the admin panel.
 api.get('/admin/settings', adminOnly, wrap(async (req, res) => {

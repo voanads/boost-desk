@@ -333,16 +333,9 @@ async function testApi() {
   return { month, echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
-// ---------- send boost spend to adsbox.biz (POST /api/adspend/import, scope adspend.write) ----------
-// Every campaign's spend per day, with its Page and ad account, so adsbox.biz can show cost per order too.
-// Re-sending a day corrects it (adsbox upserts on date + page + ad account + ad id), so the last 7 days go
-// out every 30 minutes. Campaigns synced by two people are sent once.
-async function pushSpend(days = 7) {
-  const c = await apiConfig();
-  const on = await db.getSetting('adspendPush', false);
-  if (!on || !c.url || !c.key) return null;
-  const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
-  // Each campaign counted once (two people may sync the same ad account), then added up per Page per day.
+// Boost spend per Page per day for every account: each campaign counted once (two people may sync the
+// same ad account), then added up. Campaigns without a Page are counted in noPage and left out.
+async function spendRows(from, to) {
   const seen = new Set(), rows = new Map(); let noPage = 0;
   for (const u of await db.allUsers()) {
     for (const d of await db.listRaw(u.fb_id, from, to)) for (const r of d.rows || []) {
@@ -357,6 +350,18 @@ async function pushSpend(days = 7) {
     }
   }
   const list = [...rows.values()].map((r) => ({ ...r, spend: Math.round(r.spend * 100) / 100 }));
+  return { list, noPage };
+}
+// ---------- send boost spend to adsbox.biz (POST /api/adspend/import, scope adspend.write) ----------
+// Every campaign's spend per day, with its Page and ad account, so adsbox.biz can show cost per order too.
+// Re-sending a day corrects it (adsbox upserts on date + page + ad account + ad id), so the last 7 days go
+// out every 30 minutes. Campaigns synced by two people are sent once.
+async function pushSpend(days = 7) {
+  const c = await apiConfig();
+  const on = await db.getSetting('adspendPush', false);
+  if (!on || !c.url || !c.key) return null;
+  const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
+  const { list, noPage } = await spendRows(from, to);
   const out = { at: new Date().toISOString(), from, to, received: 0, saved: 0, errors: [], noPage, error: '' };
   const endpoint = new URL(c.url).origin + '/api/adspend/import';
   try {
@@ -427,4 +432,4 @@ async function report(owner, from, to, src = 'all') {
   return { from, to, live: !!(given && given.length), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

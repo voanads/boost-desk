@@ -1366,3 +1366,7 @@ body{font-size:15.5px;letter-spacing:0}
 @media (max-width:560px){.serr{grid-template-columns:1fr}}
 .pushbox{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;margin-top:10px;background:var(--bg-2)}
 .pushst{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.newkey{margin:8px 0;padding:10px;border-radius:10px;background:var(--brand-soft);display:flex;flex-direction:column;gap:6px;color:var(--ink)}
+.newkey code{font-size:.82rem;word-break:break-all;cursor:pointer;background:var(--surface);padding:6px 8px;border-radius:8px}
+.skrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px dashed var(--line);color:var(--ink)}
+.danger-t{color:var(--live)!important}

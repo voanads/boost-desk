@@ -992,12 +992,58 @@
         `${d.canEdit ? '<button class="sm" data-sgo="qr">Change QR for everyone</button><input type="file" id="sQrFile" accept="image/png,image/jpeg" hidden>' : ''}<button class="sm ghost" data-sgo="invoice">My invoice details</button>`),
       card('⏰', 'My auto report', '', 'Sends each client’s report to their Telegram group at a set time every day. Each person sets their own.', '<button class="sm" data-sgo="autoreport">Open auto report</button>'),
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
+      d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
     ].join('');
+    if (d.canEdit) loadKeys();
+  }
+  let skBase = location.origin;
+  const devDoc = (key) => `Boost Desk spend API — read boost spend per Facebook Page per day
+
+URL:     GET ${skBase}/public-api/spend
+Auth:    X-API-Key: ${key || '<your key>'}
+         (or Authorization: Bearer <key>, or ?api_key=<key>)
+Params:  from=YYYY-MM-DD   default: 6 days before "to"
+         to=YYYY-MM-DD     default: today
+         page_id=<numeric Facebook Page id>   optional
+         Max 185 days per call. Dates are Asia/Phnom_Penh days. Money is USD.
+
+Example:
+curl -H "X-API-Key: ${key || '<your key>'}" "${skBase}/public-api/spend?from=2026-10-01&to=2026-10-17"
+
+Answer:
+{
+  "ok": true, "from": "2026-10-01", "to": "2026-10-17",
+  "timezone": "Asia/Phnom_Penh", "currency": "USD",
+  "totals": { "spend": 1234.56 }, "count": 2,
+  "rows": [
+    { "date": "2026-10-16", "page_id": "100844805533349", "spend": 17.45 },
+    { "date": "2026-10-17", "page_id": "100844805533349", "spend": 9.80 }
+  ]
+}
+
+Notes:
+- One row per Page per day = all boosts on that Page that day added up.
+- A day can still change for ~2 days (Meta updates spend late), so re-read the last 7 days each time
+  and replace (not add) what you stored for those days.
+- Join with your orders on page_id + date: cost per order = spend / orders.
+- Errors: 401 key missing/invalid · 400 bad dates or page_id · answer { "ok": false, "error": "..." }.`;
+  async function loadKeys(fresh) {
+    const box = $('skBox'); if (!box) return;
+    let d; try { d = fresh || await api('/admin/spend-keys'); } catch (e) { box.textContent = e.message; return; }
+    if (d.base) skBase = d.base;
+    box.innerHTML = `<div>Lets adsbox.biz (or any site) read <b>date · Page ID · spend</b> from Boost Desk with a key.</div>`
+      + (d.key ? `<div class="newkey"><b>New key — copy it now, it won't be shown again:</b><code class="lcode" data-copy="${esc(d.key)}">${esc(d.key)}</code><button class="sm" data-sgo="devdoc" data-key="${esc(d.key)}">Copy instructions with this key</button></div>` : '')
+      + (d.keys.length ? d.keys.map((k) => `<div class="skrow"><span><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code><br><span class="hint">${k.calls} call${k.calls === 1 ? '' : 's'}${k.lastUsed ? ' · last used ' + esc(ago(k.lastUsed)) : ' · not used yet'}</span></span><button class="sm ghost danger-t" data-delkey="${esc(k.id)}">Delete</button></div>`).join('') : '<div>No key yet.</div>');
   }
   $('sGrid').addEventListener('click', async (ev) => {
+    const cp = ev.target.closest('[data-copy]'); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Key copied'); } catch (_) {} return; }
+    const dk = ev.target.closest('[data-delkey]');
+    if (dk) { if (!confirm('Delete this key? Anything using it will stop working.')) return; try { loadKeys({ ...(await api('/admin/spend-keys/' + dk.dataset.delkey, { method: 'DELETE' })), base: skBase }); toast('Key deleted'); } catch (e) { toast(e.message); } return; }
     const b = ev.target.closest('button'); if (!b) return;
     const k = b.dataset.sgo;
+    if (k === 'newkey') { const name = prompt('Name for this key (who will use it)', 'adsbox.biz'); if (name === null) return; try { loadKeys(await api('/admin/spend-keys', { method: 'POST', body: { name } })); } catch (e) { toast(e.message); } return; }
+    if (k === 'devdoc') { try { await navigator.clipboard.writeText(devDoc(b.dataset.key || '')); successBadge('Instructions copied — paste them to the developer'); } catch (_) { toast('Could not copy'); } return; }
     if (k === 'orders-api') { showTab('orders'); setTimeout(() => $('oSetBtn').click(), 400); }
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();

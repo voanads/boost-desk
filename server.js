@@ -541,12 +541,25 @@ async function linkCode(fbId) {
 }
 // One refresh at a time, so two requests never handle the same /link message twice.
 let chatsBusy = Promise.resolve();
+// Read new Telegram messages every minute, so /link works without opening the website and nothing expires.
+if (telegram.hasBot()) setInterval(() => refreshChats().catch((e) => console.error('[telegram] refresh:', e.message)), 60000).unref();
 function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow); chatsBusy = run.catch(() => {}); return run; }
 async function refreshChatsNow() {
   const saved = await db.getSetting('telegramChats', []);
   const byId = new Map(saved.map((c) => [c.id, c]));
-  let fresh = { chats: [], links: [] };
-  try { fresh = await telegram.listChats(); } catch (e) { if (!saved.length) throw e; }
+  let fresh = { chats: [], links: [], moved: [] };
+  const offset = await db.getSetting('telegramOffset', 0);
+  try { fresh = await telegram.listChats(offset); } catch (e) { if (!saved.length) throw e; }
+  // Groups that became supergroups: move the saved group, its topics and every client to the new id.
+  for (const mv of fresh.moved || []) {
+    for (const c of [...byId.values()]) {
+      const [g, th] = String(c.id).split(':'); if (g !== mv.from) continue;
+      const id = th ? `${mv.to}:${th}` : mv.to; byId.delete(c.id); byId.set(id, { ...c, id, ...(c.chat ? { chat: mv.to } : {}) });
+    }
+    await db.pool.query(`UPDATE clients SET telegram = $2 || substr(telegram, length($1) + 1) WHERE telegram = $1 OR telegram LIKE $1 || ':%'`, [mv.from, mv.to]);
+    await db.pool.query(`UPDATE clients SET topics = replace(topics::text, '"' || $1 || ':', '"' || $2 || ':')::jsonb WHERE topics::text LIKE '%"' || $1 || ':%'`, [mv.from, mv.to]);
+    console.log('[telegram] group moved', mv.from, '→', mv.to);
+  }
   for (const c of fresh.chats) {
     const old = byId.get(c.id) || {};
     // A topic seen without its name (e.g. "Topic 45") keeps the name found earlier.
@@ -586,8 +599,9 @@ async function refreshChatsNow() {
     const rows = (await db.pool.query("SELECT DISTINCT owner, telegram FROM clients WHERE telegram <> ''")).rows;
     for (const c of unowned) { const users = [...new Set(rows.filter((r) => r.telegram === c.id).map((r) => r.owner))]; if (users.length) { c.owners = users; c.owner = users[0]; } }
   }
-  const all = [...byId.values()].sort((a, b) => a.title.localeCompare(b.title));
+  const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);
+  if (fresh.next && fresh.next !== offset) await db.setSetting('telegramOffset', fresh.next); // only after everything above is saved
   return all;
 }
 async function myChats(fbId) {

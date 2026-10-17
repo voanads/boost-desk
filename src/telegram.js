@@ -70,15 +70,25 @@ async function sendDocument(buf, filename, caption, chatId = cfg.telegramChatId,
 
 // Groups the bot has seen recently (add the bot to the group and send one message there).
 // Telegram only keeps the last 24 hours of updates, so the server also saves what it finds.
-async function listChats() {
+// Reads new updates from `offset` on (up to 1000, in pages of 100). Telegram holds at most 100 unread
+// updates per call, so without moving the offset a busy group would hide every newer /link.
+async function listChats(offset = 0) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
-  const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post"]')}`);
-  const body = await res.json().catch(() => ({}));
-  if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
-  const found = new Map(), links = [], topicNames = {};
-  for (const u of body.result || []) {
+  const result = []; let next = offset;
+  for (let page = 0; page < 10; page++) {
+    const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?limit=100&offset=${next}&allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post"]')}`);
+    const body = await res.json().catch(() => ({}));
+    if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
+    const list = body.result || []; result.push(...list);
+    if (list.length) next = list[list.length - 1].update_id + 1;
+    if (list.length < 100) break;
+  }
+  const found = new Map(), links = [], topicNames = {}, moved = [];
+  for (const u of result) {
     const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
     if (!chat || chat.type === 'private') continue;
+    // A group upgraded to a supergroup gets a new id; reports must follow it.
+    if (u.message && u.message.migrate_to_chat_id) { moved.push({ from: String(chat.id), to: String(u.message.migrate_to_chat_id) }); continue; }
     found.set(String(chat.id), { id: String(chat.id), title: chat.title || String(chat.id), type: chat.type });
     // Groups with topics: a message inside a topic carries its thread id; the topic's name comes from
     // the "topic created" message it belongs to.
@@ -93,11 +103,11 @@ async function listChats() {
     }
     // "/link CODE" typed in a group (or in one topic of it) links it to one Boost Desk account.
     const t = (u.message || u.channel_post || {}).text || '';
-    const mm = t.match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
-    if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
+    const mm = t.trim().match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/i);
+    if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links };
+  return { chats: [...found.values()], links, moved, next };
 }
 
 let botName = null;

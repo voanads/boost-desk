@@ -695,8 +695,9 @@
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}`)]);
       oData2 = d; oCfg = cfg;
       const note = $('oNote');
-      if (!cfg.url || !cfg.hasKey) { note.hidden = false; note.innerHTML = '<b>Connect adsbox.biz first.</b> Tap <b>⚙ API settings</b> and paste the API address and key from adsbox.biz. After that, orders update by themselves every 30 minutes.'; }
-      else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}`; }
+      $('oSetBtn').hidden = !(me && me.canAdmin); // the API key is for admins only
+      if (!cfg.url || !cfg.hasKey) { note.hidden = false; note.innerHTML = me && me.canAdmin ? '<b>Connect adsbox.biz first.</b> Tap <b>⚙ API settings</b> and paste the API address and key from adsbox.biz. After that, orders update for everyone by themselves every 30 minutes.' : 'Orders from adsbox.biz are not connected yet. Ask your admin to connect the adsbox.biz API; after that your clients\u2019 orders appear here by themselves.'; }
+      else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}${me && me.canAdmin ? '' : ' Tell your admin.'}`; }
       else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
       else note.hidden = true;
       renderOrders();
@@ -739,6 +740,7 @@
     finally { b.disabled = false; b.classList.remove('busy'); loadOrders(); }
   };
   $('oSetBtn').onclick = async () => {
+    if (!(me && me.canAdmin)) return;
     const c = oCfg || await api('/orders/api').catch(() => ({}));
     $('oUrl').value = c.url || ''; $('oKey').value = ''; $('oTestMsg').hidden = true;
     $('oKeyInfo').textContent = c.hasKey ? `A key is saved (${c.keyHint || 'hidden'})${c.savedBy ? ' by ' + c.savedBy : ''}. Leave the key empty to keep it.` : 'No key saved yet.';

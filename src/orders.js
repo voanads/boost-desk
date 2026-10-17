@@ -143,7 +143,10 @@ async function report(owner, from, to) {
     return { id: c.id, name: c.name, type: c.type, spend: c.spend, live: c.liveSpend, post: c.postSpend, orders: o.orders, newC: o.newC, oldC: o.oldC, pages: pg };
   });
   const matched = new Set(); for (const c of Object.values(oc.clients)) for (const k of Object.keys(c.pages)) matched.add(k);
-  const unmatched = rows.filter((r) => !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
+  // Only Pages this person actually boosts (seen in their synced ads) — other teams' Pages stay private.
+  const mine = new Set(), mineNames = new Set();
+  for (const d of await db.listRaw(owner, sync.addDays(from, -30), to)) for (const r of d.rows || []) { if (r.pageId) mine.add(r.pageId); if (r.page) mineNames.add(norm(r.page)); }
+  const unmatched = rows.filter((r) => (mine.has(r.page_id) || mineNames.has(norm(r.page_name))) && !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
   return { from, to, clients, unmatched, hasData: rows.length > 0 };
 }
 

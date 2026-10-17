@@ -1099,9 +1099,10 @@
     const b = ev.target.closest('.kbtn'); if (!b) return;
     ev.stopPropagation(); b.disabled = true;
     try {
+      b.textContent = 'Saving…';
       await api('/kind-override', { method: 'PUT', body: { campaignId: b.dataset.camp, kind: b.dataset.to || null } });
       toast(b.dataset.to === 'post' ? 'Moved to Boost posts' : b.dataset.to === 'live' ? 'Moved to Lives' : 'Back to automatic');
-      loadDash(); loadDay();
+      clients = await api('/clients').catch(() => clients); loadDash(); loadDay();
     } catch (e) { toast(e.message); b.disabled = false; }
   });
   function campMap(c) { const m = {}; for (const p of dPages[c.id] || []) for (const x of p.list || []) if (x.id) m[x.id] = { ...x, p }; return m; }

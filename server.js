@@ -706,9 +706,12 @@ api.put('/kind-override', wrap(async (req, res) => {
   const ov = (await db.getUserSetting(req.user.fb_id, 'kindOverride', {})) || {};
   if (kind === 'live' || kind === 'post') ov[id] = kind; else delete ov[id];
   await db.setUserSetting(req.user.fb_id, 'kindOverride', ov);
-  const r = await sync.exclusive(req.user.fb_id, () => sync.rematch(req.user));
-  if (!r) return res.status(409).json({ error: 'A sync is running — try again in a moment.' });
-  res.json({ ok: true });
+  // Recount now; if a sync is running, wait for it (the choice is already saved and every sync uses it).
+  for (let i = 0; i < 40; i++) {
+    if (await sync.exclusive(req.user.fb_id, () => sync.rematch(req.user))) return res.json({ ok: true });
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  res.json({ ok: true, later: true });
 }));
 // The bigger live/post window (a day or less = live): recount saved days once.
 app.use('/api', api);

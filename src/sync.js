@@ -208,6 +208,8 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     const e = await db.getEntry(day, t.clientId);
     // A "Live" client that also boosted a post (a boost of a day or more): it does both now.
     if (t.post && c && c.type === 'live') { await db.updateClient(user.fb_id, c.id, { type: 'both' }); c.type = 'both'; for (const x of clients) if (x.id === c.id) x.type = 'both'; }
+    // …and a "Boost post" client with a campaign set to Live by hand: it does both too.
+    if (t.slots.length && c && c.type === 'post') { await db.updateClient(user.fb_id, c.id, { type: 'both' }); c.type = 'both'; for (const x of clients) if (x.id === c.id) x.type = 'both'; }
     if (t.slots.length) {
       const lives = {};
       t.slots.forEach((sl, i) => {

@@ -32,9 +32,9 @@ async function status() {
 
 // Orders per client (and per Page) for one admin's clients over a period.
 const SRC = { all: 'orders', messenger: 'o_messenger', comment: 'o_comment', ad: 'o_ad' };
-async function byClient(owner, from, to, src = 'all') {
+async function byClient(owner, from, to, src = 'all', given = null) {
   const col = SRC[src] || 'orders';
-  const rows = (await q(`SELECT day::text AS day, page_id, page_name, ${col} AS orders, new_c, old_c, total FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows;
+  const rows = given || (await q(`SELECT day::text AS day, page_id, page_name, ${col} AS orders, new_c, old_c, total FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows;
   if (!rows.length) return { clients: {}, any: false };
   // Which client owns which Page: Page IDs seen in this admin's synced campaigns, plus Page IDs / names typed on clients.
   const raw = (await db.listRaw(owner, sync.addDays(from, -30), to)).flatMap((d) => d.rows || []);
@@ -182,6 +182,7 @@ async function pullRangeNow(from, to, force) {
     }
     for (const d of Object.keys(done)) if (d < sync.addDays(sync.todayIn(), -800)) delete done[d];
     await db.setSetting('ordersPulled', done);
+    liveCache.clear();
     await db.setSetting('ordersLastError', null);
     return n;
   } catch (e) { await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
@@ -205,11 +206,32 @@ async function testApi() {
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.
+// The period's totals straight from adsbox.biz (one call for the whole period, exactly what adsbox shows),
+// kept 5 minutes. Falls back to the saved daily counts when the API can't be reached.
+const liveCache = new Map();
+async function liveTotals(from, to) {
+  const k = from + '|' + to, hit = liveCache.get(k);
+  if (hit && Date.now() - hit.at < 5 * 60e3) return hit.rows;
+  const got = await fetchAll(from, to); if (got === null) return null;
+  const by = new Map();
+  for (const r of mapRows(got.list)) {
+    const pid = String(r.pageId || '').trim() || 'name:' + norm(r.pageName);
+    const a = by.get(pid) || { day: from, page_id: pid, page_name: r.pageName || '', all: 0, messenger: 0, comment: 0, ad: 0, new_c: 0, old_c: 0, total: 0 };
+    a.all += int(r.orders); a.messenger += int(r.om); a.comment += int(r.oc); a.ad += int(r.oa); a.new_c += int(r.newC); a.old_c += int(r.oldC); a.total += Number(r.total) || 0;
+    by.set(pid, a);
+  }
+  const rows = [...by.values()];
+  liveCache.set(k, { at: Date.now(), rows }); if (liveCache.size > 50) liveCache.delete(liveCache.keys().next().value);
+  return rows;
+}
 async function report(owner, from, to, src = 'all') {
-  const col = SRC[src] || 'orders';
-  const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to, src)]);
-  const split = (await q(`SELECT coalesce(sum(o_messenger),0)::int AS m, coalesce(sum(o_comment),0)::int AS c, coalesce(sum(o_ad),0)::int AS a FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows[0];
-  const rows = (await q(`SELECT page_id, max(page_name) AS page_name, sum(${col})::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
+  const col = SRC[src] || 'orders', key = SRC[src] ? src : 'all';
+  let live = null; try { live = await liveTotals(from, to); } catch (e) { live = null; }
+  const given = live && live.map((r) => ({ ...r, orders: r[key] }));
+  const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to, src, given && given.length ? given : null)]);
+  const split = live ? { m: live.reduce((t, r) => t + r.messenger, 0), c: live.reduce((t, r) => t + r.comment, 0), a: live.reduce((t, r) => t + r.ad, 0) }
+    : (await q(`SELECT coalesce(sum(o_messenger),0)::int AS m, coalesce(sum(o_comment),0)::int AS c, coalesce(sum(o_ad),0)::int AS a FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows[0];
+  const rows = given && given.length ? given : (await q(`SELECT page_id, max(page_name) AS page_name, sum(${col})::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
   const clients = d.clients.filter((c) => !c.archived || c.spend > 0).map((c) => {
     const o = oc.clients[c.id] || { orders: 0, newC: 0, oldC: 0, pages: {} };
     const pg = (pages[c.id] || []).map((p) => ({ page: p.page, pageId: p.pageId, named: p.named, spend: p.spend, live: p.live, post: p.post, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
@@ -220,7 +242,7 @@ async function report(owner, from, to, src = 'all') {
   const mine = new Set(), mineNames = new Set();
   for (const d of await db.listRaw(owner, sync.addDays(from, -30), to)) for (const r of d.rows || []) { if (r.pageId) mine.add(r.pageId); if (r.page) mineNames.add(norm(r.page)); }
   const unmatched = rows.filter((r) => (mine.has(r.page_id) || mineNames.has(norm(r.page_name))) && !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
-  return { from, to, src: SRC[src] ? src : 'all', hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
+  return { from, to, live: !!(given && given.length), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
 module.exports = { importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

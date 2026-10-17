@@ -729,7 +729,7 @@
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}&src=${oSrc}`)]);
       oData2 = d; oCfg = cfg;
       // A period older than the automatic 3 days is fetched from adsbox once per visit, then shown again.
-      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
+      if (cfg.url && cfg.hasKey && !d.live && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
         oPulled.add(oPreset);
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (aRange(oPreset)[0] === from) loadOrders(); }).catch(() => {});
       }
@@ -740,6 +740,7 @@
       else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
       else note.hidden = true;
       $('oSrc').hidden = !d.hasSplit;
+      $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '') + (d.live ? ' · live from adsbox.biz' : '');
       document.querySelectorAll('#oSrc button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === oSrc)));
       renderOrders();
     } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }

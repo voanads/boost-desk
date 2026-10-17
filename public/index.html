@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=91">
+<link rel="stylesheet" href="/assets/app.css?v=92">
 </head>
 <body>
 <div class="wrap">
@@ -273,39 +273,60 @@
 
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Admin dashboard</h2><div class="hint">Every account's boost spend in one place. Only the app owner and people they allow can see this.</div></div></div>
+      <div class="chead2"><div><h2>Admin</h2><div class="hint">Spend for every account, the people who use Boost Desk, what needs attention, and the app's settings.</div></div></div>
+      <div class="seg admnav" id="admNav" role="tablist" aria-label="Admin sections">
+        <button data-a="overview" role="tab">📊 Overview</button><button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
+      </div>
+    </div>
+
+    <div id="adm-overview">
       <div class="chips" id="aChips" role="group" aria-label="Period">
         <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button><button data-p="thisYear">This year</button>
       </div>
+      <div class="summary">
+        <div class="hero"><span class="lbl">All accounts spent</span><span class="val num" id="aSpend">$0.00</span><span class="sub num" id="aTax"></span></div>
+        <div><span class="lbl">Live spend</span><span class="val num" id="aLive">$0.00</span><span class="sub" id="aLives"></span></div>
+        <div><span class="lbl">Boost post spend</span><span class="val num" id="aPost">$0.00</span><span class="sub">&nbsp;</span></div>
+        <div><span class="lbl">Orders</span><span class="val num" id="aOrd">–</span><span class="sub" id="aOrdSub"></span></div>
+        <div><span class="lbl">Accounts with spend</span><span class="val num" id="aAcc">0</span><span class="sub" id="aAccSub"></span></div>
+      </div>
+      <div class="panel">
+        <div class="thead"><h2 id="aTitle">Accounts</h2><span class="hint" id="aHint">Tap an account to see its clients</span></div>
+        <div class="tablewrap"><table class="dtable" id="aTable">
+          <thead><tr><th>Account</th><th class="r">Clients</th><th class="r">Lives</th><th class="r">Live</th><th class="r">Post</th><th class="r">Total</th><th class="r">Orders</th><th class="r">Cost / order</th><th>Last sync</th></tr></thead>
+          <tbody id="aBody"></tbody><tfoot id="aFoot"></tfoot>
+        </table></div>
+      </div>
+      <div class="panel" id="teamPanel">
+        <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
+        <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The table above then shows spend per team. Each person can be in one team.</div>
+        <div class="teamgrid" id="teamGrid"></div>
+      </div>
     </div>
-    <div class="summary">
-      <div class="hero"><span class="lbl">All accounts spent</span><span class="val num" id="aSpend">$0.00</span><span class="sub num" id="aTax"></span></div>
-      <div><span class="lbl">Live spend</span><span class="val num" id="aLive">$0.00</span><span class="sub" id="aLives"></span></div>
-      <div><span class="lbl">Boost post spend</span><span class="val num" id="aPost">$0.00</span><span class="sub">&nbsp;</span></div>
-      <div><span class="lbl">Accounts with spend</span><span class="val num" id="aAcc">0</span><span class="sub" id="aAccSub"></span></div>
-    </div>
-    <div class="panel">
-      <div class="thead"><h2 id="aTitle">Accounts</h2><span class="hint" id="aHint">Tap an account to see its clients</span></div>
-      <div class="tablewrap"><table class="dtable" id="aTable">
-        <thead><tr><th>Account</th><th class="r">Clients</th><th class="r">Lives</th><th class="r">Live</th><th class="r">Post</th><th class="r">Total</th><th>Last sync</th></tr></thead>
-        <tbody id="aBody"></tbody><tfoot id="aFoot"></tfoot>
-      </table></div>
-    </div>
-    <div class="panel" id="teamPanel">
-      <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
-      <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The Admin table above then shows spend per team. Each person can be in one team.</div>
-      <div class="teamgrid" id="teamGrid"></div>
-    </div>
-    <div class="panel" id="autoPanel" hidden>
-      <div class="rowx"><h2>Accounts &amp; auto sync</h2><span class="spacer"></span><button id="autoAllOn">Turn all on</button><button id="autoAllOff">Turn all off</button></div>
-      <div class="hint">Only you (the app owner) see this. For each account that has logged in: every 5 minutes it checks for new ad accounts and new campaigns, every hour it refreshes today and yesterday, and at 05:30 it refreshes the last 30 days. An account is only synced after it has tapped Sync from Meta once, and while its Facebook login is valid.</div>
-      <div id="autoMsg" class="hint"></div>
-      <div class="tablewrap"><table><thead><tr><th>Account</th><th>Auto sync</th><th>Status</th><th>Last auto sync</th><th>Login expires</th><th>Can see Admin</th><th></th></tr></thead><tbody id="autoBody"></tbody></table></div>
-      <div id="blockedBox" hidden>
-        <h3>Removed accounts</h3>
+
+    <div id="adm-users" hidden>
+      <div class="panel">
+        <div class="thead"><h2>People</h2><div class="filters"><input type="search" id="uSearch" placeholder="Search people" aria-label="Search people"></div></div>
+        <div class="hint" id="uHint"></div>
+        <div class="ucards" id="uList"></div>
+      </div>
+      <div class="panel" id="blockedBox" hidden>
+        <h2>Removed accounts</h2>
         <div class="hint">These Facebook accounts can't log in to Boost Desk. Restore one to let them log in again (they start with an empty workspace).</div>
         <div class="tablewrap"><table><tbody id="blockedBody"></tbody></table></div>
       </div>
+    </div>
+
+    <div id="adm-health" hidden>
+      <div class="panel">
+        <div class="thead"><h2>Needs attention</h2><span class="spacer"></span><button id="hRefresh" type="button">↻ Check again</button></div>
+        <div id="hList" class="hlist"></div>
+        <div id="hOk" class="hok"></div>
+      </div>
+    </div>
+
+    <div id="adm-settings" hidden>
+      <div class="setgrid" id="sGrid"></div>
     </div>
   </section>
 </div>
@@ -444,6 +465,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=91"></script>
+<script src="/assets/app.js?v=92"></script>
 </body>
 </html>

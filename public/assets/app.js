@@ -226,7 +226,7 @@
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
     if (name === 'clients') loadClientMonth();
-    if (name === 'admin') { loadAdmin(); if (me && me.isOwner) loadAuto(); }
+    if (name === 'admin') { showAdm(admSec); if (admSec !== 'health') loadHealth(); }
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
     if (name === 'orders') loadOrders();
@@ -816,79 +816,147 @@
     return new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
   const whyLabel = { 'new ad account': 'new ad account found', 'new campaign': 'new campaign found', hourly: 'hourly refresh', 'daily 30-day': '30-day refresh', 'run now': 'run now' };
-  async function loadAuto() {
-    $('autoPanel').hidden = false;
-    let d;
-    try { d = await api('/auto-sync'); } catch (e) { $('autoMsg').textContent = e.message; return; }
-    $('autoMsg').textContent = d.on ? '' : 'Auto sync is switched off on the server (AUTO_SYNC=off in Railway), so nothing runs until you remove it.';
-    $('autoMsg').classList.toggle('err', !d.on);
-    $('autoBody').innerHTML = d.users.map((u) => {
-      let st;
-      if (u.expired) st = '<span class="over">Login expired</span>';
-      else if (!u.enabled) st = '<span class="muted">Off</span>';
-      else if (!u.synced) st = '<span class="muted">Waiting for first Sync from Meta</span>';
-      else if (u.busy) st = 'Syncing…';
-      else st = '<span class="ok">Running</span>';
-      const lr = u.lastRun;
-      const last = !lr ? '—' : lr.error
-        ? `<span class="over">${esc(ago(lr.at))} · failed: ${esc(lr.error)}</span>`
-        : `${esc(ago(lr.at))} · ${esc(whyLabel[lr.why] || lr.why)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
-      const exp = u.tokenExpires ? new Date(u.tokenExpires).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-      return `<tr>
-        <td>${esc(u.name)}${u.id === me.id ? ' <span class="muted">(you)</span>' : ''}<div class="hint">${u.accounts} ad accounts · ${u.clients} clients</div></td>
-        <td><label class="chk"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''}> ${u.enabled ? 'On' : 'Off'}</label></td>
-        <td>${st}</td>
-        <td>${last}${u.lastCheck ? `<div class="hint">checked for new campaigns ${esc(ago(u.lastCheck))}</div>` : ''}</td>
-        <td>${esc(exp)}</td>
-        <td>${u.id === me.id ? '<span class="chip meta">Owner</span>' : `<label class="chk"><input type="checkbox" data-adminview="${esc(u.id)}" ${u.adminView ? 'checked' : ''}> ${u.adminView ? 'Yes' : 'No'}</label>`}</td>
-        <td class="acts"><button data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>Run now</button>${u.id === me.id ? '' : ` <button class="danger" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>`}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="7" class="muted">Nobody has logged in yet.</td></tr>';
-    try {
-      const b = Object.entries(await api('/blocked'));
-      $('blockedBox').hidden = !b.length;
-      $('blockedBody').innerHTML = b.map(([id, x]) => `<tr><td>${esc(x.name || id)}<div class="hint">Facebook ID ${esc(id)} · removed ${esc(ago(x.at))}</div></td><td class="acts"><button data-restore="${esc(id)}">Restore access</button></td></tr>`).join('');
-    } catch (_) {}
+  // ---------- Admin panel: sections ----------
+  let admSec = (() => { try { return localStorage.getItem('admSec') || 'overview'; } catch (_) { return 'overview'; } })();
+  function showAdm(sec) {
+    admSec = sec; try { localStorage.setItem('admSec', sec); } catch (_) {}
+    document.querySelectorAll('#admNav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.a === sec)));
+    for (const k of ['overview', 'users', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
+    if (sec === 'overview') loadAdmin();
+    if (sec === 'users') loadUsers();
+    if (sec === 'health') loadHealth();
+    if (sec === 'settings') loadSettings();
   }
+  document.querySelectorAll('#admNav button').forEach((b) => b.onclick = () => showAdm(b.dataset.a));
+  const initials = (n) => esc((n || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase());
+  const dateShort = (t) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+
+  // Users
+  let uData = null;
+  async function loadUsers() {
+    try { uData = await api('/admin/users'); } catch (e) { $('uList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    renderUsers();
+  }
+  function renderUsers() {
+    const d = uData; if (!d) return;
+    const q = ($('uSearch').value || '').trim().toLowerCase();
+    $('admUsersN').textContent = d.users.length || '';
+    $('uHint').innerHTML = (d.canEdit ? '<b>Owner</b> manages everything · <b>Admin</b> can see this Admin page · <b>Member</b> sees only their own clients.' : 'Only the app owner can change roles or remove people.')
+      + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
+    const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
+    const day = 864e5;
+    $('uList').innerHTML = list.map((u, i) => {
+      const exp = u.tokenExpires ? Date.parse(u.tokenExpires) : 0, left = exp ? Math.round((exp - Date.now()) / day) : null;
+      let st;
+      if (u.expired) st = '<span class="ustat bad">Login expired</span>';
+      else if (!u.enabled) st = '<span class="ustat">Auto sync off</span>';
+      else if (!u.synced) st = '<span class="ustat">Waiting for first sync</span>';
+      else if (u.busy) st = '<span class="ustat run">Syncing…</span>';
+      else if (u.lastRun && u.lastRun.error) st = '<span class="ustat bad">Last sync failed</span>';
+      else st = '<span class="ustat ok">Running</span>';
+      const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
+      const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
+      const role = u.role === 'owner' ? '<span class="rolechip owner">Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}"><option value="member" ${u.role === 'member' ? 'selected' : ''}>Member</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select>` : `<span class="rolechip ${u.role}">${u.role === 'admin' ? 'Admin' : 'Member'}</span>`;
+      return `<div class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
+        <div class="uc-top"><span class="avatar">${initials(u.name)}</span><div class="uc-n"><span class="uc-nm"><b>${esc(u.name)}</b>${you ? '<span class="chip meta">You</span>' : ''}</span><span class="hint">${u.team ? esc(u.team) + ' · ' : ''}${u.accounts} ad accounts · ${u.clients} clients</span></div>${role}</div>
+        <div class="uc-grid">
+          <div><span class="lbl">Status</span>${st}</div>
+          <div><span class="lbl">Last active</span><span>${u.lastSeen ? ago(u.lastSeen) : '—'}</span></div>
+          <div><span class="lbl">Facebook login</span><span class="${u.expired ? 'over' : left !== null && left < 7 ? 'warnt' : ''}">${u.expired ? 'Expired' : left !== null ? `${left} day${left === 1 ? '' : 's'} left` : '—'}</span></div>
+          <div><span class="lbl">Auto report</span><span>${u.autoReport && u.autoReport.on ? '⏰ ' + esc(u.autoReport.time) : 'Off'}</span></div>
+        </div>
+        <div class="hint uc-last">${last}</div>
+        <div class="uc-acts">${d.canEdit ? `<label class="switch"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''}><span></span> Auto sync</label>` : ''}<span class="spacer"></span>
+          ${d.canEdit ? `<button class="sm" data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻ Sync now</button>` : ''}
+          ${edit && !you ? `<button class="sm danger" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>` : ''}</div>
+      </div>`;
+    }).join('') || '<div class="empty">No one matches.</div>';
+    const b = Object.entries(d.blocked || {});
+    $('blockedBox').hidden = !b.length;
+    $('blockedBody').innerHTML = b.map(([id, x]) => `<tr><td>${esc(x.name || id)}<div class="hint">Facebook ID ${esc(id)} · removed ${esc(ago(x.at))}</div></td><td class="acts"><button data-restore="${esc(id)}">Restore access</button></td></tr>`).join('');
+  }
+  $('uSearch').oninput = () => renderUsers();
   $('blockedBody').addEventListener('click', async (ev) => {
     const id = ev.target.dataset.restore; if (!id) return;
     try { await api('/blocked/' + encodeURIComponent(id), { method: 'DELETE' }); toast('Access restored — they can log in again'); } catch (e) { toast(e.message); }
-    loadAuto();
+    loadUsers();
   });
-  $('autoBody').addEventListener('change', async (ev) => {
-    const av = ev.target.dataset.adminview;
-    if (av) {
-      try { await api('/admin/viewers/' + encodeURIComponent(av), { method: 'PUT', body: { enabled: ev.target.checked } }); toast(ev.target.checked ? 'They can now see the Admin dashboard' : 'Admin dashboard access removed'); }
-      catch (e) { toast(e.message); }
-      return loadAuto();
-    }
+  $('uList').addEventListener('change', async (ev) => {
+    const r = ev.target.dataset.role;
+    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge(ev.target.value === 'admin' ? 'Now an Admin' : 'Now a Member'); } catch (e) { toast(e.message); } return loadUsers(); }
     const id = ev.target.dataset.auto; if (!id) return;
-    try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); }
-    catch (e) { toast(e.message); }
-    loadAuto();
+    try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); } catch (e) { toast(e.message); }
+    loadUsers();
   });
-  $('autoBody').addEventListener('click', async (ev) => {
-    const rm = ev.target.dataset.remove;
-    if (rm) {
-      const name = ev.target.dataset.name;
-      if (!confirm(`Remove ${name}?\n\nThis deletes ${name}'s clients, synced days and settings from Boost Desk, logs them out, and blocks them from logging in again. It does not touch anything in Facebook or Ads Manager.\n\nThis can't be undone (you can restore their login later, but their data will be gone).`)) return;
-      try { await api('/users/' + encodeURIComponent(rm), { method: 'DELETE' }); toast(name + ' removed'); } catch (e) { toast(e.message); }
-      return loadAuto();
-    }
-    const id = ev.target.dataset.run; if (!id) return;
-    ev.target.disabled = true;
-    try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); }
-    catch (e) { toast(e.message); }
-    loadAuto();
-    setTimeout(() => { if (!$('tab-admin').hidden) loadAuto(); }, 15000);
-  });
-  for (const [btn, on] of [['autoAllOn', true], ['autoAllOff', false]]) {
-    $(btn).onclick = async () => {
-      try { await api('/auto-sync', { method: 'PUT', body: { enabled: on } }); toast('Auto sync ' + (on ? 'on' : 'off') + ' for everyone'); }
-      catch (e) { toast(e.message); }
-      loadAuto();
-    };
+  async function runSync(id, btn) {
+    if (btn) btn.disabled = true;
+    try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); } catch (e) { toast(e.message); }
+    setTimeout(() => { if (!$('tab-admin').hidden) { if (admSec === 'users') loadUsers(); if (admSec === 'health') loadHealth(); } }, 15000);
   }
+  $('uList').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.remove) {
+      const name = b.dataset.name;
+      if (!confirm(`Remove ${name}?\n\nThis deletes ${name}'s clients, synced days and settings from Boost Desk, logs them out, and blocks them from logging in again. It does not touch anything in Facebook or Ads Manager.\n\nThis can't be undone (you can restore their login later, but their data will be gone).`)) return;
+      try { await api('/users/' + encodeURIComponent(b.dataset.remove), { method: 'DELETE' }); toast(name + ' removed'); } catch (e) { toast(e.message); }
+      return loadUsers();
+    }
+    if (b.dataset.run) { await runSync(b.dataset.run, b); loadUsers(); }
+  });
+
+  // Health
+  async function loadHealth() {
+    let d; try { d = await api('/admin/health'); } catch (e) { $('hList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    const n = d.items.filter((x) => x.level !== 'info').length;
+    $('admHealthN').textContent = n || ''; $('admHealthN').classList.toggle('bad', d.items.some((x) => x.level === 'bad'));
+    if ($('adm-health').hidden) return;
+    const icon = { bad: '⛔', warn: '⚠️', info: 'ℹ️' };
+    $('hList').innerHTML = d.items.length ? d.items.map((x, i) => `<div class="hitem ${x.level}" style="--i:${Math.min(i, 12)}"><span class="hi-ic">${icon[x.level]}</span><div class="hi-t"><span class="hi-area">${esc(x.area)}</span><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span></div>${x.action && x.action.kind === 'run' && me.isOwner ? `<button class="sm" data-hrun="${esc(x.action.id)}">↻ Sync now</button>` : x.action && x.action.kind === 'orders' ? '<button class="sm" data-hgo="orders">Open Orders</button>' : ''}</div>`).join('')
+      : '<div class="hallgood"><span>✓</span><b>Everything looks good</b><span class="hint">Nothing needs your attention right now.</span></div>';
+    $('hOk').innerHTML = d.ok.map((t) => `<div>✓ ${esc(t)}</div>`).join('') + `<div class="hint">Checked ${esc(ago(d.checkedAt))}</div>`;
+  }
+  $('hRefresh').onclick = () => loadHealth();
+  $('hList').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.hrun) { await runSync(b.dataset.hrun, b); }
+    if (b.dataset.hgo) showTab(b.dataset.hgo);
+  });
+
+  // Settings
+  async function loadSettings() {
+    let d; try { d = await api('/admin/settings'); } catch (e) { $('sGrid').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    const oc = d.orders || {};
+    const card = (ic, title, state, body, acts) => `<div class="setcard"><div class="sc-h"><span class="sc-ic">${ic}</span><b>${title}</b>${state}</div><div class="sc-b">${body}</div>${acts ? `<div class="sc-a">${acts}</div>` : ''}</div>`;
+    const on = (t) => `<span class="sc-st ok">${t}</span>`, off = (t) => `<span class="sc-st bad">${t}</span>`;
+    $('sGrid').innerHTML = [
+      card('📦', 'adsbox.biz orders', oc.hasKey ? (oc.lastError ? off('Error') : on('Connected')) : off('Not connected'),
+        `${oc.hasKey ? `Key ${esc(oc.keyHint || '')}${oc.savedBy ? ' · saved by ' + esc(oc.savedBy) : ''}<br>` : 'Connect to see cost per order.<br>'}${oc.last ? 'Last update ' + esc(ago(oc.last.at)) : ''}${oc.lastError ? `<div class="over">${esc(oc.lastError.message)}</div>` : ''}<div class="hint">Updates every 30 minutes for everyone. Only admins see the key.</div>`,
+        '<button class="sm" data-sgo="orders-api">⚙ API settings</button>'),
+      card('✈️', 'Telegram bot', d.telegram.bot ? on('Set up') : off('Missing'),
+        d.telegram.bot ? `Bot: <b>@${esc(d.telegram.username || '…')}</b><div class="hint">Clients' groups are linked with the /link code in each client's window. ${d.telegram.teamGroup ? 'Team report group is set.' : 'No team report group (TELEGRAM_CHAT_ID).'}</div>` : 'Add <code>TELEGRAM_BOT_TOKEN</code> in Railway to send reports.', ''),
+      card('🧾', 'Invoice', '', `<div class="sc-inv"><div><b>${esc(d.invoice.company)}</b><br>${esc(d.invoice.bankName)}<br>${esc(d.invoice.accountName)}<br><span class="num">${esc(d.invoice.accountNo)}</span></div>${d.invoice.qr ? `<img class="sc-qr" src="${d.invoice.qr}" alt="Payment QR">` : ''}</div><div class="hint">The payment QR is the same on every user's invoices.</div>`,
+        `${d.canEdit ? '<button class="sm" data-sgo="qr">Change QR for everyone</button><input type="file" id="sQrFile" accept="image/png,image/jpeg" hidden>' : ''}<button class="sm ghost" data-sgo="invoice">My invoice details</button>`),
+      card('⏰', 'My auto report', '', 'Sends each client’s report to their Telegram group at a set time every day. Each person sets their own.', '<button class="sm" data-sgo="autoreport">Open auto report</button>'),
+      card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
+      card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
+    ].join('');
+  }
+  $('sGrid').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const k = b.dataset.sgo;
+    if (k === 'orders-api') { showTab('orders'); setTimeout(() => $('oSetBtn').click(), 400); }
+    if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
+    if (k === 'autoreport') $('cAutoBtn').click();
+    if (k === 'qr') $('sQrFile').click();
+    if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
+  });
+  $('sGrid').addEventListener('change', async (ev) => {
+    if (ev.target.id !== 'sQrFile') return;
+    const f = ev.target.files[0]; if (!f) return;
+    if (f.size > 320000) return toast('Picture is too big — under 300 KB please.');
+    const data = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(f); });
+    try { await api('/admin/invoice-qr', { method: 'PUT', body: { qr: data } }); successBadge('QR changed for everyone'); loadSettings(); } catch (e) { toast(e.message); }
+  });
 
   $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };
 
@@ -1968,13 +2036,14 @@ Thank you for working with Ads Box!`,
     $('aTitle').textContent = 'Accounts · ' + (from === to ? nice(from) : aLabel[aPreset]);
     if (!aData) $('aBody').innerHTML = skelRows(3);
     try { const [o, t] = await Promise.all([api(`/admin/overview?from=${from}&to=${to}`), api('/admin/teams')]); aData = o; aTeams = t; renderAdmin(); renderTeams(); }
-    catch (e) { $('aBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
+    catch (e) { $('aBody').innerHTML = `<tr><td colspan="9" class="muted">${esc(e.message)}</td></tr>`; }
   }
   function renderAdmin() {
     const d = aData, t = d.totals, tax = (v) => Math.round(Math.round(v * 100) * (100 + (d.taxRate || 0)) / 100) / 100;
     rollTo($('aSpend'), money(t.spend)); $('aTax').textContent = (t.spend && d.taxRate ? `With tax ${d.taxRate}%: ${money(tax(t.spend))}` : '') + (t.added - t.spend > 0.009 ? ` · ${money(t.added - t.spend)} shared, counted once` : '');
     rollTo($('aLive'), money(t.live)); $('aLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
     rollTo($('aPost'), money(t.post));
+    rollTo($('aOrd'), t.orders ? t.orders.toLocaleString('en-US') : '–'); $('aOrdSub').textContent = t.orders ? `${money(t.orderSpend / t.orders)} per order` : 'adsbox.biz';
     rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} client${t.clients === 1 ? '' : 's'} with spend`;
     const dash = '<span class="muted">–</span>';
     const ago = (at) => { if (!at) return '<span class="muted">Never</span>'; const m = Math.round((Date.now() - new Date(at)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
@@ -1988,12 +2057,13 @@ Thank you for working with Ads Box!`,
         <td class="r num" data-l="Live">${tt.live > 0 ? money(tt.live) : dash}</td>
         <td class="r num" data-l="Post">${tt.post > 0 ? money(tt.post) : dash}</td>
         <td class="r num tot" data-l="Total"><b>${money(tt.spend)}</b>${tt.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(tt.spend))}</div>` : ''}</td>
+        <td class="r num" data-l="Orders">${u.orders ? u.orders.toLocaleString('en-US') : dash}</td><td class="r num" data-l="Cost / order">${u.orders ? '<b class="cpo">' + money(u.orderSpend / u.orders) + '</b>' : dash}</td>
         <td data-l="Last sync" class="hint">${ago(u.lastSync)}</td></tr>`;
-      const detail = !open ? '' : `<tr class="dexp"><td colspan="7"><div class="dexp-in">${withSpend.length ? withSpend.map((c) => `<div class="dl ${c.type === 'post' ? 'post' : 'live'}"><span class="dl-n"><b>${esc(c.name)}</b><span class="hint">${c.lives ? ' · ' + c.lives + ' live' + (c.lives === 1 ? '' : 's') : ''}${c.postSpend > 0 ? ' · posts ' + money(c.postSpend) : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${c.spend.toFixed(2)}</span></span></div>`).join('') : '<div class="muted">No client spend in this period.</div>'}${idle.length ? `<div class="hint" style="padding:4px 4px 0">No spend: ${idle.map((c) => esc(c.name)).join(', ')}</div>` : ''}</div></td></tr>`;
+      const detail = !open ? '' : `<tr class="dexp"><td colspan="9"><div class="dexp-in">${withSpend.length ? withSpend.map((c) => `<div class="dl ${c.type === 'post' ? 'post' : 'live'}"><span class="dl-n"><b>${esc(c.name)}</b><span class="hint">${c.lives ? ' · ' + c.lives + ' live' + (c.lives === 1 ? '' : 's') : ''}${c.postSpend > 0 ? ' · posts ' + money(c.postSpend) : ''}</span></span><span></span><span class="dl-v"><span class="muted">$</span><span class="box num">${c.spend.toFixed(2)}</span></span></div>`).join('') : '<div class="muted">No client spend in this period.</div>'}${idle.length ? `<div class="hint" style="padding:4px 4px 0">No spend: ${idle.map((c) => esc(c.name)).join(', ')}</div>` : ''}</div></td></tr>`;
       return row + detail;
     };
     const teams = d.teams || [];
-    if (!teams.length) $('aBody').innerHTML = d.users.map(userRows).join('') || '<tr><td colspan="7" class="empty-row">Nobody has logged in yet.</td></tr>';
+    if (!teams.length) $('aBody').innerHTML = d.users.map(userRows).join('') || '<tr><td colspan="9" class="empty-row">Nobody has logged in yet.</td></tr>';
     else {
       // group accounts by team, with a totals row per team
       const groups = teams.map((t) => ({ t, users: d.users.filter((u) => u.team === t.id) }));
@@ -2001,16 +2071,17 @@ Thank you for working with Ads Box!`,
       if (loose.length) groups.push({ t: { id: '', name: 'No team' }, users: loose });
       groups.forEach((g) => {
         g.sum = g.users.reduce((a, u) => ({ spend: a.spend + u.totals.spend, live: a.live + u.totals.live, post: a.post + u.totals.post, lives: a.lives + u.totals.lives, clients: a.clients + u.totals.active }), { spend: 0, live: 0, post: 0, lives: 0, clients: 0 });
+        g.ord = g.users.reduce((a, u) => a + (u.orders || 0), 0); g.ordSpend = g.users.reduce((a, u) => a + (u.orderSpend || 0), 0);
         const tt = (d.teamTotals || {})[g.t.id];
         if (tt) { g.shared = Math.max(0, Math.round((g.sum.spend - tt.spend) * 100) / 100); g.sum = { spend: tt.spend, live: tt.live, post: tt.post, lives: tt.lives, clients: tt.clients }; }
       });
       groups.sort((a, b) => (!a.t.id) - (!b.t.id) || b.sum.spend - a.sum.spend);
       $('aBody').innerHTML = groups.map((g) => `<tr class="teamrow${g.t.id ? '' : ' loose'}"><td><div class="nm"><span class="teamdot"></span><b>${esc(g.t.name)}</b><span class="hint">${g.users.length} ${g.users.length === 1 ? 'person' : 'people'}</span></div></td>
         <td class="r num" data-l="Clients">${g.sum.clients}</td><td class="r num" data-l="Lives">${g.sum.lives || dash}</td><td class="r num" data-l="Live">${g.sum.live > 0 ? money(g.sum.live) : dash}</td><td class="r num" data-l="Post">${g.sum.post > 0 ? money(g.sum.post) : dash}</td>
-        <td class="r num tot" data-l="Total"><b>${money(g.sum.spend)}</b>${g.sum.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(g.sum.spend))}</div>` : ''}${g.shared > 0.009 ? `<div class="sharednote" title="Campaigns synced by more than one person in this team are counted once">${money(g.shared)} shared, counted once</div>` : ''}</td><td class="hint">${t.spend ? Math.round(g.sum.spend / t.spend * 100) + '% of all' : ''}</td></tr>`
-        + (g.users.map(userRows).join('') || '<tr class="teamempty"><td colspan="7" class="hint">No one in this team yet — add people below.</td></tr>')).join('');
+        <td class="r num tot" data-l="Total"><b>${money(g.sum.spend)}</b>${g.sum.spend && d.taxRate ? `<div class="hint">+tax ${money(tax(g.sum.spend))}</div>` : ''}${g.shared > 0.009 ? `<div class="sharednote" title="Campaigns synced by more than one person in this team are counted once">${money(g.shared)} shared, counted once</div>` : ''}</td><td class="r num" data-l="Orders">${g.ord ? g.ord.toLocaleString('en-US') : dash}</td><td class="r num" data-l="Cost / order">${g.ord ? money(g.ordSpend / g.ord) : dash}</td><td class="hint">${t.spend ? Math.round(g.sum.spend / t.spend * 100) + '% of all' : ''}</td></tr>`
+        + (g.users.map(userRows).join('') || '<tr class="teamempty"><td colspan="9" class="hint">No one in this team yet — add people below.</td></tr>')).join('');
     }
-    $('aFoot').innerHTML = d.users.length > 1 ? `<tr><td>Total · ${d.users.length} accounts</td><td class="r num" data-l="Clients">${t.clients}</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${d.taxRate ? `<div class="hint">+tax ${money(tax(t.spend))}</div>` : ''}</td><td></td></tr>` : '';
+    $('aFoot').innerHTML = d.users.length > 1 ? `<tr><td>Total · ${d.users.length} accounts</td><td class="r num" data-l="Clients">${t.clients}</td><td class="r num" data-l="Lives">${t.lives}</td><td class="r num" data-l="Live">${money(t.live)}</td><td class="r num" data-l="Post">${money(t.post)}</td><td class="r num tot" data-l="Total"><b>${money(t.spend)}</b>${d.taxRate ? `<div class="hint">+tax ${money(tax(t.spend))}</div>` : ''}</td><td class="r num" data-l="Orders">${t.orders ? t.orders.toLocaleString('en-US') : ''}</td><td class="r num" data-l="Cost / order">${t.orders ? money(t.orderSpend / t.orders) : ''}</td><td></td></tr>` : '';
     document.querySelectorAll('#aBody tr.drow').forEach((tr) => {
       const toggle = () => { const id = tr.dataset.uid; aOpen.has(id) ? aOpen.delete(id) : aOpen.add(id); renderAdmin();
         const box = document.querySelector(`#aBody tr.drow[data-uid="${id}"]`)?.nextElementSibling?.querySelector('.dexp-in');

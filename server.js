@@ -88,6 +88,7 @@ app.get('/login', wrap(async (req, res) => {
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 
+const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {
   const user = req.session.fbId && (await db.getUser(req.session.fbId));
@@ -96,6 +97,9 @@ app.use(wrap(async (req, res, next) => {
     return res.redirect('/login');
   }
   req.user = user;
+  // When each person was last active (saved at most every 10 minutes).
+  const seen = lastSeenMem.get(user.fb_id) || 0;
+  if (Date.now() - seen > 10 * 60e3) { lastSeenMem.set(user.fb_id, Date.now()); db.setUserSetting(user.fb_id, 'lastSeen', new Date().toISOString()).catch(() => {}); }
   next();
 }));
 
@@ -172,13 +176,18 @@ api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
   const users = await db.allUsers();
   const out = [];
+  // Orders from adsbox.biz for the period (live), counted per account through its clients' Pages.
+  let live = null; try { live = await orders.liveTotals(from, to); } catch (_) { live = null; }
+  const given = live && live.length ? live.map((r) => ({ ...r, orders: r.all })) : null;
   for (const u of users) {
     const d = await sync.dashboard(u.fb_id, from, to);
+    let ord = 0, ordSpend = 0;
+    try { const oc = await orders.byClient(u.fb_id, from, to, 'all', given); for (const c of d.clients) { const o = oc.clients[c.id]; if (o && o.orders) { ord += o.orders; ordSpend += c.spend; } } } catch (_) {}
     const last = (await db.pool.query('SELECT max(synced_at) AS at FROM day_meta WHERE owner=$1', [u.fb_id])).rows[0];
     out.push({
       id: u.fb_id, name: u.name, you: u.fb_id === req.user.fb_id,
       expired: !!(u.token_expires && new Date(u.token_expires) < new Date()),
-      lastSync: last && last.at, totals: d.totals,
+      lastSync: last && last.at, totals: d.totals, orders: ord, orderSpend: Math.round(ordSpend * 100) / 100,
       clientCount: d.clients.filter((c) => !c.archived).length,
       clients: d.clients.filter((c) => c.spend > 0 || !c.archived).map((c) => ({ id: c.id, name: c.name, type: c.type, lives: c.lives, liveSpend: c.liveSpend, postSpend: c.postSpend, spend: c.spend, days: c.days })),
     });
@@ -196,7 +205,77 @@ api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   }
   const uniq = await sync.uniqueTotals(out.map((u) => u.id), from, to);
   const allTotals = { ...totals, spend: uniq.spend, live: uniq.live, post: uniq.post, lives: uniq.lives, clients: uniq.clients, added: Math.round(totals.spend * 100) / 100 };
+  allTotals.orders = out.reduce((t, u) => t + u.orders, 0); allTotals.orderSpend = out.reduce((t, u) => t + u.orderSpend, 0);
   res.json({ from, to, users: out, totals: allTotals, teams, teamTotals, taxRate: sync.TAX_RATE });
+}));
+// ---- Admin panel: users, health, settings ----
+api.get('/admin/users', adminOnly, wrap(async (req, res) => {
+  const owner = await db.ownerId(), viewers = await adminViewers(), teams = await getTeams();
+  const status = await jobs.statusAll();
+  const users = await db.allUsers();
+  const out = [];
+  for (const st of status) {
+    const u = users.find((x) => x.fb_id === st.id) || {};
+    const t = teams.find((x) => x.members.includes(st.id));
+    out.push({ ...st, role: st.id === owner ? 'owner' : viewers.has(st.id) ? 'admin' : 'member', team: t ? t.name : '', lastLogin: u.updated_at || null,
+      lastSeen: await db.getUserSetting(st.id, 'lastSeen', null), autoReport: await db.getUserSetting(st.id, 'autoReport', null) });
+  }
+  out.sort((a, b) => ({ owner: 0, admin: 1, member: 2 }[a.role] - { owner: 0, admin: 1, member: 2 }[b.role]) || String(a.name).localeCompare(String(b.name)));
+  res.json({ users: out, canEdit: owner === req.user.fb_id, me: req.user.fb_id, autoSyncServer: process.env.AUTO_SYNC !== 'off', blocked: owner === req.user.fb_id ? await db.blockedUsers() : {} });
+}));
+api.put('/admin/role/:id', ownerOnly, wrap(async (req, res) => {
+  const id = req.params.id; if (id === req.user.fb_id) return res.status(400).json({ error: 'You are the owner.' });
+  if (!(await db.getUser(id))) return res.status(404).json({ error: 'Account not found.' });
+  const v = await adminViewers(); if ((req.body || {}).role === 'admin') v.add(id); else v.delete(id);
+  await db.setSetting('adminViewers', [...v]); res.json({ ok: true });
+}));
+// Everything that needs attention, worst first.
+api.get('/admin/health', adminOnly, wrap(async (req, res) => {
+  const items = [], now = Date.now(), day = 864e5, today = sync.todayIn();
+  const add = (level, area, title, detail, action) => items.push({ level, area, title, detail, action: action || null });
+  const status = await jobs.statusAll();
+  for (const u of status) {
+    const exp = u.tokenExpires ? Date.parse(u.tokenExpires) : 0;
+    if (u.expired) add('bad', 'Login', `${u.name}'s Facebook login has expired`, 'Nothing syncs for this account until they log in to Boost Desk again.', null);
+    else if (exp && exp - now < 7 * day) add('warn', 'Login', `${u.name}'s Facebook login expires in ${Math.max(1, Math.round((exp - now) / day))} day(s)`, 'Ask them to log out and log in again to renew it.', null);
+    const lr = u.lastRun;
+    if (lr && lr.error) add('bad', 'Sync', `Auto sync failed for ${u.name}`, `${lr.error} · ${new Date(lr.at).toLocaleString('en-GB', { timeZone: cfg.tz, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`, { kind: 'run', id: u.id });
+    else if (lr && lr.errors) add('warn', 'Sync', `${u.name}: ${lr.errors} ad account(s) failed in the last sync`, 'Check Ad accounts for disabled or unpaid accounts.', { kind: 'run', id: u.id });
+    if (!u.expired && u.enabled && !u.synced) add('info', 'Sync', `${u.name} has never synced`, 'Auto sync starts after they tap Sync from Meta once.', null);
+    if (!u.expired && u.enabled && u.synced && lr && lr.at && now - Date.parse(lr.at) > 3 * 3600e3) add('warn', 'Sync', `No auto sync for ${u.name} in ${Math.round((now - Date.parse(lr.at)) / 3600e3)} hours`, 'Usually it runs every hour.', { kind: 'run', id: u.id });
+    const ar = await db.getUserSetting(u.id, 'autoReportLast', null);
+    if (ar && ar.failed && ar.failed.length) add('bad', 'Reports', `${ar.failed.length} auto report(s) failed for ${u.name}`, ar.failed.slice(0, 3).map((f) => `${f.name}: ${f.error}`).join(' · '), null);
+  }
+  if (!telegram.hasBot()) add('bad', 'Telegram', 'The Telegram bot is not set up', 'Add TELEGRAM_BOT_TOKEN in Railway so reports can be sent.', null);
+  const oc = await orders.publicConfig();
+  if (!oc.hasKey) add('info', 'Orders', 'adsbox.biz is not connected', 'Connect it to see cost per order.', { kind: 'orders' });
+  else if (oc.lastError) add('bad', 'Orders', 'Getting orders from adsbox.biz failed', oc.lastError.message, { kind: 'orders' });
+  else if (oc.last && now - Date.parse(oc.last.at) > 2 * 3600e3) add('warn', 'Orders', 'Orders from adsbox.biz have not updated in ' + Math.round((now - Date.parse(oc.last.at)) / 3600e3) + ' hours', 'Usually every 30 minutes.', { kind: 'orders' });
+  if (process.env.AUTO_SYNC === 'off') add('warn', 'Sync', 'Auto sync is switched off on the server', 'AUTO_SYNC=off is set in Railway.', null);
+  const order = { bad: 0, warn: 1, info: 2 };
+  items.sort((a, b) => order[a.level] - order[b.level]);
+  const ok = [];
+  if (telegram.hasBot()) ok.push('Telegram bot is set up');
+  if (oc.hasKey && !oc.lastError) ok.push('adsbox.biz orders are connected' + (oc.last ? ' · last update ' + new Date(oc.last.at).toLocaleTimeString('en-GB', { timeZone: cfg.tz, hour: '2-digit', minute: '2-digit' }) : ''));
+  const running = status.filter((u) => u.enabled && u.synced && !u.expired).length;
+  ok.push(`Auto sync running for ${running} of ${status.length} account(s)`);
+  res.json({ items, ok, checkedAt: new Date().toISOString(), today });
+}));
+// Settings overview for the admin panel.
+api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
+  const prof = invoice.profileOf(await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
+  res.json({
+    telegram: { bot: telegram.hasBot(), username: await telegram.username(), teamGroup: !!cfg.telegramChatId },
+    orders: await orders.publicConfig(),
+    invoice: { company: prof.company, bankName: prof.bankName, accountName: prof.accountName, accountNo: prof.accountNo, qr: prof.qr },
+    autoSyncServer: process.env.AUTO_SYNC !== 'off', tz: cfg.tz, taxRate: sync.TAX_RATE,
+    canEdit: (await db.ownerId()) === req.user.fb_id,
+  });
+}));
+api.put('/admin/invoice-qr', ownerOnly, wrap(async (req, res) => {
+  const qr = String((req.body || {}).qr || '');
+  if (qr && (!/^data:image\/(png|jpe?g);base64,/.test(qr) || qr.length > 450000)) return res.status(400).json({ error: 'The QR must be a PNG or JPG, up to about 300 KB.' });
+  await db.setSetting('invoiceQr', qr); invoice.setQr(qr); res.json({ ok: true });
 }));
 api.get('/blocked', ownerOnly, wrap(async (req, res) => res.json(await db.blockedUsers())));
 api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {
@@ -759,6 +838,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 });
 
 db.init().then(() => {
+  db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
   jobs.start();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").

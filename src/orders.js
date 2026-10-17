@@ -265,4 +265,4 @@ async function report(owner, from, to, src = 'all') {
   return { from, to, live: !!(given && given.length), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

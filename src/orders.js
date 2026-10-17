@@ -70,11 +70,15 @@ async function apiConfig() {
   const c = (await db.getSetting('adsboxApi', null)) || {};
   let key = '';
   try { key = c.keyEnc ? decrypt(c.keyEnc) : ''; } catch (_) { key = ''; }
-  return { url: c.url || process.env.ADSBOX_API_URL || '', key: key || process.env.ADSBOX_API_KEY || '', hint: c.keyHint || (process.env.ADSBOX_API_KEY ? '…' + process.env.ADSBOX_API_KEY.slice(-4) : ''), by: c.by || '', at: c.at || '' };
+  return { url: c.url || process.env.ADSBOX_API_URL || '', key: key || process.env.ADSBOX_API_KEY || '', hint: c.keyHint || (process.env.ADSBOX_API_KEY ? '…' + process.env.ADSBOX_API_KEY.slice(-4) : ''), by: c.by || '', at: c.at || '', listUrl: c.listUrl || process.env.ADSBOX_LIST_URL || '' };
 }
-async function saveApiConfig({ url, key }, by) {
+async function saveApiConfig({ url, key, listUrl }, by) {
   const cur = (await db.getSetting('adsboxApi', null)) || {};
   const next = { ...cur, url: String(url || '').trim().slice(0, 300), by, at: new Date().toISOString() };
+  if (listUrl !== undefined) {
+    next.listUrl = String(listUrl || '').trim().slice(0, 300);
+    if (next.listUrl && !/^https:\/\//i.test(next.listUrl)) throw Object.assign(new Error('The order list address must start with https://'), { status: 400 });
+  }
   if (key && String(key).trim()) { next.keyEnc = encrypt(String(key).trim()); next.keyHint = '…' + String(key).trim().slice(-4); }
   if (key === null) { delete next.keyEnc; delete next.keyHint; }
   if (next.url && !/^https:\/\//i.test(next.url) && !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/i.test(next.url)) throw Object.assign(new Error('The API address must start with https://'), { status: 400 });
@@ -83,7 +87,7 @@ async function saveApiConfig({ url, key }, by) {
 }
 async function publicConfig() {
   const c = await apiConfig();
-  return { url: c.url, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null) };
+  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null) };
 }
 // DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
 // per-order row, a type field saying "new" / "old" (or is_new true/false).
@@ -127,8 +131,8 @@ function checkPeriod(body, from, to) {
   const off = (x, y) => Math.abs(Date.parse(x) - Date.parse(y)) > 36 * 3600e3; // a UTC-written date may be a day off
   if (/^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(t) && (off(f, from) || off(t, to))) throw new Error(`adsbox.biz answered for ${f} – ${t} instead of ${from} – ${to}, so its numbers were not used.`);
 }
-async function callApi(from, to, page = 1, extra = '') {
-  const { url, key } = await apiConfig();
+async function callApi(from, to, page = 1, extra = '', base = '') {
+  const cfgx = await apiConfig(), key = cfgx.key, url = base || cfgx.url;
   if (!url || !key) return null;
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000), t0 = Date.now();
   let res;
@@ -140,14 +144,14 @@ async function callApi(from, to, page = 1, extra = '') {
   if (res.status === 401 || res.status === 403) throw new Error('adsbox.biz refused the API key (check the key).');
   if (!res.ok) throw new Error(`adsbox.biz API answered HTTP ${res.status}`);
   let body; try { body = JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
-  checkPeriod(body, from, to);
+  if (!base) checkPeriod(body, from, to);
   return body;
 }
 const listOf = (body) => (Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || []);
 // All rows for a period, following the API's pages (Laravel-style current_page/last_page, next links,
 // or a total), so a long list is never cut off at the first page.
-async function fetchAll(from, to, extra = '') {
-  const first = await callApi(from, to, 1, extra); if (first === null) return null;
+async function fetchAll(from, to, extra = '', base = '') {
+  const first = await callApi(from, to, 1, extra, base); if (first === null) return null;
   const all = [...listOf(first)];
   const meta = (first && !Array.isArray(first) && (first.meta || first.pagination || first)) || {};
   const total = Number(meta.total ?? meta.total_count ?? meta.count) || 0;
@@ -157,11 +161,66 @@ async function fetchAll(from, to, extra = '') {
   while (page < 200) {
     const more = (last && page < last) || hasNext(body) || (total && all.length < total);
     if (!more) break;
-    page++; body = await callApi(from, to, page, extra); const list = listOf(body);
+    page++; body = await callApi(from, to, page, extra, base); const list = listOf(body);
     if (!list.length) break;
     all.push(...list); pages++;
   }
   return { totals: first && !Array.isArray(first) && first.totals && typeof first.totals === 'object' ? first.totals : null, groupBy: first && first.group_by, list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [], echo: first && !Array.isArray(first) ? Object.fromEntries(['from', 'to', 'timezone', 'group_by', 'count'].filter((k) => k in first).map((k) => [k, typeof first[k] === 'object' ? JSON.stringify(first[k]) : String(first[k])])) : {} };
+}
+// ---------- counting from adsbox's order list (the same list as its Order page) ----------
+// Each order counts once (by its id); its date is turned into a Phnom Penh day; DM · NEW / DM · OLD and
+// comment / Messenger / ad come from its own fields. Only the counts are kept — never names or phones.
+function localDay(v) {
+  const s = String(v || '');
+  if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(s) || /^\d{10,13}$/.test(s)) {
+    const d = /^\d+$/.test(s) ? new Date(Number(s) * (s.length === 10 ? 1000 : 1)) : new Date(s);
+    if (!isNaN(d)) return new Intl.DateTimeFormat('en-CA', { timeZone: cfg.tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  }
+  return s.slice(0, 10);
+}
+const DEAD = /cancel|delet|spam|reject|void|trash|remove/i;
+function orderOf(x) {
+  const status = String(x.status ?? x.order_status ?? x.state ?? '');
+  if (DEAD.test(status) || x.deleted_at || x.is_deleted === true) return null;
+  const blob = [x.source, x.channel, x.from, x.origin, x.type, x.order_type, x.kind, x.dm_type].filter((v) => v != null).join(' ').toLowerCase();
+  const src = /comment|live/.test(blob) ? 'oc' : /\bad\b|ads|advert/.test(blob) ? 'oa' : /dm|messenger|inbox|message|chat/.test(blob) ? 'om' : '';
+  return {
+    id: x.order_id ?? x.orderId ?? x.order_code ?? x.code ?? x.id ?? x._id ?? null,
+    day: localDay(x.created_at ?? x.createdAt ?? x.order_date ?? x.date ?? x.ordered_at ?? x.time),
+    pageId: String(x.page_id ?? x.pageId ?? x.fb_page_id ?? (x.page && typeof x.page === 'object' ? x.page.id : '') ?? ''),
+    pageName: String(x.page_name ?? x.pageName ?? (x.page && typeof x.page === 'object' ? x.page.name : x.page) ?? ''),
+    ...splitOf(typeof x.is_new === 'boolean' || x.is_new === 0 || x.is_new === 1 ? { is_new: x.is_new } : { type: x.dm_type ?? x.customer_type ?? x.type ?? '' }),
+    src, total: Number(x.total ?? x.amount ?? x.grand_total) || 0,
+  };
+}
+// Orders between two days, as rows per Page per day (same shape as the summary's rows).
+async function listOrders(from, to, pageIds = []) {
+  const { listUrl } = await apiConfig(); if (!listUrl) return null;
+  const extra = '&per_page=500&limit=500&page_size=500';
+  let got = await fetchAll(from, to, extra, listUrl); if (got === null) return null;
+  let orders = got.list.map(orderOf).filter(Boolean);
+  // A list without Page IDs on each order: ask for each Page separately.
+  if (orders.length && orders.every((o) => !o.pageId) && pageIds.length) {
+    orders = [];
+    for (const pid of pageIds) {
+      const g = await fetchAll(from, to, `${extra}&page_id=${encodeURIComponent(pid)}&fb_page_id=${encodeURIComponent(pid)}`, listUrl);
+      for (const o of (g ? g.list : []).map(orderOf).filter(Boolean)) orders.push({ ...o, pageId: o.pageId || pid });
+    }
+  }
+  const seen = new Set(), agg = new Map();
+  for (const o of orders) {
+    if (o.id != null && o.id !== '') { const k = String(o.id); if (seen.has(k)) continue; seen.add(k); }
+    if (!o.day || o.day < from || o.day > to) continue;
+    const k = o.day + '|' + (o.pageId || 'name:' + norm(o.pageName));
+    const a = agg.get(k) || { day: o.day, pageId: o.pageId, pageName: o.pageName, orders: 0, newC: 0, oldC: 0, total: 0, oc: 0, om: 0, oa: 0, cust: 0 };
+    a.orders++; a.newC += o.newC; a.oldC += o.oldC; a.total += o.total; if (o.src) a[o.src]++; if (!a.pageName) a.pageName = o.pageName;
+    agg.set(k, a);
+  }
+  return { rows: [...agg.values()], count: seen.size || orders.length, raw: got.list.length };
+}
+// Page IDs to ask about when the order list needs one Page at a time: Pages seen in the summary lately.
+async function knownPageIds(from, to) {
+  try { const g = await fetchAll(from, to, '&group_by=page'); return [...new Set(mapRows(g ? g.list : []).map((r) => String(r.pageId || '')).filter(Boolean))]; } catch (_) { return []; }
 }
 // Count one period into the database, day by day (each day re-counted from scratch). One pull at a time,
 // so pulls started by the timer, the button and the page never mix.
@@ -176,6 +235,14 @@ async function pullRangeNow(from, to, force) {
   let n = 0;
   const done = (await db.getSetting('ordersPulled', {})) || {}, recent = sync.addDays(sync.todayIn(), -3);
   try {
+    if ((await apiConfig()).listUrl) {
+      // Order list: one fetch for the whole period, then counted per day.
+      const lst = await listOrders(from, to, await knownPageIds(from, to)); if (lst === null) return null;
+      await q(`DELETE FROM page_orders WHERE source='api' AND day BETWEEN $1 AND $2`, [from, to]);
+      n = await importRows(lst.rows, 'api');
+      for (let day = from; day <= to; day = sync.addDays(day, 1)) done[day] = Date.now();
+      to = sync.addDays(from, -1); // skip the summary loop below
+    }
     for (let day = from; day <= to; day = sync.addDays(day, 1)) {
       if (!force && day < recent && done[day] && Date.now() - done[day] < 24 * 3600e3) continue; // counted lately; nothing new
       const got = await fetchAll(day, day); if (got === null) return null;
@@ -249,6 +316,14 @@ async function testApi() {
       const dayRows = mapRows(byDay.list).filter((r) => String(r.pageId) === String(top.pageId));
       month.page = { id: String(top.pageId), name: top.pageName, byPage: int(top.orders), byDay: dayRows.reduce((t, r) => t + int(r.orders), 0), days: dayRows.length, messenger: int(top.om), customers: int(top.cust) };
       month.lists = await probeLists(m1, m2, String(top.pageId));
+      // A working order list found and none set yet → use it from now on.
+      const c = await apiConfig();
+      if (!c.listUrl) {
+        const ok = month.lists.find((l) => l.status === 200 && l.json && l.rowKeys && l.rowKeys.some((k) => /date|created|time/i.test(k)));
+        if (ok) { const o = new URL(c.url).origin + ok.path; const cur = (await db.getSetting('adsboxApi', null)) || {}; await db.setSetting('adsboxApi', { ...cur, listUrl: o }); month.listChosen = o; liveCache.clear(); }
+      }
+      const c2 = await apiConfig();
+      if (c2.listUrl) { try { const lst = await listOrders(m1, m2, [String(top.pageId)]); month.listUrl = c2.listUrl; month.listPage = lst ? lst.rows.filter((r) => String(r.pageId) === String(top.pageId)).reduce((t, r) => t + r.orders, 0) : null; month.listAll = lst ? lst.count : null; } catch (e) { month.listError = e.message; } }
     }
   } catch (e) { month = { error: e.message }; }
   return { month, echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
@@ -261,9 +336,11 @@ const liveCache = new Map();
 async function liveTotals(from, to) {
   const k = from + '|' + to, hit = liveCache.get(k);
   if (hit && Date.now() - hit.at < 5 * 60e3) return hit.rows;
-  const got = await fetchAll(from, to); if (got === null) return null;
+  let src;
+  if ((await apiConfig()).listUrl) { const lst = await listOrders(from, to, await knownPageIds(from, to)); if (lst === null) return null; src = lst.rows; }
+  else { const got = await fetchAll(from, to); if (got === null) return null; src = mapRows(got.list); }
   const by = new Map();
-  for (const r of mapRows(got.list)) {
+  for (const r of src) {
     const pid = String(r.pageId || '').trim() || 'name:' + norm(r.pageName);
     const a = by.get(pid) || { day: from, page_id: pid, page_name: r.pageName || '', all: 0, messenger: 0, comment: 0, ad: 0, customers: 0, new_c: 0, old_c: 0, total: 0 };
     a.all += int(r.orders); a.customers += int(r.cust); a.messenger += int(r.om); a.comment += int(r.oc); a.ad += int(r.oa); a.new_c += int(r.newC); a.old_c += int(r.oldC); a.total += Number(r.total) || 0;

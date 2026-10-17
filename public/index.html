@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=94">
+<link rel="stylesheet" href="/assets/app.css?v=95">
 </head>
 <body>
 <div class="wrap">
@@ -452,6 +452,7 @@
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="oDlgTitle">adsbox.biz API</h2><div class="hint">Paste the API address and key from adsbox.biz. The key is saved encrypted and is never shown again.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
     <label class="fld"><span>API address</span><input type="url" id="oUrl" placeholder="https://adsbox.biz/api/orders/summary" autocomplete="off"></label>
+    <label class="fld"><span>Order list address <small class="hint">(optional — counts orders exactly like the adsbox Order page; found by Test)</small></span><input type="url" id="oListUrl" placeholder="https://adsbox.biz/api/orders" autocomplete="off"></label>
     <label class="fld"><span>API key</span><input type="password" id="oKey" placeholder="Paste the key" autocomplete="new-password"></label>
     <div class="hint" id="oKeyInfo"></div>
     <div class="note" id="oTestMsg" hidden></div>
@@ -477,6 +478,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=94"></script>
+<script src="/assets/app.js?v=95"></script>
 </body>
 </html>

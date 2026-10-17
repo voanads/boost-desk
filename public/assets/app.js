@@ -796,7 +796,7 @@
     try {
       oCfg = await saveCfg();
       const r = await api('/orders/test', { method: 'POST' });
-      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} row${r.rows === 1 ? '' : 's'} for yesterday and today.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday and today.';
+      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for yesterday and today${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday and today.';
     } catch (e) { m.textContent = '✕ ' + e.message; }
     finally { b.disabled = false; }
   };

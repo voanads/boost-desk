@@ -85,6 +85,7 @@ async function publicConfig() {
 }
 // DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
 // per-order row, a type field saying "new" / "old" (or is_new true/false).
+const isOrderRow = (x) => !!x && ['phone', 'customer', 'customer_name', 'customer_phone', 'address', 'status', 'order_id', 'orderId', 'order_code', 'psid', 'customer_id'].some((k) => k in x);
 function splitOf(x) {
   const keys = Object.keys(x || {}), num = (k) => Number(x[k]) || 0;
   const kNew = keys.find((k) => /(^|[^a-z])(dm.?new|new.?dm|new.?customers?|new.?c|new)$/i.test(k) || /^dm.?new|^newdm|^dmnew/i.test(k));
@@ -100,10 +101,18 @@ function splitOf(x) {
 // Read rows from whatever shape the API returns: [..], {data:[..]}, {rows:[..]}, {orders:[..]}.
 function mapRows(body) {
   const list = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
-  return list.map((x) => ({
+  // One row per order (it has a customer, phone, status or order id) counts as 1 order, whatever its own
+  // "orders"/"count" field says (on a per-order row that can be the customer's order history).
+  // The same order seen twice (pages overlapping) is counted once.
+  const seen = new Set();
+  return list.filter((x) => {
+    const id = x && (x.order_id ?? x.orderId ?? x.order_code ?? x.code ?? x.id ?? x._id);
+    if (id == null || id === '') return true;
+    const k = String(id); if (seen.has(k)) return false; seen.add(k); return true;
+  }).map((x) => ({
     day: String(x.date || x.day || x.order_date || x.created_at || '').slice(0, 10),
     pageId: x.page_id ?? x.pageId ?? x.fb_page_id ?? '', pageName: x.page_name ?? x.pageName ?? x.page ?? '',
-    orders: x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1, ...splitOf(x), total: x.total ?? x.amount ?? 0,
+    orders: isOrderRow(x) ? 1 : (x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1), ...splitOf(x), total: x.total ?? x.amount ?? 0,
   }));
 }
 async function callApi(from, to) {
@@ -142,6 +151,7 @@ async function pullApi(days = 3, fromDay, toDay) {
       const k = r.day + '|' + r.pageId + '|' + r.pageName, a = agg.get(k) || { day: r.day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
       a.orders += Number(r.orders) || 0; a.newC += Number(r.newC) || 0; a.oldC += Number(r.oldC) || 0; a.total += Number(r.total) || 0; agg.set(k, a);
     }
+    await q(`DELETE FROM page_orders WHERE source='api' AND day BETWEEN $1 AND $2`, [from, to]); // re-counted from scratch for these days
     const n = await importRows([...agg.values()], 'api');
     await db.setSetting('ordersLastError', null);
     return n;
@@ -154,7 +164,8 @@ async function testApi() {
   if (body === null) throw Object.assign(new Error('Enter the API address and key first.'), { status: 400 });
   const rows = mapRows(body), raw = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
   const fields = raw[0] && typeof raw[0] === 'object' ? Object.keys(raw[0]) : [];
-  return { rows: rows.length, fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
+  const sumField = raw.reduce((t, x) => t + (Number(x && (x.orders ?? x.count)) || 0), 0);
+  return { rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.

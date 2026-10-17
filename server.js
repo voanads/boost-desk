@@ -563,14 +563,20 @@ async function refreshChatsNow() {
       if ((c.seen[u.fb_id] || 0) >= l.at) continue; // this message was already handled
       c.seen[u.fb_id] = l.at;
       const has = c.owners.includes(u.fb_id);
+      // The group belongs to the client too, so the bot's reply is short, names no one, and is cleaned up
+      // (with the /link command) after a minute.
+      const where = c.type === 'topic' ? 'Topic' : 'ក្រុម';
+      let text = '';
       if (l.unlink && has) {
         c.owners = c.owners.filter((x) => x !== u.fb_id);
-        telegram.send(`👋 ${u.name} is no longer linked to this ${c.type === 'topic' ? 'topic' : 'group'} in Boost Desk.`, c.id).catch(() => {});
+        if (!c.owners.length) text = `🔕 ${where}នេះ នឹងលែងទទួលរបាយការណ៍ Boost ទៀតហើយ។\nThis ${c.type === 'topic' ? 'topic' : 'group'} will no longer receive boost reports.`;
       } else if (!l.unlink && !has) {
         c.owners.push(u.fb_id);
-        const others = c.owners.filter((x) => x !== u.fb_id).map((x) => users.find((y) => y.fb_id === x)?.name).filter(Boolean);
-        telegram.send(`✅ This ${c.type === 'topic' ? 'topic' : 'group'} is now linked to ${u.name} in Boost Desk${others.length ? ` (also linked: ${others.join(', ')})` : ''}. Reports for their clients can be sent here.`, c.id).catch(() => {});
+        text = `✅ ${where}នេះ ត្រូវបានភ្ជាប់ ដើម្បីទទួលរបាយការណ៍ Boost ប្រចាំថ្ងៃពី Ads Box។\nThis ${c.type === 'topic' ? 'topic' : 'group'} is set up to receive daily boost reports from Ads Box.`;
       }
+      const tidy = async (botMsg) => setTimeout(() => { telegram.remove(c.id, botMsg); telegram.remove(c.id, l.msgId); }, 60000);
+      if (text) telegram.send(text, c.id).then(tidy).catch(() => {});
+      else tidy(null);
     }
   }
   for (const c of byId.values()) c.owner = c.owners[0] || '';

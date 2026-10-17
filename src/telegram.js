@@ -17,6 +17,7 @@ async function send(text, chatId = cfg.telegramChatId) {
   if (!chatId) throw new Error('No Telegram group chosen. Set TELEGRAM_CHAT_ID for the team, or pick a group for this client.');
   const chunks = [];
   for (let i = 0; i < text.length; i += 3900) chunks.push(text.slice(i, i + 3900)); // Telegram limit is 4096
+  let lastId = null;
   for (const chunk of chunks) {
     const res = await fetch(`${API}/bot${cfg.telegramToken}/sendMessage`, {
       method: 'POST',
@@ -25,7 +26,17 @@ async function send(text, chatId = cfg.telegramChatId) {
     });
     const body = await res.json().catch(() => ({}));
     if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
+    lastId = body.result && body.result.message_id;
   }
+  return lastId;
+}
+// Remove a message (works for the bot's own messages; others' only when the bot is a group admin).
+async function remove(chatId, messageId) {
+  if (!cfg.telegramToken || !messageId) return false;
+  try {
+    const r = await (await fetch(`${API}/bot${cfg.telegramToken}/deleteMessage`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: String(chatId).split(':')[0], message_id: messageId }) })).json();
+    return !!r.ok;
+  } catch (_) { return false; }
 }
 
 // A picture with the report as its caption. Telegram captions are limited to 1024 characters,
@@ -83,7 +94,7 @@ async function listChats() {
     // "/link CODE" typed in a group (or in one topic of it) links it to one Boost Desk account.
     const t = (u.message || u.channel_post || {}).text || '';
     const mm = t.match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/);
-    if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink' });
+    if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1] === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
   return { chats: [...found.values()], links };
@@ -96,4 +107,4 @@ async function username() {
   return botName;
 }
 
-module.exports = { configured, hasBot, send, sendPhoto, sendDocument, listChats, username };
+module.exports = { configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };

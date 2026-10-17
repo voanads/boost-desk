@@ -115,12 +115,12 @@ function mapRows(body) {
     orders: isOrderRow(x) ? 1 : (x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1), ...splitOf(x), total: x.total ?? x.amount ?? 0,
   }));
 }
-async function callApi(from, to) {
+async function callApi(from, to, page = 1) {
   const { url, key } = await apiConfig();
   if (!url || !key) return null;
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   let res;
-  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
+  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}from=${from}&to=${to}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
   catch (e) { throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
   finally { clearTimeout(t); }
   const text = await res.text();
@@ -128,41 +128,69 @@ async function callApi(from, to) {
   if (!res.ok) throw new Error(`adsbox.biz API answered HTTP ${res.status}`);
   try { return JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
 }
-// Pull the last few days of counts into the database.
-// Any period, asked in pieces of up to 31 days (older months can be fetched whenever they're opened).
-async function pullRange(from, to) {
-  let n = 0, start = from;
-  while (start <= to) {
-    const end = sync.addDays(start, 30) < to ? sync.addDays(start, 30) : to;
-    const r = await pullApi(0, start, end); if (r === null) return null;
-    n += r; start = sync.addDays(end, 1);
+const listOf = (body) => (Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || []);
+// All rows for a period, following the API's pages (Laravel-style current_page/last_page, next links,
+// or a total), so a long list is never cut off at the first page.
+async function fetchAll(from, to) {
+  const first = await callApi(from, to); if (first === null) return null;
+  const all = [...listOf(first)];
+  const meta = (first && !Array.isArray(first) && (first.meta || first.pagination || first)) || {};
+  const total = Number(meta.total ?? meta.total_count ?? meta.count) || 0;
+  const last = Number(meta.last_page ?? meta.total_pages ?? meta.pages) || 0;
+  const hasNext = (b) => !!(b && !Array.isArray(b) && (b.next_page_url || (b.links && typeof b.links === 'object' && !Array.isArray(b.links) && b.links.next) || (b.meta && b.meta.next) || b.next || b.has_more));
+  let page = 1, body = first, pages = 1;
+  while (page < 200) {
+    const more = (last && page < last) || hasNext(body) || (total && all.length < total);
+    if (!more) break;
+    page++; body = await callApi(from, to, page); const list = listOf(body);
+    if (!list.length) break;
+    all.push(...list); pages++;
   }
-  return n;
+  return { list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [] };
 }
-async function pullApi(days = 3, fromDay, toDay) {
-  const to = toDay || sync.todayIn(), from = fromDay || sync.addDays(to, -(days - 1));
+// Count one period into the database, day by day (each day re-counted from scratch). One pull at a time,
+// so pulls started by the timer, the button and the page never mix.
+let pullChain = Promise.resolve();
+function pullRange(from, to, { force = true } = {}) {
+  const run = pullChain.then(() => pullRangeNow(from, to, force)); pullChain = run.catch(() => {}); return run;
+}
+async function pullApi(days = 3) {
+  const to = sync.todayIn(); return pullRange(sync.addDays(to, -(days - 1)), to);
+}
+async function pullRangeNow(from, to, force) {
+  let n = 0;
+  const done = (await db.getSetting('ordersPulled', {})) || {}, recent = sync.addDays(sync.todayIn(), -3);
   try {
-    const body = await callApi(from, to);
-    if (body === null) return null;
-    const rows = mapRows(body);
-    // Per-order rows (one row per order) are counted here; summary rows already carry counts.
-    const agg = new Map();
-    for (const r of rows) {
-      const k = r.day + '|' + r.pageId + '|' + r.pageName, a = agg.get(k) || { day: r.day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
-      a.orders += Number(r.orders) || 0; a.newC += Number(r.newC) || 0; a.oldC += Number(r.oldC) || 0; a.total += Number(r.total) || 0; agg.set(k, a);
+    for (let day = from; day <= to; day = sync.addDays(day, 1)) {
+      if (!force && day < recent && done[day] && Date.now() - done[day] < 24 * 3600e3) continue; // counted lately; nothing new
+      const got = await fetchAll(day, day); if (got === null) return null;
+      const agg = new Map(), rows = mapRows(got.list);
+      // The API filters by day: everything it sends belongs to that day (its times may be in UTC, a day off).
+      // If it sends rows far from that day, it ignored the filter — then keep only rows dated that day.
+      const far = rows.some((r) => r.day && (r.day < sync.addDays(day, -1) || r.day > sync.addDays(day, 1)));
+      for (const r of rows) {
+        if (far && r.day !== day) continue;
+        r.day = day;
+        const k = r.pageId + '|' + (r.pageId ? '' : r.pageName), a = agg.get(k) || { day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
+        a.orders += Number(r.orders) || 0; a.newC += Number(r.newC) || 0; a.oldC += Number(r.oldC) || 0; a.total += Number(r.total) || 0; if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
+      }
+      await q(`DELETE FROM page_orders WHERE source='api' AND day=$1`, [day]);
+      n += await importRows([...agg.values()], 'api');
+      done[day] = Date.now();
     }
-    await q(`DELETE FROM page_orders WHERE source='api' AND day BETWEEN $1 AND $2`, [from, to]); // re-counted from scratch for these days
-    const n = await importRows([...agg.values()], 'api');
+    for (const d of Object.keys(done)) if (d < sync.addDays(sync.todayIn(), -800)) delete done[d];
+    await db.setSetting('ordersPulled', done);
     await db.setSetting('ordersLastError', null);
     return n;
   } catch (e) { await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
 }
 // "Test connection": one call for yesterday + today, report what came back (field names only, no values).
 async function testApi() {
-  const to = sync.todayIn(), from = sync.addDays(to, -6);
-  const body = await callApi(from, to);
-  if (body === null) throw Object.assign(new Error('Enter the API address and key first.'), { status: 400 });
-  const rows = mapRows(body), raw = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
+  const to = sync.addDays(sync.todayIn(), -1), from = to;
+  const got = await fetchAll(from, to);
+  if (got === null) throw Object.assign(new Error('Enter the API address and key first.'), { status: 400 });
+  const raw = got.list, rows = mapRows(raw);
+  const days = {}; for (const r of rows) days[r.day] = (days[r.day] || 0) + 1;
   const fields = raw[0] && typeof raw[0] === 'object' ? Object.keys(raw[0]) : [];
   // How the rows split by their type / status / source fields (only those short labels, never customer data).
   const breakdown = {};
@@ -171,7 +199,7 @@ async function testApi() {
     const b = (breakdown[k] = breakdown[k] || {}); b[String(v)] = (b[String(v)] || 0) + 1;
   }
   const sumField = raw.reduce((t, x) => t + (Number(x && (x.orders ?? x.count)) || 0), 0);
-  return { breakdown, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
+  return { breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.

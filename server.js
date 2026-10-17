@@ -721,7 +721,7 @@ api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orde
 api.post('/orders/pull', wrap(async (req, res) => {
   const b = req.body || {}, today = sync.todayIn();
   let n;
-  if (isDay(b.from) && isDay(b.to) && b.from <= b.to && b.from >= sync.addDays(today, -800)) n = await orders.pullRange(b.from, b.to > today ? today : b.to);
+  if (isDay(b.from) && isDay(b.to) && b.from <= b.to && b.from >= sync.addDays(today, -800)) n = await orders.pullRange(b.from, b.to > today ? today : b.to, { force: !!b.force });
   else n = await orders.pullApi(Math.min(62, Number(b.days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
 api.get('/orders/report', wrap(async (req, res) => {
   const { from, to } = req.query;

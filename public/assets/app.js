@@ -774,7 +774,7 @@
   $('oSync').onclick = async () => {
     const b = $('oSync'); b.disabled = true; b.classList.add('busy');
     const [from, to] = aRange(oPreset);
-    try { const r = await api('/orders/pull', { method: 'POST', body: { from: from < addD(me.today, -61) ? from : addD(me.today, -61), to } }); oPulled.add(oPreset); successBadge(`Orders updated (${r.rows} Page-days)`); }
+    try { const r = await api('/orders/pull', { method: 'POST', body: { from, to, force: true } }); oPulled.add(oPreset); successBadge(`Orders updated (${r.rows} Page-days)`); }
     catch (e) { toast(e.message); }
     finally { b.disabled = false; b.classList.remove('busy'); loadOrders(); }
   };
@@ -796,7 +796,7 @@
     try {
       oCfg = await saveCfg();
       const r = await api('/orders/test', { method: 'POST' });
-      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for the last 7 days${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${Object.entries(r.breakdown || {}).map(([k, v]) => `<br>${esc(k)}: ${Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => `<b>${esc(n)}</b> ${c}`).join(' · ')}`).join('')}${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for the last 7 days.';
+      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for yesterday (${r.pages} page${r.pages === 1 ? '' : 's'}${r.total ? ', API says ' + r.total : ''})${Object.keys(r.days || {}).length > 1 ? ' · dates in answer: ' + esc(Object.entries(r.days).map(([d, c]) => d + ' ' + c).join(', ')) : ''}${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.<br>Answer: <code>${esc((r.keys || []).join(', '))}</code><br>Fields: <code>${esc(r.fields.join(', '))}</code>${Object.entries(r.breakdown || {}).map(([k, v]) => `<br>${esc(k)}: ${Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => `<b>${esc(n)}</b> ${c}`).join(' · ')}`).join('')}${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday.';
     } catch (e) { m.textContent = '✕ ' + e.message; }
     finally { b.disabled = false; }
   };

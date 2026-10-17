@@ -342,20 +342,22 @@ async function pushSpend(days = 7) {
   const on = await db.getSetting('adspendPush', false);
   if (!on || !c.url || !c.key) return null;
   const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
-  const rows = new Map();
+  // Each campaign counted once (two people may sync the same ad account), then added up per Page per day.
+  const seen = new Set(), rows = new Map(); let noPage = 0;
   for (const u of await db.allUsers()) {
     for (const d of await db.listRaw(u.fb_id, from, to)) for (const r of d.rows || []) {
-      const day = r.day || d.day, spend = Math.round((Number(r.spend) || 0) * 100) / 100;
+      const day = r.day || d.day, spend = Number(r.spend) || 0;
       if (!day || !(spend > 0)) continue;
-      const id = String(r.campaignId || ''), acct = String(r.accountId || '');
-      const k = `${day}|${r.pageId || ''}|${acct}|${id || r.name}`;
-      if (rows.has(k)) continue;
-      rows.set(k, { date: day, spend, currency: 'USD', page_id: String(r.pageId || ''), ad_account_id: acct ? (acct.startsWith('act_') ? acct : 'act_' + acct) : '',
-        campaign_id: id, ad_id: id, ad_name: String(r.name || '').slice(0, 255), impressions: r.impressions != null ? int(r.impressions) : undefined });
+      const ck = `${day}|${r.accountId}|${r.campaignId || r.name}`;
+      if (seen.has(ck)) continue; seen.add(ck);
+      const pid = String(r.pageId || '');
+      if (!pid) { noPage++; continue; } // without a Page adsbox can't match it to orders
+      const k = day + '|' + pid, a = rows.get(k) || { date: day, page_id: pid, spend: 0 };
+      a.spend += spend; rows.set(k, a);
     }
   }
-  const list = [...rows.values()];
-  const out = { at: new Date().toISOString(), from, to, received: 0, saved: 0, errors: [], noPage: list.filter((r) => !r.page_id).length, error: '' };
+  const list = [...rows.values()].map((r) => ({ ...r, spend: Math.round(r.spend * 100) / 100 }));
+  const out = { at: new Date().toISOString(), from, to, received: 0, saved: 0, errors: [], noPage, error: '' };
   const endpoint = new URL(c.url).origin + '/api/adspend/import';
   try {
     for (let i = 0; i < list.length; i += 1000) {

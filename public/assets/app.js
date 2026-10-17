@@ -798,7 +798,7 @@
     $('oPushOn').checked = !!p.on;
     const l = p.last;
     $('oPushSt').innerHTML = !l ? (p.on ? 'Waiting for the first send…' : 'Off') : l.error ? `<span class="over">✕ ${esc(ago(l.at))}: ${esc(l.error)}</span>`
-      : `✓ Sent ${esc(ago(l.at))} · ${l.saved} of ${l.received} rows saved (${esc(l.from)} – ${esc(l.to)})${l.noPage ? ` · ${l.noPage} without a Page` : ''}${l.errors && l.errors.length ? ` · <span class="over">${l.errors.length} rows refused: ${esc(l.errors[0].error)}</span>` : ''}`;
+      : `✓ Sent ${esc(ago(l.at))} · ${l.saved} of ${l.received} rows saved (${esc(l.from)} – ${esc(l.to)})${l.noPage ? ` · ${l.noPage} campaign${l.noPage === 1 ? '' : 's'} skipped (no Page)` : ''}${l.errors && l.errors.length ? ` · <span class="over">${l.errors.length} rows refused: ${esc(l.errors[0].error)}</span>` : ''}`;
   }
   async function loadPush() { try { drawPush(await api('/orders/push')); } catch (_) { $('oPushSt').textContent = ''; } }
   $('oPushOn').onchange = async () => { try { drawPush(await api('/orders/push', { method: 'PUT', body: { on: $('oPushOn').checked } })); toast($('oPushOn').checked ? 'Spend will be sent to adsbox.biz every 30 minutes' : 'Stopped sending spend'); } catch (e) { toast(e.message); } };

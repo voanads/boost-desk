@@ -117,18 +117,30 @@ function mapRows(body) {
     orders: isOrderRow(x) ? 1 : (x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1), ...splitOf(x), total: x.total ?? x.amount ?? x.revenue ?? 0, oc: x.orders_from_comment ?? 0, om: x.orders_from_messenger ?? 0, oa: x.orders_from_ad ?? 0, cust: typeof x.customers === 'number' ? x.customers : 0,
   }));
 }
+// The period under every common name, so whichever the API reads, it gets the right days.
+const dateParams = (from, to) => ['from', 'to', 'date_from', 'date_to', 'start_date', 'end_date', 'start', 'end', 'since', 'until']
+  .map((k, i) => `${k}=${i % 2 ? to : from}`).join('&');
+// The API says which period it answered for; if that isn't the one asked, its numbers can't be used.
+function checkPeriod(body, from, to) {
+  if (!body || Array.isArray(body) || !body.from || !body.to) return;
+  const f = String(body.from).slice(0, 10), t = String(body.to).slice(0, 10);
+  const off = (x, y) => Math.abs(Date.parse(x) - Date.parse(y)) > 36 * 3600e3; // a UTC-written date may be a day off
+  if (/^\d{4}-\d{2}-\d{2}$/.test(f) && /^\d{4}-\d{2}-\d{2}$/.test(t) && (off(f, from) || off(t, to))) throw new Error(`adsbox.biz answered for ${f} – ${t} instead of ${from} – ${to}, so its numbers were not used.`);
+}
 async function callApi(from, to, page = 1) {
   const { url, key } = await apiConfig();
   if (!url || !key) return null;
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 20000);
   let res;
-  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}from=${from}&to=${to}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
+  try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
   catch (e) { throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
   finally { clearTimeout(t); }
   const text = await res.text();
   if (res.status === 401 || res.status === 403) throw new Error('adsbox.biz refused the API key (check the key).');
   if (!res.ok) throw new Error(`adsbox.biz API answered HTTP ${res.status}`);
-  try { return JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
+  let body; try { body = JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
+  checkPeriod(body, from, to);
+  return body;
 }
 const listOf = (body) => (Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || []);
 // All rows for a period, following the API's pages (Laravel-style current_page/last_page, next links,
@@ -148,7 +160,7 @@ async function fetchAll(from, to) {
     if (!list.length) break;
     all.push(...list); pages++;
   }
-  return { list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [] };
+  return { list: all, total, pages, keys: first && !Array.isArray(first) ? Object.keys(first) : [], echo: first && !Array.isArray(first) ? Object.fromEntries(['from', 'to', 'timezone', 'group_by', 'count'].filter((k) => k in first).map((k) => [k, typeof first[k] === 'object' ? JSON.stringify(first[k]) : String(first[k])])) : {} };
 }
 // Count one period into the database, day by day (each day re-counted from scratch). One pull at a time,
 // so pulls started by the timer, the button and the page never mix.
@@ -202,7 +214,7 @@ async function testApi() {
     const b = (breakdown[k] = breakdown[k] || {}); b[String(v)] = (b[String(v)] || 0) + 1;
   }
   const sumField = raw.reduce((t, x) => t + (Number(x && (x.orders ?? x.count)) || 0), 0);
-  return { breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
+  return { echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.

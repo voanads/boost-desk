@@ -25,7 +25,7 @@ const DEFAULT_PROFILE = {
 // The earlier payment QR picture, saved into profiles back then, is swapped for the current one.
 const OLD_QR = ['94042555944acbaa1af9fbb5885baeba64c317d7'];
 const sha1 = (x) => require('crypto').createHash('sha1').update(String(x)).digest('hex');
-const profileOf = (saved) => { saved = saved && saved.qr && OLD_QR.includes(sha1(saved.qr)) ? { ...saved, qr: DEFAULT_PROFILE.qr } : saved; const p = { ...DEFAULT_PROFILE }; for (const [k, v] of Object.entries(saved || {})) if (v != null && (v !== '' || k === 'sign' || k === 'qr' || k === 'logo')) p[k] = v; if (!p.logo) p.logo = DEFAULT_PROFILE.logo; return p; };
+const profileOf = (saved) => { saved = saved && saved.qr && OLD_QR.includes(sha1(saved.qr)) ? { ...saved, qr: DEFAULT_PROFILE.qr } : saved; const p = { ...DEFAULT_PROFILE }; for (const [k, v] of Object.entries(saved || {})) if (v != null && (v !== '' || k === 'sign' || k === 'qr' || k === 'logo')) p[k] = v; if (!p.logo) p.logo = DEFAULT_PROFILE.logo; p.qr = DEFAULT_PROFILE.qr; /* one payment QR for everyone */ return p; };
 
 // Telegram message sent with an invoice. Words in {curly brackets} are filled in for each invoice.
 const DEFAULT_MESSAGE = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', 'នៅថ្ងៃទី {date} ។', '', 'តម្លៃសេវាកម្ម =$ {price}', 'Page : {pages}', '', '', 'ទឹកប្រាក់ត្រូវបង់ =$ {total}', '', 'សូមអរគុណ!🙏🏼'].join('\n');

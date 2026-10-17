@@ -278,7 +278,9 @@ async function probeLists(from, to, pageId) {
     const u = `${origin}${pth}?${dateParams(from, to)}&page_id=${encodeURIComponent(pageId)}&fb_page_id=${encodeURIComponent(pageId)}&limit=1&per_page=1`;
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
     try {
-      const r = await fetch(u, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal });
+      let r = await fetch(u, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal });
+      // Some APIs want the key in the address instead of a header.
+      if (r.status === 401) { const r2 = await fetch(`${u}&api_key=${encodeURIComponent(key)}&key=${encodeURIComponent(key)}&token=${encodeURIComponent(key)}`, { headers: { Accept: 'application/json' }, signal: ctl.signal }).catch(() => null); if (r2 && r2.status !== 401 && r2.status !== 404) { r = r2; out.keyInUrl = true; } }
       let body = null; try { body = JSON.parse(await r.text()); } catch (_) { body = null; }
       const list = body ? listOf(body) : [];
       const meta = body && !Array.isArray(body) ? (body.meta || body.pagination || body) : {};

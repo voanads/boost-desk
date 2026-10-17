@@ -200,6 +200,27 @@ async function pullRangeNow(from, to, force) {
     return n;
   } catch (e) { await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
 }
+// Look for an order-list endpoint next to the summary one (like the Order page uses), and say what it
+// returns — the status, the field names and how many rows. Never the rows themselves.
+async function probeLists(from, to, pageId) {
+  const { url, key } = await apiConfig(); if (!url || !key) return [];
+  let origin; try { origin = new URL(url).origin; } catch (_) { return []; }
+  const paths = ['/api/orders', '/api/orders/list', '/api/orders/index', '/api/v1/orders', '/api/order'];
+  const out = [];
+  for (const pth of paths) {
+    const u = `${origin}${pth}?${dateParams(from, to)}&page_id=${encodeURIComponent(pageId)}&fb_page_id=${encodeURIComponent(pageId)}&limit=1&per_page=1`;
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const r = await fetch(u, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal });
+      let body = null; try { body = JSON.parse(await r.text()); } catch (_) { body = null; }
+      const list = body ? listOf(body) : [];
+      const meta = body && !Array.isArray(body) ? (body.meta || body.pagination || body) : {};
+      out.push({ path: pth, status: r.status, json: !!body, keys: body && !Array.isArray(body) ? Object.keys(body).slice(0, 12) : [], rowKeys: list[0] && typeof list[0] === 'object' ? Object.keys(list[0]).slice(0, 20) : [], total: Number(meta.total ?? meta.total_count ?? meta.count) || null });
+    } catch (e) { out.push({ path: pth, status: 0, error: e.name === 'AbortError' ? 'timed out' : e.message }); }
+    finally { clearTimeout(t); }
+  }
+  return out;
+}
 // "Test connection": one call for yesterday + today, report what came back (field names only, no values).
 async function testApi() {
   const to = sync.addDays(sync.todayIn(), -1), from = to;
@@ -222,6 +243,13 @@ async function testApi() {
     const [byDay, byPage] = await Promise.all([fetchAll(m1, m2, '&group_by=page_day'), fetchAll(m1, m2, '&group_by=page')]);
     const sum = (g) => mapRows(g.list).reduce((a, r) => a + int(r.orders), 0);
     month = { from: m1, to: m2, byDay: sum(byDay), byDayRows: byDay.list.length, byPage: sum(byPage), byPageRows: byPage.list.length, byPageGroup: byPage.groupBy, totals: byPage.totals };
+    // The busiest Page, three ways: added-up days, one month total, and (if adsbox has one) its order list.
+    const top = mapRows(byPage.list).sort((x, y) => int(y.orders) - int(x.orders))[0];
+    if (top && top.pageId) {
+      const dayRows = mapRows(byDay.list).filter((r) => String(r.pageId) === String(top.pageId));
+      month.page = { id: String(top.pageId), name: top.pageName, byPage: int(top.orders), byDay: dayRows.reduce((t, r) => t + int(r.orders), 0), days: dayRows.length, messenger: int(top.om), customers: int(top.cust) };
+      month.lists = await probeLists(m1, m2, String(top.pageId));
+    }
   } catch (e) { month = { error: e.message }; }
   return { month, echo: got.echo, asked: from + ' – ' + to, breakdown, pages: got.pages, total: got.total, keys: got.keys, days, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }

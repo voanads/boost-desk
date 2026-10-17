@@ -1046,10 +1046,29 @@
   document.addEventListener('click', async (ev) => {
     const b = ev.target.closest('.pgname'); if (!b) return;
     ev.stopPropagation();
-    const name = prompt(`Name for Facebook Page ${b.dataset.pgid}:`, b.dataset.pgname || ''); if (name === null) return;
-    try { await api('/page-names/' + b.dataset.pgid, { method: 'PUT', body: { name: name.trim() } }); dPages = await api(`/dashboard/pages?from=${dRange()[0]}&to=${dRange()[1]}`); renderDash(); toast(name.trim() ? 'Page name saved' : 'Page name removed'); }
-    catch (e) { toast(e.message); }
+    openPageNames(b.dataset.pgid);
   });
+  // All Pages without a name in the period, in one list: open each on Facebook and type its name.
+  function openPageNames(first) {
+    const rows = [];
+    for (const c of dData ? dData.clients : []) for (const p of dPages[c.id] || []) {
+      if (!p.pageId || p.named || rows.some((r) => r.id === p.pageId)) continue;
+      const ex = (p.list || []).map((x) => x.name).find((n) => n && !/^\d+$/.test(n)) || '';
+      rows.push({ id: p.pageId, client: c.name, guess: p.guess || '', ex, spend: p.spend });
+    }
+    rows.sort((a, b) => (a.id === first ? -1 : b.id === first ? 1 : b.spend - a.spend));
+    if (!rows.length) { toast('All Pages in this period have a name.'); return; }
+    $('pnList').innerHTML = rows.map((r) => `<div class="pnrow"><div class="pn-h"><b>${esc(r.client)}</b><span class="hint num">Page ID ${esc(r.id)}</span><a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a></div>${r.ex ? `<div class="hint pn-ex" title="${esc(r.ex)}">e.g. ${esc(r.ex)}</div>` : ''}<input type="text" data-pn="${esc(r.id)}" maxlength="120" placeholder="Page name" value="${esc(r.guess)}"></div>`).join('');
+    dlgOpen($('pnDlg'));
+    setTimeout(() => { const i = $('pnList').querySelector('input'); if (i) i.focus(); }, 80);
+  }
+  $('pnSave').onclick = async () => {
+    const b = $('pnSave'); b.disabled = true; let n = 0;
+    try {
+      for (const i of $('pnList').querySelectorAll('[data-pn]')) { const v = i.value.trim(); if (!v) continue; await api('/page-names/' + i.dataset.pn, { method: 'PUT', body: { name: v } }); n++; }
+      $('pnDlg').close(); dPages = await api(`/dashboard/pages?from=${dRange()[0]}&to=${dRange()[1]}`); renderDash(); successBadge(n ? `${n} Page name${n === 1 ? '' : 's'} saved` : 'Nothing to save');
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  };
   // Tick / untick a live or the boost post for the report.
   function togglePick(line) {
     const cid = Number(line.dataset.cid), off = offSet(cid, dDate), k = line.dataset.pick;

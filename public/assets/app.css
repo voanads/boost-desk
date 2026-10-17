@@ -1244,3 +1244,11 @@ body{font-size:15.5px;letter-spacing:0}
 .kbtn{font-size:.76rem;padding:3px 9px;border-radius:99px;white-space:nowrap}
 .psub-c{margin:0 0 6px 18px;width:auto}
 @media (max-width:760px){.camp{grid-template-columns:1fr auto}.camp .hint{grid-column:1 / -1;order:3}}
+
+/* Name your Pages */
+.pnlist{display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow:auto}
+.pnrow{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.pn-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pn-h .btn{margin-left:auto}
+.pn-ex{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pnrow input{width:100%;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}

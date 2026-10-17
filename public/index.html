@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=76">
+<link rel="stylesheet" href="/assets/app.css?v=77">
 </head>
 <body>
 <div class="wrap">
@@ -427,6 +427,13 @@
     <div class="dlg-foot"><button type="button" class="ghost" id="oKeyDel">Remove key</button><span class="spacer"></span><button type="button" id="oTest">Test connection</button><button type="button" class="primary" id="oSave">Save</button></div>
   </form>
 </dialog>
+<dialog id="pnDlg" class="dlg" aria-labelledby="pnTitle">
+  <form method="dialog" class="dlg-in">
+    <div class="dlg-head"><div><h2 id="pnTitle">Name your Pages</h2><div class="hint">Facebook hides some client Page names from apps. Tap <b>Open ↗</b> to see the Page on Facebook, then type its name. Names are saved for the whole team.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
+    <div class="pnlist" id="pnList"></div>
+    <div class="dlg-foot"><span class="spacer"></span><button type="button" class="primary" id="pnSave">Save names</button></div>
+  </form>
+</dialog>
 <dialog id="ckDlg" class="dlg" aria-labelledby="ckTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="ckTitle">Report</h2><div class="hint" id="ckTo"></div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -439,6 +446,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=76"></script>
+<script src="/assets/app.js?v=77"></script>
 </body>
 </html>

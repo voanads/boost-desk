@@ -22,7 +22,10 @@ const DEFAULT_PROFILE = {
   issuedBy: 'Accountant',
   logo: asset('logo.png'), qr: asset('qr.png'), sign: '',
 };
-const profileOf = (saved) => { const p = { ...DEFAULT_PROFILE }; for (const [k, v] of Object.entries(saved || {})) if (v != null && (v !== '' || k === 'sign' || k === 'qr' || k === 'logo')) p[k] = v; if (!p.logo) p.logo = DEFAULT_PROFILE.logo; return p; };
+// The earlier payment QR picture, saved into profiles back then, is swapped for the current one.
+const OLD_QR = ['94042555944acbaa1af9fbb5885baeba64c317d7'];
+const sha1 = (x) => require('crypto').createHash('sha1').update(String(x)).digest('hex');
+const profileOf = (saved) => { saved = saved && saved.qr && OLD_QR.includes(sha1(saved.qr)) ? { ...saved, qr: DEFAULT_PROFILE.qr } : saved; const p = { ...DEFAULT_PROFILE }; for (const [k, v] of Object.entries(saved || {})) if (v != null && (v !== '' || k === 'sign' || k === 'qr' || k === 'logo')) p[k] = v; if (!p.logo) p.logo = DEFAULT_PROFILE.logo; return p; };
 
 // Telegram message sent with an invoice. Words in {curly brackets} are filled in for each invoice.
 const DEFAULT_MESSAGE = ['សួស្តីបង', '', 'ខាងប្អូនចង់ជម្រាប សេវាកម្មបងត្រូវដល់ថ្ងៃបង់', 'នៅថ្ងៃទី {date} ។', '', 'តម្លៃសេវាកម្ម =$ {price}', 'Page : {pages}', '', '', 'ទឹកប្រាក់ត្រូវបង់ =$ {total}', '', 'សូមអរគុណ!🙏🏼'].join('\n');
@@ -120,7 +123,7 @@ async function svg(inv, saved) {
   out.push(await S('Account Name :', 43, py + 83, { size: 8, weight: 700 }), await S(an1, 111, py + 83, { size: 8, weight: 700 }));
   if (an2) out.push(await S(an2, 111, py + 94, { size: 8, weight: 700 }));
   out.push(await S('Account No', 43, py + 116, { size: 8, weight: 700 }), await S(':', 101, py + 116, { size: 8, weight: 700 }), await S(p.accountNo, 109, py + 116, { size: 9.5, weight: 700 }));
-  if (p.qr) out.push(`<image x="252" y="${py + 16}" width="84" height="122" preserveAspectRatio="xMidYMid meet" href="${p.qr}" xlink:href="${p.qr}"/>`);
+  if (p.qr) out.push(`<image x="246" y="${py + 34}" width="104" height="104" preserveAspectRatio="xMidYMid meet" href="${p.qr}" xlink:href="${p.qr}"/>`);
   // signatures
   out.push(`<line x1="93" y1="737" x2="183" y2="737" stroke="#000" stroke-width="0.6" stroke-dasharray="1 2"/>`);
   out.push(await S('Customer Signature & Name', 138, 749, { size: 8, anchor: 'middle' }));

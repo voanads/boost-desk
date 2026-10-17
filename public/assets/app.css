@@ -1279,3 +1279,6 @@ body{font-size:15.5px;letter-spacing:0}
 @keyframes pcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (max-width:560px){.pcard-t{padding-left:0}}
 @media (prefers-reduced-motion:reduce){.pcard{animation:none}}
+/* Orders: no new-customer data from adsbox → hide those columns and the tile */
+#tab-orders.nonew table th:nth-child(n+5),#tab-orders.nonew table td:nth-child(n+5){display:none}
+#tab-orders.nonew .summary>div:has(#oCpn){display:none}

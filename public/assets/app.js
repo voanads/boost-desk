@@ -744,6 +744,7 @@
     list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) * dir : (v(a[k]) - v(b[k])) * dir) || b.spend - a.spend);
     const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, newC: a.newC + c.newC, oldC: a.oldC + c.oldC, withOrders: a.withOrders + (c.orders ? 1 : 0), spendW: a.spendW + (c.orders ? c.spend : 0) }), { spend: 0, orders: 0, newC: 0, oldC: 0, withOrders: 0, spendW: 0 });
     rollTo($('oCpo'), cpoText(t.spendW, t.orders)); $('oCpoSub').textContent = t.orders ? `boost spend ÷ orders · ${t.withOrders} client${t.withOrders === 1 ? '' : 's'} with orders` : 'No orders yet';
+    $('tab-orders').classList.toggle('nonew', !t.newC && !t.oldC); // adsbox didn't send new/returning → hide those columns
     rollTo($('oOrders'), t.orders.toLocaleString('en-US')); $('oOrdersSub').textContent = t.newC || t.oldC ? `${t.newC.toLocaleString('en-US')} new · ${t.oldC.toLocaleString('en-US')} returning` : '';
     rollTo($('oSpend'), money(t.spend)); $('oSpendSub').textContent = 'from the synced boosts';
     rollTo($('oCpn'), cpoText(t.spendW, t.newC)); $('oCpnSub').textContent = t.newC ? `${t.newC.toLocaleString('en-US')} new customers` : '';

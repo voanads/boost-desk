@@ -31,7 +31,7 @@ async function status() {
 }
 
 // Orders per client (and per Page) for one admin's clients over a period.
-const SRC = { all: 'orders', messenger: 'o_messenger', comment: 'o_comment', ad: 'o_ad' };
+const SRC = { all: 'orders', messenger: 'o_messenger', comment: 'o_comment', ad: 'o_ad', customers: 'customers' };
 async function byClient(owner, from, to, src = 'all', given = null) {
   const col = SRC[src] || 'orders';
   const rows = given || (await q(`SELECT day::text AS day, page_id, page_name, ${col} AS orders, new_c, old_c, total FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows;
@@ -228,8 +228,8 @@ async function liveTotals(from, to) {
   const by = new Map();
   for (const r of mapRows(got.list)) {
     const pid = String(r.pageId || '').trim() || 'name:' + norm(r.pageName);
-    const a = by.get(pid) || { day: from, page_id: pid, page_name: r.pageName || '', all: 0, messenger: 0, comment: 0, ad: 0, new_c: 0, old_c: 0, total: 0 };
-    a.all += int(r.orders); a.messenger += int(r.om); a.comment += int(r.oc); a.ad += int(r.oa); a.new_c += int(r.newC); a.old_c += int(r.oldC); a.total += Number(r.total) || 0;
+    const a = by.get(pid) || { day: from, page_id: pid, page_name: r.pageName || '', all: 0, messenger: 0, comment: 0, ad: 0, customers: 0, new_c: 0, old_c: 0, total: 0 };
+    a.all += int(r.orders); a.customers += int(r.cust); a.messenger += int(r.om); a.comment += int(r.oc); a.ad += int(r.oa); a.new_c += int(r.newC); a.old_c += int(r.oldC); a.total += Number(r.total) || 0;
     by.set(pid, a);
   }
   const rows = [...by.values()];

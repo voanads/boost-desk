@@ -1091,8 +1091,8 @@
   }
   // What Meta says about each campaign (Page, scheduled run time), to show why it counts as live or post.
   const runText = (m) => (m === 'unknown' || m === undefined ? '' : m === null ? 'no end date' : m < 60 ? `${m} min boost` : m < 1440 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} boost` : `${Math.round(m / 1440)}-day boost`);
-  const pageLabel = (p) => (p.named || !p.pageId ? esc(p.page) : `Page …${esc(p.pageId.slice(-6))}`);
-  const nameBtn = (p) => (p.pageId && !p.named ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="">Add name</button>` : '');
+  const pageLabel = (p) => (p.named || !p.pageId ? esc(p.page) : p.guess ? `${esc(p.guess)} <span class="hint" title="Page ID ${esc(p.pageId)} — name guessed from the campaign names">…${esc(p.pageId.slice(-4))}</span>` : `Page …${esc(p.pageId.slice(-6))}`);
+  const nameBtn = (p) => (p.pageId && !p.named ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="${esc(p.guess || '')}">${p.guess ? 'Save name' : 'Add name'}</button>` : '');
   // One campaign, with a switch to correct live/post by hand (remembered for future syncs and reports).
   const campRow = (x) => !x.id ? '' : `<div class="camp${x.set ? ' set' : ''}"><span class="cn" title="${esc(x.name)}">${esc(x.name || 'Campaign')}</span><span class="hint">${[runText(x.run), money(x.spend), x.set ? 'set by you' : ''].filter(Boolean).join(' · ')}</span><span class="camp-b"><button type="button" class="kbtn" data-camp="${esc(x.id)}" data-to="${x.live ? 'post' : 'live'}" title="Correct this campaign">${x.live ? '📌 It’s a post' : '🔴 It’s a live'}</button>${x.set ? `<button type="button" class="kbtn ghost" data-camp="${esc(x.id)}" data-to="" title="Let the app decide again">Auto</button>` : ''}</span></div>`;
   document.addEventListener('click', async (ev) => {

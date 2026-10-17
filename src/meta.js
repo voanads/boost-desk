@@ -352,7 +352,7 @@ async function videoKind(id, token) {
 // even for client Pages you don't manage), then from the Page itself.
 const pageNameCache = new Map(); // only successful lookups are cached
 async function campaignPages(token, actId, campaignIds) {
-  const pageOf = {}, typeOf = {}, videosOf = {};
+  const pageOf = {}, typeOf = {}, videosOf = {}, storyOf = {};
   if (!campaignIds.length) return pageOf;
   try {
     for (let i = 0; i < campaignIds.length; i += 50) {
@@ -366,6 +366,7 @@ async function campaignPages(token, actId, campaignIds) {
         const pid = ad.adset?.promoted_object?.page_id || c.object_story_spec?.page_id || c.actor_id
           || String(c.effective_object_story_id || '').split('_')[0];
         if (pid && !pageOf[ad.campaign_id]) pageOf[ad.campaign_id] = String(pid);
+        if (pid && c.effective_object_story_id && !storyOf[pid]) storyOf[String(pid)] = String(c.effective_object_story_id);
         if (c.object_type) { const t = typeOf[ad.campaign_id]; typeOf[ad.campaign_id] = !t || t === c.object_type ? c.object_type : (c.object_type === 'VIDEO' || t === 'VIDEO' ? 'VIDEO' : t); }
         // The video behind the ad: its own id, or the second half of the boosted post id (video posts share it).
         const vid = c.video_id || c.object_story_spec?.video_data?.video_id;
@@ -389,6 +390,11 @@ async function campaignPages(token, actId, campaignIds) {
     }
     for (const p of needed.filter((x) => !pageNameCache.has(x))) {
       try { const n = (await get(`/${p}`, { fields: 'name' }, token)).name; if (n) pageNameCache.set(p, n); }
+      catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    }
+    // Last try: the boosted post itself says which Page posted it ("from": { name }).
+    for (const p of needed.filter((x) => !pageNameCache.has(x) && storyOf[x])) {
+      try { const f = (await get(`/${storyOf[p]}`, { fields: 'from' }, token)).from; if (f && f.name && String(f.id) === p) pageNameCache.set(p, f.name); }
       catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
     }
   }

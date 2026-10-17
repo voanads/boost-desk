@@ -593,6 +593,14 @@ async function pageSpend(owner, from, to) {
     it.spend = round2(it.spend + v); it.days++;
   }
   for (const id of Object.keys(out)) out[id] = Object.values(out[id]).map((p) => ({ ...p, list: Object.values(p.list).sort((a, b) => b.spend - a.spend) })).sort((a, b) => b.spend - a.spend);
+  // Page name Meta won't give us: guess it from how its campaigns are named ("CosMe | 17" → "CosMe").
+  for (const list of Object.values(out)) for (const p of list) {
+    if (p.named) continue;
+    const votes = {};
+    for (const x of p.list) { if (isAutoPost(x.name)) continue; const pre = campaignPrefix(x.name).trim(); if (pre && pre.length <= 60 && !/^\d+$/.test(pre)) votes[pre] = (votes[pre] || 0) + x.spend; }
+    const best = Object.entries(votes).sort((a, b) => b[1] - a[1])[0];
+    if (best) p.guess = best[0];
+  }
   return out;
 }
 

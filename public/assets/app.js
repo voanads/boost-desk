@@ -796,7 +796,7 @@
     try {
       oCfg = await saveCfg();
       const r = await api('/orders/test', { method: 'POST' });
-      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for yesterday and today${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday and today.';
+      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for the last 7 days${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.<br>Fields: <code>${esc(r.fields.join(', '))}</code>${Object.entries(r.breakdown || {}).map(([k, v]) => `<br>${esc(k)}: ${Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => `<b>${esc(n)}</b> ${c}`).join(' · ')}`).join('')}${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for the last 7 days.';
     } catch (e) { m.textContent = '✕ ' + e.message; }
     finally { b.disabled = false; }
   };

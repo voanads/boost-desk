@@ -159,13 +159,19 @@ async function pullApi(days = 3, fromDay, toDay) {
 }
 // "Test connection": one call for yesterday + today, report what came back (field names only, no values).
 async function testApi() {
-  const to = sync.todayIn(), from = sync.addDays(to, -1);
+  const to = sync.todayIn(), from = sync.addDays(to, -6);
   const body = await callApi(from, to);
   if (body === null) throw Object.assign(new Error('Enter the API address and key first.'), { status: 400 });
   const rows = mapRows(body), raw = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
   const fields = raw[0] && typeof raw[0] === 'object' ? Object.keys(raw[0]) : [];
+  // How the rows split by their type / status / source fields (only those short labels, never customer data).
+  const breakdown = {};
+  for (const x of raw) for (const [k, v] of Object.entries(x || {})) {
+    if (!/type|status|source|channel|kind|state|deleted|cancel/i.test(k) || v == null || typeof v === 'object' || String(v).length > 30) continue;
+    const b = (breakdown[k] = breakdown[k] || {}); b[String(v)] = (b[String(v)] || 0) + 1;
+  }
   const sumField = raw.reduce((t, x) => t + (Number(x && (x.orders ?? x.count)) || 0), 0);
-  return { rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
+  return { breakdown, rows: rows.length, rawRows: raw.length, sumField, perOrder: raw.some(isOrderRow), fields, hasPage: rows.some((r) => r.pageId || r.pageName), hasDate: rows.some((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.day)) };
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.

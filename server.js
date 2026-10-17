@@ -726,7 +726,7 @@ api.post('/orders/pull', wrap(async (req, res) => {
 api.get('/orders/report', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid period.' });
-  res.json(await orders.report(req.user.fb_id, from, to));
+  res.json(await orders.report(req.user.fb_id, from, to, String(req.query.src || 'all')));
 }));
 
 // Set a campaign to Live or Post by hand (kind: 'live' | 'post' | null to go back to automatic), then recount.

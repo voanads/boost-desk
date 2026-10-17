@@ -16,9 +16,9 @@ async function importRows(rows, source = 'upload') {
   for (const r of rows.slice(0, 50000)) {
     const pageId = String(r.pageId || '').trim().slice(0, 40), name = String(r.pageName || '').trim().slice(0, 150);
     if (!isDay(r.day) || (!pageId && !name)) continue;
-    await q(`INSERT INTO page_orders (day, page_id, page_name, orders, new_c, old_c, total, source, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
-             ON CONFLICT (day, page_id) DO UPDATE SET page_name=COALESCE(NULLIF($3,''), page_orders.page_name), orders=$4, new_c=$5, old_c=$6, total=$7, source=$8, updated_at=now()`,
-      [r.day, pageId || 'name:' + norm(name), name, int(r.orders), int(r.newC), int(r.oldC), Math.max(0, Number(r.total) || 0), source]);
+    await q(`INSERT INTO page_orders (day, page_id, page_name, orders, new_c, old_c, total, source, o_comment, o_messenger, o_ad, customers, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())
+             ON CONFLICT (day, page_id) DO UPDATE SET page_name=COALESCE(NULLIF($3,''), page_orders.page_name), orders=$4, new_c=$5, old_c=$6, total=$7, source=$8, o_comment=$9, o_messenger=$10, o_ad=$11, customers=$12, updated_at=now()`,
+      [r.day, pageId || 'name:' + norm(name), name, int(r.orders), int(r.newC), int(r.oldC), Math.max(0, Number(r.total) || 0), source, int(r.oc), int(r.om), int(r.oa), int(r.cust)]);
     n++;
   }
   await db.setSetting('ordersLastImport', { at: new Date().toISOString(), rows: n, source });
@@ -31,8 +31,10 @@ async function status() {
 }
 
 // Orders per client (and per Page) for one admin's clients over a period.
-async function byClient(owner, from, to) {
-  const rows = (await q(`SELECT day::text AS day, page_id, page_name, orders, new_c, old_c, total FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows;
+const SRC = { all: 'orders', messenger: 'o_messenger', comment: 'o_comment', ad: 'o_ad' };
+async function byClient(owner, from, to, src = 'all') {
+  const col = SRC[src] || 'orders';
+  const rows = (await q(`SELECT day::text AS day, page_id, page_name, ${col} AS orders, new_c, old_c, total FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows;
   if (!rows.length) return { clients: {}, any: false };
   // Which client owns which Page: Page IDs seen in this admin's synced campaigns, plus Page IDs / names typed on clients.
   const raw = (await db.listRaw(owner, sync.addDays(from, -30), to)).flatMap((d) => d.rows || []);
@@ -112,7 +114,7 @@ function mapRows(body) {
   }).map((x) => ({
     day: String(x.date || x.day || x.order_date || x.created_at || '').slice(0, 10),
     pageId: x.page_id ?? x.pageId ?? x.fb_page_id ?? '', pageName: x.page_name ?? x.pageName ?? x.page ?? '',
-    orders: isOrderRow(x) ? 1 : (x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1), ...splitOf(x), total: x.total ?? x.amount ?? 0,
+    orders: isOrderRow(x) ? 1 : (x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1), ...splitOf(x), total: x.total ?? x.amount ?? x.revenue ?? 0, oc: x.orders_from_comment ?? 0, om: x.orders_from_messenger ?? 0, oa: x.orders_from_ad ?? 0, cust: typeof x.customers === 'number' ? x.customers : 0,
   }));
 }
 async function callApi(from, to, page = 1) {
@@ -172,7 +174,7 @@ async function pullRangeNow(from, to, force) {
         if (far && r.day !== day) continue;
         r.day = day;
         const k = r.pageId + '|' + (r.pageId ? '' : r.pageName), a = agg.get(k) || { day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
-        a.orders += Number(r.orders) || 0; a.newC += Number(r.newC) || 0; a.oldC += Number(r.oldC) || 0; a.total += Number(r.total) || 0; if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
+        for (const f of ['orders', 'newC', 'oldC', 'total', 'oc', 'om', 'oa', 'cust']) a[f] = (a[f] || 0) + (Number(r[f]) || 0); if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
       }
       await q(`DELETE FROM page_orders WHERE source='api' AND day=$1`, [day]);
       n += await importRows([...agg.values()], 'api');
@@ -203,9 +205,11 @@ async function testApi() {
 }
 
 // Orders page: per client spend (from the synced ads) next to orders, per Page; plus Pages with orders but no client.
-async function report(owner, from, to) {
-  const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to)]);
-  const rows = (await q(`SELECT page_id, max(page_name) AS page_name, sum(orders)::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
+async function report(owner, from, to, src = 'all') {
+  const col = SRC[src] || 'orders';
+  const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to, src)]);
+  const split = (await q(`SELECT coalesce(sum(o_messenger),0)::int AS m, coalesce(sum(o_comment),0)::int AS c, coalesce(sum(o_ad),0)::int AS a FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows[0];
+  const rows = (await q(`SELECT page_id, max(page_name) AS page_name, sum(${col})::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
   const clients = d.clients.filter((c) => !c.archived || c.spend > 0).map((c) => {
     const o = oc.clients[c.id] || { orders: 0, newC: 0, oldC: 0, pages: {} };
     const pg = (pages[c.id] || []).map((p) => ({ page: p.page, pageId: p.pageId, named: p.named, spend: p.spend, live: p.live, post: p.post, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
@@ -216,7 +220,7 @@ async function report(owner, from, to) {
   const mine = new Set(), mineNames = new Set();
   for (const d of await db.listRaw(owner, sync.addDays(from, -30), to)) for (const r of d.rows || []) { if (r.pageId) mine.add(r.pageId); if (r.page) mineNames.add(norm(r.page)); }
   const unmatched = rows.filter((r) => (mine.has(r.page_id) || mineNames.has(norm(r.page_name))) && !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
-  return { from, to, clients, unmatched, hasData: rows.length > 0 };
+  return { from, to, src: SRC[src] ? src : 'all', hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
 module.exports = { importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

@@ -719,12 +719,14 @@
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
   const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
   const oPulled = new Set();
+  let oSrc = (() => { try { return localStorage.getItem('oSrc') || 'all'; } catch (_) { return 'all'; } })();
+  document.querySelectorAll('#oSrc button').forEach((b) => b.onclick = () => { oSrc = b.dataset.s; try { localStorage.setItem('oSrc', oSrc); } catch (_) {} loadOrders(); });
   async function loadOrders() {
     document.querySelectorAll('#oChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === oPreset)));
     const [from, to] = aRange(oPreset);
     $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
     try {
-      const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}`)]);
+      const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}&src=${oSrc}`)]);
       oData2 = d; oCfg = cfg;
       // A period older than the automatic 3 days is fetched from adsbox once per visit, then shown again.
       if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
@@ -737,6 +739,8 @@
       else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}${me && me.canAdmin ? '' : ' Tell your admin.'}`; }
       else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
       else note.hidden = true;
+      $('oSrc').hidden = !d.hasSplit;
+      document.querySelectorAll('#oSrc button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === oSrc)));
       renderOrders();
     } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }
   }

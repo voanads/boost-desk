@@ -1282,3 +1282,5 @@ body{font-size:15.5px;letter-spacing:0}
 /* Orders: no new-customer data from adsbox → hide those columns and the tile */
 #tab-orders.nonew table th:nth-child(n+5),#tab-orders.nonew table td:nth-child(n+5){display:none}
 #tab-orders.nonew .summary>div:has(#oCpn){display:none}
+.chips.osrc{margin-top:8px}
+.chips.osrc button{font-size:.82rem;padding:5px 12px}

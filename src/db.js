@@ -106,6 +106,10 @@ async function init() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (day, page_id)
     );
+    ALTER TABLE page_orders ADD COLUMN IF NOT EXISTS o_comment INT NOT NULL DEFAULT 0;   -- orders from live/post comments
+    ALTER TABLE page_orders ADD COLUMN IF NOT EXISTS o_messenger INT NOT NULL DEFAULT 0; -- orders from Messenger chats
+    ALTER TABLE page_orders ADD COLUMN IF NOT EXISTS o_ad INT NOT NULL DEFAULT 0;        -- orders from ads
+    ALTER TABLE page_orders ADD COLUMN IF NOT EXISTS customers INT NOT NULL DEFAULT 0;
   `);
   await migrateToWorkspaces();
 }

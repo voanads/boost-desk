@@ -540,32 +540,63 @@
 
   // Add / edit dialog
   let cEdit = null, cDraft = null;
-  function drawDlgPages() { pageEditor($('cPages'), cDraft.pages, 'cpg', (p) => { cDraft.pages = p; drawDlgPages(); drawDlgTopics(); }); }
-  // Groups with topics: each Page can send its report to its own topic.
-  function drawDlgTopics() {
-    const topics = tgChats.filter((t) => t.type === 'topic');
-    for (const v of Object.values(cDraft.topics || {})) if (v && v.id && !topics.some((t) => t.id === v.id)) topics.push({ id: v.id, title: v.title || v.id, type: 'topic' });
-    const show = cDraft.pages.length > 0 && topics.length > 0 && me && me.telegram && me.telegram.bot;
-    $('cTopicsFld').hidden = !show; if (!show) return;
-    $('cTopics').innerHTML = cDraft.pages.map((p, i) => `<label class="toprow"><b title="${esc(p)}">${isId(p) ? 'Page ID …' + esc(p.slice(-5)) : esc(p)}</b><select data-tp="${i}"><option value="">Main group</option>${topics.map((t) => `<option value="${esc(t.id)}" ${(cDraft.topics[p] || {}).id === t.id ? 'selected' : ''}>${esc(t.topic ? t.topic + ' · ' + String(t.title).split(' › ')[0] : t.title)}</option>`).join('')}</select></label>`).join('')
-      + '<small class="hint">To see a topic here, send the <b>/link</b> code inside that topic, then tap Refresh list. Pages left on “Main group” go to the group above.</small>';
-    document.querySelectorAll('#cTopics [data-tp]').forEach((sel) => sel.onchange = () => {
-      const p = cDraft.pages[Number(sel.dataset.tp)], t = topics.find((x) => x.id === sel.value);
-      if (t) cDraft.topics[p] = { id: t.id, title: t.title }; else delete cDraft.topics[p];
-    });
+  // Pages as cards: name, ID, remove, and (when the group has topics) which topic its report goes to.
+  let pnKnown = {};
+  async function loadDlgPageNames() {
+    const ids = cDraft.pages.filter((p) => isId(p) && !(p in pnKnown));
+    if (!ids.length) return;
+    try { Object.assign(pnKnown, await api('/page-names?ids=' + ids.join(','))); drawDlgPages(); } catch (_) {}
   }
+  const groupTopics = () => {
+    if (!cDraft.telegram) return [];
+    const g = String(cDraft.telegram).split(':')[0];
+    const list = tgChats.filter((t) => t.type === 'topic' && String(t.id).split(':')[0] === g);
+    for (const v of Object.values(cDraft.topics || {})) if (v && v.id && String(v.id).split(':')[0] === g && !list.some((t) => t.id === v.id)) list.push({ id: v.id, title: v.title || v.id, topic: String(v.title || '').split(' › ').pop(), type: 'topic' });
+    return list;
+  };
+  const topicName = (t) => t.topic || String(t.title).split(' › ').pop();
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9ក-៿]+/g, '');
+  function drawDlgPages() {
+    const topics = groupTopics();
+    const label = (p) => (isId(p) ? pnKnown[p] || '' : p);
+    // A Page with no topic yet takes the topic whose name matches it.
+    for (const p of cDraft.pages) {
+      if ((cDraft.topics[p] || {}).id || !topics.length) continue;
+      const n = norm(label(p)); if (n.length < 3) continue;
+      const t = topics.find((x) => { const tn = norm(topicName(x)); return tn.length >= 3 && (tn.includes(n) || n.includes(tn)); });
+      if (t) cDraft.topics[p] = { id: t.id, title: t.title };
+    }
+    $('cPageCards').innerHTML = cDraft.pages.map((p, i) => {
+      const name = label(p), cur = (cDraft.topics[p] || {}).id || '';
+      return `<div class="pcard" style="--i:${i}">
+        <div class="pcard-h"><span class="pcard-ic" aria-hidden="true">📄</span>
+          <div class="pcard-n">${name ? `<b title="${esc(name)}">${esc(name)}</b>` : `<b class="muted">Page without a name</b>`}${isId(p) ? `<span class="hint num">ID …${esc(p.slice(-6))}</span>` : ''}</div>
+          ${isId(p) && !name ? `<a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(p)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
+          <button type="button" class="ghost pcard-x" data-rm="${i}" aria-label="Remove this Page">✕</button></div>
+        ${topics.length ? `<label class="pcard-t"><span>Report to</span><select data-tp="${i}"><option value="">Main group chat</option>${topics.map((t) => `<option value="${esc(t.id)}" ${cur === t.id ? 'selected' : ''}># ${esc(topicName(t))}</option>`).join('')}</select></label>` : ''}
+      </div>`;
+    }).join('') || '<div class="pcard-empty">No Page yet — add the Facebook Page this client boosts from.</div>';
+    $('cPageCards').querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const p = cDraft.pages[Number(b.dataset.rm)]; cDraft.pages = cDraft.pages.filter((x) => x !== p); delete cDraft.topics[p]; drawDlgPages(); });
+    $('cPageCards').querySelectorAll('[data-tp]').forEach((sel) => sel.onchange = () => {
+      const p = cDraft.pages[Number(sel.dataset.tp)], t = topics.find((x) => x.id === sel.value);
+      if (t) cDraft.topics[p] = { id: t.id, title: t.title }; else cDraft.topics[p] = { id: '', title: '' }; // '' = chosen main chat, don't auto-match again
+    });
+    pageEditor($('cPages'), [], 'cpg', (add) => { const v = add[0]; if (v && !cDraft.pages.includes(v)) { cDraft.pages = [...cDraft.pages, v]; drawDlgPages(); loadDlgPageNames(); } });
+    $('cpg-add').placeholder = cDraft.pages.length ? '+ Add another Page (name or ID)' : '+ Add a Page (name or ID)';
+  }
+  function drawDlgTopics() { /* topics now live inside each Page card */ }
   function drawDlgType() { document.querySelectorAll('#cType button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cDraft.type))); }
   document.querySelectorAll('#cType button').forEach((b) => b.onclick = () => { cDraft.type = b.dataset.v; drawDlgType(); });
   function drawDlgTg() {
     const box = $('cTgBox');
     if (!me || !me.telegram || !me.telegram.bot) { box.innerHTML = '<div class="note">The Telegram bot is not set up on the server yet (TELEGRAM_BOT_TOKEN in Railway), so groups can’t be picked. Reports can still be copied.</div>'; return; }
-    const opts = [...tgChats];
+    const opts = tgChats.filter((t) => t.type !== 'topic');
     if (cDraft.telegram && !opts.some((o) => o.id === cDraft.telegram)) opts.push({ id: cDraft.telegram, title: cDraft.telegram_title || cDraft.telegram });
-    box.innerHTML = `<div class="tgrow"><select id="cTg"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === cDraft.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select><button type="button" id="cTgRefresh">Refresh list</button></div>
-      <div class="linkhelp"><b>Connect a group:</b> add ${tgBot ? '<b>@' + esc(tgBot) + '</b>' : 'the bot'} to the client's Telegram group, send <code class="lcode" title="Tap to copy">/link ${esc(tgCode)}</code> in the group, then tap <b>Refresh list</b>. Only people who linked a group see it, and teammates can each link the same group. To remove yourself, send <code>/unlink ${esc(tgCode)}</code>.</div>`;
+    box.innerHTML = `<div class="tgrow"><select id="cTg"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === cDraft.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select><button type="button" id="cTgRefresh" title="Refresh list">↻ Refresh</button></div>
+      <details class="linkhelp-d"><summary>How to connect a group or topic?</summary><div class="linkhelp"> add ${tgBot ? '<b>@' + esc(tgBot) + '</b>' : 'the bot'} to the client's Telegram group, send <code class="lcode" title="Tap to copy">/link ${esc(tgCode)}</code> in the group, then tap <b>Refresh list</b>. Only people who linked a group see it, and teammates can each link the same group. To remove yourself, send <code>/unlink ${esc(tgCode)}</code>. For a group with topics, also send the <b>/link</b> code inside each topic so it shows next to the Pages above.</div></details>`;
     const lc = box.querySelector('.lcode'); if (lc) lc.onclick = async () => { try { await navigator.clipboard.writeText(lc.textContent); toast('Copied — paste it in the Telegram group'); } catch (_) {} };
-    $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; };
-    $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); drawDlgTopics(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
+    $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; drawDlgPages(); };
+    $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); drawDlgPages(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
   function openClientDlg(c, preset) {
     cEdit = c || null;
@@ -575,7 +606,7 @@
     $('cName').value = cDraft.name; $('cSave').textContent = c ? 'Save changes' : 'Add client';
     $('cDel').hidden = !c; $('cPause').hidden = !c; if (c) $('cPause').textContent = c.archived ? 'Resume' : 'Pause';
     $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
-    drawDlgType(); drawDlgPages(); drawDlgTg(); drawDlgTopics();
+    drawDlgType(); drawDlgPages(); drawDlgTg(); loadDlgPageNames();
     const d = $('cDlg'); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
     setTimeout(() => (c ? $('cpg-add') : $('cName')).focus(), 60);
   }
@@ -650,7 +681,7 @@
   $('cForm').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const pending = $('cpg-add') && $('cpg-add').value.trim(); if (pending && !cDraft.pages.includes(pending)) cDraft.pages.push(pending);
-    const topics = {}; for (const p of cDraft.pages) if (cDraft.topics && cDraft.topics[p]) topics[p] = cDraft.topics[p];
+    const topics = {}, grp = String(cDraft.telegram || '').split(':')[0]; for (const p of cDraft.pages) { const v = cDraft.topics && cDraft.topics[p]; if (v && v.id && grp && String(v.id).split(':')[0] === grp) topics[p] = v; }
     const body = { name: $('cName').value.trim(), type: cDraft.type, pages: cDraft.pages, telegram: cDraft.telegram, telegram_title: cDraft.telegram_title, topics };
     if (!body.name) { $('cName').focus(); return; }
     const b = $('cSave'); b.disabled = true;

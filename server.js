@@ -471,6 +471,12 @@ api.get('/dashboard/pages', wrap(async (req, res) => {
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   res.json(await sync.pageSpend(req.user.fb_id, from, to));
 }));
+// Names for Page IDs (saved names first, then names Meta gave us), for the client window.
+api.get('/page-names', wrap(async (req, res) => {
+  const ids = String(req.query.ids || '').split(',').filter((x) => /^\d{5,25}$/.test(x)).slice(0, 100);
+  const saved = await db.getSetting('pageNames', {}), known = meta.knownPageNames();
+  res.json(Object.fromEntries(ids.map((id) => [id, saved[id] || known[id] || ''])));
+}));
 // Name a Page that Meta won't name (client Pages you don't manage). Saved for everyone, used by every sync.
 api.put('/page-names/:id', wrap(async (req, res) => {
   const id = String(req.params.id), name = String((req.body || {}).name || '').trim().slice(0, 120);

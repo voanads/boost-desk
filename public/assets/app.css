@@ -1252,3 +1252,30 @@ body{font-size:15.5px;letter-spacing:0}
 .pn-h .btn{margin-left:auto}
 .pn-ex{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pnrow input{width:100%;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+
+/* Client window: one card per Page */
+.pcards{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg-1,var(--card,#fff))}
+.pcards:empty{display:none}
+.pcard{padding:10px 12px;display:flex;flex-direction:column;gap:8px;animation:pcIn .28s ease both;animation-delay:calc(var(--i,0)*40ms)}
+.pcard+.pcard{border-top:1px solid var(--line)}
+.pcard-h{display:flex;align-items:center;gap:10px;min-width:0}
+.pcard-ic{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:9px;background:var(--brand-soft,var(--accent-soft));font-size:.95rem}
+.pcard-n{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.pcard-n b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard-n b.muted{font-weight:500}
+.pcard-x{padding:4px 9px!important;color:var(--muted)}
+.pcard-x:hover{color:var(--bad,#c0392b)}
+.pcard-t{display:flex;align-items:center;gap:10px;padding-left:42px}
+.pcard-t span{font-size:.82rem;color:var(--muted);white-space:nowrap}
+.pcard-t select{flex:1;min-width:0;padding:7px 9px}
+.pcard-empty{padding:14px;color:var(--muted);font-size:.9rem;text-align:center}
+#cPages{margin-top:8px;min-height:0;padding:2px 6px}
+#cPages input{min-width:0}
+.linkhelp-d{margin-top:8px}
+.linkhelp-d summary{cursor:pointer;font-size:.85rem;color:var(--brand,var(--accent));list-style:none;padding:2px 0}
+.linkhelp-d summary::-webkit-details-marker{display:none}
+.linkhelp-d summary::before{content:'ⓘ ';}
+.linkhelp-d[open] summary{margin-bottom:6px}
+@keyframes pcIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (max-width:560px){.pcard-t{padding-left:0}}
+@media (prefers-reduced-motion:reduce){.pcard{animation:none}}

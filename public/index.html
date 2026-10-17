@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=77">
+<link rel="stylesheet" href="/assets/app.css?v=78">
 </head>
 <body>
 <div class="wrap">
@@ -145,15 +145,12 @@
       <div class="fld"><span>Boost type</span>
         <div class="seg seg-lg" id="cType" role="group" aria-label="Boost type"><button type="button" data-v="live">🔴 Live</button><button type="button" data-v="post">📌 Boost post</button><button type="button" data-v="both">Post + live</button></div>
       </div>
-      <div class="fld"><span>Facebook Pages</span>
+      <div class="fld"><span>Pages &amp; where reports go</span>
+        <div id="cPageCards" class="pcards"></div>
         <div class="pages pages-lg" id="cPages"></div>
-        <small class="hint">Type the Page name exactly as on Facebook and press Enter. Add every Page this client boosts from. Pages seen in your synced ads are suggested.</small>
       </div>
-      <div class="fld"><span>Telegram group <small class="hint">(where Send report goes)</small></span>
+      <div class="fld"><span>Telegram group</span>
         <div id="cTgBox"></div>
-      </div>
-      <div class="fld" id="cTopicsFld" hidden><span>Topic for each Page <small class="hint">(for groups with topics)</small></span>
-        <div id="cTopics" class="topics"></div>
       </div>
       <div class="dlg-foot">
         <button type="button" class="danger" id="cDel" hidden>Delete</button>
@@ -446,6 +443,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=77"></script>
+<script src="/assets/app.js?v=78"></script>
 </body>
 </html>

@@ -139,6 +139,8 @@ async function callApi(from, to, page = 1, extra = '', base = '') {
   try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${extra}${page > 1 ? `&page=${page}` : ''}`, { headers: { Authorization: `Bearer ${key}`, 'X-API-Key': key, Accept: 'application/json' }, signal: ctl.signal }); }
   catch (e) { require('./health').noteService('adsbox.biz', false, 20000, e.message); throw new Error(`Could not reach adsbox.biz (${e.name === 'AbortError' ? 'timed out' : e.message})`); }
   finally { clearTimeout(t); }
+  if (base && res.status === 401) { try { res = await fetch(`${url}${url.includes('?') ? '&' : '?'}${dateParams(from, to)}${extra}${page > 1 ? `&page=${page}` : ''}&api_key=${encodeURIComponent(key)}&key=${encodeURIComponent(key)}&token=${encodeURIComponent(key)}`, { headers: { Accept: 'application/json' } }); } catch (_) { /* keep the first answer */ } }
+  if (base && res.status === 401) throw new Error('The adsbox.biz order list needs a login and does not accept the API key yet — ask the developer to allow the API key on it.');
   require('./health').noteService('adsbox.biz', res.ok, Date.now() - t0, res.ok ? '' : 'HTTP ' + res.status);
   const text = await res.text();
   if (res.status === 401 || res.status === 403) throw new Error('adsbox.biz refused the API key (check the key).');

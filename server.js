@@ -718,7 +718,7 @@ api.get('/todo', wrap(async (req, res) => res.json(await pm.todo(req.user))));
 api.get('/orders/api', wrap(async (req, res) => { const c = await orders.publicConfig(); if (!(await canSeeAdmin(req.user.fb_id))) { delete c.keyHint; delete c.url; delete c.savedBy; c.url = c.hasKey ? 'set' : ''; } res.json(c); })); // non-admins only learn whether it is connected
 api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders.saveApiConfig(req.body || {}, req.user.name))));
 api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
-api.post('/orders/pull', wrap(async (req, res) => { const n = await orders.pullApi(Math.min(31, Number((req.body || {}).days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
+api.post('/orders/pull', wrap(async (req, res) => { const n = await orders.pullApi(Math.min(62, Number((req.body || {}).days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
 api.get('/orders/report', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid period.' });

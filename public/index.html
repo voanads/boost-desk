@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=80">
+<link rel="stylesheet" href="/assets/app.css?v=81">
 </head>
 <body>
 <div class="wrap">
@@ -227,12 +227,12 @@
       <div class="hero"><span class="lbl">Cost per order</span><span class="val num" id="oCpo">–</span><span class="sub" id="oCpoSub"></span></div>
       <div><span class="lbl">Orders</span><span class="val num" id="oOrders">0</span><span class="sub" id="oOrdersSub"></span></div>
       <div><span class="lbl">Boost spend</span><span class="val num" id="oSpend">$0.00</span><span class="sub" id="oSpendSub"></span></div>
-      <div><span class="lbl">Cost per new customer</span><span class="val num" id="oCpn">–</span><span class="sub" id="oCpnSub"></span></div>
+      <div><span class="lbl">Cost per new DM</span><span class="val num" id="oCpn">–</span><span class="sub" id="oCpnSub"></span></div>
     </div>
     <div class="panel">
       <div class="thead"><h2 id="oTitle">Clients</h2><div class="filters"><input type="search" id="oSearch" placeholder="Search client or Page" aria-label="Search clients"></div></div>
       <div class="tablewrap"><table class="dtable otable" id="oTable">
-        <thead><tr><th data-os="name">Client</th><th class="r" data-os="spend">Spend</th><th class="r" data-os="orders">Orders</th><th class="r" data-os="cpo">Cost / order</th><th class="r" data-os="newC">New customers</th><th class="r" data-os="cpn">Cost / new</th></tr></thead>
+        <thead><tr><th data-os="name">Client</th><th class="r" data-os="spend">Spend</th><th class="r" data-os="orders">Orders</th><th class="r" data-os="cpo">Cost / order</th><th class="r" data-os="newC">DM · New</th><th class="r" data-os="cpn">Cost / new DM</th></tr></thead>
         <tbody id="oBody"></tbody><tfoot id="oFoot"></tfoot>
       </table></div>
     </div>
@@ -443,6 +443,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=80"></script>
+<script src="/assets/app.js?v=81"></script>
 </body>
 </html>

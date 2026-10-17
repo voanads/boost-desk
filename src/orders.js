@@ -83,13 +83,27 @@ async function publicConfig() {
   const c = await apiConfig();
   return { url: c.url, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null) };
 }
+// DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
+// per-order row, a type field saying "new" / "old" (or is_new true/false).
+function splitOf(x) {
+  const keys = Object.keys(x || {}), num = (k) => Number(x[k]) || 0;
+  const kNew = keys.find((k) => /(^|[^a-z])(dm.?new|new.?dm|new.?customers?|new.?c|new)$/i.test(k) || /^dm.?new|^newdm|^dmnew/i.test(k));
+  const kOld = keys.find((k) => /(^|[^a-z])(dm.?old|old.?dm|old.?customers?|old.?c|old|returning)$/i.test(k) || /^dm.?old|^olddm|^dmold/i.test(k));
+  if ((kNew && typeof x[kNew] !== 'boolean') || kOld) return { newC: kNew ? num(kNew) : 0, oldC: kOld ? num(kOld) : 0 };
+  const flag = x.is_new ?? x.isNew ?? x.new_customer;
+  if (typeof flag === 'boolean' || flag === 0 || flag === 1) return flag ? { newC: 1, oldC: 0 } : { newC: 0, oldC: 1 };
+  const t = String(x.dm_type ?? x.dmType ?? x.customer_type ?? x.customerType ?? x.type ?? x.dm ?? x.customer_status ?? '').toLowerCase();
+  if (/new|ថ្មី/.test(t)) return { newC: 1, oldC: 0 };
+  if (/old|return|ចាស់/.test(t)) return { newC: 0, oldC: 1 };
+  return { newC: 0, oldC: 0 };
+}
 // Read rows from whatever shape the API returns: [..], {data:[..]}, {rows:[..]}, {orders:[..]}.
 function mapRows(body) {
   const list = Array.isArray(body) ? body : body && (body.data || body.rows || body.orders || body.items || body.result) || [];
   return list.map((x) => ({
     day: String(x.date || x.day || x.order_date || x.created_at || '').slice(0, 10),
     pageId: x.page_id ?? x.pageId ?? x.fb_page_id ?? '', pageName: x.page_name ?? x.pageName ?? x.page ?? '',
-    orders: x.orders ?? x.count ?? x.total_orders ?? 1, newC: x.new_customers ?? x.new ?? 0, oldC: x.old_customers ?? x.old ?? 0, total: x.total ?? x.amount ?? 0,
+    orders: x.orders ?? x.count ?? x.total_orders ?? x.order_count ?? 1, ...splitOf(x), total: x.total ?? x.amount ?? 0,
   }));
 }
 async function callApi(from, to) {

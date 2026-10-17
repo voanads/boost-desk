@@ -120,8 +120,18 @@ async function callApi(from, to) {
   try { return JSON.parse(text); } catch (_) { throw new Error('adsbox.biz did not answer with JSON — check the API address.'); }
 }
 // Pull the last few days of counts into the database.
-async function pullApi(days = 3) {
-  const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));
+// Any period, asked in pieces of up to 31 days (older months can be fetched whenever they're opened).
+async function pullRange(from, to) {
+  let n = 0, start = from;
+  while (start <= to) {
+    const end = sync.addDays(start, 30) < to ? sync.addDays(start, 30) : to;
+    const r = await pullApi(0, start, end); if (r === null) return null;
+    n += r; start = sync.addDays(end, 1);
+  }
+  return n;
+}
+async function pullApi(days = 3, fromDay, toDay) {
+  const to = toDay || sync.todayIn(), from = fromDay || sync.addDays(to, -(days - 1));
   try {
     const body = await callApi(from, to);
     if (body === null) return null;
@@ -164,4 +174,4 @@ async function report(owner, from, to) {
   return { from, to, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { importRows, status, byClient, pullApi, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

@@ -717,7 +717,8 @@
   // ---------- Orders page (adsbox.biz) ----------
   let oPreset = '7', oData2 = null, oCfg = null, oSort = { k: 'orders', asc: false }; const oOpen = new Set();
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
-  const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month' };
+  const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
+  const oPulled = new Set();
   async function loadOrders() {
     document.querySelectorAll('#oChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === oPreset)));
     const [from, to] = aRange(oPreset);
@@ -725,6 +726,11 @@
     try {
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}`)]);
       oData2 = d; oCfg = cfg;
+      // A period older than the automatic 3 days is fetched from adsbox once per visit, then shown again.
+      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
+        oPulled.add(oPreset);
+        api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (aRange(oPreset)[0] === from) loadOrders(); }).catch(() => {});
+      }
       const note = $('oNote');
       $('oSetBtn').hidden = !(me && me.canAdmin); // the API key is for admins only
       if (!cfg.url || !cfg.hasKey) { note.hidden = false; note.innerHTML = me && me.canAdmin ? '<b>Connect adsbox.biz first.</b> Tap <b>⚙ API settings</b> and paste the API address and key from adsbox.biz. After that, orders update for everyone by themselves every 30 minutes.' : 'Orders from adsbox.biz are not connected yet. Ask your admin to connect the adsbox.biz API; after that your clients\u2019 orders appear here by themselves.'; }
@@ -767,7 +773,8 @@
   $('oSearch').oninput = () => renderOrders();
   $('oSync').onclick = async () => {
     const b = $('oSync'); b.disabled = true; b.classList.add('busy');
-    try { const r = await api('/orders/pull', { method: 'POST', body: { days: 62 } }); successBadge(`Orders updated (${r.rows} Page-days)`); }
+    const [from, to] = aRange(oPreset);
+    try { const r = await api('/orders/pull', { method: 'POST', body: { from: from < addD(me.today, -61) ? from : addD(me.today, -61), to } }); oPulled.add(oPreset); successBadge(`Orders updated (${r.rows} Page-days)`); }
     catch (e) { toast(e.message); }
     finally { b.disabled = false; b.classList.remove('busy'); loadOrders(); }
   };

@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=81">
+<link rel="stylesheet" href="/assets/app.css?v=82">
 </head>
 <body>
 <div class="wrap">
@@ -220,7 +220,7 @@
       <div class="chead2"><div><h2>Orders</h2><div class="hint">Orders from adsbox.biz next to boost spend, for each client and Page: what one order costs.</div></div><span class="spacer"></span><button type="button" id="oSync" class="primary">Get latest orders</button><button type="button" id="oSetBtn" hidden>⚙ API settings</button></div>
       <div class="chips" id="oChips" role="group" aria-label="Period">
         <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button>
-      </div>
+      <button data-p="thisYear">This year</button></div>
     </div>
     <div class="note" id="oNote" hidden></div>
     <div class="summary" id="oSum">
@@ -443,6 +443,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=81"></script>
+<script src="/assets/app.js?v=82"></script>
 </body>
 </html>

@@ -221,7 +221,7 @@
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'lives', 'orders', 'insights', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
@@ -230,7 +230,6 @@
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
     if (name === 'orders') loadOrders();
-    if (name === 'insights') { loadInsights(); loadAiState(); }
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -821,88 +820,6 @@
     finally { b.disabled = false; }
   };
 
-  // ---------- Insights ----------
-  let iPreset = '30', iData = null; const iOpen = new Set();
-  const iLabels = { 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month' };
-  document.querySelectorAll('#iChips button').forEach((b) => b.onclick = () => { iPreset = b.dataset.p; loadInsights(); });
-  const LABEL = { star: '<span class="pill ok">★ Star</span>', grow: '<span class="pill brand">↑ Grow</span>', fix: '<span class="pill bad">⚠ Fix</span>', ok: '<span class="pill">OK</span>', 'no-orders': '<span class="pill warn">No orders</span>', 'no-data': '<span class="pill">No order data</span>', organic: '<span class="pill">No boost</span>' };
-  const finding = (x, i) => `<div class="ifitem ${x.good === true ? 'good' : x.good === false ? 'bad' : ''}" style="--i:${i}"><span class="if-ic">${{ boost: '🚀', type: '🎥', budget: '💵', time: '⏰', day: '📅', creative: '🖼', chat: '💬' }[x.kind] || '•'}</span><span>${esc(x.text)}</span></div>`;
-  async function loadInsights() {
-    document.querySelectorAll('#iChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === iPreset)));
-    const [from, to] = aRange(iPreset);
-    if (!iData) $('iBody').innerHTML = skelRows(4);
-    try { iData = await api(`/insights?from=${from}&to=${to}`); renderInsights(); }
-    catch (e) { $('iBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; }
-  }
-  function renderInsights() {
-    const d = iData, dash = '<span class="muted">–</span>';
-    rollTo($('iCpo'), d.totals.cpo != null ? money(d.totals.cpo) : '–'); $('iCpoSub').textContent = `${money(d.totals.spend)} boost spend`;
-    rollTo($('iOrders'), d.totals.orders.toLocaleString('en-US')); $('iOrdersSub').textContent = `${d.pages.length} Page${d.pages.length === 1 ? '' : 's'} · ${iLabels[iPreset]}`;
-    $('iBest').textContent = d.best ? d.best.name : '–'; $('iBestSub').textContent = d.best ? `${money(d.best.cpo)} per order` : '';
-    const fix = d.pages.filter((p) => p.label === 'fix'); rollTo($('iFix'), String(fix.length)); $('iFixSub').textContent = fix.length ? fix.slice(0, 2).map((p) => p.name).join(', ') + (fix.length > 2 ? '…' : '') : 'none';
-    const q = d.quality || {};
-    $('iNote').hidden = !q.estimate; $('iNote').innerHTML = q.estimate ? `⚠ ${q.estimate} of ${q.estimate + q.kept} days use adsbox.biz order numbers from before Boost Desk kept each day (they may be too high), so cost per order looks cheaper than it is. From 17 Oct on every day is kept exactly.` : '';
-    $('iOverallPanel').hidden = !d.overall.length;
-    $('iOverall').innerHTML = d.overall.map(finding).join('');
-    $('iBody').innerHTML = d.pages.map((p, i) => {
-      const open = iOpen.has(p.key), t = p.trend, mix = p.spend ? Math.round(p.live / p.spend * 100) : 0;
-      const tr = t == null ? dash : `<span class="${t >= 0 ? 'is-ok' : 'is-danger'}">${t >= 0 ? '▲' : '▼'} ${Math.abs(t)}%</span>${p.cpoTrend != null ? `<div class="hint">cost ${p.cpoTrend <= 0 ? '▼' : '▲'} ${Math.abs(p.cpoTrend)}%</div>` : ''}`;
-      return `<tr class="drow${open ? ' open' : ''}" data-ik="${esc(p.key)}" tabindex="0" style="--i:${Math.min(i, 12)}"><td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(p.name)}</b></div><div class="pg">${esc(p.client)}</div></td>
-        <td class="r num" data-l="Spend">${money(p.spend)}</td><td class="r num" data-l="Orders"><b>${p.orders ? p.orders.toLocaleString('en-US') : dash}</b></td>
-        <td class="r num" data-l="Cost / order"><b class="cpo">${p.cpo != null ? money(p.cpo) : dash}</b></td><td class="r num" data-l="vs before">${tr}</td>
-        <td data-l="Live / post">${p.spend ? `<div class="imix" title="${mix}% live"><i style="width:${mix}%"></i></div><span class="hint">${mix}% live</span>` : dash}</td><td data-l="">${LABEL[p.label] || ''}</td></tr>`
-        + (open ? `<tr class="dexp"><td colspan="7"><div class="dexp-in"><div class="ifind">${p.findings.length ? p.findings.map(finding).join('') : `<div class="muted">Not enough days with orders to compare yet (needs at least 5). ${p.orderDays} day${p.orderDays === 1 ? '' : 's'} with orders in this period.</div>`}</div>
-          <div class="hint">${p.boostDays} boost day${p.boostDays === 1 ? '' : 's'} · ${p.orderDays} day${p.orderDays === 1 ? '' : 's'} with orders${p.prev ? ` · before: ${p.prev.orders} orders, ${money(p.prev.spend)}` : ''}</div></div></td></tr>` : '');
-    }).join('') || '<tr><td colspan="7" class="empty-row">No boosts or orders in this period.</td></tr>';
-    document.querySelectorAll('#iBody tr[data-ik]').forEach((tr) => { const t = () => { const k = tr.dataset.ik; iOpen.has(k) ? iOpen.delete(k) : iOpen.add(k); renderInsights(); }; tr.onclick = t; tr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } }; });
-  }
-
-  // ---------- AI analyst (Insights) ----------
-  let aiLang = (() => { try { return localStorage.getItem('aiLang') || 'en'; } catch (_) { return 'en'; } })(), aiHist = [], aiKey = '';
-  const mdHtml = (md) => {
-    const lines = esc(md).split('\n'); let html = '', list = false;
-    const inline = (t) => t.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
-    for (const raw of lines) {
-      const l = raw.trimEnd();
-      const li = l.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)$/);
-      if (li) { if (!list) { html += '<ul>'; list = true; } html += `<li>${inline(li[1])}</li>`; continue; }
-      if (list) { html += '</ul>'; list = false; }
-      const h = l.match(/^#{1,4}\s+(.*)$/);
-      if (h) html += `<h4>${inline(h[1])}</h4>`; else if (l.trim()) html += `<p>${inline(l)}</p>`;
-    }
-    return html + (list ? '</ul>' : '');
-  };
-  const drawAiLang = () => document.querySelectorAll('#aiLang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.l === aiLang)));
-  document.querySelectorAll('#aiLang button').forEach((b) => b.onclick = () => { aiLang = b.dataset.l; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} drawAiLang(); });
-  drawAiLang();
-  function aiRender(extra) {
-    const out = $('aiOut'); out.hidden = !aiHist.length && !extra;
-    out.innerHTML = aiHist.map((m) => m.role === 'user' ? `<div class="aiq">${esc(m.text)}</div>` : `<div class="aia">${mdHtml(m.text)}</div>`).join('') + (extra || '');
-    out.scrollTop = out.scrollHeight;
-  }
-  async function aiAsk(question) {
-    const [from, to] = aRange(iPreset), key = from + '|' + to + '|' + aiLang;
-    if (!question || key !== aiKey) { aiHist = []; aiKey = key; }
-    const q = question || '';
-    if (q) aiHist.push({ role: 'user', text: q });
-    aiRender(`<div class="aia aiwait"><span class="dots"><i></i><i></i><i></i></span> ${question ? 'Thinking…' : 'Reading your Pages, orders and lives…'}</div>`);
-    $('aiRun').disabled = $('aiSend').disabled = true;
-    try {
-      const r = await api('/insights/ai', { method: 'POST', body: { from, to, question: q, lang: aiLang, history: q ? aiHist.slice(0, -1) : [] } });
-      aiHist.push({ role: 'assistant', text: r.text });
-      aiRender(`<div class="hint aimeta">${esc(r.model)}${r.pictures ? ` · looked at ${r.pictures} live thumbnail${r.pictures === 1 ? '' : 's'}` : ''}${r.cached ? ' · saved answer' : ''}${r.left != null ? ` · ${r.left} questions left today` : ''}</div>`);
-    } catch (e) {
-      if (q) aiHist.pop();
-      aiRender(`<div class="aia aierr">${esc(e.message)}</div>`);
-    } finally { $('aiRun').disabled = $('aiSend').disabled = false; }
-  }
-  $('aiRun').onclick = () => aiAsk('');
-  $('aiForm').onsubmit = (ev) => { ev.preventDefault(); const q = $('aiQ').value.trim(); if (!q) return $('aiQ').focus(); $('aiQ').value = ''; aiAsk(q); };
-  document.querySelectorAll('#aiSugg button').forEach((b) => b.onclick = () => aiAsk(b.textContent));
-  async function loadAiState() {
-    try { const c = await api('/insights/ai'); if (!c.hasKey) { $('aiHint').innerHTML = me && me.isOwner ? 'AI is not set up yet. Add your Anthropic API key in <b>Admin → Settings → AI analyst</b>.' : 'AI is not set up yet — ask the app owner to add the Anthropic API key.'; $('aiRun').disabled = $('aiSend').disabled = true; } } catch (_) {}
-  }
-
   // ---------- auto sync (owner only) ----------
   const ago = (t) => {
     if (!t) return '—';
@@ -1074,7 +991,6 @@
         `${d.canEdit ? '<button class="sm" data-sgo="qr">Change QR for everyone</button><input type="file" id="sQrFile" accept="image/png,image/jpeg" hidden>' : ''}<button class="sm ghost" data-sgo="invoice">My invoice details</button>`),
       card('⏰', 'My auto report', '', 'Sends each client’s report to their Telegram group at a set time every day. Each person sets their own.', '<button class="sm" data-sgo="autoreport">Open auto report</button>'),
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
-      card('🤖', 'AI analyst (Claude)', d.ai && d.ai.hasKey ? on('On') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} questions per person per day.<div class="hint">Used on the Insights page. Sends Page totals, orders, boost setups, post text and live thumbnails to Anthropic — no customer data.</div>` : 'Add an Anthropic API key (from console.anthropic.com) to turn on the AI analyst on the Insights page. Each analysis costs a few cents.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
     ].join('');
@@ -1131,8 +1047,6 @@ Notes:
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();
     if (k === 'qr') $('sQrFile').click();
-    if (k === 'aikey') { const v = prompt('Paste the Anthropic API key (starts with sk-ant-)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI analyst on'); loadSettings(); } catch (e) { toast(e.message); } return; }
-    if (k === 'aikeydel') { if (!confirm('Remove the AI key? The AI analyst stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
   });
   $('sGrid').addEventListener('change', async (ev) => {
@@ -2323,7 +2237,7 @@ Thank you for working with Ads Box!`,
       await loadDay();
       const h = location.hash.slice(1);
       if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
-      showTab(['clients', 'accounts', 'lives', 'orders', 'insights', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

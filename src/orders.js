@@ -233,20 +233,34 @@ function pullRange(from, to, { force = true } = {}) {
 async function pullApi(days = 3) {
   const to = sync.todayIn(); return pullRange(sync.addDays(to, -(days - 1)), to);
 }
+// Each day's count is kept the way adsbox.biz showed it while the day was today/yesterday (when it matches
+// the adsbox Order page). Once a day is older than yesterday it is LOCKED and never fetched again, so later
+// changes in adsbox's totals can't make old days wrong. Days from before this was set up are "backfill":
+// fetched once from the API (may be too high) and marked as estimates.
+//   dayState: { 'YYYY-MM-DD': 'fresh' | 'locked' | 'backfill' }
+async function dayStates() { return (await db.getSetting('ordersDayState', {})) || {}; }
 async function pullRangeNow(from, to, force) {
   let n = 0;
-  const done = (await db.getSetting('ordersPulled', {})) || {}, recent = sync.addDays(sync.todayIn(), -3);
+  const done = (await db.getSetting('ordersPulled', {})) || {}, state = await dayStates();
+  const today = sync.todayIn(), yest = sync.addDays(today, -1);
+  const plan = []; // days to fetch now
+  for (let day = from; day <= to && day <= today; day = sync.addDays(day, 1)) {
+    if (day >= yest) { plan.push(day); continue; }               // today / yesterday: always refresh
+    if (state[day] === 'locked') continue;                        // kept as it was — never changes again
+    if (state[day] === 'fresh') { state[day] = 'locked'; continue; } // captured while recent → lock it
+    if (!force && done[day] && Date.now() - done[day] < 24 * 3600e3) continue; // backfill fetched lately
+    plan.push(day);
+  }
+  const store = async (day, rowsOfDay) => {
+    await q(`DELETE FROM page_orders WHERE source='api' AND day=$1`, [day]);
+    n += await importRows(rowsOfDay, 'api');
+    done[day] = Date.now(); state[day] = day >= yest ? 'fresh' : 'backfill';
+  };
   try {
-    if ((await apiConfig()).listUrl) {
-      // Order list: one fetch for the whole period, then counted per day.
-      const lst = await listOrders(from, to, await knownPageIds(from, to)); if (lst === null) return null;
-      await q(`DELETE FROM page_orders WHERE source='api' AND day BETWEEN $1 AND $2`, [from, to]);
-      n = await importRows(lst.rows, 'api');
-      for (let day = from; day <= to; day = sync.addDays(day, 1)) done[day] = Date.now();
-      to = sync.addDays(from, -1); // skip the summary loop below
-    }
-    for (let day = from; day <= to; day = sync.addDays(day, 1)) {
-      if (!force && day < recent && done[day] && Date.now() - done[day] < 24 * 3600e3) continue; // counted lately; nothing new
+    if (plan.length && (await apiConfig()).listUrl) {
+      const lst = await listOrders(plan[0], plan[plan.length - 1], await knownPageIds(plan[0], plan[plan.length - 1])); if (lst === null) return null;
+      for (const day of plan) await store(day, lst.rows.filter((r) => r.day === day));
+    } else for (const day of plan) {
       const got = await fetchAll(day, day); if (got === null) return null;
       const agg = new Map(), rows = mapRows(got.list);
       // The API filters by day: everything it sends belongs to that day (its times may be in UTC, a day off).
@@ -258,16 +272,23 @@ async function pullRangeNow(from, to, force) {
         const k = r.pageId + '|' + (r.pageId ? '' : r.pageName), a = agg.get(k) || { day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
         for (const f of ['orders', 'newC', 'oldC', 'total', 'oc', 'om', 'oa', 'cust']) a[f] = (a[f] || 0) + (Number(r[f]) || 0); if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
       }
-      await q(`DELETE FROM page_orders WHERE source='api' AND day=$1`, [day]);
-      n += await importRows([...agg.values()], 'api');
-      done[day] = Date.now();
+      await store(day, [...agg.values()]);
     }
-    for (const d of Object.keys(done)) if (d < sync.addDays(sync.todayIn(), -800)) delete done[d];
+    for (const d of Object.keys(done)) if (d < sync.addDays(today, -800)) delete done[d];
+    for (const d of Object.keys(state)) if (d < sync.addDays(today, -800)) delete state[d];
     await db.setSetting('ordersPulled', done);
+    await db.setSetting('ordersDayState', state);
     liveCache.clear();
     await db.setSetting('ordersLastError', null);
     return n;
-  } catch (e) { await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
+  } catch (e) { await db.setSetting('ordersDayState', state).catch(() => {}); await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
+}
+// How trustworthy a period's order numbers are: days kept from when they were recent vs. estimates.
+async function periodQuality(from, to) {
+  const state = await dayStates(), today = sync.todayIn();
+  let kept = 0, estimate = 0, missing = 0;
+  for (let d = from; d <= to && d <= today; d = sync.addDays(d, 1)) { const st = state[d]; if (st === 'locked' || st === 'fresh') kept++; else if (st === 'backfill') estimate++; else missing++; }
+  return { kept, estimate, missing };
 }
 // Look for an order-list endpoint next to the summary one (like the Order page uses), and say what it
 // returns — the status, the field names and how many rows. Never the rows themselves.
@@ -413,8 +434,11 @@ async function liveTotals(from, to) {
 }
 async function report(owner, from, to, src = 'all') {
   const col = SRC[src] || 'orders', key = SRC[src] ? src : 'all';
-  let live = null; try { live = await liveTotals(from, to); } catch (e) { live = null; }
-  const given = live && live.map((r) => ({ ...r, orders: r[key] }));
+  // Today and yesterday are refreshed from adsbox (if not done in the last 5 minutes); everything is then read
+  // from the kept daily counts.
+  const today = sync.todayIn(), yest = sync.addDays(today, -1), done = (await db.getSetting('ordersPulled', {})) || {};
+  if (to >= yest && (await apiConfig()).key && !(done[today] && Date.now() - done[today] < 5 * 60e3)) { try { await pullRange(yest, today, { force: false }); } catch (_) { /* show what is kept */ } }
+  const live = null, given = null;
   const [d, pages, oc] = await Promise.all([sync.dashboard(owner, from, to), sync.pageSpend(owner, from, to), byClient(owner, from, to, src, given && given.length ? given : null)]);
   const split = live ? { m: live.reduce((t, r) => t + r.messenger, 0), c: live.reduce((t, r) => t + r.comment, 0), a: live.reduce((t, r) => t + r.ad, 0) }
     : (await q(`SELECT coalesce(sum(o_messenger),0)::int AS m, coalesce(sum(o_comment),0)::int AS c, coalesce(sum(o_ad),0)::int AS a FROM page_orders WHERE day BETWEEN $1 AND $2`, [from, to])).rows[0];
@@ -429,7 +453,7 @@ async function report(owner, from, to, src = 'all') {
   const mine = new Set(), mineNames = new Set();
   for (const d of await db.listRaw(owner, sync.addDays(from, -30), to)) for (const r of d.rows || []) { if (r.pageId) mine.add(r.pageId); if (r.page) mineNames.add(norm(r.page)); }
   const unmatched = rows.filter((r) => (mine.has(r.page_id) || mineNames.has(norm(r.page_name))) && !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
-  return { from, to, live: !!(given && given.length), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
+  return { from, to, live: false, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

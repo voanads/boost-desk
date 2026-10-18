@@ -740,7 +740,9 @@
       else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
       else note.hidden = true;
       $('oSrc').hidden = !d.hasSplit;
-      $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '') + (d.live ? ' · live from adsbox.biz' : '');
+      $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
+      const ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
+      if (est && note.hidden) { note.hidden = false; note.innerHTML = `⚠ <b>${est} of ${est + (ql.kept || 0)} days</b> in this period are estimates from adsbox.biz's API (from before Boost Desk started keeping each day's count) and may be too high. From 18 Oct on, every day is kept exactly as adsbox.biz showed it on that day and the next.`; }
       document.querySelectorAll('#oSrc button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === oSrc)));
       renderOrders();
     } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }

@@ -202,8 +202,7 @@ api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const users = await db.allUsers();
   const out = [];
   // Orders from adsbox.biz for the period (live), counted per account through its clients' Pages.
-  let live = null; try { live = await orders.liveTotals(from, to); } catch (_) { live = null; }
-  const given = live && live.length ? live.map((r) => ({ ...r, orders: r.all })) : null;
+  const given = null; // kept daily counts (see orders.js)
   for (const u of users) {
     const d = await sync.dashboard(u.fb_id, from, to);
     let ord = 0, ordSpend = 0;

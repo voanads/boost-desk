@@ -719,8 +719,7 @@
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
   const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
   const oPulled = new Set();
-  let oSrc = (() => { try { return localStorage.getItem('oSrc') || 'all'; } catch (_) { return 'all'; } })();
-  document.querySelectorAll('#oSrc button').forEach((b) => b.onclick = () => { oSrc = b.dataset.s; try { localStorage.setItem('oSrc', oSrc); } catch (_) {} loadOrders(); });
+  const oSrc = 'all'; // orders from every source (the Messenger / Comment / Ads filter was removed)
   async function loadOrders() {
     document.querySelectorAll('#oChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === oPreset)));
     const [from, to] = aRange(oPreset);
@@ -739,11 +738,9 @@
       else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}${me && me.canAdmin ? '' : ' Tell your admin.'}`; }
       else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
       else note.hidden = true;
-      $('oSrc').hidden = !d.hasSplit;
       $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
       const ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       if (est && note.hidden) { note.hidden = false; note.innerHTML = `⚠ <b>${est} of ${est + (ql.kept || 0)} days</b> in this period are estimates from adsbox.biz's API (from before Boost Desk started keeping each day's count) and may be too high. From 18 Oct on, every day is kept exactly as adsbox.biz showed it on that day and the next.`; }
-      document.querySelectorAll('#oSrc button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.s === oSrc)));
       renderOrders();
     } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }
   }

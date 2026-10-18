@@ -453,7 +453,15 @@ async function report(owner, from, to, src = 'all') {
   const mine = new Set(), mineNames = new Set();
   for (const d of await db.listRaw(owner, sync.addDays(from, -30), to)) for (const r of d.rows || []) { if (r.pageId) mine.add(r.pageId); if (r.page) mineNames.add(norm(r.page)); }
   const unmatched = rows.filter((r) => (mine.has(r.page_id) || mineNames.has(norm(r.page_name))) && !matched.has(r.page_id) && !matched.has('name:' + norm(r.page_name)) && r.orders > 0).map((r) => ({ pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name, orders: r.orders })).sort((a, b) => b.orders - a.orders);
-  return { from, to, live: false, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
+  // The same length of time just before, for "cheaper / more expensive than before".
+  let prev = null;
+  try {
+    const len = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1, pf = sync.addDays(from, -len), pt = sync.addDays(from, -1);
+    const [pd, po] = await Promise.all([sync.dashboard(owner, pf, pt), byClient(owner, pf, pt, src)]);
+    let ps = 0, pn = 0; for (const c of pd.clients) { const o = po.clients[c.id]; if (o && o.orders) { ps += c.spend; pn += o.orders; } }
+    prev = { from: pf, to: pt, spend: Math.round(ps * 100) / 100, orders: pn };
+  } catch (_) { prev = null; }
+  return { from, to, live: false, prev, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
 module.exports = { periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

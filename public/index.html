@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=104">
+<link rel="stylesheet" href="/assets/app.css?v=106">
 </head>
 <body>
 <div class="wrap">
@@ -216,30 +216,30 @@
   <!-- PAYMENTS -->
   <!-- ORDERS (adsbox.biz) -->
   <section id="tab-orders" class="wrap" hidden>
-    <div class="dhead">
-      <div class="chead2"><div><h2>Orders</h2><div class="hint">Orders from adsbox.biz next to boost spend, for each client and Page: what one order costs.</div></div><span class="spacer"></span><button type="button" id="oSync" class="primary">Get latest orders</button><button type="button" id="oSetBtn" hidden>⚙ API settings</button></div>
-      <div class="chips" id="oChips" role="group" aria-label="Period">
-        <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button>
-      <button data-p="thisYear">This year</button></div>
+    <div class="ohead">
+      <div><h2>Orders</h2><div class="hint">What one order costs for each client — boost spend ÷ orders from adsbox.biz.</div></div>
+      <div class="ohead-r">
+        <label class="osel"><span class="sr">Period</span><select id="oPeriod"><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="thisYear">This year</option></select></label>
+        <button type="button" id="oSync" class="orefresh" title="Get the latest orders from adsbox.biz"><span class="ic-r" aria-hidden="true">↻</span> <span id="oUpd">Update</span></button>
+        <button type="button" id="oSetBtn" class="ghost oicon" title="adsbox.biz API settings" aria-label="API settings" hidden>⚙</button>
+      </div>
     </div>
-    <div class="note" id="oNote" hidden></div>
-    <div class="summary" id="oSum">
-      <div class="hero"><span class="lbl">Cost per order</span><span class="val num" id="oCpo">–</span><span class="sub" id="oCpoSub"></span></div>
-      <div><span class="lbl">Orders</span><span class="val num" id="oOrders">0</span><span class="sub" id="oOrdersSub"></span></div>
-      <div><span class="lbl">Boost spend</span><span class="val num" id="oSpend">$0.00</span><span class="sub" id="oSpendSub"></span></div>
-      <div><span class="lbl">Cost per new DM</span><span class="val num" id="oCpn">–</span><span class="sub" id="oCpnSub"></span></div>
+    <div class="note onote" id="oNote" hidden></div>
+    <div class="ostrip" id="oSum">
+      <div class="ost-main"><span class="val num" id="oCpo">–</span><span class="lbl">per order</span></div>
+      <div class="ost"><span class="val num" id="oOrders">0</span><span class="lbl">orders</span></div>
+      <div class="ost"><span class="val num" id="oSpend">$0.00</span><span class="lbl">boost spend</span></div>
+      <div class="ost-trend" id="oTrend"></div>
     </div>
-    <div class="panel">
-      <div class="thead"><h2 id="oTitle">Clients</h2><div class="filters"><input type="search" id="oSearch" placeholder="Search client or Page" aria-label="Search clients"></div></div>
-      <div class="tablewrap"><table class="dtable otable" id="oTable">
-        <thead><tr><th data-os="name">Client</th><th class="r" data-os="spend">Spend</th><th class="r" data-os="orders">Orders</th><th class="r" data-os="cpo">Cost / order</th><th class="r" data-os="newC">DM · New</th><th class="r" data-os="cpn">Cost / new DM</th></tr></thead>
-        <tbody id="oBody"></tbody><tfoot id="oFoot"></tfoot>
-      </table></div>
+    <div class="otools">
+      <div class="seg" id="oSortSeg" role="group" aria-label="Sort"><button type="button" data-k="cpo" aria-pressed="true">Cheapest</button><button type="button" data-k="orders">Most orders</button><button type="button" data-k="spend">Most spend</button></div>
+      <input type="search" id="oSearch" placeholder="Search client or Page" aria-label="Search clients">
     </div>
+    <div class="ocards" id="oCards"></div>
     <div class="panel" id="oUnPanel" hidden>
       <h2>Orders on Pages without a client</h2>
-      <div class="hint">These Pages you boost have orders in adsbox.biz, but none of your clients uses them yet. Add the Page to a client (by name or Page ID) to include them.</div>
-      <div class="tablewrap"><table><thead><tr><th>Page</th><th>Page ID</th><th class="r">Orders</th></tr></thead><tbody id="oUnBody"></tbody></table></div>
+      <div class="hint">These Pages you boost have orders in adsbox.biz, but no client uses them yet. Add the Page (name or Page ID) to a client to include them.</div>
+      <div class="ounlist" id="oUnBody"></div>
     </div>
   </section>
 
@@ -482,6 +482,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=104"></script>
+<script src="/assets/app.js?v=106"></script>
 </body>
 </html>

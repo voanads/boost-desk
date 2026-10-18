@@ -715,72 +715,77 @@
   }
 
   // ---------- Orders page (adsbox.biz) ----------
-  let oPreset = '7', oData2 = null, oCfg = null, oSort = { k: 'orders', asc: false }; const oOpen = new Set();
+  let oPreset = '7', oData2 = null, oCfg = null;
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
   const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
   const oPulled = new Set();
   const oSrc = 'all'; // orders from every source (the Messenger / Comment / Ads filter was removed)
+  let oSortK = (() => { try { return localStorage.getItem('oSort') || 'cpo'; } catch (_) { return 'cpo'; } })();
   async function loadOrders() {
-    document.querySelectorAll('#oChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === oPreset)));
+    $('oPeriod').value = oPreset;
+    document.querySelectorAll('#oSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === oSortK)));
     const [from, to] = aRange(oPreset);
-    $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
+    if (!oData2) $('oCards').innerHTML = '<div class="ocard skel"></div><div class="ocard skel"></div><div class="ocard skel"></div>';
     try {
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}&src=${oSrc}`)]);
       oData2 = d; oCfg = cfg;
-      // A period older than the automatic 3 days is fetched from adsbox once per visit, then shown again.
-      if (cfg.url && cfg.hasKey && !d.live && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
+      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
         oPulled.add(oPreset);
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (aRange(oPreset)[0] === from) loadOrders(); }).catch(() => {});
       }
-      const note = $('oNote');
-      $('oSetBtn').hidden = !(me && me.canAdmin); // the API key is for admins only
-      if (!cfg.url || !cfg.hasKey) { note.hidden = false; note.innerHTML = me && me.canAdmin ? '<b>Connect adsbox.biz first.</b> Tap <b>⚙ API settings</b> and paste the API address and key from adsbox.biz. After that, orders update for everyone by themselves every 30 minutes.' : 'Orders from adsbox.biz are not connected yet. Ask your admin to connect the adsbox.biz API; after that your clients\u2019 orders appear here by themselves.'; }
-      else if (cfg.lastError) { note.hidden = false; note.innerHTML = `⚠ The last try to get orders failed: ${esc(cfg.lastError.message)}${me && me.canAdmin ? '' : ' Tell your admin.'}`; }
-      else if (!d.hasData) { note.hidden = false; note.innerHTML = 'Connected. No orders for this period yet. Tap <b>Get latest orders</b> to fetch them now.'; }
-      else note.hidden = true;
-      $('oTitle').textContent = 'Clients · ' + (oLabels[oPreset] || '');
-      const ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
-      if (est && note.hidden) { note.hidden = false; note.innerHTML = `⚠ <b>${est} of ${est + (ql.kept || 0)} days</b> in this period are estimates from adsbox.biz's API (from before Boost Desk started keeping each day's count) and may be too high. From 18 Oct on, every day is kept exactly as adsbox.biz showed it on that day and the next.`; }
+      $('oSetBtn').hidden = !(me && me.canAdmin);
+      $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
+      const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
+      let msg = '';
+      if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
+      else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
+      else if (!d.hasData) msg = 'No orders for this period yet. Tap <b>↻ Update</b> to fetch them.';
+      else if (est) msg = `<span title="Days from before Boost Desk started keeping each day's count (18 Oct) come from adsbox.biz's API and may be too high, so cost per order looks cheaper.">ⓘ ${est} of ${est + (ql.kept || 0)} days are estimates and may be too high.</span>`;
+      note.hidden = !msg; note.innerHTML = msg;
       renderOrders();
-    } catch (e) { $('oBody').innerHTML = `<tr><td colspan="6" class="muted">${esc(e.message)}</td></tr>`; }
+    } catch (e) { $('oCards').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
   function renderOrders() {
     const d = oData2; if (!d) return;
     const q = ($('oSearch').value || '').trim().toLowerCase();
-    const list = d.clients.filter((c) => c.spend > 0 || c.orders > 0)
-      .filter((c) => !q || [c.name, ...c.pages.map((p) => p.page)].some((x) => String(x).toLowerCase().includes(q)))
-      .map((c) => ({ ...c, cpo: c.orders ? c.spend / c.orders : Infinity, cpn: c.newC ? c.spend / c.newC : Infinity }));
-    const k = oSort.k, dir = oSort.asc ? 1 : -1, v = (x) => (x === Infinity ? 1e12 : x);
-    list.sort((a, b) => (k === 'name' ? a.name.localeCompare(b.name) * dir : (v(a[k]) - v(b[k])) * dir) || b.spend - a.spend);
-    const t = list.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, newC: a.newC + c.newC, oldC: a.oldC + c.oldC, withOrders: a.withOrders + (c.orders ? 1 : 0), spendW: a.spendW + (c.orders ? c.spend : 0) }), { spend: 0, orders: 0, newC: 0, oldC: 0, withOrders: 0, spendW: 0 });
-    rollTo($('oCpo'), cpoText(t.spendW, t.orders)); $('oCpoSub').textContent = t.orders ? `boost spend ÷ orders · ${t.withOrders} client${t.withOrders === 1 ? '' : 's'} with orders` : 'No orders yet';
-    $('tab-orders').classList.toggle('nonew', !t.newC && !t.oldC); // adsbox didn't send new/returning → hide those columns
-    rollTo($('oOrders'), t.orders.toLocaleString('en-US')); $('oOrdersSub').textContent = t.newC || t.oldC ? `DM · ${t.newC.toLocaleString('en-US')} new · ${t.oldC.toLocaleString('en-US')} old` : '';
-    rollTo($('oSpend'), money(t.spend)); $('oSpendSub').textContent = 'from the synced boosts';
-    rollTo($('oCpn'), cpoText(t.spendW, t.newC)); $('oCpnSub').textContent = t.newC ? `${t.newC.toLocaleString('en-US')} new DM` : '';
-    const dash = '<span class="muted">–</span>';
-    $('oBody').innerHTML = list.map((c) => {
-      const open = oOpen.has(c.id), multi = c.pages.length > 1;
-      return `<tr class="drow${open ? ' open' : ''}" data-oc="${c.id}" tabindex="0"><td class="cname"><div class="nm">${multi ? '<span class="chev" aria-hidden="true">›</span>' : ''}<b>${esc(c.name)}</b>${typeTags(c.type)}</div>${c.pages.length ? `<div class="pg">${c.pages.slice(0, 3).map((p) => pageLabel(p)).join(' · ')}${c.pages.length > 3 ? ` +${c.pages.length - 3}` : ''}</div>` : ''}</td>
-        <td class="r num" data-l="Spend">${money(c.spend)}</td><td class="r num" data-l="Orders"><b>${c.orders ? c.orders.toLocaleString('en-US') : dash}</b></td>
-        <td class="r num" data-l="Cost / order"><b class="cpo">${cpoText(c.spend, c.orders)}</b></td><td class="r num" data-l="DM · New">${c.newC || dash}</td><td class="r num" data-l="Cost / new DM">${cpoText(c.spend, c.newC)}</td></tr>`
-        + (open && multi ? c.pages.map((p) => `<tr class="osub"><td class="cname"><div class="pg">📄 ${pageLabel(p)}</div></td><td class="r num" data-l="Spend">${money(p.spend)}</td><td class="r num" data-l="Orders">${p.orders || dash}</td><td class="r num" data-l="Cost / order">${cpoText(p.spend, p.orders)}</td><td></td><td></td></tr>`).join('') : '');
-    }).join('') || '<tr><td colspan="6" class="empty-row">No spend or orders in this period.</td></tr>';
-    $('oFoot').innerHTML = list.length > 1 ? `<tr><td>Total · ${list.length} clients</td><td class="r num" data-l="Spend">${money(t.spend)}</td><td class="r num" data-l="Orders">${t.orders.toLocaleString('en-US')}</td><td class="r num" data-l="Cost / order">${cpoText(t.spendW, t.orders)}</td><td class="r num" data-l="DM · New">${t.newC}</td><td class="r num" data-l="Cost / new DM">${cpoText(t.spendW, t.newC)}</td></tr>` : '';
-    document.querySelectorAll('#oBody tr[data-oc]').forEach((tr) => tr.onclick = () => { const id = Number(tr.dataset.oc); if (oOpen.has(id)) oOpen.delete(id); else oOpen.add(id); renderOrders(); });
-    document.querySelectorAll('#oTable th[data-os]').forEach((th) => th.classList.toggle('sorted', th.dataset.os === oSort.k));
+    const all = d.clients.filter((c) => c.spend > 0 || c.orders > 0);
+    const t = all.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, spendW: a.spendW + (c.orders ? c.spend : 0) }), { spend: 0, orders: 0, spendW: 0 });
+    const avg = t.orders ? t.spendW / t.orders : null;
+    rollTo($('oCpo'), avg != null ? money(avg) : '–');
+    rollTo($('oOrders'), t.orders.toLocaleString('en-US'));
+    rollTo($('oSpend'), money(t.spend));
+    const p = d.prev, pAvg = p && p.orders ? p.spend / p.orders : null;
+    $('oTrend').innerHTML = avg != null && pAvg ? (() => { const ch = Math.round((avg - pAvg) / pAvg * 100); return ch === 0 ? '<span class="muted">Same cost per order as the period before</span>' : `<span class="${ch < 0 ? 'is-ok' : 'is-danger'}">${ch < 0 ? '▼' : '▲'} ${Math.abs(ch)}% ${ch < 0 ? 'cheaper' : 'more expensive'}</span> <span class="muted">than the ${oLabels[oPreset] && /Last|This/.test(oLabels[oPreset]) ? 'period' : 'day'} before (${money(pAvg)})</span>`; })() : '';
+    // cards
+    const tone = (cpo) => (cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid');
+    const toneTxt = { good: 'cheap', mid: 'average', bad: 'expensive', '': '' };
+    const minCpo = Math.min(...all.filter((c) => c.orders).map((c) => c.spend / c.orders));
+    const list = all.filter((c) => !q || [c.name, ...c.pages.map((x) => x.page)].some((x) => String(x).toLowerCase().includes(q)))
+      .map((c) => ({ ...c, cpo: c.orders ? c.spend / c.orders : null }));
+    const cmp = { cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9), orders: (a, b) => b.orders - a.orders, spend: (a, b) => b.spend - a.spend }[oSortK] || ((a, b) => 0);
+    list.sort((a, b) => cmp(a, b) || b.spend - a.spend);
+    $('oCards').innerHTML = list.map((c, i) => {
+      const tn = tone(c.cpo), score = c.cpo ? Math.max(6, Math.round(minCpo / c.cpo * 100)) : 0;
+      const pages = c.pages.filter((x) => x.spend > 0 || x.orders > 0).sort((a, b) => b.orders - a.orders || b.spend - a.spend);
+      return `<article class="ocard ${tn}" style="--i:${Math.min(i, 12)}">
+        <header><div class="oc-n"><b>${esc(c.name)}</b>${typeTags(c.type)}</div><div class="oc-cpo ${tn}"><span class="num">${c.cpo != null ? money(c.cpo) : '–'}</span><small>${c.cpo != null ? 'per order' : 'no orders'}</small></div></header>
+        <div class="oc-sub"><span><b class="num">${c.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(c.spend)}</span> spent</div>
+        ${c.cpo != null ? `<div class="oc-bar ${tn}" title="${toneTxt[tn]} compared with your average ${money(avg)}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] === 'average' ? 'about average' : toneTxt[tn]} · avg ${money(avg)}</div>` : '<div class="oc-tone">Spent but no orders matched — check the Page ID in the client.</div>'}
+        ${pages.length > 1 || (pages.length === 1 && pages[0].page !== c.name) ? `<ul class="oc-pages">${pages.map((x) => `<li><span class="op-n" title="${esc(x.page)}">${pageLabel(x)}</span><span class="op-o num">${x.orders ? x.orders.toLocaleString('en-US') : '–'}</span><span class="op-c num ${tone(x.orders ? x.spend / x.orders : null)}">${x.orders ? money(x.spend / x.orders) : '–'}</span></li>`).join('')}</ul>` : ''}
+      </article>`;
+    }).join('') || `<div class="empty">${q ? 'No client matches your search.' : 'No spend or orders in this period.'}</div>`;
     $('oUnPanel').hidden = !d.unmatched.length;
-    $('oUnBody').innerHTML = d.unmatched.map((u) => `<tr><td>${esc(u.page || '—')}</td><td class="num">${esc(u.pageId || '—')}</td><td class="r num">${u.orders.toLocaleString('en-US')}</td></tr>`).join('');
+    $('oUnBody').innerHTML = d.unmatched.map((u) => `<div class="ounrow"><span><b>${esc(u.page || 'Unknown Page')}</b>${u.pageId ? `<span class="hint num"> · ${esc(u.pageId)}</span>` : ''}</span><span class="num">${u.orders.toLocaleString('en-US')} orders</span></div>`).join('');
   }
-  document.querySelectorAll('#oTable th[data-os]').forEach((th) => th.onclick = () => { const k = th.dataset.os; oSort = { k, asc: oSort.k === k ? !oSort.asc : ['name', 'cpo', 'cpn'].includes(k) }; renderOrders(); });
-  document.querySelectorAll('#oChips button').forEach((b) => b.onclick = () => { oPreset = b.dataset.p; loadOrders(); });
+  document.querySelectorAll('#oSortSeg button').forEach((b) => b.onclick = () => { oSortK = b.dataset.k; try { localStorage.setItem('oSort', oSortK); } catch (_) {} document.querySelectorAll('#oSortSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); renderOrders(); });
+  $('oPeriod').onchange = () => { oPreset = $('oPeriod').value; loadOrders(); };
   $('oSearch').oninput = () => renderOrders();
   $('oSync').onclick = async () => {
-    const b = $('oSync'); b.disabled = true; b.classList.add('busy');
+    const b = $('oSync'); b.disabled = true; b.classList.add('spin');
     const [from, to] = aRange(oPreset);
-    try { const r = await api('/orders/pull', { method: 'POST', body: { from, to, force: true } }); oPulled.add(oPreset); successBadge(`Orders updated (${r.rows} Page-days)`); }
+    try { await api('/orders/pull', { method: 'POST', body: { from, to, force: true } }); oPulled.add(oPreset); successBadge('Orders updated'); }
     catch (e) { toast(e.message); }
-    finally { b.disabled = false; b.classList.remove('busy'); loadOrders(); }
+    finally { b.disabled = false; b.classList.remove('spin'); loadOrders(); }
   };
   $('oSetBtn').onclick = async () => {
     if (!(me && me.canAdmin)) return;

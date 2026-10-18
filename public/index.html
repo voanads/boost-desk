@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=101">
+<link rel="stylesheet" href="/assets/app.css?v=103">
 </head>
 <body>
 <div class="wrap">
@@ -24,6 +24,7 @@
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
       <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
       <button role="tab" data-tab="orders" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5"/><path d="M12 12v9"/></svg><span class="full">Orders</span><span class="short">Orders</span></button>
+      <button role="tab" data-tab="insights" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/></svg><span class="full">Insights</span><span class="short">Insights</span></button>
       <button role="tab" data-tab="payments" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h9l4 4V21l-2.5-1.5L14 21l-2.5-1.5L9 21l-3-1.5Z"/><path d="M9 9h6M9 13h6"/></svg><span class="full">Payments</span><span class="short">Pay</span></button>
       <button role="tab" data-tab="admin" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4 5.5v6c0 4.7 3.3 8.6 8 10 4.7-1.4 8-5.3 8-10v-6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span class="full">Admin</span><span class="short">Admin</span></button>
     </nav>
@@ -240,6 +241,44 @@
       <h2>Orders on Pages without a client</h2>
       <div class="hint">These Pages you boost have orders in adsbox.biz, but none of your clients uses them yet. Add the Page to a client (by name or Page ID) to include them.</div>
       <div class="tablewrap"><table><thead><tr><th>Page</th><th>Page ID</th><th class="r">Orders</th></tr></thead><tbody id="oUnBody"></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-insights" class="wrap" hidden>
+    <div class="dhead">
+      <div class="chead2"><div><h2>Insights</h2><div class="hint">Which Pages sell the most for their boost money — and why: live or post, budget, start time, weekday, video or photo. Built from your synced boosts and the orders kept from adsbox.biz.</div></div></div>
+      <div class="chips" id="iChips" role="group" aria-label="Period">
+        <button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button>
+      </div>
+    </div>
+    <div class="note" id="iNote" hidden></div>
+    <div class="summary">
+      <div class="hero"><span class="lbl">Cost per order</span><span class="val num" id="iCpo">–</span><span class="sub" id="iCpoSub"></span></div>
+      <div><span class="lbl">Orders</span><span class="val num" id="iOrders">0</span><span class="sub" id="iOrdersSub"></span></div>
+      <div><span class="lbl">Best Page</span><span class="val ival" id="iBest">–</span><span class="sub" id="iBestSub"></span></div>
+      <div><span class="lbl">Pages to fix</span><span class="val num" id="iFix">0</span><span class="sub" id="iFixSub"></span></div>
+    </div>
+    <div class="panel aipanel" id="aiPanel">
+      <div class="thead"><h2>🤖 AI analyst</h2><div class="seg" id="aiLang" role="group" aria-label="Language"><button type="button" data-l="en" aria-pressed="true">English</button><button type="button" data-l="km">ខ្មែរ</button></div></div>
+      <div class="hint" id="aiHint">Reads this period's Pages, orders, boosts and your best and worst lives (with their setup, post text and thumbnail) and explains what sells — the Page, the video or the boost.</div>
+      <div id="aiOut" class="aiout" hidden></div>
+      <div class="aiask">
+        <button type="button" class="primary" id="aiRun">✨ Analyse this period</button>
+        <form id="aiForm" class="aiform"><input type="text" id="aiQ" maxlength="500" placeholder="Ask a question, e.g. Why is RD cheaper than the other Pages?" autocomplete="off"><button type="submit" id="aiSend">Ask</button></form>
+      </div>
+      <div class="chips aisugg" id="aiSugg"><button type="button">Which Page should get more budget?</button><button type="button">What makes the best lives sell?</button><button type="button">What time should we go live?</button><button type="button">Is the boost or the Page doing the work?</button></div>
+    </div>
+    <div class="panel" id="iOverallPanel">
+      <h2>What works across all your Pages</h2>
+      <div class="ifind" id="iOverall"></div>
+    </div>
+    <div class="panel">
+      <div class="thead"><h2>Pages</h2><span class="hint">Tap a Page to see why</span></div>
+      <div class="ilegend"><span class="pill ok">★ Star</span> sells a lot, cheap · <span class="pill brand">↑ Grow</span> cheap — spend more · <span class="pill bad">⚠ Fix</span> expensive with a big budget · <span class="pill">OK</span></div>
+      <div class="tablewrap"><table class="dtable" id="iTable">
+        <thead><tr><th>Page</th><th class="r">Spend</th><th class="r">Orders</th><th class="r">Cost / order</th><th class="r">vs before</th><th>Live / post</th><th></th></tr></thead>
+        <tbody id="iBody"></tbody>
+      </table></div>
     </div>
   </section>
 
@@ -482,6 +521,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=101"></script>
+<script src="/assets/app.js?v=103"></script>
 </body>
 </html>

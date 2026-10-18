@@ -325,6 +325,7 @@ api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
     invoice: { company: prof.company, bankName: prof.bankName, accountName: prof.accountName, accountNo: prof.accountNo, qr: prof.qr },
     autoSyncServer: process.env.AUTO_SYNC !== 'off', tz: cfg.tz, taxRate: sync.TAX_RATE,
     canEdit: (await db.ownerId()) === req.user.fb_id,
+    ai: await require('./src/ai').publicConfig(),
   });
 }));
 api.put('/admin/invoice-qr', ownerOnly, wrap(async (req, res) => {
@@ -868,6 +869,19 @@ api.post('/orders/pull', wrap(async (req, res) => {
   let n;
   if (isDay(b.from) && isDay(b.to) && b.from <= b.to && b.from >= sync.addDays(today, -800)) n = await orders.pullRange(b.from, b.to > today ? today : b.to, { force: !!b.force });
   else n = await orders.pullApi(Math.min(62, Number(b.days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
+api.post('/insights/ai', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!isDay(b.from) || !isDay(b.to) || b.from > b.to || (Date.parse(b.to) - Date.parse(b.from)) / 864e5 > 185) return res.status(400).json({ error: 'Pick a period of up to 6 months.' });
+  try { res.json(await require('./src/ai').ask(req.user.fb_id, { from: b.from, to: b.to, question: String(b.question || ''), history: b.history, lang: b.lang === 'km' ? 'km' : 'en' })); }
+  catch (e) { if (e.status) return res.status(e.status).json({ error: e.message, notSetUp: !!e.notSetUp }); throw e; }
+}));
+api.get('/insights/ai', wrap(async (req, res) => { const c = await require('./src/ai').publicConfig(); if ((await db.ownerId()) !== req.user.fb_id) { delete c.keyHint; delete c.savedBy; } res.json(c); }));
+api.put('/admin/ai', ownerOnly, wrap(async (req, res) => res.json(await require('./src/ai').saveKey((req.body || {}).key === null ? null : String((req.body || {}).key || ''), req.user.name))));
+api.get('/insights', wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 185) return res.status(400).json({ error: 'Pick a period of up to 6 months.' });
+  res.json(await require('./src/insights').analyze(req.user.fb_id, from, to));
+}));
 api.get('/orders/report', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid period.' });

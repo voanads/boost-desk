@@ -1379,3 +1379,29 @@ body{font-size:15.5px;letter-spacing:0}
 .newkey code{font-size:var(--fs-md);word-break:break-all;cursor:pointer;background:var(--surface);padding:6px 8px;border-radius:var(--r-sm)}
 .skrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px dashed var(--line);color:var(--ink)}
 .danger-t{color:var(--live)!important}
+/* Insights */
+.ifind{display:flex;flex-direction:column;gap:var(--s-2)}
+.ifitem{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:var(--r-lg);background:var(--bg-2);line-height:1.5;animation:pcIn var(--t-med) ease both;animation-delay:calc(var(--i,0)*40ms)}
+.ifitem.good{background:var(--ok-soft)} .ifitem.bad{background:var(--danger-soft)}
+.if-ic{flex:none;width:22px;text-align:center}
+.ilegend{font-size:var(--fs-md);color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.imix{width:72px;height:6px;border-radius:var(--r-pill);background:var(--brand-soft);overflow:hidden}
+.imix i{display:block;height:100%;background:var(--live)}
+.ival{font-size:var(--fs-h3)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* AI analyst */
+.aipanel{border-color:color-mix(in srgb,var(--brand) 30%,var(--line))}
+.aiout{display:flex;flex-direction:column;gap:var(--s-3);max-height:620px;overflow:auto;padding:2px}
+.aia{background:var(--bg-2);border-radius:var(--r-lg);padding:var(--s-3) var(--s-4);line-height:1.6;font-size:var(--fs-2xl)}
+.aia h4{margin:var(--s-3) 0 var(--s-1);font-size:var(--fs-base)} .aia h4:first-child{margin-top:0}
+.aia p{margin:0 0 var(--s-2)} .aia ul{margin:0 0 var(--s-2);padding-left:20px} .aia li{margin:2px 0}
+.aiq{align-self:flex-end;max-width:80%;background:var(--brand-soft);color:var(--ink);border-radius:var(--r-lg) var(--r-lg) var(--r-xs) var(--r-lg);padding:var(--s-2) var(--s-3);font-weight:600}
+.aierr{background:var(--danger-soft);color:var(--danger)}
+.aiwait{color:var(--muted);display:flex;align-items:center;gap:var(--s-2)}
+.dots{display:inline-flex;gap:3px}.dots i{width:6px;height:6px;border-radius:50%;background:var(--brand);animation:aidot 1s infinite ease-in-out}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes aidot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+.aimeta{text-align:right}
+.aiask{display:flex;gap:var(--s-2);flex-wrap:wrap;align-items:center}
+.aiform{display:flex;gap:var(--s-2);flex:1;min-width:240px}
+.aiform input{flex:1;min-width:0}
+.aisugg button{font-size:var(--fs-md)!important}
+@media (prefers-reduced-motion:reduce){.dots i{animation:none}}

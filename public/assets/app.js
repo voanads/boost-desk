@@ -715,23 +715,23 @@
   }
 
   // ---------- Orders page (adsbox.biz) ----------
-  let oPreset = '7', oData2 = null, oCfg = null;
+  let oData2 = null, oCfg = null;
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
-  const oLabels = { today: 'Today', yesterday: 'Yesterday', 7: 'Last 7 days', 30: 'Last 30 days', thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year' };
   const oPulled = new Set();
   const oSrc = 'all'; // orders from every source (the Messenger / Comment / Ads filter was removed)
   let oSortK = (() => { try { return localStorage.getItem('oSort') || 'cpo'; } catch (_) { return 'cpo'; } })();
   async function loadOrders() {
-    $('oPeriod').value = oPreset;
+    if (!dDate) dDate = me.today;
+    paintPeriod();
     document.querySelectorAll('#oSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === oSortK)));
-    const [from, to] = aRange(oPreset);
+    const [from, to] = dRange(), pk = from + '|' + to;
     if (!oData2) $('oCards').innerHTML = '<div class="ocard skel"></div><div class="ocard skel"></div><div class="ocard skel"></div>';
     try {
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}&src=${oSrc}`)]);
       oData2 = d; oCfg = cfg;
-      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(oPreset)) {
-        oPulled.add(oPreset);
-        api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (aRange(oPreset)[0] === from) loadOrders(); }).catch(() => {});
+      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(pk)) {
+        oPulled.add(pk);
+        api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
       }
       $('oSetBtn').hidden = !(me && me.canAdmin);
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
@@ -755,7 +755,7 @@
     rollTo($('oOrders'), t.orders.toLocaleString('en-US'));
     rollTo($('oSpend'), money(t.spend));
     const p = d.prev, pAvg = p && p.orders ? p.spend / p.orders : null;
-    $('oTrend').innerHTML = avg != null && pAvg ? (() => { const ch = Math.round((avg - pAvg) / pAvg * 100); return ch === 0 ? '<span class="muted">Same cost per order as the period before</span>' : `<span class="${ch < 0 ? 'is-ok' : 'is-danger'}">${ch < 0 ? '▼' : '▲'} ${Math.abs(ch)}% ${ch < 0 ? 'cheaper' : 'more expensive'}</span> <span class="muted">than the ${oLabels[oPreset] && /Last|This/.test(oLabels[oPreset]) ? 'period' : 'day'} before (${money(pAvg)})</span>`; })() : '';
+    $('oTrend').innerHTML = avg != null && pAvg ? (() => { const ch = Math.round((avg - pAvg) / pAvg * 100); return ch === 0 ? '<span class="muted">Same cost per order as the period before</span>' : `<span class="${ch < 0 ? 'is-ok' : 'is-danger'}">${ch < 0 ? '▼' : '▲'} ${Math.abs(ch)}% ${ch < 0 ? 'cheaper' : 'more expensive'}</span> <span class="muted">than the ${d.from === d.to ? 'day' : 'period'} before (${money(pAvg)})</span>`; })() : '';
     // cards
     const tone = (cpo) => (cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid');
     const toneTxt = { good: 'cheap', mid: 'average', bad: 'expensive', '': '' };
@@ -778,12 +778,11 @@
     $('oUnBody').innerHTML = d.unmatched.map((u) => `<div class="ounrow"><span><b>${esc(u.page || 'Unknown Page')}</b>${u.pageId ? `<span class="hint num"> · ${esc(u.pageId)}</span>` : ''}</span><span class="num">${u.orders.toLocaleString('en-US')} orders</span></div>`).join('');
   }
   document.querySelectorAll('#oSortSeg button').forEach((b) => b.onclick = () => { oSortK = b.dataset.k; try { localStorage.setItem('oSort', oSortK); } catch (_) {} document.querySelectorAll('#oSortSeg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); renderOrders(); });
-  $('oPeriod').onchange = () => { oPreset = $('oPeriod').value; loadOrders(); };
   $('oSearch').oninput = () => renderOrders();
   $('oSync').onclick = async () => {
     const b = $('oSync'); b.disabled = true; b.classList.add('spin');
-    const [from, to] = aRange(oPreset);
-    try { await api('/orders/pull', { method: 'POST', body: { from, to, force: true } }); oPulled.add(oPreset); successBadge('Orders updated'); }
+    const [from, to] = dRange();
+    try { await api('/orders/pull', { method: 'POST', body: { from, to, force: true } }); oPulled.add(from + '|' + to); successBadge('Orders updated'); }
     catch (e) { toast(e.message); }
     finally { b.disabled = false; b.classList.remove('spin'); loadOrders(); }
   };
@@ -1110,17 +1109,32 @@ Notes:
     else if (v === 'lastYear') { dMode = 'year'; dDate = (Number(t.slice(0, 4)) - 1) + '-06-15'; }
     else if (v === 'lastMonth') { const d = parse(t.slice(0, 8) + '01'); d.setMonth(d.getMonth() - 1); dMode = 'month'; dDate = iso(d); }
     else if (v === 'custom') { openPeriod(true); return; }
-    loadDash();
+    else if (v === 'more') { openPeriod(); return; }
+    loadPeriod();
   }
-  document.querySelectorAll('#dChips button').forEach((b) => b.onclick = () => applyPreset(b.dataset.preset));
+  // The period bar (Dashboard and Orders share one period).
+  const loadPeriod = () => (!$('tab-orders').hidden ? loadOrders() : loadDash());
+  function paintPeriod() {
+    const pre = currentPreset(), label = periodLabel();
+    const atEnd = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);
+    document.querySelectorAll('.perbar').forEach((bar) => {
+      bar.querySelector('.pb-label').textContent = label;
+      bar.querySelector('.pb-next').disabled = atEnd;
+      const known = [...bar.querySelectorAll('.pb-chips button')].some((b) => b.dataset.preset === pre);
+      bar.querySelectorAll('.pb-chips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre || (b.dataset.preset === 'more' && !known))));
+    });
+  }
+  document.querySelectorAll('.pb-chips button').forEach((b) => b.onclick = () => applyPreset(b.dataset.preset));
+  document.querySelectorAll('.pb-prev').forEach((b) => b.onclick = () => dShift(-1));
+  document.querySelectorAll('.pb-next').forEach((b) => b.onclick = () => dShift(1));
+  document.querySelectorAll('.pb-pick').forEach((b) => b.onclick = () => openPeriod());
   const dShift = (n) => {
     if (dMode === 'range') { const len = Math.round((parse(dTo) - parse(dFrom)) / 864e5) + 1; dFrom = addD(dFrom, n * len); dTo = addD(dTo, n * len); }
     else if (dMode === 'day') dDate = addD(dDate, n);
     else if (dMode === 'year') dDate = (Number(dDate.slice(0, 4)) + n) + dDate.slice(4);
     else { const d = parse(dDate); d.setDate(1); d.setMonth(d.getMonth() + n); dDate = iso(d); }
-    loadDash();
+    loadPeriod();
   };
-  $('dPrev').onclick = () => dShift(-1); $('dNext').onclick = () => dShift(1);
 
   // ---------- floating period filter (bottom of the screen while scrolled down) ----------
   const dock = $('fDock');
@@ -1143,9 +1157,8 @@ Notes:
     } else dock.hidden = true;
   }
   if ('IntersectionObserver' in window) {
-    new IntersectionObserver(([en]) => setDock(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: '-70px 0px 0px 0px' }).observe(document.querySelector('#tab-dashboard .dhead'));
+    new IntersectionObserver(([en]) => setDock(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: '-70px 0px 0px 0px' }).observe(document.querySelector('#tab-dashboard .perbar'));
   }
-  $('dPick').onclick = () => openPeriod();
 
   // ---------- period sheet: every way to pick a period, big and in one place ----------
   const presetRange = (v) => {
@@ -1180,13 +1193,13 @@ Notes:
   }
   const closePeriod = () => { const d = $('pDlg'); if (d.open) d.close(); };
   document.querySelectorAll('#pGrid button').forEach((b) => b.onclick = () => { closePeriod(); applyPreset(b.dataset.preset); });
-  $('pDay').onchange = () => { if ($('pDay').value) { dMode = 'day'; dDate = $('pDay').value; forceCustom = false; closePeriod(); loadDash(); } };
-  $('pMonth').onchange = () => { if ($('pMonth').value) { dMode = 'month'; dDate = $('pMonth').value + '-01'; forceCustom = false; closePeriod(); loadDash(); } };
+  $('pDay').onchange = () => { if ($('pDay').value) { dMode = 'day'; dDate = $('pDay').value; forceCustom = false; closePeriod(); loadPeriod(); } };
+  $('pMonth').onchange = () => { if ($('pMonth').value) { dMode = 'month'; dDate = $('pMonth').value + '-01'; forceCustom = false; closePeriod(); loadPeriod(); } };
   $('pApply').onclick = () => {
     let a = $('pFrom').value, b = $('pTo').value; if (!a || !b) return toast('Pick both dates.');
     if (a > b) [a, b] = [b, a];
     if ((parse(b) - parse(a)) / 864e5 > 366) return toast('Pick at most one year.');
-    dMode = 'range'; dFrom = a; dTo = b; forceCustom = true; closePeriod(); loadDash();
+    dMode = 'range'; dFrom = a; dTo = b; forceCustom = true; closePeriod(); loadPeriod();
   };
   $('pFrom')._btn.onfocus = $('pTo')._btn.onfocus = () => $('pRange').classList.add('on');
   $('pDlg').addEventListener('click', (ev) => { if (ev.target === $('pDlg')) closePeriod(); }); // tap outside closes
@@ -1210,14 +1223,12 @@ Notes:
     const infoDay = dMode === 'day' ? dDate : me.today;
     if (date !== infoDay) { date = infoDay; loadDay(); }
     const pre = currentPreset();
-    document.querySelectorAll('#dChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre)));
-    $('dLabel').textContent = periodLabel();
+    paintPeriod();
     syncDock(pre);
     $('dDay').value = dDate; $('dMonth').value = dDate.slice(0, 7);
     const custom = dMode === 'range' && pre === 'custom';
     $('dRangeBox').hidden = !custom; $('dPick').hidden = custom;
     if (dMode === 'range') { $('dFrom').value = dFrom; $('dTo').value = dTo; }
-    $('dNext').disabled = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);
     $('dTable').classList.toggle('oneday', dMode === 'day');
     const [from, to] = dRange();
     $('dTableTitle').textContent = 'Clients · ' + periodLabel() + (dTypeF ? (dTypeF === 'live' ? ' · Live only' : ' · Boost posts only') : '');

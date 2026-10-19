@@ -1941,6 +1941,7 @@ Notes:
           <span class="spacer"></span>
           <a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
           <button type="button" class="sm rbtn${c && c.telegram ? ' tg' : ''}" data-send="${v.id}"><span class="plane">${plane}</span> ${v.sentAt ? 'Send again' : 'Send to group'}</button>
+          ${d.tgSent && d.tgSent[v.id] ? `<button type="button" class="sm danger" data-unsend="${v.id}" title="The bot removes this invoice from the Telegram group (possible for 48 hours after sending)">Delete from group</button>` : ''}
           <button type="button" class="sm${v.paidAt ? ' paidbtn' : ''}" data-paid="${v.id}" data-on="${v.paidAt ? 1 : 0}">${v.paidAt ? '✓ Paid' : 'Mark paid'}</button>
           <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div>`;
     // Invoices whose client no longer has a service fee (or was removed): still shown, so they can be deleted or marked paid.
@@ -1975,7 +1976,24 @@ Notes:
     document.querySelectorAll('#payList [data-view]').forEach((b) => b.onclick = () => { const v = payData.invoices.find((x) => x.id === Number(b.dataset.view)); openInvoice(payData.clients.find((c) => c.id === v.clientId), v); });
     document.querySelectorAll('#payList [data-send]').forEach((b) => b.onclick = () => sendInvoice(Number(b.dataset.send), b));
     document.querySelectorAll('#payList [data-paid]').forEach((b) => b.onclick = async () => { try { await api('/invoices/' + b.dataset.paid, { method: 'PATCH', body: { paid: b.dataset.on !== '1' } }); if (b.dataset.on !== '1') { successBadge('Marked as paid'); if (typeof confetti === 'function') confetti(b); } loadPayments(); } catch (e) { toast(e.message); } });
-    document.querySelectorAll('#payList [data-delinv]').forEach((b) => b.onclick = async () => { if (!confirm('Delete this invoice? Its number will not be used again.')) return; try { await api('/invoices/' + b.dataset.delinv, { method: 'DELETE' }); loadPayments(); } catch (e) { toast(e.message); } });
+    document.querySelectorAll('#payList [data-unsend]').forEach((b) => b.onclick = async () => {
+      const v = payData.invoices.find((x) => x.id === Number(b.dataset.unsend));
+      if (!confirm(`Delete invoice ${v ? v.number : ''} from the Telegram group? The invoice stays in Boost Desk.`)) return;
+      b.disabled = true; b.textContent = 'Deleting…';
+      try {
+        const x = await api(`/invoices/${b.dataset.unsend}/unsend`, { method: 'POST' });
+        if (x.failed && !x.deleted) toast('Telegram did not allow deleting it (older than 48 hours, or already deleted). Delete it in the group as an admin.');
+        else successBadge('Invoice deleted from the group');
+        loadPayments();
+      } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Delete from group'; }
+    });
+    document.querySelectorAll('#payList [data-delinv]').forEach((b) => b.onclick = async () => {
+      if (!confirm('Delete this invoice? Its number will not be used again.')) return;
+      try {
+        if (payData.tgSent && payData.tgSent[b.dataset.delinv] && confirm('It was sent to the Telegram group. Delete it from the group too?')) await api(`/invoices/${b.dataset.delinv}/unsend`, { method: 'POST' }).catch(() => {});
+        await api('/invoices/' + b.dataset.delinv, { method: 'DELETE' }); loadPayments();
+      } catch (e) { toast(e.message); }
+    });
   }
   async function sendInvoice(id, btn) {
     const v = payData.invoices.find((x) => x.id === id), c = v && payData.clients.find((x) => x.id === v.clientId);

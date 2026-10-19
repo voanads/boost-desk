@@ -489,7 +489,24 @@ api.get('/payments', wrap(async (req, res) => {
     month: ym, today: sync.todayIn(),
     clients: clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name, pages: c.pages, telegram: c.telegram, telegramTitle: c.telegram_title, service: c.service })),
     invoices, bot: telegram.hasBot(),
+    tgSent: Object.fromEntries(Object.entries(await sentInvoices(req.user.fb_id)).map(([k, v]) => [k, { at: v.at, to: v.to }])),
   });
+}));
+// Invoices sent to Telegram in the last 48 hours (a bot can delete its own messages only that long).
+async function sentInvoices(owner) {
+  const all = (await db.getUserSetting(owner, 'sentInvoices', {})) || {}, out = {};
+  for (const [k, v] of Object.entries(all)) if (v && Date.now() - Date.parse(v.at) < 48 * 3600e3) out[k] = v;
+  return out;
+}
+api.post('/invoices/:id/unsend', wrap(async (req, res) => {
+  const inv = await db.getInvoice(req.user.fb_id, Number(req.params.id)); if (!inv) return res.status(404).json({ error: 'Invoice not found.' });
+  const all = await sentInvoices(req.user.fb_id), rec = all[inv.id];
+  if (!rec) return res.status(404).json({ error: 'This invoice was not sent in the last 48 hours — delete it in Telegram instead (group admins can).' });
+  let ok = 0;
+  for (const m of rec.msgs) if (await telegram.remove(m.chat, m.id)) ok++;
+  delete all[inv.id]; await db.setUserSetting(req.user.fb_id, 'sentInvoices', all);
+  await db.markInvoice(req.user.fb_id, inv.id, { sent: false });
+  res.json({ ok: true, deleted: ok, failed: rec.msgs.length - ok });
 }));
 const withMessage = async (owner) => { const saved = await db.getUserSetting(owner, 'invoiceProfile', {}); return { ...(await invoiceProfile(owner)), message: saved.message || invoice.DEFAULT_MESSAGE, defaultMessage: invoice.DEFAULT_MESSAGE }; };
 api.get('/invoice-profile', wrap(async (req, res) => res.json(await withMessage(req.user.fb_id))));
@@ -551,7 +568,13 @@ api.post('/invoices/:id/send', wrap(async (req, res) => {
   // Message sent with the picture: the account's own template (Invoice settings), or the default Khmer reminder.
   const saved = await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {});
   const caption = invoice.fillMessage(saved.message, invoice.messageValues(inv, c.service && c.service.day));
-  await telegram.sendPhoto(buf, caption, c.telegram);
+  const track = [];
+  await telegram.sendPhoto(buf, caption, c.telegram, track);
+  if (track.length) {
+    const all = await sentInvoices(req.user.fb_id), old = all[inv.id] ? all[inv.id].msgs : [];
+    all[inv.id] = { at: new Date().toISOString(), to: c.telegram_title || c.telegram, msgs: [...old, ...track].slice(-20) };
+    await db.setUserSetting(req.user.fb_id, 'sentInvoices', all);
+  }
   res.json({ ...(await db.markInvoice(req.user.fb_id, inv.id, { sent: true })), sentTo: c.telegram_title || c.telegram });
 }));
 api.patch('/invoices/:id', wrap(async (req, res) => {

@@ -1537,3 +1537,16 @@ body{font-size:15.5px;letter-spacing:0}
   .mrow [data-l]::before{content:attr(data-l);display:block;font-size:var(--fs-2xs);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
   .mrow [data-l]{text-align:left}
 }
+
+/* Main Dashboard: team cards (same look as the Orders client cards) */
+.ocard.mteam{cursor:pointer;text-align:left;font:inherit;font-weight:400;color:var(--ink);background:var(--surface);width:100%;height:auto;justify-content:flex-start;align-items:stretch;transition:transform var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease)}
+.ocard.mteam:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.mteam:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.mteam .oc-n .pill{font-size:var(--fs-2xs)}
+.mini-av{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:var(--fs-2xs);font-weight:700;margin-right:6px;vertical-align:middle;flex:none}
+.mteam .op-n{display:flex;align-items:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mteam .op-c{text-align:right}
+.mteam-go{margin-top:auto;padding-top:var(--s-2);color:var(--brand);font-weight:700;font-size:var(--fs-md)}
+.mteam-h{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;margin-bottom:var(--s-3)}
+.mteam-h h3{margin:0;font-size:var(--fs-h2)}
+.mteam .op-c.good{color:var(--ok)}.mteam .op-c.mid{color:var(--warn)}.mteam .op-c.bad{color:var(--danger)}

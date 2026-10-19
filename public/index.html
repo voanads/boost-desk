@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=112">
+<link rel="stylesheet" href="/assets/app.css?v=113">
 </head>
 <body>
 <div class="wrap">
@@ -68,7 +68,7 @@
       <div class="ost-main"><span class="val num" id="mSpend">$0.00</span><span class="lbl">boost spend</span></div>
       <div class="ost"><span class="val num" id="mOrders">0</span><span class="lbl">orders</span></div>
       <div class="ost"><span class="val num" id="mCpo">–</span><span class="lbl">per order</span></div>
-      <div class="ost"><span class="val num" id="mUsers">0</span><span class="lbl">accounts</span></div>
+      <div class="ost"><span class="val num" id="mUsers">0</span><span class="lbl" id="mUsersLbl">accounts</span></div>
       <div class="ost"><span class="val num" id="mPages">0</span><span class="lbl">Pages</span></div>
     </div>
     <div class="perbar" role="group" aria-label="Period">
@@ -503,6 +503,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=112"></script>
+<script src="/assets/app.js?v=113"></script>
 </body>
 </html>

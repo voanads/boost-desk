@@ -715,37 +715,72 @@
     catch (e) { toast(e.message); }
   }
 
-  // ---------- Main Dashboard (admins / COO): every account → its Pages → spend and orders ----------
-  let mData = null, mSortK = 'spend', mFirst = true; const mOpen = new Set();
+  // ---------- Main Dashboard (admins / COO): teams → their admins → Pages, with spend and orders ----------
+  let mData = null, mSortK = 'spend', mTeam = null; const mOpen = new Set();
   async function loadMain() {
     if (!dDate) dDate = me.today;
     paintPeriod();
     const [from, to] = dRange();
-    if (!mData) $('mList').innerHTML = '<div class="mcard skel"></div><div class="mcard skel"></div>';
-    try {
-      mData = await api(`/main/overview?from=${from}&to=${to}`);
-      if (mFirst) { mData.users.forEach((u) => { if (u.pages.length) mOpen.add(u.id); }); mFirst = false; }
-      renderMain();
-    } catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    if (!mData) $('mList').innerHTML = '<div class="ocards"><div class="ocard skel"></div><div class="ocard skel"></div><div class="ocard skel"></div></div>';
+    try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
+    catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
   const cpoOf = (spend, orders) => (orders > 0 && spend > 0 ? spend / orders : null);
+  // Teams with their members; people in no team go to "No team". A Page boosted by two members counts its orders once.
+  function mTeams() {
+    const d = mData, inTeam = new Set(), out = [];
+    const agg = (t, members) => {
+      const pg = new Map();
+      for (const u of members) for (const p of u.pages) { const k = p.pageId || p.page; const x = pg.get(k) || { spend: 0, orders: p.orders }; x.spend += p.spend; pg.set(k, x); }
+      let spend = 0, orders = 0, ordSpend = 0; for (const x of pg.values()) { spend += x.spend; orders += x.orders; if (x.orders > 0) ordSpend += x.spend; }
+      return { ...t, members, spend, orders, ordSpend, pages: pg.size, cpo: cpoOf(ordSpend, orders) };
+    };
+    for (const t of d.teams || []) { const ms = d.users.filter((u) => t.members.includes(u.id)); ms.forEach((u) => inTeam.add(u.id)); out.push(agg(t, ms)); }
+    const rest = d.users.filter((u) => !inTeam.has(u.id));
+    if (rest.length) out.push(agg({ id: '__none', name: (d.teams || []).length ? 'No team' : 'All accounts', members: [] }, rest));
+    return out;
+  }
   function renderMain() {
     const d = mData; if (!d) return;
-    const t = d.totals, avg = cpoOf(t.ordSpend, t.orders);
+    const teams = mTeams(), team = mTeam && teams.find((t) => t.id === mTeam);
+    if (mTeam && !team) mTeam = null;
+    // summary: everything, or the open team
+    const t = team ? { spend: team.spend, orders: team.orders, ordSpend: team.ordSpend, users: team.members.filter((u) => u.spend > 0).length, pages: team.pages } : d.totals;
+    const avg = cpoOf(d.totals.ordSpend, d.totals.orders), tAvg = cpoOf(t.ordSpend, t.orders);
     rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US'));
-    rollTo($('mCpo'), avg != null ? money(avg) : '–'); rollTo($('mUsers'), String(t.users)); rollTo($('mPages'), String(t.pages));
+    rollTo($('mCpo'), tAvg != null ? money(tAvg) : '–'); rollTo($('mUsers'), String(t.users)); rollTo($('mPages'), String(t.pages));
+    $('mUsersLbl').textContent = team ? 'admins' : 'accounts';
     document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
     const q = ($('mSearch').value || '').trim().toLowerCase();
+    const has = (x) => String(x || '').toLowerCase().includes(q);
     const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9) }[mSortK];
     const tone = (c) => (c == null || avg == null ? '' : c <= avg * 0.8 ? 'good' : c >= avg * 1.5 ? 'bad' : 'mid');
-    const users = d.users.map((u) => {
-      const hitUser = !q || u.name.toLowerCase().includes(q);
-      const pages = u.pages.filter((p) => hitUser || [p.page, p.guess, p.client].some((x) => String(x || '').toLowerCase().includes(q)))
-        .map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+    const toneTxt = { good: 'cheap', mid: 'about average', bad: 'expensive' };
+    const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
+    if (!team) { // ---- team cards
+      const list = teams.filter((x) => !q || has(x.name) || x.members.some((u) => has(u.name) || u.pages.some((p) => has(p.page) || has(p.client)))).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+      const minCpo = Math.min(...list.filter((x) => x.cpo != null).map((x) => x.cpo));
+      $('mList').innerHTML = list.length ? `<div class="ocards">${list.map((x, i) => {
+        const tn = tone(x.cpo), score = x.cpo ? Math.max(6, Math.round(minCpo / x.cpo * 100)) : 0;
+        const ms = [...x.members].sort((a, b) => b.spend - a.spend);
+        return `<button type="button" class="ocard mteam ${tn}" data-mteam="${esc(x.id)}" style="--i:${Math.min(i, 12)}">
+          <header><div class="oc-n"><b>${esc(x.name)}</b><span class="pill">${ms.length} admin${ms.length === 1 ? '' : 's'}</span></div><div class="oc-cpo ${tn}"><span class="num">${x.cpo != null ? money(x.cpo) : '–'}</span><small>${x.cpo != null ? 'per order' : 'no orders'}</small></div></header>
+          <div class="oc-sub"><span><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(x.spend)}</span> spent<span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span></div>
+          ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
+          ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
+          <span class="mteam-go">See Pages <span aria-hidden="true">→</span></span>
+        </button>`;
+      }).join('')}</div>` : `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
+      document.querySelectorAll('#mList [data-mteam]').forEach((b) => b.onclick = () => { mTeam = b.dataset.mteam; const tm = mTeams().find((x) => x.id === mTeam); mOpen.clear(); (tm ? tm.members : []).forEach((u) => mOpen.add(u.id)); renderMain(); window.scrollTo({ top: $('tab-main').offsetTop - 10, behavior: calm ? 'auto' : 'smooth' }); });
+      return;
+    }
+    // ---- one team: its admins, each with their Pages
+    const users = team.members.map((u) => {
+      const hitUser = !q || has(u.name);
+      const pages = u.pages.filter((p) => hitUser || has(p.page) || has(p.guess) || has(p.client)).map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
       return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
     }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-    const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
-    $('mList').innerHTML = users.map((u, i) => {
+    $('mList').innerHTML = `<div class="mteam-h"><button type="button" class="ghost" id="mBack">← All teams</button><h3>${esc(team.name)}</h3><span class="hint">${team.members.length} admin${team.members.length === 1 ? '' : 's'} · ${team.pages} Page${team.pages === 1 ? '' : 's'}</span></div><div class="mlist">` + (users.map((u, i) => {
       const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
       return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
         <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
@@ -762,7 +797,8 @@
             <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
             <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}</div>` : '<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div></div>') : ''}
       </article>`;
-    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
+    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No admins in this team yet — add them in Admin → Teams.'}</div>`) + '</div>';
+    $('mBack').onclick = () => { mTeam = null; renderMain(); };
     document.querySelectorAll('#mList [data-muser]').forEach((b) => b.onclick = () => { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); });
   }
   document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });

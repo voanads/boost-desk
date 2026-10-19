@@ -226,7 +226,7 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   const tot = { spend: 0, orders: 0, ordSpend: 0, pages: seenPages.size, users: users.filter((u) => u.spend > 0).length };
   for (const v of seenPages.values()) { tot.spend += v.spend; tot.orders += v.orders; if (v.orders > 0) tot.ordSpend += v.spend; }
   tot.spend = Math.round(tot.spend * 100) / 100; tot.ordSpend = Math.round(tot.ordSpend * 100) / 100;
-  res.json({ from, to, totals: tot, users });
+  res.json({ from, to, totals: tot, users, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
 }));
 api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;

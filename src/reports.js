@@ -7,19 +7,20 @@ const reportImage = require('./reportImage');
 
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-function routes(c) {
-  const pages = (c.pages || []).map(norm);
+// skip: Pages (name or Page ID) left out of the report — unticked in the Dashboard.
+function routes(c, skip = []) {
+  const pages = (c.pages || []).map(norm), sk = new Set(skip.map(norm));
   const topics = Object.entries(c.topics || {}).filter(([p, v]) => v && v.id && pages.includes(norm(p)));
-  if (!topics.length) return [{ key: '', label: 'All Pages', scope: null, chat: c.telegram || '', title: c.telegram_title || '' }];
+  if (!topics.length) return [{ key: '', label: 'All Pages', scope: skip.length ? { exclude: skip } : null, chat: c.telegram || '', title: c.telegram_title || '' }];
   return [
-    ...topics.map(([page, v]) => ({ key: page, label: page, scope: { page }, chat: v.id, title: v.title || '' })),
-    { key: '__rest', label: 'Other Pages', scope: { exclude: topics.map(([p]) => p) }, chat: c.telegram || '', title: c.telegram_title || '', rest: true },
+    ...topics.filter(([page]) => !sk.has(norm(page))).map(([page, v]) => ({ key: page, label: page, scope: { page }, chat: v.id, title: v.title || '' })),
+    { key: '__rest', label: 'Other Pages', scope: { exclude: [...topics.map(([p]) => p), ...skip] }, chat: c.telegram || '', title: c.telegram_title || '', rest: true },
   ];
 }
 
 // The report text for each route (rest / extra routes with no spend are left out).
-async function preview(owner, c, from, to, { kind = '', parts = null } = {}) {
-  const list = routes(c), out = [];
+async function preview(owner, c, from, to, { kind = '', parts = null, skip = [] } = {}) {
+  const list = routes(c, skip), out = [];
   for (const r of list) {
     const rep = await sync.clientReport(owner, c.id, from, to, kind, parts, r.scope);
     if (list.length > 1 && !(rep.spend > 0)) continue;
@@ -29,8 +30,8 @@ async function preview(owner, c, from, to, { kind = '', parts = null } = {}) {
 }
 
 // Send. `only` = one route key (from the report dialog, with text the user may have edited).
-async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '' } = {}) {
-  const list = routes(c);
+async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '', skip = [] } = {}) {
+  const list = routes(c, skip);
   const pick = only != null ? list.filter((r) => r.key === only) : list;
   if (!pick.length) throw Object.assign(new Error('That Page has no Telegram topic any more.'), { status: 400 });
   const sent = [];

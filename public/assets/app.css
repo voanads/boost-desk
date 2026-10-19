@@ -1445,3 +1445,19 @@ body{font-size:15.5px;letter-spacing:0}
   .pb-chips{margin:0;padding:0;flex-wrap:wrap;overflow:visible;min-width:0}
   .pb-chips button{flex:1 1 auto;padding:8px 10px}
 }
+
+/* ---------- Pages in a client's report (tick to include / leave out) ---------- */
+.pgpick{margin-top:var(--s-3);padding:var(--s-3);border:1px dashed color-mix(in srgb,var(--brand) 35%,var(--line));border-radius:var(--r-lg);background:color-mix(in srgb,var(--brand-soft) 45%,transparent)}
+.pgpick-h{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-2);flex-wrap:wrap;margin-bottom:var(--s-2)}
+.pgpick-h b{font-size:var(--fs-lg)}
+.pgpick-l{display:flex;flex-wrap:wrap;gap:var(--s-2)}
+.pgchip{display:inline-flex;align-items:center;gap:var(--s-2);padding:7px 12px 7px 8px;border-radius:var(--r-pill);background:var(--surface);border:1.5px solid var(--brand);color:var(--ink);font-size:var(--fs-md);max-width:100%;transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease)}
+.pgchip .tick{width:18px;height:18px;border-radius:50%;background:var(--brand);display:grid;place-items:center;flex:none}
+.pgchip .tick svg{width:12px;height:12px;fill:none;stroke:var(--on-brand);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pgchip-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pgchip b{font-size:var(--fs-sm)}
+.pgchip[aria-pressed=false]{border-color:var(--line);opacity:.6}
+.pgchip[aria-pressed=false] .tick{background:var(--bg-2);border:1.5px solid var(--line)}
+.pgchip[aria-pressed=false] .tick svg{visibility:hidden}
+.pgchip[aria-pressed=false] .pgchip-n{text-decoration:line-through}
+@media (max-width:560px){.pgchip{flex:1 1 100%;justify-content:flex-start}.pgchip b{margin-left:auto}}

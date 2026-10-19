@@ -1328,6 +1328,28 @@ Notes:
   }
   // Unticked lines per client + day: those are left out of the report. Everything starts ticked.
   const dOff = {};
+  // Pages left out of a client's report (unticked under the breakdown), per client + period.
+  const dSkip = {};
+  const skipKey = (cid) => cid + '|' + dRange().join('|');
+  const skipSetOf = (cid) => dSkip[skipKey(cid)] || (dSkip[skipKey(cid)] = new Set());
+  const reportPages = (c) => (dPages[c.id] || []).map((p) => ({ ...p, amt: dTypeF === 'live' ? p.live : dTypeF === 'post' ? p.post : p.spend })).filter((p) => p.amt > 0.0049).sort((a, b) => b.amt - a.amt);
+  function pagePick(c) {
+    const l = reportPages(c); if (l.length < 2) return '';
+    const off = skipSetOf(c.id); for (const k of [...off]) if (!l.some((p) => p.page === k)) off.delete(k);
+    const on = l.filter((p) => !off.has(p.page));
+    return `<div class="pgpick"><div class="pgpick-h"><b>Pages in this report</b><span class="hint">${on.length === l.length ? 'Tap a Page to leave it out' : `${on.length} of ${l.length} Pages · ${money(on.reduce((a, p) => a + p.amt, 0))}`}</span></div><div class="pgpick-l">${l.map((p) => `<button type="button" class="pgchip" data-pgcid="${c.id}" data-pgk="${esc(p.page)}" aria-pressed="${!off.has(p.page)}"><span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="pgchip-n">${pageLabel(p)}</span><b class="num">${money(p.amt)}</b></button>`).join('')}</div></div>`;
+  }
+  function skipList(c) { // what the server needs: Page ID and name of every unticked Page
+    const off = skipSetOf(c.id), out = [];
+    for (const p of reportPages(c)) if (off.has(p.page)) { if (p.pageId) out.push(p.pageId); out.push(p.page); }
+    return out;
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('.pgchip'); if (!b) return;
+    const set = skipSetOf(Number(b.dataset.pgcid)), k = b.dataset.pgk;
+    if (set.has(k)) set.delete(k); else set.add(k);
+    renderDash();
+  });
   const offSet = (cid, day) => dOff[cid + '|' + day] || (dOff[cid + '|' + day] = new Set());
   const partLine = (p, pick) => `<div class="dl ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}" data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}><span class="dl-n">${pick ? '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>' : ''}<b>${esc(p.label)}</b><span class="hint">${p.n ? ' · ' + p.n + ' campaign' + (p.n > 1 ? 's' : '') : ''}</span>${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span>${p.time ? `<span class="dl-t num">${esc(p.time)}</span>` : '<span></span>'}<span class="dl-v"><span class="muted">$</span><span class="box num">${Number(p.spend).toFixed(2)}</span></span>${p.sub ? `<div class="dl-sub">${p.sub}</div>` : ''}</div>`;
   function pickLabel(c) {
@@ -1402,7 +1424,7 @@ Notes:
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}</span></button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${pagePick(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------
@@ -1572,7 +1594,9 @@ Notes:
       const [from, to] = dRange(), cid = Number(b.dataset.dreport);
       const lines = [...document.querySelectorAll(`#dBody .dl.pick[data-cid="${cid}"]`)], on = lines.filter((l) => !l.classList.contains('off')).map((l) => l.dataset.pick);
       if (lines.length && !on.length) return toast('Tick at least one line to send.');
-      openReportDlg({ kind: 'client', cid, from, to, label: periodLabel(), only: dTypeF, parts: lines.length && on.length < lines.length ? on : null });
+      const c = dData.clients.find((x) => x.id === cid), pl = c ? reportPages(c) : [], skip = c ? skipList(c) : [];
+      if (pl.length > 1 && pl.every((p) => skipSetOf(cid).has(p.page))) return toast('Tick at least one Page to send.');
+      openReportDlg({ kind: 'client', cid, from, to, label: periodLabel(), only: dTypeF, parts: lines.length && on.length < lines.length ? on : null, skip: skip.length ? skip : null });
     });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel(), only: dTypeF });
@@ -1606,9 +1630,9 @@ Notes:
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}`);
         if (ckTarget !== o) return;
-        $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}`;
+        $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}${o.skip ? ' · some Pages left out' : ''}`;
         $('ckText').value = r.text;
         $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
           : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
@@ -1673,7 +1697,7 @@ Notes:
     $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
     $('ckWithImg').disabled = true;
     try {
-      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${fresh ? '&fresh=1' : ''}${o.route != null ? '&page=' + encodeURIComponent(o.route) : ''}`);
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}${fresh ? '&fresh=1' : ''}${o.route != null ? '&page=' + encodeURIComponent(o.route) : ''}`);
       if (ckTarget !== o) return;
       if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }
@@ -1692,7 +1716,7 @@ Notes:
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, page: o.routes && o.route != null ? o.route : undefined } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, skip: o.skip || [], page: o.routes && o.route != null ? o.route : undefined } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

@@ -755,25 +755,31 @@ async function myChats(fbId) {
 api.get('/telegram/chats', wrap(async (req, res) => {
   res.json({ chats: await myChats(req.user.fb_id), code: await linkCode(req.user.fb_id), bot: await telegram.username() });
 }));
+// skip: Pages left out of the report (JSON list of Page IDs / names), unticked on the Dashboard.
+function skipOf(v) {
+  let a = v; if (typeof v === 'string') { try { a = JSON.parse(v); } catch (_) { a = []; } }
+  return Array.isArray(a) ? a.map((x) => String(x || '').trim().slice(0, 150)).filter(Boolean).slice(0, 50) : [];
+}
+const skipScope = (skip) => (skip.length ? { exclude: skip } : null);
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts);
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip);
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   const rts = c ? reports.routes(c) : [];
   if (rts.length > 1) { // Pages that report to their own topics: one text per Page
-    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts });
-    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts);
+    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip });
+    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
     return res.json({ ...r, routes: list });
   }
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip)));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
-async function reportPng(user, id, from, to, kind = '', parts = null) {
-  const k = `${user.fb_id}|${id}|${from}|${to}|${kind}|${(parts || []).join(',')}`, hit = imgCache.get(k);
+async function reportPng(user, id, from, to, kind = '', parts = null, skip = []) {
+  const k = `${user.fb_id}|${id}|${from}|${to}|${kind}|${(parts || []).join(',')}|${skip.join('¦')}`, hit = imgCache.get(k);
   if (hit && Date.now() - hit.at < 5 * 60000) return hit.png;
-  const png = await reportImage.clientReportImage(user, id, from, to, kind, parts);
+  const png = await reportImage.clientReportImage(user, id, from, to, kind, parts, skipScope(skip));
   imgCache.set(k, { png, at: Date.now() });
   for (const [kk, v] of imgCache) if (Date.now() - v.at > 5 * 60000) imgCache.delete(kk);
   return png;
@@ -781,37 +787,37 @@ async function reportPng(user, id, from, to, kind = '', parts = null) {
 api.get('/client-report/:id/image', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts);
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip);
   if (req.query.page != null && req.query.page !== '') { // one Page's picture
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
-    const r = c && reports.routes(c).find((x) => x.key === String(req.query.page));
+    const r = c && reports.routes(c, skip).find((x) => x.key === String(req.query.page));
     if (!r) return res.status(404).json({ error: 'That Page has no topic.' });
     const png = await reportImage.clientReportImage(req.user, req.params.id, from, to, kind, parts, r.scope);
     if (!png) return res.status(204).end();
     return res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
   }
-  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}|${(parts || []).join(',')}`);
-  const png = await reportPng(req.user, req.params.id, from, to, kind, parts);
+  if (req.query.fresh) imgCache.delete(`${req.user.fb_id}|${req.params.id}|${from}|${to}|${kind}|${(parts || []).join(',')}|${skip.join('¦')}`);
+  const png = await reportPng(req.user, req.params.id, from, to, kind, parts, skip);
   if (!png) return res.status(204).end();
   res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts);
+  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip);
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const cl = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (cl && reports.routes(cl).length > 1) { // each Page to its own topic (or just the one picked in the dialog)
     const page = (req.body || {}).page;
-    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text });
+    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip });
     if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
     const sentAt = new Date().toISOString();
     if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
     return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
   }
-  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts);
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;
-  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind, parts); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
+  if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind, parts, skip); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
   if (png) await telegram.sendPhoto(png, body, r.client.telegram);
   else await telegram.send(body, r.client.telegram);
   const sentAt = new Date().toISOString();

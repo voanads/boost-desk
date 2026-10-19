@@ -717,14 +717,31 @@
 
   // ---------- Main Dashboard (admins / COO): teams → their admins → Pages, with spend and orders ----------
   let mData = null, mSortK = 'spend', mTeam = null, mSug = null, mSugAt = 0, mSugAll = false; const mOpen = new Set();
-  const SUG_IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
-  // Suggestions for a list of accounts: [{ ...item, who, tip }] — to-dos first, then tips.
+  const SUG_IC = { unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆', expensive: '💸', cheap: '💎' };
+  // Important suggestions for a team (COO view): money at risk and performance only — not day-to-day chores
+  // like picking a Telegram group or sending a report.
+  const SUG_KEEP = { high: 0, 'cpr-up': 1, quiet: 3, missing: 4, unpaid: 5, best: 7, 'cpr-down': 8 };
   function teamSug(members) {
     if (!mSug) return [];
-    const todo = [], tips = [];
-    for (const u of members) { const s2 = mSug.users[u.id]; if (!s2) continue; s2.items.forEach((x) => todo.push({ ...x, who: u.name })); s2.tips.forEach((x) => tips.push({ ...x, who: u.name, tip: true })); }
-    const rank = { bad: 0, warn: 1, todo: 2, good: 3 };
-    return [...todo.sort((a, b) => (rank[a.level] ?? 2) - (rank[b.level] ?? 2)), ...tips.sort((a, b) => (rank[a.level] ?? 2) - (rank[b.level] ?? 2))];
+    const out = [], avg = mData ? cpoOf(mData.totals.ordSpend, mData.totals.orders) : null;
+    for (const u of members) {
+      const s2 = mSug.users[u.id];
+      if (s2) [...s2.items, ...s2.tips].forEach((x) => { if (x.kind in SUG_KEEP) out.push({ ...x, who: u.name, rank: SUG_KEEP[x.kind] }); });
+      // Pages where one order costs far more than the company average
+      if (avg) for (const p of u.pages) {
+        const c = cpoOf(p.spend, p.orders);
+        if (c != null && p.spend >= 20 && c >= avg * 2) out.push({ kind: 'expensive', level: c >= avg * 4 ? 'bad' : 'warn', rank: 2, who: u.name, sort: -p.spend,
+          title: `${p.page}${p.client ? ' (' + p.client + ')' : ''}: ${money(c)} per order — ${(c / avg).toFixed(1)}× the average`,
+          detail: `${money(p.spend)} spent for ${p.orders.toLocaleString('en-US')} orders in this period · average ${money(avg)} · check the post, audience or price` });
+      }
+      // The team's cheapest Page with real volume: worth boosting more
+      const best = u.pages.filter((p) => p.orders >= 20 && p.spend >= 20).map((p) => ({ p, c: p.spend / p.orders })).sort((a, b2) => a.c - b2.c)[0];
+      if (best && avg && best.c <= avg * 0.7) out.push({ kind: 'cheap', level: 'good', rank: 6, who: u.name,
+        title: `${best.p.page}${best.p.client ? ' (' + best.p.client + ')' : ''} gets orders cheap: ${money(best.c)} each`,
+        detail: `${best.p.orders.toLocaleString('en-US')} orders for ${money(best.p.spend)} · ${Math.round((1 - best.c / avg) * 100)}% below the average — a good one to boost more` });
+    }
+    const lv = { bad: 0, warn: 1, todo: 2, good: 3 };
+    return out.sort((a, b2) => (a.level === 'bad' ? 0 : 1) - (b2.level === 'bad' ? 0 : 1) || a.rank - b2.rank || (lv[a.level] ?? 2) - (lv[b2.level] ?? 2) || (a.sort || 0) - (b2.sort || 0)); // urgent first
   }
   const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
   async function loadMain() {
@@ -779,7 +796,7 @@
           <div class="oc-sub"><span><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(x.spend)}</span> spent<span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span></div>
           ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
           ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
-          ${(() => { const sg = teamSug(x.members), todo = sg.filter((y) => !y.tip).length, tips = sg.length - todo, warn = sg.filter((y) => y.level === 'warn' || y.level === 'bad').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> suggestion${sg.length === 1 ? '' : 's'}</span>${todo ? `<span class="pill">${todo} to do</span>` : ''}${warn ? `<span class="pill warn">${warn} need attention</span>` : ''}${tips && !todo && !warn ? `<span class="pill ok">${tips} tip${tips === 1 ? '' : 's'}</span>` : ''}</div>` : ''; })()}
+          ${(() => { const sg = teamSug(x.members), bad = sg.filter((y) => y.level === 'bad').length, warn = sg.filter((y) => y.level === 'warn').length, good = sg.filter((y) => y.level === 'good').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> important</span>${bad ? `<span class="pill bad">${bad} urgent</span>` : ''}${warn ? `<span class="pill warn">${warn} to watch</span>` : ''}${good ? `<span class="pill ok">${good} going well</span>` : ''}</div>` : ''; })()}
           <span class="mteam-go">See Pages & suggestions <span aria-hidden="true">→</span></span>
         </button>`;
       }).join('')}</div>` : `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
@@ -793,10 +810,10 @@
       return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
     }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
     $('mList').innerHTML = `<div class="mteam-h"><button type="button" class="ghost" id="mBack">← All teams</button><h3>${esc(team.name)}</h3><span class="hint">${team.members.length} admin${team.members.length === 1 ? '' : 's'} · ${team.pages} Page${team.pages === 1 ? '' : 's'}</span></div>${(() => {
-      if (!mSug) return '<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team</h3></div><div class="muted">Loading…</div></div>';
-      const sg = teamSug(team.members).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)); if (!sg.length) return `<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team</h3></div><div class="todo-done">🎉 Nothing to fix for this team today.</div></div>`;
+      if (!mSug) return '<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team</h3></div><div class="muted">Loading…</div></div>';
+      const sg = teamSug(team.members).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)); if (!sg.length) return `<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team</h3></div><div class="todo-done">🎉 Nothing important to fix for this team.</div></div>`;
       const show = mSugAll ? sg : sg.slice(0, 6);
-      return `<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team <span class="countpill">${sg.length}</span></h3><span class="hint">Today · the same tips each admin sees on their Dashboard</span></div><div class="todolist">${show.map(sugRow).join('')}</div>${sg.length > 6 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}</div>`;
+      return `<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team <span class="countpill">${sg.length}</span></h3><span class="hint">Money at risk first, then what's working · chores like Telegram groups and reports are left out</span></div><div class="todolist">${show.map(sugRow).join('')}</div>${sg.length > 6 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}</div>`;
     })()}<div class="mlist">` + (users.map((u, i) => {
       const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
       return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">

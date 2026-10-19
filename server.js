@@ -196,6 +196,15 @@ api.patch('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
 api.delete('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
   await saveTeams((await getTeams()).filter((x) => x.id !== req.params.id)); res.json({ ok: true });
 }));
+// Main Dashboard: each account's to-do list and suggestions for today (the same list each person sees on their Dashboard).
+api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
+  const out = {};
+  await Promise.all((await db.allUsers()).map(async (u) => {
+    try { const t = await pm.todo({ fb_id: u.fb_id, name: u.name }); out[u.fb_id] = { items: t.items || [], tips: t.tips || [] }; }
+    catch (e) { out[u.fb_id] = { items: [], tips: [], error: e.message }; }
+  }));
+  res.json({ today: sync.todayIn(), users: out });
+}));
 // Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.
 api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;

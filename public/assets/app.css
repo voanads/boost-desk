@@ -1550,3 +1550,15 @@ body{font-size:15.5px;letter-spacing:0}
 .mteam-h{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;margin-bottom:var(--s-3)}
 .mteam-h h3{margin:0;font-size:var(--fs-h2)}
 .mteam .op-c.good{color:var(--ok)}.mteam .op-c.mid{color:var(--warn)}.mteam .op-c.bad{color:var(--danger)}
+
+/* Main Dashboard: suggestions per team */
+.mteam-sug{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:var(--fs-md);color:var(--ink);padding-top:var(--s-2);border-top:1px dashed var(--line)}
+.mteam-sug .pill{font-size:var(--fs-2xs)}
+.msug{margin-bottom:var(--s-3)}
+.msug-h{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:var(--s-2);margin-bottom:var(--s-3)}
+.msug-h h3{margin:0;font-size:var(--fs-xl);display:flex;align-items:center;gap:6px}
+.msug .todolist{display:flex;flex-direction:column;gap:var(--s-2)}
+.msug .todo-it.good{border-left-color:var(--ok);background:color-mix(in srgb,var(--ok) 5%,var(--surface))}
+.msug>.ghost{margin-top:var(--s-2)}
+.sug-who{display:inline-flex;align-items:center;flex:none;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap}
+@media (max-width:760px){.sug-who{margin-left:40px}}

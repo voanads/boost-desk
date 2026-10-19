@@ -716,12 +716,23 @@
   }
 
   // ---------- Main Dashboard (admins / COO): teams → their admins → Pages, with spend and orders ----------
-  let mData = null, mSortK = 'spend', mTeam = null; const mOpen = new Set();
+  let mData = null, mSortK = 'spend', mTeam = null, mSug = null, mSugAt = 0, mSugAll = false; const mOpen = new Set();
+  const SUG_IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+  // Suggestions for a list of accounts: [{ ...item, who, tip }] — to-dos first, then tips.
+  function teamSug(members) {
+    if (!mSug) return [];
+    const todo = [], tips = [];
+    for (const u of members) { const s2 = mSug.users[u.id]; if (!s2) continue; s2.items.forEach((x) => todo.push({ ...x, who: u.name })); s2.tips.forEach((x) => tips.push({ ...x, who: u.name, tip: true })); }
+    const rank = { bad: 0, warn: 1, todo: 2, good: 3 };
+    return [...todo.sort((a, b) => (rank[a.level] ?? 2) - (rank[b.level] ?? 2)), ...tips.sort((a, b) => (rank[a.level] ?? 2) - (rank[b.level] ?? 2))];
+  }
+  const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
   async function loadMain() {
     if (!dDate) dDate = me.today;
     paintPeriod();
     const [from, to] = dRange();
     if (!mData) $('mList').innerHTML = '<div class="ocards"><div class="ocard skel"></div><div class="ocard skel"></div><div class="ocard skel"></div></div>';
+    if (!mSug || Date.now() - mSugAt > 120e3) api('/main/suggestions').then((x) => { mSug = x; mSugAt = Date.now(); renderMain(); }).catch(() => {});
     try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
     catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
@@ -768,7 +779,8 @@
           <div class="oc-sub"><span><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(x.spend)}</span> spent<span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span></div>
           ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
           ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
-          <span class="mteam-go">See Pages <span aria-hidden="true">→</span></span>
+          ${(() => { const sg = teamSug(x.members), todo = sg.filter((y) => !y.tip).length, tips = sg.length - todo, warn = sg.filter((y) => y.level === 'warn' || y.level === 'bad').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> suggestion${sg.length === 1 ? '' : 's'}</span>${todo ? `<span class="pill">${todo} to do</span>` : ''}${warn ? `<span class="pill warn">${warn} need attention</span>` : ''}${tips && !todo && !warn ? `<span class="pill ok">${tips} tip${tips === 1 ? '' : 's'}</span>` : ''}</div>` : ''; })()}
+          <span class="mteam-go">See Pages & suggestions <span aria-hidden="true">→</span></span>
         </button>`;
       }).join('')}</div>` : `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
       document.querySelectorAll('#mList [data-mteam]').forEach((b) => b.onclick = () => { mTeam = b.dataset.mteam; const tm = mTeams().find((x) => x.id === mTeam); mOpen.clear(); (tm ? tm.members : []).forEach((u) => mOpen.add(u.id)); renderMain(); window.scrollTo({ top: $('tab-main').offsetTop - 10, behavior: calm ? 'auto' : 'smooth' }); });
@@ -780,7 +792,12 @@
       const pages = u.pages.filter((p) => hitUser || has(p.page) || has(p.guess) || has(p.client)).map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
       return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
     }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-    $('mList').innerHTML = `<div class="mteam-h"><button type="button" class="ghost" id="mBack">← All teams</button><h3>${esc(team.name)}</h3><span class="hint">${team.members.length} admin${team.members.length === 1 ? '' : 's'} · ${team.pages} Page${team.pages === 1 ? '' : 's'}</span></div><div class="mlist">` + (users.map((u, i) => {
+    $('mList').innerHTML = `<div class="mteam-h"><button type="button" class="ghost" id="mBack">← All teams</button><h3>${esc(team.name)}</h3><span class="hint">${team.members.length} admin${team.members.length === 1 ? '' : 's'} · ${team.pages} Page${team.pages === 1 ? '' : 's'}</span></div>${(() => {
+      if (!mSug) return '<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team</h3></div><div class="muted">Loading…</div></div>';
+      const sg = teamSug(team.members).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)); if (!sg.length) return `<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team</h3></div><div class="todo-done">🎉 Nothing to fix for this team today.</div></div>`;
+      const show = mSugAll ? sg : sg.slice(0, 6);
+      return `<div class="panel msug"><div class="msug-h"><h3>💡 Suggestions for this team <span class="countpill">${sg.length}</span></h3><span class="hint">Today · the same tips each admin sees on their Dashboard</span></div><div class="todolist">${show.map(sugRow).join('')}</div>${sg.length > 6 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}</div>`;
+    })()}<div class="mlist">` + (users.map((u, i) => {
       const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
       return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
         <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
@@ -798,7 +815,8 @@
             <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}</div>` : '<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div></div>') : ''}
       </article>`;
     }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No admins in this team yet — add them in Admin → Teams.'}</div>`) + '</div>';
-    $('mBack').onclick = () => { mTeam = null; renderMain(); };
+    $('mBack').onclick = () => { mTeam = null; mSugAll = false; renderMain(); };
+    if ($('mSugMore')) $('mSugMore').onclick = () => { mSugAll = !mSugAll; renderMain(); };
     document.querySelectorAll('#mList [data-muser]').forEach((b) => b.onclick = () => { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); });
   }
   document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });

@@ -1215,7 +1215,7 @@ Notes:
     const k = th.dataset.sort; dSort = { key: k, asc: dSort.key === k ? !dSort.asc : k === 'name' || k === 'cpr' }; renderDash();
   });
 
-  let dEntries = {}, dPages = {}, dKey = ''; const dOpen = new Set();
+  let dEntries = {}, dPages = {}, dKey = '', dSent = {}; const dOpen = new Set();
   const skelRows = (n) => Array.from({ length: n }, (_, i) => `<tr class="skel"><td colspan="9"><div class="sk" style="--w:${60 + ((i * 37) % 35)}%"></div></td></tr>`).join('');
   async function loadDash(quiet) {
     if (!dDate) dDate = me.today;
@@ -1238,8 +1238,8 @@ Notes:
     // 9) skeleton while a new period loads
     const skel = !samePeriod ? setTimeout(() => { $('dBody').innerHTML = skelRows(5); $('dFoot').innerHTML = ''; document.querySelectorAll('#tab-dashboard .summary .val').forEach((v) => v.classList.add('skel-v')); }, 120) : null;
     try {
-      const [d, rows, pg] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => []), api(`/dashboard/pages?from=${from}&to=${to}`).catch(() => ({}))]);
-      dPages = pg || {};
+      const [d, rows, pg, sr] = await Promise.all([api(`/dashboard?from=${from}&to=${to}`), api(`/entries?from=${from}&to=${to}`).catch(() => []), api(`/dashboard/pages?from=${from}&to=${to}`).catch(() => ({})), api('/sent-reports').catch(() => ({}))]);
+      dPages = pg || {}; dSent = sr || {};
       clearTimeout(skel); document.querySelectorAll('.skel-v').forEach((v) => v.classList.remove('skel-v'));
       dData = d; dEntries = {}; dKey = key;
       for (const r of rows) (dEntries[r.client_id] = dEntries[r.client_id] || {})[r.day] = r.data || {};
@@ -1399,6 +1399,27 @@ Notes:
     }
     return html;
   }
+  // A report sent in the last 48 hours for this client + period: it can be deleted from the Telegram group.
+  const sentRec = (c) => dSent[`${c.id}|${dRange().join('|')}`] || null;
+  function sentLine(c) {
+    const r = sentRec(c); if (!r) return '';
+    const t = new Date(r.at), when = t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + (t.toDateString() === new Date().toDateString() ? '' : ' ' + t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
+    return `<div class="dsent2"><span><b>✓ Report sent ${esc(when)}</b>${r.by ? ' by ' + esc(r.by) : ''}${r.to ? ` · <span class="hint">${esc(r.to)}</span>` : ''}</span><button type="button" class="danger sm" data-delrep="${c.id}" title="The bot removes its report from the Telegram group (possible for 48 hours after sending)">Delete from group</button></div>`;
+  }
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-delrep]'); if (!b) return;
+    const cid = Number(b.dataset.delrep), c = dData && dData.clients.find((x) => x.id === cid), r = c && sentRec(c);
+    if (!r || !confirm(`Delete the report for ${c.name} · ${periodLabel()} from the Telegram group?${r.count > 1 ? ` (${r.count} messages)` : ''}`)) return;
+    b.disabled = true; b.textContent = 'Deleting…';
+    try {
+      const [from, to] = dRange();
+      const x = await api(`/client-report/${cid}/delete`, { method: 'POST', body: { from, to } });
+      try { if (from === to && from === date && day && day.entries[cid]) { day.entries[cid].reportSent = null; refreshValues(); } } catch (_) { /* Home tab not loaded */ }
+      if (x.failed && !x.deleted) toast('Telegram did not allow deleting it (older than 48 hours, or already deleted). Delete it in the group as an admin.');
+      else successBadge(x.failed ? `Deleted ${x.deleted}, ${x.failed} could not be deleted` : 'Report deleted from the group');
+      loadTodo(); loadDash();
+    } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Delete from group'; }
+  });
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
@@ -1408,7 +1429,7 @@ Notes:
       if (pick) for (const k of [...pick.off]) if (!parts.some((p) => p.key === k)) pick.off.delete(k);
       body = (parts.length ? dayGroups(c, parts, pick) : '<div class="muted">No boost spend on this day.</div>')
         + (e.note ? `<div class="dnote">📝 ${esc(e.note)}</div>` : '')
-        + (e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
+        + (sentRec(c) ? '' : e.reportSent && e.reportSent.at ? `<div class="dsent">✓ Report sent ${new Date(e.reportSent.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}${e.reportSent.by ? ' by ' + esc(e.reportSent.by) : ''}</div>` : '');
     } else if (dMode === 'year') {
       const months = {};
       for (const d of Object.keys(days)) {
@@ -1427,7 +1448,7 @@ Notes:
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${pagePick(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${sentLine(c)}${pagePick(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------

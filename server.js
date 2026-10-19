@@ -801,14 +801,46 @@ api.get('/client-report/:id/image', wrap(async (req, res) => {
   if (!png) return res.status(204).end();
   res.set('content-type', 'image/png').set('cache-control', 'no-store').send(png);
 }));
+// Reports sent in the last 48 hours (Telegram lets a bot delete its own messages only that long),
+// so they can be deleted from the group. Per user: { 'clientId|from|to': { at, by, to, msgs: [{ chat, id }] } }.
+const SENT_KEEP = 48 * 3600e3;
+async function sentReports(owner) {
+  const all = (await db.getUserSetting(owner, 'sentReports', {})) || {}, out = {};
+  for (const [k, v] of Object.entries(all)) if (v && Date.now() - Date.parse(v.at) < SENT_KEEP) out[k] = v;
+  return out;
+}
+async function rememberSent(user, id, from, to, msgs, sentTo) {
+  if (!msgs.length) return;
+  const all = await sentReports(user.fb_id), k = `${Number(id)}|${from}|${to}`;
+  const old = all[k] ? all[k].msgs : []; // sent again: Delete removes every copy
+  all[k] = { at: new Date().toISOString(), by: user.name, to: sentTo, msgs: [...old, ...msgs].slice(-40) };
+  await db.setUserSetting(user.fb_id, 'sentReports', all);
+}
+api.get('/sent-reports', wrap(async (req, res) => {
+  const all = await sentReports(req.user.fb_id);
+  res.json(Object.fromEntries(Object.entries(all).map(([k, v]) => [k, { at: v.at, by: v.by, to: v.to, count: v.msgs.length }])));
+}));
+api.post('/client-report/:id/delete', wrap(async (req, res) => {
+  const { from, to } = req.body || {};
+  if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
+  const all = await sentReports(req.user.fb_id), k = `${Number(req.params.id)}|${from}|${to}`, rec = all[k];
+  if (!rec) return res.status(404).json({ error: 'No report sent in the last 48 hours for this period — delete it in Telegram instead (group admins can).' });
+  let ok = 0;
+  for (const m of rec.msgs) if (await telegram.remove(m.chat, m.id)) ok++;
+  delete all[k]; await db.setUserSetting(req.user.fb_id, 'sentReports', all);
+  if (from === to && isDay(from)) { const id = Number(req.params.id); await db.putEntry(from, id, deepMerge(await db.getEntry(from, id), { reportSent: null })); }
+  res.json({ ok: true, deleted: ok, failed: rec.msgs.length - ok });
+}));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
   const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip);
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const cl = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (cl && reports.routes(cl).length > 1) { // each Page to its own topic (or just the one picked in the dialog)
     const page = (req.body || {}).page;
-    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip });
+    const track = [];
+    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip, track });
     if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
+    await rememberSent(req.user, cl.id, from, to, track, done.map((d) => d.to).join(', '));
     const sentAt = new Date().toISOString();
     if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
     return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
@@ -818,8 +850,10 @@ api.post('/client-report/:id/send', wrap(async (req, res) => {
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;
   if (withImage !== false) { try { png = await reportPng(req.user, req.params.id, from, to, kind, parts, skip); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
-  if (png) await telegram.sendPhoto(png, body, r.client.telegram);
-  else await telegram.send(body, r.client.telegram);
+  const track = [];
+  if (png) await telegram.sendPhoto(png, body, r.client.telegram, track);
+  else await telegram.send(body, r.client.telegram, track);
+  await rememberSent(req.user, req.params.id, from, to, track, r.client.telegramTitle || r.client.telegram);
   const sentAt = new Date().toISOString();
   // A one-day report is remembered on that day's checklist ("Sent 21:05").
   if (from === to && isDay(from)) {

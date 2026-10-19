@@ -30,7 +30,7 @@ async function preview(owner, c, from, to, { kind = '', parts = null, skip = [] 
 }
 
 // Send. `only` = one route key (from the report dialog, with text the user may have edited).
-async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '', skip = [] } = {}) {
+async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '', skip = [], track = null } = {}) {
   const list = routes(c, skip);
   const pick = only != null ? list.filter((r) => r.key === only) : list;
   if (!pick.length) throw Object.assign(new Error('That Page has no Telegram topic any more.'), { status: 400 });
@@ -45,7 +45,7 @@ async function send(user, c, from, to, { kind = '', parts = null, withImage = tr
     const body = only != null && typeof text === 'string' && text.trim() ? text.slice(0, 12000) : rep.text;
     let png = null;
     if (withImage) { try { png = await reportImage.clientReportImage(user, c.id, from, to, kind, parts, r.scope); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
-    if (png) await telegram.sendPhoto(png, body, r.chat); else await telegram.send(body, r.chat);
+    if (png) await telegram.sendPhoto(png, body, r.chat, track); else await telegram.send(body, r.chat, track);
     sent.push({ label: r.label, to: r.title || r.chat, withImage: !!png });
   }
   return sent;

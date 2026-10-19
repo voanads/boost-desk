@@ -12,7 +12,8 @@ function dest(id) {
 function addDest(form, id) { const d = dest(id); form.append('chat_id', d.chat_id); if (d.message_thread_id) form.append('message_thread_id', String(d.message_thread_id)); }
 
 // chatId defaults to the team group. Pass a client's group to send it there instead.
-async function send(text, chatId = cfg.telegramChatId) {
+// track (optional array): each sent message is added as { chat, id }, so it can be deleted later.
+async function send(text, chatId = cfg.telegramChatId, track = null) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   if (!chatId) throw new Error('No Telegram group chosen. Set TELEGRAM_CHAT_ID for the team, or pick a group for this client.');
   const chunks = [];
@@ -28,6 +29,7 @@ async function send(text, chatId = cfg.telegramChatId) {
     try { require('./health').noteService('Telegram', !!body.ok || res.status < 500, 0, body.ok ? '' : body.description); } catch (_) {}
     if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
     lastId = body.result && body.result.message_id;
+    if (track && lastId) track.push({ chat: String(chatId), id: lastId });
   }
   return lastId;
 }
@@ -42,7 +44,7 @@ async function remove(chatId, messageId) {
 
 // A picture with the report as its caption. Telegram captions are limited to 1024 characters,
 // so a longer report goes as a separate message right after the picture.
-async function sendPhoto(png, caption, chatId = cfg.telegramChatId) {
+async function sendPhoto(png, caption, chatId = cfg.telegramChatId, track = null) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   if (!chatId) throw new Error('No Telegram group chosen.');
   const fits = caption && caption.length <= 1024;
@@ -53,7 +55,8 @@ async function sendPhoto(png, caption, chatId = cfg.telegramChatId) {
   const res = await fetch(`${API}/bot${cfg.telegramToken}/sendPhoto`, { method: 'POST', body: form });
   const body = await res.json().catch(() => ({}));
   if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
-  if (caption && !fits) await send(caption, chatId);
+  if (track && body.result && body.result.message_id) track.push({ chat: String(chatId), id: body.result.message_id });
+  if (caption && !fits) await send(caption, chatId, track);
 }
 
 // A file (e.g. an invoice PDF) with a caption.

@@ -196,6 +196,38 @@ api.patch('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
 api.delete('/admin/teams/:id', ownerOnly, wrap(async (req, res) => {
   await saveTeams((await getTeams()).filter((x) => x.id !== req.params.id)); res.json({ ok: true });
 }));
+// Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.
+api.get('/main/overview', adminOnly, wrap(async (req, res) => {
+  const { from, to } = req.query;
+  if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
+  const nm = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const ordRows = (await db.pool.query('SELECT page_id, max(page_name) AS page_name, sum(orders)::int AS orders FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id', [from, to])).rows;
+  const byId = {}, byName = {};
+  for (const r of ordRows) { byId[String(r.page_id)] = r.orders; if (r.page_name) byName[nm(r.page_name)] = (byName[nm(r.page_name)] || 0) + r.orders; }
+  const users = [], seenPages = new Map();
+  for (const u of await db.allUsers()) {
+    const [ps, clients] = await Promise.all([sync.pageSpend(u.fb_id, from, to), db.listClients(u.fb_id)]);
+    const cName = Object.fromEntries(clients.map((c) => [c.id, c.name]));
+    const pages = [];
+    for (const [cid, list] of Object.entries(ps)) for (const p of list) {
+      const orders = (p.pageId && byId[String(p.pageId)]) || byName[nm(p.page)] || byName[nm(p.guess)] || 0;
+      pages.push({ page: p.page, pageId: p.pageId, named: p.named, guess: p.guess || '', client: cName[cid] || '', clientId: Number(cid), spend: p.spend, live: p.live, post: p.post, orders });
+      const key = p.pageId || nm(p.page);
+      const s = seenPages.get(key) || { orders, spend: 0 }; s.spend += p.spend; seenPages.set(key, s);
+    }
+    pages.sort((a, b) => b.spend - a.spend);
+    const spend = pages.reduce((t, p) => t + p.spend, 0), orders = pages.reduce((t, p) => t + p.orders, 0);
+    const ordSpend = pages.filter((p) => p.orders > 0).reduce((t, p) => t + p.spend, 0);
+    if (!pages.length && !clients.length) continue;
+    users.push({ id: u.fb_id, name: u.name, you: u.fb_id === req.user.fb_id, spend: Math.round(spend * 100) / 100, orders, ordSpend: Math.round(ordSpend * 100) / 100, clients: clients.filter((c) => !c.archived).length, pages });
+  }
+  users.sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
+  // Totals: a Page boosted from two accounts has its orders counted once.
+  const tot = { spend: 0, orders: 0, ordSpend: 0, pages: seenPages.size, users: users.filter((u) => u.spend > 0).length };
+  for (const v of seenPages.values()) { tot.spend += v.spend; tot.orders += v.orders; if (v.orders > 0) tot.ordSpend += v.spend; }
+  tot.spend = Math.round(tot.spend * 100) / 100; tot.ordSpend = Math.round(tot.ordSpend * 100) / 100;
+  res.json({ from, to, totals: tot, users });
+}));
 api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });

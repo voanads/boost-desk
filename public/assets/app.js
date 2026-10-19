@@ -220,8 +220,8 @@
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
-    if (name === 'admin' && !(me && me.canAdmin)) name = 'dashboard';
-    ['dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if ((name === 'admin' || name === 'main') && !(me && me.canAdmin)) name = 'dashboard';
+    ['main', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
@@ -230,6 +230,7 @@
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
     if (name === 'orders') loadOrders();
+    if (name === 'main') loadMain();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -714,6 +715,59 @@
     catch (e) { toast(e.message); }
   }
 
+  // ---------- Main Dashboard (admins / COO): every account → its Pages → spend and orders ----------
+  let mData = null, mSortK = 'spend', mFirst = true; const mOpen = new Set();
+  async function loadMain() {
+    if (!dDate) dDate = me.today;
+    paintPeriod();
+    const [from, to] = dRange();
+    if (!mData) $('mList').innerHTML = '<div class="mcard skel"></div><div class="mcard skel"></div>';
+    try {
+      mData = await api(`/main/overview?from=${from}&to=${to}`);
+      if (mFirst) { mData.users.forEach((u) => { if (u.pages.length) mOpen.add(u.id); }); mFirst = false; }
+      renderMain();
+    } catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  }
+  const cpoOf = (spend, orders) => (orders > 0 && spend > 0 ? spend / orders : null);
+  function renderMain() {
+    const d = mData; if (!d) return;
+    const t = d.totals, avg = cpoOf(t.ordSpend, t.orders);
+    rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US'));
+    rollTo($('mCpo'), avg != null ? money(avg) : '–'); rollTo($('mUsers'), String(t.users)); rollTo($('mPages'), String(t.pages));
+    document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
+    const q = ($('mSearch').value || '').trim().toLowerCase();
+    const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9) }[mSortK];
+    const tone = (c) => (c == null || avg == null ? '' : c <= avg * 0.8 ? 'good' : c >= avg * 1.5 ? 'bad' : 'mid');
+    const users = d.users.map((u) => {
+      const hitUser = !q || u.name.toLowerCase().includes(q);
+      const pages = u.pages.filter((p) => hitUser || [p.page, p.guess, p.client].some((x) => String(x || '').toLowerCase().includes(q)))
+        .map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+      return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
+    }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+    const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
+    $('mList').innerHTML = users.map((u, i) => {
+      const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
+      return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
+        <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
+          <span class="avatar">${esc(initials(u.name))}</span>
+          <span class="mc-n"><b>${esc(u.name)}</b>${u.you ? ' <span class="pill brand">You</span>' : ''}<span class="hint">${u.pages.length} Page${u.pages.length === 1 ? '' : 's'} · ${u.clients} client${u.clients === 1 ? '' : 's'}</span></span>
+          <span class="mc-s"><span class="lbl">Spend</span><b class="num">${money(u.spend)}</b></span>
+          <span class="mc-s"><span class="lbl">Orders</span><b class="num">${u.orders.toLocaleString('en-US')}</b></span>
+          <span class="mc-s"><span class="lbl">Per order</span><b class="num ${tone(u.cpo)}">${u.cpo != null ? money(u.cpo) : '–'}</b></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </button>
+        ${open ? (u.pages.length ? `<div class="mc-b"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${u.pages.map((p) => `<div class="mrow">
+            <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
+            <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
+            <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
+            <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}</div>` : '<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div></div>') : ''}
+      </article>`;
+    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
+    document.querySelectorAll('#mList [data-muser]').forEach((b) => b.onclick = () => { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); });
+  }
+  document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });
+  $('mSearch').oninput = () => renderMain();
+
   // ---------- Orders page (adsbox.biz) ----------
   let oData2 = null, oCfg = null;
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
@@ -1113,7 +1167,7 @@ Notes:
     loadPeriod();
   }
   // The period bar (Dashboard and Orders share one period).
-  const loadPeriod = () => (!$('tab-orders').hidden ? loadOrders() : loadDash());
+  const loadPeriod = () => (!$('tab-orders').hidden ? loadOrders() : !$('tab-main').hidden ? loadMain() : loadDash());
   function paintPeriod() {
     const pre = currentPreset(), label = periodLabel();
     const atEnd = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);
@@ -2318,8 +2372,8 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (me.canAdmin) document.querySelector('nav.tabs [data-tab=admin]').hidden = false;
-      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      if (me.canAdmin) { document.querySelector('nav.tabs [data-tab=admin]').hidden = false; document.querySelector('nav.tabs [data-tab=main]').hidden = false; }
+      showTab(['main', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

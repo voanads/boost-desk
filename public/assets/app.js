@@ -722,7 +722,7 @@
   // like picking a Telegram group or sending a report.
   const SUG_KEEP = { high: 0, 'cpr-up': 1, quiet: 3, missing: 4, unpaid: 5, best: 7, 'cpr-down': 8 };
   function teamSug(members) {
-    if (!mSug) return [];
+    if (!mSug || !mSug.users) return [];
     const out = [], avg = mData ? cpoOf(mData.totals.ordSpend, mData.totals.orders) : null;
     for (const u of members) {
       const s2 = mSug.users[u.id];
@@ -1255,6 +1255,36 @@ Notes:
       bar.querySelectorAll('.pb-chips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === pre || (b.dataset.preset === 'more' && !known))));
     });
   }
+  // Period bar sticks to the top of the page while scrolling (Main Dashboard, Dashboard, Orders), with a little motion.
+  (function stickyBars() {
+    const head = document.querySelector('header.appbar');
+    const topGap = () => (head && getComputedStyle(head).position === 'sticky' ? head.offsetHeight + 6 : 10);
+    const setTop = () => document.documentElement.style.setProperty('--pb-top', topGap() + 'px');
+    setTop(); addEventListener('resize', setTop);
+    if (!('IntersectionObserver' in window)) return;
+    // While stuck, the bar also shows the page's key totals (they scroll away with the summary).
+    const MINI = { 'tab-main': [['mSpend', 'spend'], ['mOrders', 'orders'], ['mCpo', 'per order']], 'tab-orders': [['oCpo', 'per order'], ['oOrders', 'orders'], ['oSpend', 'spend']], 'tab-dashboard': [['dSpend', 'spent'], ['dLive', 'live'], ['dPost', 'post']] };
+    document.querySelectorAll('.perbar').forEach((bar) => {
+      const sec = bar.closest('section'), spec = sec && MINI[sec.id];
+      if (spec) {
+        const mini = document.createElement('div'); mini.className = 'pb-mini'; mini.setAttribute('aria-hidden', 'true');
+        bar.querySelector('.pb-nav').after(mini);
+        const fill = () => { mini.innerHTML = spec.map(([id, l]) => `<span><b class="num">${esc(($(id) || {}).textContent || '–')}</b> ${l}</span>`).join(''); };
+        fill(); const mo = new MutationObserver(() => { if (bar.classList.contains('stuck')) fill(); });
+        spec.forEach(([id]) => { if ($(id)) mo.observe($(id), { childList: true, characterData: true, subtree: true }); });
+        bar._fill = fill;
+      }
+      const s2 = document.createElement('div'); s2.className = 'pb-sentinel'; s2.setAttribute('aria-hidden', 'true');
+      bar.before(s2);
+      const io = new IntersectionObserver(([en]) => {
+        const stuck = !en.isIntersecting && en.boundingClientRect.height > 0 && en.boundingClientRect.top < topGap() && en.rootBounds && en.boundingClientRect.bottom < en.rootBounds.bottom;
+        if (stuck === bar.classList.contains('stuck')) return;
+        bar.classList.toggle('stuck', stuck); if (stuck && bar._fill) bar._fill();
+        if (stuck && !calm && bar.animate) bar.animate([{ transform: 'translateY(-14px) scale(.98)', opacity: .4 }, { transform: 'none', opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.22,1,.36,1)' });
+      }, { rootMargin: `-${topGap()}px 0px 0px 0px`, threshold: 0 });
+      io.observe(s2);
+    });
+  })();
   document.querySelectorAll('.pb-chips button').forEach((b) => b.onclick = () => applyPreset(b.dataset.preset));
   document.querySelectorAll('.pb-prev').forEach((b) => b.onclick = () => dShift(-1));
   document.querySelectorAll('.pb-next').forEach((b) => b.onclick = () => dShift(1));
@@ -1288,7 +1318,8 @@ Notes:
     } else dock.hidden = true;
   }
   if ('IntersectionObserver' in window) {
-    new IntersectionObserver(([en]) => setDock(!en.isIntersecting && en.boundingClientRect.top < 0), { rootMargin: '-70px 0px 0px 0px' }).observe(document.querySelector('#tab-dashboard .perbar'));
+    // The bottom dock is replaced by the period bar sticking to the top of the page (see stickyBars below).
+    setDock(false);
   }
 
   // ---------- period sheet: every way to pick a period, big and in one place ----------

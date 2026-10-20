@@ -1571,3 +1571,32 @@ body{font-size:15.5px;letter-spacing:0}
 .mt-cpo.good b{color:var(--ok)}.mt-cpo.mid b{color:var(--warn)}.mt-cpo.bad b{color:var(--danger)}
 
 .mt-shared{color:var(--warn);font-size:var(--fs-sm)}
+
+/* Period bar sticks to the top while scrolling */
+.pb-sentinel{height:1px;margin-bottom:-1px;pointer-events:none}
+.perbar{position:sticky;top:var(--pb-top,10px);z-index:20;transition:box-shadow var(--t-med) var(--ease),background-color var(--t-med) var(--ease),padding var(--t-med) var(--ease)}
+.perbar.stuck{background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb,var(--brand) 25%,var(--line))}
+.perbar.stuck .pb-pick{color:var(--brand)}
+@media (max-width:760px){
+  .perbar.stuck{padding:6px;gap:6px}
+  .perbar.stuck .pb-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .perbar.stuck .pb-chips::-webkit-scrollbar{display:none}
+  .perbar.stuck .pb-chips button{flex:none;padding:6px 11px}
+  .perbar.stuck .navbtn,.perbar.stuck .pb-pick{height:34px}
+}
+
+.pb-mini{display:none}
+.perbar.stuck .pb-mini{display:flex;align-items:baseline;gap:var(--s-3);flex-wrap:nowrap;white-space:nowrap;font-size:var(--fs-md);color:var(--muted);padding:0 var(--s-2);border-left:1px solid var(--line);animation:miniIn var(--t-med) var(--ease)}
+.perbar.stuck .pb-mini b{color:var(--ink);font-size:var(--fs-xl);font-weight:800}
+.perbar.stuck .pb-mini span:first-child b{color:var(--brand)}
+@keyframes miniIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+@media (min-width:761px){
+  .perbar.stuck{flex-wrap:nowrap;padding:6px 8px}
+  .perbar.stuck .pb-chips{flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(90deg,#000 92%,transparent)}
+  .perbar.stuck .pb-chips::-webkit-scrollbar{display:none}
+  .perbar.stuck .pb-chips button{flex:none;padding:6px 11px;font-size:var(--fs-sm)}
+  .perbar.stuck .navbtn{width:34px;height:34px}.perbar.stuck .pb-pick{height:34px;font-size:var(--fs-xl)}
+}
+@media (max-width:1400px){.perbar.stuck .pb-mini span:nth-child(3){display:none}}
+@media (max-width:980px){.perbar.stuck .pb-mini{display:none}}
+@media (prefers-reduced-motion:reduce){.perbar.stuck .pb-mini{animation:none}}

@@ -1269,9 +1269,11 @@ Notes:
       if (spec) {
         const mini = document.createElement('div'); mini.className = 'pb-mini'; mini.setAttribute('aria-hidden', 'true');
         bar.querySelector('.pb-nav').after(mini);
-        const fill = () => { mini.innerHTML = spec.map(([id, l]) => `<span><b class="num">${esc(($(id) || {}).textContent || '–')}</b> ${l}</span>`).join(''); };
+        // rollTo() draws digit wheels, so read the value it was given (aria-label), not the wheel text.
+        const val = (id) => { const el = $(id); return el ? (el.getAttribute('aria-label') || el._roll || el.textContent || '–').trim() : '–'; };
+        const fill = () => { mini.innerHTML = spec.map(([id, l]) => `<span><b class="num">${esc(val(id))}</b> ${l}</span>`).join(''); };
         fill(); const mo = new MutationObserver(() => { if (bar.classList.contains('stuck')) fill(); });
-        spec.forEach(([id]) => { if ($(id)) mo.observe($(id), { childList: true, characterData: true, subtree: true }); });
+        spec.forEach(([id]) => { if ($(id)) mo.observe($(id), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['aria-label'] }); });
         bar._fill = fill;
       }
       const s2 = document.createElement('div'); s2.className = 'pb-sentinel'; s2.setAttribute('aria-hidden', 'true');

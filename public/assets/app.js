@@ -758,10 +758,16 @@
   function mTeams() {
     const d = mData, inTeam = new Set(), out = [];
     const agg = (t, members) => {
-      const pg = new Map();
-      for (const u of members) for (const p of u.pages) { const k = p.pageId || p.page; const x = pg.get(k) || { spend: 0, orders: p.orders }; x.spend += p.spend; pg.set(k, x); }
-      let spend = 0, orders = 0, ordSpend = 0; for (const x of pg.values()) { spend += x.spend; orders += x.orders; if (x.orders > 0) ordSpend += x.spend; }
-      return { ...t, members, spend, orders, ordSpend, pages: pg.size, cpo: cpoOf(ordSpend, orders) };
+      const pg = new Map(); let added = 0;
+      for (const u of members) for (const p of u.pages) {
+        added += p.spend;
+        const k = p.pageId || p.page, x = pg.get(k) || { camps: new Map(), orders: p.orders };
+        for (const [id, v] of p.camps || [[u.id + p.page, p.spend]]) if (!x.camps.has(id)) x.camps.set(id, v); // each campaign once
+        pg.set(k, x);
+      }
+      let spend = 0, orders = 0, ordSpend = 0;
+      for (const x of pg.values()) { const sp = [...x.camps.values()].reduce((a, b) => a + b, 0); spend += sp; orders += x.orders; if (x.orders > 0) ordSpend += sp; }
+      return { ...t, members, spend, orders, ordSpend, pages: pg.size, shared: Math.max(0, added - spend), cpo: cpoOf(ordSpend, orders) };
     };
     for (const t of d.teams || []) { const ms = d.users.filter((u) => t.members.includes(u.id)); ms.forEach((u) => inTeam.add(u.id)); out.push(agg(t, ms)); }
     const rest = d.users.filter((u) => !inTeam.has(u.id));
@@ -793,7 +799,7 @@
         const ms = [...x.members].sort((a, b) => b.spend - a.spend);
         return `<button type="button" class="ocard mteam ${tn}" data-mteam="${esc(x.id)}" style="--i:${Math.min(i, 12)}">
           <header><div class="oc-n"><b>${esc(x.name)}</b><span class="pill">${ms.length} admin${ms.length === 1 ? '' : 's'}</span></div><div class="oc-cpo mt-tot"><span class="num">${money(x.spend)}</span><small><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</small></div></header>
-          <div class="oc-sub"><span class="mt-cpo ${tn}"><b class="num">${x.cpo != null ? money(x.cpo) : '–'}</b> ${x.cpo != null ? 'per order' : 'no orders yet'}</span><span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span></div>
+          <div class="oc-sub"><span class="mt-cpo ${tn}"><b class="num">${x.cpo != null ? money(x.cpo) : '–'}</b> ${x.cpo != null ? 'per order' : 'no orders yet'}</span><span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span>${x.shared > 0.009 ? `<span class="mt-shared" title="Two people in this team synced the same ad account — those campaigns are counted once">· ${money(x.shared)} shared, counted once</span>` : ''}</div>
           ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
           ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
           ${(() => { const sg = teamSug(x.members), bad = sg.filter((y) => y.level === 'bad').length, warn = sg.filter((y) => y.level === 'warn').length, good = sg.filter((y) => y.level === 'good').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> important</span>${bad ? `<span class="pill bad">${bad} urgent</span>` : ''}${warn ? `<span class="pill warn">${warn} to watch</span>` : ''}${good ? `<span class="pill ok">${good} going well</span>` : ''}</div>` : ''; })()}
@@ -960,13 +966,13 @@
   };
   const whyLabel = { 'new ad account': 'new ad account found', 'new campaign': 'new campaign found', hourly: 'hourly refresh', 'daily 30-day': '30-day refresh', 'run now': 'run now' };
   // ---------- Admin panel: sections ----------
-  let admSec = (() => { try { return localStorage.getItem('admSec') || 'overview'; } catch (_) { return 'overview'; } })();
+  let admSec = (() => { try { const v = localStorage.getItem('admSec'); return v && v !== 'overview' ? v : 'users'; } catch (_) { return 'users'; } })();
   function showAdm(sec) {
+    if (sec === 'overview') sec = 'users'; // Overview was removed — spend per team is on the Main Dashboard
     admSec = sec; try { localStorage.setItem('admSec', sec); } catch (_) {}
     document.querySelectorAll('#admNav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.a === sec)));
     for (const k of ['overview', 'users', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
-    if (sec === 'overview') loadAdmin();
-    if (sec === 'users') loadUsers();
+    if (sec === 'users') { loadUsers(); loadTeams(); }
     if (sec === 'health') loadHealth();
     if (sec === 'settings') loadSettings();
   }
@@ -2396,10 +2402,11 @@ Thank you for working with Ads Box!`,
     });
   }
 
+  async function loadTeams() { try { aTeams = await api('/admin/teams'); renderTeams(); } catch (e) { $('teamGrid').innerHTML = `<div class="muted">${esc(e.message)}</div>`; } }
   function renderTeams() {
     const { teams, users, canEdit } = aTeams;
     $('teamNewForm').hidden = !canEdit;
-    $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Admin table above then shows spend per team. Each person can be in one team.' : 'Teams set up by the app owner.';
+    $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Main Dashboard then shows spend, orders and suggestions per team. Each person can be in one team.' : 'Teams set up by the app owner.';
     const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
     const inTeam = new Set(teams.flatMap((t) => t.members));
     $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">
@@ -2408,19 +2415,19 @@ Thank you for working with Ads Box!`,
       ${canEdit ? `<select data-addmember><option value="">+ Add person…</option>${users.filter((u) => !t.members.includes(u.id)).map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${inTeam.has(u.id) ? ' (move from other team)' : ''}</option>`).join('')}</select>` : ''}
     </div>`).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
     document.querySelectorAll('#teamGrid .teamcard').forEach((card) => {
-      const id = card.dataset.team, patch = async (body) => { try { await api('/admin/teams/' + id, { method: 'PATCH', body }); await loadAdmin(); } catch (e) { toast(e.message); } };
+      const id = card.dataset.team, patch = async (body) => { try { await api('/admin/teams/' + id, { method: 'PATCH', body }); await loadTeams(); mData = null; } catch (e) { toast(e.message); } };
       const add = card.querySelector('[data-addmember]'); if (add) add.onchange = () => add.value && patch({ add: add.value }).then(() => toast('Added to team'));
       card.querySelectorAll('[data-removemember]').forEach((b) => b.onclick = () => patch({ remove: b.dataset.removemember }));
       const rn = card.querySelector('[data-rename]'); if (rn) rn.onclick = () => { const n = prompt('Team name', card.querySelector('.tc-name').textContent); if (n && n.trim()) patch({ name: n.trim() }); };
       const del = card.querySelector('[data-deleteteam]'); if (del) del.onclick = async () => {
         if (!del.dataset.arm) { del.dataset.arm = '1'; del.textContent = 'Tap again'; setTimeout(() => { del.dataset.arm = ''; del.textContent = 'Delete'; }, 3000); return; }
-        try { await api('/admin/teams/' + id, { method: 'DELETE' }); toast('Team deleted — people keep their data'); await loadAdmin(); } catch (e) { toast(e.message); }
+        try { await api('/admin/teams/' + id, { method: 'DELETE' }); toast('Team deleted — people keep their data'); await loadTeams(); mData = null; } catch (e) { toast(e.message); }
       };
     });
   }
   $('teamNewForm').addEventListener('submit', async (ev) => {
     ev.preventDefault(); const name = $('teamNewName').value.trim(); if (!name) return $('teamNewName').focus();
-    try { await api('/admin/teams', { method: 'POST', body: { name } }); $('teamNewName').value = ''; toast('Team created — now add people'); await loadAdmin(); } catch (e) { toast(e.message); }
+    try { await api('/admin/teams', { method: 'POST', body: { name } }); $('teamNewName').value = ''; toast('Team created — now add people'); await loadTeams(); mData = null; } catch (e) { toast(e.message); }
   });
 
   // ---------- Telegram groups for clients ----------

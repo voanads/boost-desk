@@ -1569,3 +1569,5 @@ body{font-size:15.5px;letter-spacing:0}
 .mt-tot small b.num{display:inline;color:var(--ink);font-size:var(--fs-xl);font-weight:700}
 .mt-cpo b{color:var(--ink)}
 .mt-cpo.good b{color:var(--ok)}.mt-cpo.mid b{color:var(--warn)}.mt-cpo.bad b{color:var(--danger)}
+
+.mt-shared{color:var(--warn);font-size:var(--fs-sm)}

@@ -220,9 +220,14 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
     const pages = [];
     for (const [cid, list] of Object.entries(ps)) for (const p of list) {
       const orders = (p.pageId && byId[String(p.pageId)]) || byName[nm(p.page)] || byName[nm(p.guess)] || 0;
-      pages.push({ page: p.page, pageId: p.pageId, named: p.named, guess: p.guess || '', client: cName[cid] || '', clientId: Number(cid), spend: p.spend, live: p.live, post: p.post, orders });
+      // Campaign IDs with their spend: two people syncing the same ad account see the same campaigns,
+      // so team and company totals count each campaign once.
+      const camps = (p.list || []).map((x, i) => [x.id ? String(x.id) : `${u.fb_id}:${p.page}:${i}`, x.spend]);
+      pages.push({ page: p.page, pageId: p.pageId, named: p.named, guess: p.guess || '', client: cName[cid] || '', clientId: Number(cid), spend: p.spend, live: p.live, post: p.post, orders, camps });
       const key = p.pageId || nm(p.page);
-      const s = seenPages.get(key) || { orders, spend: 0 }; s.spend += p.spend; seenPages.set(key, s);
+      const s = seenPages.get(key) || { orders, camps: new Map() };
+      for (const [id, v] of camps) if (!s.camps.has(id)) s.camps.set(id, v);
+      seenPages.set(key, s);
     }
     pages.sort((a, b) => b.spend - a.spend);
     const spend = pages.reduce((t, p) => t + p.spend, 0), orders = pages.reduce((t, p) => t + p.orders, 0);
@@ -233,7 +238,9 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   users.sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
   // Totals: a Page boosted from two accounts has its orders counted once.
   const tot = { spend: 0, orders: 0, ordSpend: 0, pages: seenPages.size, users: users.filter((u) => u.spend > 0).length };
-  for (const v of seenPages.values()) { tot.spend += v.spend; tot.orders += v.orders; if (v.orders > 0) tot.ordSpend += v.spend; }
+  let added = 0; for (const u of users) added += u.spend;
+  for (const v of seenPages.values()) { const sp = [...v.camps.values()].reduce((a, b) => a + b, 0); tot.spend += sp; tot.orders += v.orders; if (v.orders > 0) tot.ordSpend += sp; }
+  tot.shared = Math.max(0, Math.round((added - tot.spend) * 100) / 100);
   tot.spend = Math.round(tot.spend * 100) / 100; tot.ordSpend = Math.round(tot.ordSpend * 100) / 100;
   res.json({ from, to, totals: tot, users, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
 }));

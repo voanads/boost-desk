@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=116">
+<link rel="stylesheet" href="/assets/app.css?v=117">
 </head>
 <body>
 <div class="wrap">
@@ -293,13 +293,13 @@
 
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Admin</h2><div class="hint">Spend for every account, the people who use Boost Desk, what needs attention, and the app's settings.</div></div></div>
+      <div class="chead2"><div><h2>Admin</h2><div class="hint">The people who use Boost Desk and their teams, what needs attention, and the app's settings. Spend per team is on the Main Dashboard.</div></div></div>
       <div class="seg admnav" id="admNav" role="tablist" aria-label="Admin sections">
-        <button data-a="overview" role="tab">📊 Overview</button><button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
+        <button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
       </div>
     </div>
 
-    <div id="adm-overview">
+    <div id="adm-overview" hidden>
       <div class="chips" id="aChips" role="group" aria-label="Period">
         <button data-p="today">Today</button><button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button><button data-p="thisYear">This year</button>
       </div>
@@ -317,11 +317,6 @@
           <tbody id="aBody"></tbody><tfoot id="aFoot"></tfoot>
         </table></div>
       </div>
-      <div class="panel" id="teamPanel">
-        <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
-        <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The table above then shows spend per team. Each person can be in one team.</div>
-        <div class="teamgrid" id="teamGrid"></div>
-      </div>
     </div>
 
     <div id="adm-users" hidden>
@@ -329,6 +324,11 @@
         <div class="thead"><h2>People</h2><div class="filters"><input type="search" id="uSearch" placeholder="Search people" aria-label="Search people"></div></div>
         <div class="hint" id="uHint"></div>
         <div class="ucards" id="uList"></div>
+      </div>
+      <div class="panel" id="teamPanel">
+        <div class="rowx"><h2>Teams</h2><span class="spacer"></span><form id="teamNewForm" class="teamnew"><input type="text" id="teamNewName" placeholder="New team name, e.g. Team 1" maxlength="60"><button class="primary" type="submit">+ New team</button></form></div>
+        <div class="hint" id="teamHint">Group people into teams (e.g. a PM and their media buyers). The table above then shows spend per team. Each person can be in one team.</div>
+        <div class="teamgrid" id="teamGrid"></div>
       </div>
       <div class="panel" id="blockedBox" hidden>
         <h2>Removed accounts</h2>
@@ -503,6 +503,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=116"></script>
+<script src="/assets/app.js?v=117"></script>
 </body>
 </html>

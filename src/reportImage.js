@@ -72,16 +72,37 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   return adsFor(user, client, byAccount, from, to);
 }
+// Meta can refuse one ad account for this login ("Cannot call API for app … on behalf of user …", #200/#10:
+// access to the ad account was removed, or a Business blocks the app). Then try the login of another Boost Desk
+// person who has the same ad account, and if nobody can read it, leave that account's ads out of the picture.
+const denied = (e) => e && !e.needsLogin && !e.rateLimited && ([200, 10, 100, 190].includes(Number(e.code)) || /cannot call api|permission|on behalf of user/i.test(e.message || ''));
+async function insightsAnyToken(user, act, ids, from, to) {
+  const mine = await sync.tokenFor(user);
+  try { return await meta.adInsights(mine, act, ids, from, to); }
+  catch (e) {
+    if (!denied(e)) throw e;
+    const plain = String(act).replace(/^act_/, '');
+    const others = (await db.pool.query('SELECT DISTINCT owner FROM ad_accounts WHERE (id=$1 OR id=$2) AND owner<>$3', ['act_' + plain, plain, user.fb_id])).rows.map((r) => r.owner);
+    for (const id of others) {
+      const u = await db.getUser(id); if (!u || !u.token_enc || (u.token_expires && new Date(u.token_expires) < new Date())) continue;
+      try { return await meta.adInsights(await sync.tokenFor(u), act, ids, from, to); } catch (e2) { if (!denied(e2)) throw e2; }
+    }
+    const err = new Error(`Meta doesn't let your Facebook login read ad account ${plain} any more (access removed or the Business blocks this app).`);
+    err.skip = true; throw err;
+  }
+}
 async function adsFor(user, client, byAccount, from, to) {
-  const token = await sync.tokenFor(user);
-  const ads = []; let reach = 0;
+  const ads = []; let reach = 0; const skipped = [];
   for (const [act, ids] of Object.entries(byAccount)) {
-    const r = await meta.adInsights(token, act, [...ids], from, to);
+    let r;
+    try { r = await insightsAnyToken(user, act, [...ids], from, to); }
+    catch (e) { if (e.skip) { skipped.push(String(act).replace(/^act_/, '')); continue; } throw e; }
     ads.push(...r.ads.filter((a) => a.spend > 0 || a.impressions > 0));
     reach = reach === null || r.reach === null ? null : reach + r.reach;
   }
   ads.sort((a, b) => b.spend - a.spend);
-  return { client, ads, reach };
+  if (!ads.length && skipped.length) { const e = new Error(`Meta doesn't let your Facebook login read ad account ${skipped.join(', ')} any more, so the ads picture can't be made. Ask the ad account owner to add you back (or log in again).`); e.status = 400; throw e; }
+  return { client, ads, reach, skipped };
 }
 
 function periodTitle(from, to) {

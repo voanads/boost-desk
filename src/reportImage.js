@@ -17,7 +17,7 @@ const cut = (s, n) => { const a = [...String(s || '')]; return a.length > n ? a.
 const plural = (n, t) => (n === 1 ? t : t === 'person reached' ? 'people reached' : t + 's');
 
 // The client's campaigns in the period (from saved sync rows), grouped by ad account.
-async function clientCampaigns(owner, clientId, from, to, kind = '', only = null) {
+async function clientCampaigns(owner, clientId, from, to, kind = '', only = null, notIds = null) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) return { client: null, byAccount: {} };
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
@@ -29,6 +29,7 @@ async function clientCampaigns(owner, clientId, from, to, kind = '', only = null
     if (!m || m.id !== c.id) continue;
     if (kind && (sync.isPostFor(c, r) ? 'post' : 'live') !== kind) continue; // Live / Post filter
     if (only && !only.has(String(r.campaignId))) continue; // only the ticked lives / posts
+    if (notIds && notIds.has(String(r.campaignId))) continue; // lines left out of a longer report
     (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
   }
   return { client: c, byAccount };
@@ -48,10 +49,11 @@ async function fetchThumb(url) {
 
 // Ads for one client and period, straight from Meta.
 async function clientAds(user, clientId, from, to, kind = '', parts = null, scope = null) {
+  const sp = sync.splitParts(parts), notIds = sp.drop.size ? await sync.dropIds(clientId, sp.drop) : null; parts = sp.pick;
   if (scope) { // one Page of the client (its own Telegram topic)
     const client = (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId));
     if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
-    const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(from, clientId, parts) : null);
+    const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(from, clientId, parts) : null, notIds);
     const byAccount = {};
     for (const r of rows) {
       if (!r.campaignId || !r.accountId) continue;
@@ -68,7 +70,7 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
     for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) only.add(String(id));
     if (!only.size) return { client: (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId)), ads: [], reach: 0 }; // campaign list not saved for this day: no picture rather than a wrong one
   }
-  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only);
+  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only, notIds);
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   return adsFor(user, client, byAccount, from, to);
 }

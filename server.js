@@ -12,7 +12,8 @@ const health = require('./src/health');
 const reportImage = require('./src/reportImage');
 const kindOf = (k) => (k === 'live' || k === 'post' ? k : '');
 // Ticked report lines: "l1,l3,post" or ['l1','post'] → clean list, or null for everything.
-const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split(',')).map(String).filter((x) => /^(l\d{1,2}|post)$/.test(x)); return a.length ? [...new Set(a)].sort() : null; };
+// parts: lines ticked on a one-day report ('l1', 'post'), and lines left out of a longer report ('!2026-10-18:l1').
+const partsOf = (v) => { const a = (Array.isArray(v) ? v : String(v || '').split(',')).map(String).filter((x) => /^(l\d{1,2}|post)$/.test(x) || /^!\d{4}-\d{2}-\d{2}:(l\d{1,2}|post)$/.test(x)); return a.length ? [...new Set(a)].sort().slice(0, 400) : null; };
 const jobs = require('./src/jobs');
 const extras = require('./src/extras');
 const reports = require('./src/reports');

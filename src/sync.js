@@ -412,7 +412,7 @@ function onPage(r, page, names) {
   const n = norm(page);
   return (r.page && norm(r.page) === n) || (r.pageId && (r.pageId === page || (names[r.pageId] && norm(names[r.pageId]) === n)));
 }
-async function scopeRows(owner, c, from, to, scope, onlyIds = null) {
+async function scopeRows(owner, c, from, to, scope, onlyIds = null, notIds = null) {
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
   const clients = await clientsWithLearnedPages(owner, all, { save: false });
   const names = { ...(await db.getSetting('pageNames', {})) };
@@ -422,13 +422,14 @@ async function scopeRows(owner, c, from, to, scope, onlyIds = null) {
     if (!(Number(r.spend) > 0)) return false;
     const m = matchClient(r, clients); if (!m || m.id !== c.id) return false;
     if (onlyIds && !onlyIds.has(String(r.campaignId))) return false;
+    if (notIds && notIds.has(String(r.campaignId))) return false;
     if (scope.page) return onPage(r, scope.page, names);
     return !(scope.exclude || []).some((p) => onPage(r, p, names));
   }).map((r) => ({ ...r, _client: me }));
 }
 // Same shape as saved day entries ({ day, data: { lives, post } }), built from one Page's campaigns.
-async function scopeEntries(owner, c, from, to, scope, onlyIds = null) {
-  const rows = await scopeRows(owner, c, from, to, scope, onlyIds);
+async function scopeEntries(owner, c, from, to, scope, onlyIds = null, notIds = null) {
+  const rows = await scopeRows(owner, c, from, to, scope, onlyIds, notIds);
   const byDay = {};
   for (const r of rows) (byDay[r.day] = byDay[r.day] || []).push(r);
   return Object.keys(byDay).sort().map((day) => {
@@ -445,12 +446,23 @@ async function partIds(day, clientId, parts) {
   return ids;
 }
 
+// Lines left out of a longer report ('!day:key' in parts) and the campaign IDs behind them.
+function splitParts(parts) {
+  const all = parts || [], drop = new Set(all.filter((x) => x[0] === '!').map((x) => x.slice(1))), pick = all.filter((x) => x[0] !== '!');
+  return { pick: pick.length ? pick : null, drop };
+}
+async function dropIds(clientId, drop) {
+  const ids = new Set();
+  for (const k of drop) { const [day, key] = k.split(':'); for (const id of await partIds(day, clientId, [key])) ids.add(id); }
+  return ids;
+}
 async function clientReport(owner, clientId, from, to, kind = '', parts = null, scope = null) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
+  const sp = splitParts(parts), drop = sp.drop; parts = sp.pick;
   let rows;
   if (scope) { // one Page (or the rest): rebuilt from the synced campaigns; ticked lines become campaign IDs
-    rows = await scopeEntries(owner, c, from, to, scope, parts && parts.length && from === to ? await partIds(from, c.id, parts) : null);
+    rows = await scopeEntries(owner, c, from, to, scope, parts && parts.length && from === to ? await partIds(from, c.id, parts) : null, drop.size ? await dropIds(c.id, drop) : null);
     parts = null;
   } else rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
   const lines = []; let spent = 0;
@@ -464,12 +476,12 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
     if (L) {
       const lives = Object.entries(e.lives || {}).sort(([a], [b]) => Number(a.slice(1)) - Number(b.slice(1)));
       for (const [k, l] of lives) {
-        if (!(Number(l.spend) > 0) || (pick && !pick.has(k))) continue;
+        if (!(Number(l.spend) > 0) || (pick && !pick.has(k)) || drop.has(from + ':' + k)) continue;
         total += Number(l.spend);
         lines.push(`🔴 Live ${k.slice(1)}${l.time ? ' (' + l.time + ')' : ''}: ${fmt(l.spend)}`);
       }
     }
-    if (P && Number((e.post || {}).spend) > 0 && (!pick || pick.has('post'))) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
+    if (P && Number((e.post || {}).spend) > 0 && (!pick || pick.has('post')) && !drop.has(from + ':post')) { total += Number(e.post.spend); lines.push(`📌 Boost post: ${fmt(e.post.spend)}`); }
     spent = total;
     if (!total) lines.push('No boost spend on this day.');
     lines.push('', totalWithTax(total));
@@ -483,8 +495,8 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
     for (const r of rows) {
       const e = r.data || {};
       let dl = 0, dn = 0, dp = 0;
-      if (L) for (const l of Object.values(e.lives || {})) { const v = Number(l && l.spend) || 0; if (v > 0) { dl += v; dn++; } }
-      if (P) dp = Number((e.post || {}).spend) || 0;
+      if (L) for (const [k, l] of Object.entries(e.lives || {})) { if (!scope && drop.has(r.day + ':' + k)) continue; const v = Number(l && l.spend) || 0; if (v > 0) { dl += v; dn++; } }
+      if (P && (scope || !drop.has(r.day + ':post'))) dp = Number((e.post || {}).spend) || 0;
       const t = dl + dp;
       if (!t) continue;
       days++; total += t; live += dl; post += dp; lives += dn;
@@ -501,8 +513,8 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
     else {
       lines.push(totalWithTax(total));
       const sub = [];
-      if (L) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
-      if (P) sub.push(`📌 Boost posts: ${fmt(post)}`);
+      if (L && (live > 0 || !P)) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
+      if (P && (post > 0 || !L)) sub.push(`📌 Boost posts: ${fmt(post)}`);
       lines.push(...sub, `📅 ${days} day${days === 1 ? '' : 's'} with boosts`, '', ...daily);
     }
   }
@@ -618,4 +630,4 @@ async function pageSpend(owner, from, to) {
   return out;
 }
 
-module.exports = { scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

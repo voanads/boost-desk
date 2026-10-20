@@ -1462,7 +1462,7 @@ Notes:
   };
   // Tick / untick a live or the boost post for the report.
   function togglePick(line) {
-    const cid = Number(line.dataset.cid), off = offSet(cid, dDate), k = line.dataset.pick;
+    const cid = Number(line.dataset.cid), off = offSet(cid, line.dataset.day || dDate), k = line.dataset.pick;
     if (off.has(k)) off.delete(k); else off.add(k);
     line.classList.toggle('off', off.has(k)); line.setAttribute('aria-checked', String(!off.has(k)));
     const lines = [...document.querySelectorAll(`#dBody .dl.pick[data-cid="${cid}"]`)], on = lines.filter((l) => !l.classList.contains('off'));
@@ -1516,11 +1516,16 @@ Notes:
   });
   const offSet = (cid, day) => dOff[cid + '|' + day] || (dOff[cid + '|' + day] = new Set());
   const TICK = '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
-  const partLine = (p, pick) => `<div class="dl ln ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}" data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}>`
+  const partLine = (p, pick) => `<div class="dl ln ${p.kind}${pick ? ' pick' + (pick.off.has(p.key) ? ' off' : '') : ''}"${pick ? ` data-pick="${p.key}" data-cid="${pick.cid}"${pick.day ? ` data-day="${pick.day}"` : ''} data-spend="${p.spend}" role="checkbox" tabindex="0" aria-checked="${!pick.off.has(p.key)}" title="Tap to include or leave out of the report"` : ''}>`
     + `<div class="ln-h">${pick ? TICK : ''}<span class="ln-t"><b>${esc(p.label)}</b>${p.time ? `<span class="ln-time num"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>${esc(p.time)}</span>` : ''}${p.n ? `<span class="ln-meta">${p.n} campaign${p.n > 1 ? 's' : ''}</span>` : ''}${p.kind === 'post' && p.results > 0 ? `<span class="dl-r">${esc(resText(p.results, p.resultType))} · <b class="num">${cprMoney(cpr(p.spend, p.results))}</b> each</span>` : ''}</span><b class="ln-v num">${money(p.spend)}</b></div>`
     + `${p.sub ? `<div class="ln-sub">${p.sub}</div>` : ''}</div>`;
   function pickLabel(c) {
-    if (dMode !== 'day') return '';
+    if (dMode === 'year') return '';
+    if (dMode !== 'day') { // every day of the period
+      const all = []; for (const [d, e] of Object.entries(dEntries[c.id] || {})) for (const p of dayParts(c, e)) all.push({ ...p, off: offSet(c.id, d).has(p.key) });
+      const on = all.filter((p) => !p.off);
+      return all.length < 2 || on.length === all.length ? '' : on.length ? ` · ${on.length} of ${all.length} ticked · ${money(on.reduce((a, p) => a + p.spend, 0))}` : ' · nothing ticked';
+    }
     const parts = dayParts(c, (dEntries[c.id] || {})[dDate] || {}), off = offSet(c.id, dDate), on = parts.filter((p) => !off.has(p.key));
     return parts.length < 2 || on.length === parts.length ? '' : on.length ? ` · ${on.length} of ${parts.length} ticked · ${money(on.reduce((a, p) => a + p.spend, 0))}` : ' · nothing ticked';
   }
@@ -1607,9 +1612,10 @@ Notes:
       }).join('') : '<div class="muted">No boost spend this year.</div>';
     } else {
       const list = Object.keys(days).sort().reverse().map((d) => ({ d, parts: dayParts(c, days[d]) })).filter((x) => x.parts.length);
+      const many = list.reduce((a, x) => a + x.parts.length, 0) > 1; // ticks: leave a live or post of any day out of the report
       body = list.length ? list.map((x) => {
-        const tot = x.parts.reduce((s2, p) => s2 + p.spend, 0);
-        return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p)).join('')}</div>`;
+        const tot = x.parts.reduce((s2, p) => s2 + p.spend, 0), pick = many ? { cid: c.id, off: offSet(c.id, x.d), day: x.d } : null;
+        return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p, pick)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
     return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${sentLine(c)}${pagePick(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
@@ -1784,7 +1790,10 @@ Notes:
       if (lines.length && !on.length) return toast('Tick at least one line to send.');
       const c = dData.clients.find((x) => x.id === cid), pl = c ? reportPages(c) : [], skip = c ? skipList(c) : [];
       if (pl.length > 1 && pl.every((p) => skipSetOf(cid).has(p.page))) return toast('Tick at least one Page to send.');
-      openReportDlg({ kind: 'client', cid, from, to, label: periodLabel(), only: dTypeF, parts: lines.length && on.length < lines.length ? on : null, skip: skip.length ? skip : null });
+      // One day: the ticked lines. Longer periods: the unticked lines of each day ('!day:key').
+      const multi = lines.some((l) => l.dataset.day);
+      const parts = !lines.length || on.length === lines.length ? null : multi ? lines.filter((l) => l.classList.contains('off')).map((l) => `!${l.dataset.day}:${l.dataset.pick}`) : on;
+      openReportDlg({ kind: 'client', cid, from, to, label: periodLabel(), only: dTypeF, parts, skip: skip.length ? skip : null });
     });
     document.querySelectorAll('#dBody [data-report]').forEach((b) => b.onclick = () => {
       const [from, to] = dRange(); openReportDlg({ kind: 'client', cid: Number(b.dataset.report), from, to, label: periodLabel(), only: dTypeF });
@@ -1818,7 +1827,7 @@ Notes:
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}`);
         if (ckTarget !== o) return;
         $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}${o.skip ? ' · some Pages left out' : ''}`;
         $('ckText').value = r.text;
@@ -1885,7 +1894,7 @@ Notes:
     $('ckImgMsg').textContent = 'Making the ads picture from Meta…'; $('ckImgBox').classList.add('loading');
     $('ckWithImg').disabled = true;
     try {
-      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + o.parts.join(',') : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}${fresh ? '&fresh=1' : ''}${o.route != null ? '&page=' + encodeURIComponent(o.route) : ''}`);
+      const res = await fetch(`/api/client-report/${o.cid}/image?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}${fresh ? '&fresh=1' : ''}${o.route != null ? '&page=' + encodeURIComponent(o.route) : ''}`);
       if (ckTarget !== o) return;
       if (res.status === 204) { $('ckImgMsg').textContent = 'No ads with spend in this period — the report goes as text only.'; return; }
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || 'Could not make the picture.'); }

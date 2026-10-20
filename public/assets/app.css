@@ -1562,3 +1562,10 @@ body{font-size:15.5px;letter-spacing:0}
 .msug>.ghost{margin-top:var(--s-2)}
 .sug-who{display:inline-flex;align-items:center;flex:none;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap}
 @media (max-width:760px){.sug-who{margin-left:40px}}
+
+/* Team card: total spend big on top, orders under it; cost per order in the line below */
+.mt-tot .num{color:var(--ink)}
+.mt-tot small{display:block;margin-top:2px;font-size:var(--fs-md);color:var(--muted)}
+.mt-tot small b.num{display:inline;color:var(--ink);font-size:var(--fs-xl);font-weight:700}
+.mt-cpo b{color:var(--ink)}
+.mt-cpo.good b{color:var(--ok)}.mt-cpo.mid b{color:var(--warn)}.mt-cpo.bad b{color:var(--danger)}

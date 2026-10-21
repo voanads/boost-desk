@@ -163,8 +163,18 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
   let rows = await allStatuses(`/${actId}/insights`, params, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
   const diag = { campaign: rows.length };
   if (loose) {
-    const seen = new Set(rows.map((r) => r.campaign_id + '|' + r.date_start));
-    const add = (list) => { let n = 0; for (const r of list || []) { const k = r.campaign_id + '|' + r.date_start; if (!seen.has(k)) { seen.add(k); rows.push(r); n++; } } return n; };
+    // Merge by campaign + day, keeping the row with the most spend: some accounts answer the first query with
+    // the right campaigns and days but spend 0, while another query has the real spend for the same rows.
+    const at = new Map(rows.map((r, i) => [r.campaign_id + '|' + r.date_start, i]));
+    const add = (list) => {
+      let n = 0;
+      for (const r of list || []) {
+        const k = r.campaign_id + '|' + r.date_start, i = at.get(k);
+        if (i == null) { at.set(k, rows.length); rows.push(r); n++; }
+        else if ((Number(r.spend) || 0) > (Number(rows[i].spend) || 0)) { rows[i] = r; n++; }
+      }
+      return n;
+    };
     const note = (k, e) => { diag[k] = 'error: ' + (e.code ? '#' + e.code + ' ' : '') + String(e.message || '').slice(0, 90); };
     try { diag.extra = add(await getAll(`/${actId}/insights`, { ...params, filtering: [{ field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES_EXTRA }] }, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; note('extra', e); }
     try { diag.plain = add(await getAll(`/${actId}/insights`, params, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; note('plain', e); }

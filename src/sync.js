@@ -214,7 +214,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       if (noAccess[id]) { delete noAccess[id]; noAccessChanged = true; }
       if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));
-        if (why[id] && total - found > 1) console.error(`[sync] ${names[id] || id}: still missing ${round2(total - found)} — rows from Meta: ${why[id]}`);
+        if (why[id] && total - found > 1) console.log(`[sync] ${names[id] || id}: still missing ${round2(total - found)} — rows from Meta: ${why[id]}`);
         // Meta rounds each campaign-day to the cent, so many rows can differ from the total by a few cents.
         const tol = round2(Math.max(0.5, rows.length * 0.005));
         if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol, ...(why[id] && total - found > tol ? { why: why[id] } : {}) });

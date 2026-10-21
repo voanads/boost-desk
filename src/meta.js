@@ -185,6 +185,11 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
     rows = rows.slice();
   }
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
+  if (loose) { // what the rows look like, to find out why spend goes missing
+    diag.withSpend = withSpend.length;
+    diag.rawSum = Math.round(rows.reduce((t, r) => t + (Number(r.spend) || 0), 0) * 100) / 100;
+    const r0 = rows[0]; if (r0) diag.sample = `${r0.date_start}..${r0.date_stop} spend=${JSON.stringify(r0.spend)} keys=${Object.keys(r0).join('/')}`;
+  }
   const ids = [...new Set(withSpend.map((r) => r.campaign_id))];
   const starts = {}, goals = {}, runs = {};
   for (let i = 0; i < ids.length; i += 50) {

@@ -151,11 +151,23 @@ async function accountSpendRange(token, actId, since, until) {
 }
 
 // Campaign spend per day over a date range (one API call per account, daily breakdown).
-async function campaignSpendRange(token, actId, since, until, accountName = '') {
-  const rows = await allStatuses(`/${actId}/insights`, {
+// Statuses Meta can give a campaign that the normal filter leaves out (billing problems, review, paused ad sets…).
+const CAMPAIGN_STATUSES_EXTRA = ['PENDING_REVIEW', 'DISAPPROVED', 'PREAPPROVED', 'PENDING_BILLING_INFO', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'];
+// loose: also ask for those statuses and with no status filter at all, and merge (used when the account's own
+// total says spend is missing).
+async function campaignSpendRange(token, actId, since, until, accountName = '', { loose = false } = {}) {
+  const params = {
     level: 'campaign', fields: 'campaign_id,campaign_name,spend,reach,impressions,actions,video_thruplay_watched_actions',
     time_range: { since, until }, time_increment: 1, limit: 500,
-  }, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+  };
+  let rows = await allStatuses(`/${actId}/insights`, params, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+  if (loose) {
+    const seen = new Set(rows.map((r) => r.campaign_id + '|' + r.date_start));
+    const add = (list) => { for (const r of list || []) { const k = r.campaign_id + '|' + r.date_start; if (!seen.has(k)) { seen.add(k); rows.push(r); } } };
+    try { add(await getAll(`/${actId}/insights`, { ...params, filtering: [{ field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES_EXTRA }] }, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    try { add(await getAll(`/${actId}/insights`, params, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    rows = rows.slice();
+  }
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
   const ids = [...new Set(withSpend.map((r) => r.campaign_id))];
   const starts = {}, goals = {}, runs = {};

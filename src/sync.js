@@ -156,13 +156,13 @@ function addDays(day, n) {
 }
 
 // Meta sometimes fails big requests with #1/#2 "unexpected error": ask again for each half of the period.
-async function spendRangeSplit(token, act, since, until, name, depth = 0) {
-  try { return await meta.campaignSpendRange(token, act, since, until, name); }
+async function spendRangeSplit(token, act, since, until, name, depth = 0, opts = {}) {
+  try { return await meta.campaignSpendRange(token, act, since, until, name, opts); }
   catch (e) {
     if (!(e.code === 1 || e.code === 2) || since >= until || depth > 4) throw e;
     const days = Math.round((Date.parse(until) - Date.parse(since)) / 864e5), mid = addDays(since, Math.floor(days / 2));
-    const a = await spendRangeSplit(token, act, since, mid, name, depth + 1);
-    const b = await spendRangeSplit(token, act, addDays(mid, 1), until, name, depth + 1);
+    const a = await spendRangeSplit(token, act, since, mid, name, depth + 1, opts);
+    const b = await spendRangeSplit(token, act, addDays(mid, 1), until, name, depth + 1, opts);
     return a.concat(b);
   }
 }
@@ -195,7 +195,20 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       // afterwards made the account look a dollar or two short when nothing was missing.
       let total = null;
       try { total = round2(await meta.accountSpendRange(token, id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
-      const rows = await spendRangeSplit(token, id, since, until, names[id]);
+      let rows = await spendRangeSplit(token, id, since, until, names[id]);
+      // The account's total says campaigns are missing: ask again for every campaign status and merge.
+      if (total != null && total - rows.reduce((t, r) => t + r.spend, 0) > Math.max(1, rows.length * 0.005)) {
+        try {
+          const more = await spendRangeSplit(token, id, since, until, names[id], 0, { loose: true });
+          if (more.reduce((t, r) => t + r.spend, 0) > rows.reduce((t, r) => t + r.spend, 0)) { console.log(`[sync] ${names[id] || id}: found more spend with all campaign statuses`); rows = more; }
+          // Still short: Meta sometimes returns a cut-down answer for a long daily breakdown — ask week by week.
+          if (total - rows.reduce((t, r) => t + r.spend, 0) > Math.max(1, total * 0.02) && since < until) {
+            const weekly = [];
+            for (let d = since; d <= until; d = addDays(d, 7)) { const e = addDays(d, 6) < until ? addDays(d, 6) : until; weekly.push(...await spendRangeSplit(token, id, d, e, names[id], 0, { loose: true })); }
+            if (weekly.reduce((t, r) => t + r.spend, 0) > rows.reduce((t, r) => t + r.spend, 0)) { console.log(`[sync] ${names[id] || id}: found more spend week by week`); rows = weekly; }
+          }
+        } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+      }
       items.push(...rows);
       if (noAccess[id]) { delete noAccess[id]; noAccessChanged = true; }
       if (total != null) {

@@ -177,7 +177,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
     const camps = await allStatuses(`/${actId}/campaigns`, {
       fields: 'id,start_time,created_time,stop_time,adsets.limit(5){optimization_goal,start_time,end_time}',
       filtering: [{ field: 'id', operator: 'IN', value: chunk }], limit: 100,
-    }, { field: 'effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+    }, { field: 'effective_status', operator: 'IN', value: loose ? [...CAMPAIGN_STATUSES, ...CAMPAIGN_STATUSES_EXTRA] : CAMPAIGN_STATUSES }, token);
     for (const c of camps) {
       starts[c.id] = c.start_time || c.created_time || null; goals[c.id] = (c.adsets?.data || []).map((a) => a.optimization_goal).find(Boolean) || '';
       // Scheduled run time in minutes (longest ad set; null = runs with no end date).

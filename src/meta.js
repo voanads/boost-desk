@@ -161,11 +161,27 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
     time_range: { since, until }, time_increment: 1, limit: 500,
   };
   let rows = await allStatuses(`/${actId}/insights`, params, { field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES }, token);
+  const diag = { campaign: rows.length };
   if (loose) {
     const seen = new Set(rows.map((r) => r.campaign_id + '|' + r.date_start));
-    const add = (list) => { for (const r of list || []) { const k = r.campaign_id + '|' + r.date_start; if (!seen.has(k)) { seen.add(k); rows.push(r); } } };
-    try { add(await getAll(`/${actId}/insights`, { ...params, filtering: [{ field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES_EXTRA }] }, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
-    try { add(await getAll(`/${actId}/insights`, params, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+    const add = (list) => { let n = 0; for (const r of list || []) { const k = r.campaign_id + '|' + r.date_start; if (!seen.has(k)) { seen.add(k); rows.push(r); n++; } } return n; };
+    const note = (k, e) => { diag[k] = 'error: ' + (e.code ? '#' + e.code + ' ' : '') + String(e.message || '').slice(0, 90); };
+    try { diag.extra = add(await getAll(`/${actId}/insights`, { ...params, filtering: [{ field: 'campaign.effective_status', operator: 'IN', value: CAMPAIGN_STATUSES_EXTRA }] }, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; note('extra', e); }
+    try { diag.plain = add(await getAll(`/${actId}/insights`, params, token)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; note('plain', e); }
+    // Last try: ad level, added up per campaign and day (Meta sometimes answers per ad when per campaign is empty).
+    try {
+      const ads = await allStatuses(`/${actId}/insights`, { ...params, level: 'ad', fields: 'ad_id,campaign_id,campaign_name,spend,reach,impressions,actions,video_thruplay_watched_actions' },
+        { field: 'ad.effective_status', operator: 'IN', value: AD_STATUSES }, token);
+      const agg = {};
+      for (const a of ads) {
+        const k = a.campaign_id + '|' + a.date_start, x = agg[k] || (agg[k] = { campaign_id: a.campaign_id, campaign_name: a.campaign_name, date_start: a.date_start, date_stop: a.date_stop, spend: 0, reach: 0, impressions: 0, actions: {}, thru: {} });
+        x.spend += Number(a.spend) || 0; x.reach += Number(a.reach) || 0; x.impressions += Number(a.impressions) || 0;
+        for (const ac of a.actions || []) x.actions[ac.action_type] = (x.actions[ac.action_type] || 0) + (Number(ac.value) || 0);
+        for (const ac of a.video_thruplay_watched_actions || []) x.thru[ac.action_type] = (x.thru[ac.action_type] || 0) + (Number(ac.value) || 0);
+      }
+      const list = Object.values(agg).map((x) => ({ ...x, spend: String(Math.round(x.spend * 100) / 100), actions: Object.entries(x.actions).map(([action_type, value]) => ({ action_type, value })), video_thruplay_watched_actions: Object.entries(x.thru).map(([action_type, value]) => ({ action_type, value })) }));
+      diag.adRows = ads.length; diag.ad = add(list);
+    } catch (e) { if (e.needsLogin || e.rateLimited) throw e; note('ad', e); }
     rows = rows.slice();
   }
   const withSpend = rows.filter((r) => Number(r.spend) > 0);
@@ -192,7 +208,7 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
     }
   }
   const pages = await campaignPages(token, actId, ids);
-  return withSpend.map((r) => ({
+  const out = withSpend.map((r) => ({
     day: r.date_start,
     account: accountName || actId, accountId: actId,
     name: r.campaign_name, campaignId: r.campaign_id, spend: Number(r.spend),
@@ -205,6 +221,8 @@ async function campaignSpendRange(token, actId, since, until, accountName = '', 
     ...campaignResult(r, goals[r.campaign_id]),
     ...engagement(r),
   }));
+  out.diag = diag;
+  return out;
 }
 
 // "Result" the way Ads Manager counts it: the action that matches the ad set's optimisation goal.

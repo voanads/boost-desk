@@ -179,7 +179,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   const names = Object.fromEntries((await db.listAccounts(owner)).map((a) => [a.id, a.name]));
   const items = [];
   const errors = [];
-  const checks = [];
+  const checks = [], why = {};
   // Ad accounts Meta refused for permission (#200 "Cannot call API … on behalf of user"): tried again only
   // every 6 hours, so one lost account doesn't fill the logs every 5 minutes. A manual Sync always tries.
   const noAccess = (await db.getUserSetting(owner, 'acctNoAccess', {})) || {};
@@ -207,15 +207,17 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
             for (let d = since; d <= until; d = addDays(d, 7)) { const e = addDays(d, 6) < until ? addDays(d, 6) : until; weekly.push(...await spendRangeSplit(token, id, d, e, names[id], 0, { loose: true })); }
             if (weekly.reduce((t, r) => t + r.spend, 0) > rows.reduce((t, r) => t + r.spend, 0)) { console.log(`[sync] ${names[id] || id}: found more spend week by week`); rows = weekly; }
           }
+          if (more.diag) why[id] = Object.entries(more.diag).map(([k, v]) => `${k} ${v}`).join(', ');
         } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
       }
       items.push(...rows);
       if (noAccess[id]) { delete noAccess[id]; noAccessChanged = true; }
       if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));
+        if (why[id] && total - found > 1) console.error(`[sync] ${names[id] || id}: still missing ${round2(total - found)} — rows from Meta: ${why[id]}`);
         // Meta rounds each campaign-day to the cent, so many rows can differ from the total by a few cents.
         const tol = round2(Math.max(0.5, rows.length * 0.005));
-        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol });
+        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol, ...(why[id] && total - found > tol ? { why: why[id] } : {}) });
       }
     } catch (e) {
       if (e.needsLogin) throw e;

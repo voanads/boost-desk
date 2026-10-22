@@ -481,6 +481,18 @@
     try { accounts = await api('/accounts/refresh', { method: 'POST' }); renderAccounts(); toast("Ad accounts and today's spend updated"); if (date === me.today) loadDay(); }
     catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Refresh from Meta'; }
   };
+  // Threshold extension setup: reveal the per-user endpoint + key to paste into Check My Ads.
+  let extLoaded = false;
+  $('extBtn').onclick = async () => {
+    const box = $('extBox'); const show = box.hidden; box.hidden = !show;
+    if (show && !extLoaded) {
+      try { const r = await api('/ext/key'); $('extUrl').value = r.url; $('extKey').value = r.key; extLoaded = true; }
+      catch (e) { toast(e.message); $('extKey').value = ''; $('extKey').placeholder = 'Could not load key'; }
+    }
+  };
+  const copy = (sel, label) => { const el = $(sel); if (!el.value) return; el.select(); navigator.clipboard?.writeText(el.value).then(() => toast(label + ' copied'), () => toast('Select and copy manually')); };
+  $('extCopyUrl').onclick = () => copy('extUrl', 'URL');
+  $('extCopyKey').onclick = () => copy('extKey', 'Key');
 
   // ---------- clients ----------
   // Chip list of Facebook Page names with an input to add more.

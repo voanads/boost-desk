@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=123">
+<link rel="stylesheet" href="/assets/app.css?v=124">
 </head>
 <body>
 <div class="wrap">
@@ -184,7 +184,16 @@
   <section id="tab-accounts" class="wrap" hidden>
     <div class="top">
       <div><h2>Ad accounts</h2><div class="hint" id="acctUpdated">Balances, limits and status from Meta. Ticked accounts are included in Sync.</div></div>
+      <span class="spacer"></span>
+      <button id="extBtn" class="ghost" title="Meta doesn't share the billing threshold with apps — the Check My Ads extension can push it here">🧩 Threshold extension</button>
       <button id="refreshAccts" class="primary">Refresh from Meta</button>
+    </div>
+    <div class="note" id="extBox" hidden>
+      <b>Show the billing threshold automatically</b>
+      <p class="hint" style="margin:6px 0 10px">Meta's API doesn't give apps the billing threshold, so the Threshold column stays blank. The <b>Check My Ads</b> browser extension reads it from your own Facebook session and can send just the numbers here — no passwords or cookies. Paste these two values into the extension's <b>Boost Desk</b> settings, then run its sync.</p>
+      <label class="fld"><span>Endpoint URL</span><input type="text" id="extUrl" readonly></label>
+      <label class="fld"><span>Your key</span><input type="text" id="extKey" readonly placeholder="Loading…"></label>
+      <div class="dlg-foot"><span class="hint">Keep this key private — anyone with it can write threshold numbers to your workspace.</span><span class="spacer"></span><button type="button" class="ghost" id="extCopyUrl">Copy URL</button><button type="button" class="primary" id="extCopyKey">Copy key</button></div>
     </div>
     <div class="summary">
       <div><span class="lbl">Accounts</span><span class="val num" id="aCount">0</span></div>
@@ -503,6 +512,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=123"></script>
+<script src="/assets/app.js?v=124"></script>
 </body>
 </html>

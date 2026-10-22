@@ -114,6 +114,42 @@ app.get('/public-api/spend', wrap(async (req, res) => {
   db.setSetting('spendApiKeys', keys).catch(() => {});
   res.json({ ok: true, from, to, timezone: cfg.tz, currency: 'USD', totals: { spend: Math.round(list.reduce((t, r) => t + r.spend, 0) * 100) / 100 }, count: list.length, rows: list });
 }));
+// ---- Check My Ads browser extension → billing thresholds ----
+// The extension reads each account's automatic-payment ("billing") threshold from the user's own
+// logged-in Facebook session and pushes the numbers here. Meta does not expose this field to the
+// Marketing API, so this is the only way Boost Desk can show it. Only the numbers travel — never
+// Facebook cookies or tokens. Auth is a per-user extension key (not a browser cookie), so CORS is
+// open: the key is the credential.
+function extCors(res) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization');
+}
+app.options('/public-api/thresholds', (req, res) => { extCors(res); res.sendStatus(204); });
+app.post('/public-api/thresholds', wrap(async (req, res) => {
+  extCors(res);
+  const key = String(req.get('x-api-key') || (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || (req.body || {}).key || '').trim();
+  const idx = (await db.getSetting('extKeyIndex', {})) || {};
+  const owner = key ? idx[sha(key)] : null;
+  if (!owner) return res.status(401).json({ ok: false, error: 'Extension key missing or not valid.' });
+  const items = Array.isArray((req.body || {}).thresholds) ? req.body.thresholds : [];
+  const map = (await db.getUserSetting(owner, 'extThresholds', {})) || {};
+  let stored = 0;
+  for (const it of items) {
+    const id = String((it && (it.id || it.account_id)) || '').trim();
+    if (!/^act_\d{5,25}$/.test(id)) continue;
+    const v = Number(it.threshold);
+    if (!isFinite(v) || v < 0 || v > 1e9) { // null/absent threshold clears a stale value
+      if (it.threshold === null) delete map[id];
+      continue;
+    }
+    map[id] = { v: Math.round(v * 100) / 100, cur: (String(it.currency || '').slice(0, 8) || null), at: new Date().toISOString() };
+    stored++;
+  }
+  await db.setUserSetting(owner, 'extThresholds', map);
+  res.json({ ok: true, stored, accounts: Object.keys(map).length });
+}));
+
 const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {
@@ -708,14 +744,31 @@ async function accountsWithToday(owner) {
   const day = sync.todayIn();
   const rows = await db.getRaw(owner, day);
   const meta0 = (await db.getDay(owner, day)).meta;
+  const ext = (await db.getUserSetting(owner, 'extThresholds', {})) || {};
   const byAcct = {};
   for (const r of rows || []) byAcct[r.accountId] = (byAcct[r.accountId] || 0) + (Number(r.spend) || 0);
   for (const a of list) {
     const i = a.info || (a.info = {});
     if (rows && a.enabled) { i.todaySpend = Math.round((byAcct[a.id] || 0) * 100) / 100; i.todayAt = meta0?.synced_at || null; delete i.todayError; }
+    // Meta's API doesn't return the billing threshold; use what the browser extension pushed when
+    // the API left it blank. Flagged so the UI can note where it came from.
+    if (i.threshold == null && ext[a.id] && ext[a.id].v != null) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
   }
   return list;
 }
+// The logged-in user's key + endpoint for the Check My Ads extension to push thresholds (lazily created).
+api.get('/ext/key', wrap(async (req, res) => {
+  const owner = req.user.fb_id;
+  let key = await db.getUserSetting(owner, 'extKey', null);
+  if (!key) {
+    key = 'bd_ext_' + crypto.randomBytes(20).toString('hex');
+    await db.setUserSetting(owner, 'extKey', key);
+    const idx = (await db.getSetting('extKeyIndex', {})) || {};
+    idx[sha(key)] = owner;
+    await db.setSetting('extKeyIndex', idx);
+  }
+  res.json({ key, url: cfg.baseUrl + '/public-api/thresholds' });
+}));
 api.get('/accounts', wrap(async (req, res) => res.json(await accountsWithToday(req.user.fb_id))));
 api.post('/accounts/refresh', wrap(async (req, res) => {
   const me = req.user.fb_id;

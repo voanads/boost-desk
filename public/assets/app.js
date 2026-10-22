@@ -467,7 +467,7 @@
         <td>${esc(a.name)}<div class="hint num">${esc(a.id)}${i.business ? ' · ' + esc(i.business) : ''}</div></td>
         <td>${chip}</td>
         <td class="r num">${i.todayError ? '<span class="hint" title="' + esc(i.todayError) + '">error</span>' : i.todaySpend != null ? (Number(i.todaySpend) > 0 ? '<b>' + money(i.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
-        <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${cap}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
+        <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${i.threshold != null ? money(i.threshold) : '<span class="muted">—</span>'}</td><td class="r num">${cap}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
     }).join('') || '<tr><td colspan="8" class="muted">No ad accounts loaded yet. Tap Refresh from Meta.</td></tr>';
     $('aCount').textContent = accounts.length; $('aActive').textContent = act; $('aBad').textContent = bad;
     $('aBad').classList.toggle('over', bad > 0); $('aToday').textContent = money(today);

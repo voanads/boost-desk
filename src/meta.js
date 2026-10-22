@@ -99,13 +99,18 @@ const DISABLE_REASON = {
   15: 'Compromised ad account',
 };
 
-async function adAccounts(token) {
-  const rows = await getAll('/me/adaccounts', {
-    fields: 'id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone_name,business{name}',
-    limit: 100,
-  }, token);
+const ACCOUNT_FIELDS = 'id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone_name,business{name}';
+// adspaymentcycle.threshold_amount is the account's automatic-payment ("billing") threshold — the
+// balance at which Meta charges the card — in minor units. It's an internal edge that Meta returns
+// only for some apps/tokens; if asking for it fails (unknown field, no permission on the edge), we
+// retry with the plain field set so the account list always loads. Genuine login / rate-limit errors
+// still surface, since they'd fail the retry too.
+const THRESHOLD_FIELD = 'adspaymentcycle{threshold_amount,billing_period}';
+
+function mapAccount(a) {
   // balance, amount_spent and spend_cap come in minor units (cents) as strings.
-  return rows.map((a) => ({
+  const cycle = Array.isArray(a.adspaymentcycle?.data) ? a.adspaymentcycle.data[0] : null;
+  return {
     id: a.id,
     name: a.name,
     status: STATUS[a.account_status] || `Status ${a.account_status}`,
@@ -114,10 +119,22 @@ async function adAccounts(token) {
     balance: Number(a.balance || 0) / 100,
     amountSpent: Number(a.amount_spent || 0) / 100,
     spendCap: Number(a.spend_cap || 0) / 100,
+    threshold: cycle && cycle.threshold_amount != null ? Number(cycle.threshold_amount) / 100 : null,
     currency: a.currency,
     timezone: a.timezone_name,
     business: a.business?.name || '',
-  }));
+  };
+}
+
+async function adAccounts(token) {
+  try {
+    const rows = await getAll('/me/adaccounts', { fields: `${ACCOUNT_FIELDS},${THRESHOLD_FIELD}`, limit: 100 }, token);
+    return rows.map(mapAccount);
+  } catch (e) {
+    if (e.needsLogin || e.rateLimited) throw e; // real problems, not the optional threshold edge
+    const rows = await getAll('/me/adaccounts', { fields: ACCOUNT_FIELDS, limit: 100 }, token);
+    return rows.map(mapAccount);
+  }
 }
 
 async function accountSpend(token, actId, day) {

@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=122">
+<link rel="stylesheet" href="/assets/app.css?v=123">
 </head>
 <body>
 <div class="wrap">
@@ -193,7 +193,7 @@
       <div><span class="lbl">Spent today</span><span class="val num" id="aToday">$0.00</span></div>
     </div>
     <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Sync</th><th>Account</th><th>Status</th><th class="r">Today</th><th class="r">Balance due</th><th class="r">Spend limit left</th><th class="r">Lifetime spend</th></tr></thead>
+      <thead><tr><th>Sync</th><th>Account</th><th>Status</th><th class="r">Today</th><th class="r">Balance due</th><th class="r">Threshold</th><th class="r">Spend limit left</th><th class="r">Lifetime spend</th></tr></thead>
       <tbody id="acctBody"></tbody>
     </table></div></div>
   </section>
@@ -503,6 +503,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=122"></script>
+<script src="/assets/app.js?v=123"></script>
 </body>
 </html>

@@ -1457,49 +1457,102 @@
     if (b.dataset.hgo) showTab(b.dataset.hgo);
   });
 
-  // ---------- Admin → Ad accounts: every ad account of every person ----------
-  let aaData = null, aaF = 'all';
+  // ---------- Ad accounts (admins): every ad account of every team, like the Clients Board ----------
+  let aaData = null, aaF = 'all', aaSortK = 'today', aaTeam = '', aaSel = null, aaPicked = false;
   async function loadAdAccounts() {
-    try { aaData = await api('/admin/ad-accounts'); } catch (e) { $('aaBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; return; }
-    const sel = $('aaPerson'), cur = sel.value;
-    sel.innerHTML = '<option value="">Everyone</option>' + aaData.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${u.team ? ' · ' + esc(u.team) : ''}</option>`).join('');
-    sel.value = cur; $('aaOwner').innerHTML = '<option value="">Who uses it?</option>' + aaData.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
-    $('aaAddBtn').hidden = !aaData.canEdit;
+    if (!aaData) { $('aaList').innerHTML = '<div class="crow skel-card"></div>'.repeat(6); $('aaDetail').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
+    try { aaData = await api('/admin/ad-accounts'); } catch (e) { if (!aaData) $('aaDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; return; }
+    $('aaOwner').innerHTML = '<option value="">Who uses it?</option>' + aaData.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${u.team ? ' · ' + esc(u.team) : ''}</option>`).join('');
+    $('aaAddBtn').hidden = !aaData.canEdit || !$('aaAdd').hidden;
     renderAdAccounts();
   }
   const aaOk = (a) => [1, 201].includes(a.statusCode);
+  const aaWarn = (a) => [9, 3, 7, 8, 100].includes(a.statusCode);
+  // An account belongs to the teams of the people who sync it (or, if no one syncs it, of anyone who can open it).
+  const aaTeams = (a) => { const on = a.people.filter((p) => p.enabled); return [...new Set((on.length ? on : a.people).map((p) => p.teamId || '__none'))]; };
   function renderAdAccounts() {
     const d = aaData; if (!d) return;
-    const q = ($('aaSearch').value || '').trim().toLowerCase(), who = $('aaPerson').value, has = (x) => String(x || '').toLowerCase().includes(q);
+    const teamName = Object.fromEntries(d.teams.map((t) => [t.id, t.name]));
+    const q = ($('aaSearch').value || '').trim().toLowerCase(), has = (x) => String(x || '').toLowerCase().includes(q);
+    const all = d.accounts.map((a) => ({ ...a, tms: aaTeams(a) }));
+    const scope = all.filter((a) => !aaTeam || a.tms.includes(aaTeam));
+    const k = { n: scope.length, ok: scope.filter(aaOk).length, bad: scope.filter((a) => !aaOk(a)).length, today: scope.reduce((t, a) => t + (Number(a.todaySpend) || 0), 0), week: scope.reduce((t, a) => t + (Number(a.week) || 0), 0), bal: scope.reduce((t, a) => t + (Number(a.balance) || 0), 0), off: scope.filter((a) => !a.people.some((p) => p.enabled)).length };
+    $('aaKpis').innerHTML = `
+      <div class="bk"><span class="lbl">Ad accounts</span><b class="num">${k.n}</b><span class="sub">${k.ok} active · ${k.off} not synced</span></div>
+      <div class="bk ${k.bad ? 'bad' : ''}"><span class="lbl">Problems</span><b class="num">${k.bad}</b><span class="sub">${k.bad ? 'disabled, unpaid, in review…' : 'all running'}</span></div>
+      <div class="bk bk-hero"><span class="lbl">Spent today</span><b class="num">${money(k.today)}</b><span class="sub">${money(k.week)} in the last 7 days</span></div>
+      <div class="bk"><span class="lbl">Balance to pay</span><b class="num">${money(k.bal)}</b><span class="sub">across these accounts</span></div>`;
+    $('admAccN').textContent = all.filter((a) => !aaOk(a)).length || '';
+    const cnt = (id) => all.filter((a) => a.tms.includes(id)).length;
+    const chips = [['', 'All teams', all.length], ...d.teams.map((t) => [t.id, t.name, cnt(t.id)]), ...(cnt('__none') ? [['__none', 'No team', cnt('__none')]] : [])];
+    $('aaTeams').innerHTML = chips.map(([id, n, c]) => `<button type="button" class="bchip" data-aateam="${esc(id)}" aria-pressed="${aaTeam === id}">${esc(n)} <span class="num">${c}</span></button>`).join('');
     document.querySelectorAll('#aaFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === aaF)));
-    const scope = d.accounts.filter((a) => !who || a.people.some((p) => p.id === who));
-    const k = { n: scope.length, ok: scope.filter(aaOk).length, bad: scope.filter((a) => !aaOk(a)).length, today: scope.reduce((t, a) => t + (Number(a.todaySpend) || 0), 0), bal: scope.reduce((t, a) => t + (Number(a.balance) || 0), 0), off: scope.filter((a) => !a.people.some((p) => p.enabled)).length };
-    $('admAccN').textContent = d.accounts.filter((a) => !aaOk(a)).length || '';
-    $('aaKpis').innerHTML = `<div class="aak"><span class="lbl">Ad accounts</span><b class="num">${k.n}</b><span class="sub">${k.off} not synced</span></div>
-      <div class="aak"><span class="lbl">Active</span><b class="num ok-t">${k.ok}</b><span class="sub">running normally</span></div>
-      <div class="aak ${k.bad ? 'bad' : ''}"><span class="lbl">Problems</span><b class="num">${k.bad}</b><span class="sub">disabled, unpaid, in review…</span></div>
-      <div class="aak"><span class="lbl">Spent today</span><b class="num">${money(k.today)}</b><span class="sub">synced accounts</span></div>
-      <div class="aak"><span class="lbl">Balance to pay</span><b class="num">${money(k.bal)}</b><span class="sub">all accounts</span></div>`;
+    document.querySelectorAll('#aaSort button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === aaSortK)));
     const list = scope.filter((a) => aaF === 'all' || (aaF === 'ok' ? aaOk(a) : aaF === 'bad' ? !aaOk(a) : !a.people.some((p) => p.enabled)))
-      .filter((a) => !q || has(a.name) || has(a.id) || has(a.business) || a.people.some((p) => has(p.name)))
-      .sort((a, b) => (aaOk(a) - aaOk(b)) || (Number(b.todaySpend) || 0) - (Number(a.todaySpend) || 0) || a.name.localeCompare(b.name));
-    $('aaBody').innerHTML = list.map((a) => {
-      const warn = [9, 3, 7, 8, 100].includes(a.statusCode), cur = a.currency && a.currency !== 'USD' ? ` <span class="hint">${esc(a.currency)}</span>` : '';
-      const nearCap = a.threshold && a.balance >= a.threshold * 0.8;
-      return `<tr class="${aaOk(a) ? '' : 'aa-bad'}"><td><b>${esc(a.name)}</b><div class="hint num">${esc(a.id)}${a.business ? ' · ' + esc(a.business) : ''}</div></td>
-        <td><span class="chip ${aaOk(a) ? 'ok' : warn ? 'warn' : 'bad'}">${esc(a.status || '—')}</span>${a.disableReason ? `<div class="hint">${esc(a.disableReason)}</div>` : ''}</td>
-        <td><div class="aa-ppl">${a.people.map((p) => `<label class="aa-p${p.enabled ? ' on' : ''}" title="${p.enabled ? 'Synced for ' : 'Not synced for '}${esc(p.name)}">${d.canEdit ? `<input type="checkbox" data-aasync="${esc(p.id)}|${esc(a.id)}" ${p.enabled ? 'checked' : ''} aria-label="Sync for ${esc(p.name)}">` : `<span class="aa-dot" aria-hidden="true"></span>`}<span>${esc(p.name)}</span>${p.team ? `<span class="hint">${esc(p.team)}</span>` : ''}</label>`).join('')}</div></td>
-        <td class="r num">${a.todaySpend != null ? (Number(a.todaySpend) > 0 ? '<b>' + money(a.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
-        <td class="r num ${nearCap ? 'warn-t' : ''}">${money(a.balance)}${cur}</td>
-        <td class="r num">${a.threshold != null ? money(a.threshold) : '<span class="muted">—</span>'}</td>
-        <td class="r num">${money(a.amountSpent)}</td></tr>`;
-    }).join('') || `<tr><td colspan="7" class="muted">${d.accounts.length ? 'Nothing matches.' : 'No ad accounts yet — each person taps Sync from Meta once, or tap Refresh from Facebook.'}</td></tr>`;
+      .filter((a) => !q || has(a.name) || has(a.id) || has(a.business) || a.people.some((p) => has(p.name)) || (a.pages || []).some((p) => has(p.page)));
+    const srt = { today: (a, b) => (Number(b.todaySpend) || 0) - (Number(a.todaySpend) || 0), week: (a, b) => (b.week || 0) - (a.week || 0), balance: (a, b) => (b.balance || 0) - (a.balance || 0) }[aaSortK];
+    const grp = (a) => (aaTeam ? aaTeam : a.tms[0]), tOrder = [...d.teams.map((t) => t.id), '__none'];
+    list.sort((a, b) => (aaTeam ? 0 : tOrder.indexOf(grp(a)) - tOrder.indexOf(grp(b))) || (aaOk(a) - aaOk(b)) || srt(a, b) || a.name.localeCompare(b.name));
+    if (aaSel && !list.some((a) => a.id === aaSel)) aaSel = null;
+    if ((!aaSel || !aaPicked) && list.length && matchMedia('(min-width: 901px)').matches) aaSel = list[0].id;
+    let last;
+    $('aaList').innerHTML = list.map((a, i) => {
+      const g = grp(a), head = !aaTeam && g !== last ? `<div class="bl-team">${esc(g === '__none' ? 'No team' : teamName[g] || 'Team')}</div>` : ''; last = g;
+      const on = a.people.filter((p) => p.enabled);
+      return `${head}<button type="button" class="crow${a.id === aaSel ? ' on' : ''}" role="option" aria-selected="${a.id === aaSel}" data-aasel="${esc(a.id)}" style="--i:${Math.min(i, 14)}">
+        <span class="cr-av aa-av ${aaOk(a) ? 'ok' : aaWarn(a) ? 'warn' : 'bad'}" aria-hidden="true">${esc(String(a.name || '?').trim().slice(0, 1).toUpperCase())}</span>
+        <span class="cr-n"><b>${esc(a.name)}</b><span class="cr-tags"><span class="chip ${aaOk(a) ? 'ok' : aaWarn(a) ? 'warn' : 'bad'}">${esc(a.status || '—')}</span>${on.length ? on.slice(0, 2).map((p) => `<span class="chip who">${esc(p.name.split(/\s+/)[0])}</span>`).join('') + (on.length > 2 ? `<span class="chip meta">+${on.length - 2}</span>` : '') : '<span class="chip nogroup">Not synced</span>'}</span></span>
+        <span class="cr-v"><b class="num">${a.todaySpend != null ? money(a.todaySpend) : '–'}</b><span class="hint">today · bal ${money(a.balance)}</span></span>
+      </button>`;
+    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : aaF !== 'all' ? 'No ad account in this view.' : 'No ad accounts yet — tap Refresh from Facebook.'}</div>`;
     const newest = d.accounts.map((a) => a.seenAt).filter(Boolean).sort().pop();
-    $('aaNote').textContent = (newest ? 'Account details from Facebook ' + ago(newest) + '. ' : '') + 'One row per ad account; the people listed can open it with their Facebook login. Ticked = included in that person\'s sync.';
+    $('aaUpdated').textContent = newest ? 'From Facebook ' + ago(newest) : '';
+    // ---- detail
+    const a = list.find((x) => x.id === aaSel);
+    if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
+    const cur = a.currency && a.currency !== 'USD' ? ' ' + a.currency : '';
+    const thr = a.threshold ? Math.min(100, Math.round(a.balance / a.threshold * 100)) : null;
+    const days = []; for (let i = 13; i >= 0; i--) days.push(addD(d.today, -i));
+    const dv = days.map((x) => (a.daily || {})[x] || 0), dmax = Math.max(0.01, ...dv);
+    const capLeft = a.spendCap ? Math.max(0, a.spendCap - a.amountSpent) : null;
+    const pmax = Math.max(0.01, ...(a.pages || []).map((p) => p.spend));
+    $('aaDetail').innerHTML = `<div class="cd-in">
+      <div class="cd-head"><button type="button" class="ghost sm cd-back" id="aaBack">← All ad accounts</button>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg aa-av ${aaOk(a) ? 'ok' : aaWarn(a) ? 'warn' : 'bad'}" aria-hidden="true">${esc(String(a.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(a.name)}</h3><div class="cr-tags"><span class="chip ${aaOk(a) ? 'ok' : aaWarn(a) ? 'warn' : 'bad'}">${esc(a.status || '—')}</span><span class="hint num">${esc(a.id)}</span>${a.business ? `<span class="hint">· ${esc(a.business)}</span>` : ''}</div></div></div>
+          <a class="btn sm ghost" href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${esc(String(a.id).replace(/^act_/, ''))}" target="_blank" rel="noopener">Open in Ads Manager ↗</a></div>
+        ${a.disableReason ? `<div class="note aa-why">⚠ ${esc(a.disableReason)}</div>` : ''}</div>
+      <div class="cd-stats">
+        <div class="cd-stat hero"><span class="lbl">Spent today</span><b class="num">${a.todaySpend != null ? money(a.todaySpend) : '–'}</b><span class="sub">${a.todayAt ? 'as of ' + new Date(a.todayAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'not synced today'}</span></div>
+        <div class="cd-stat"><span class="lbl">Last 7 days</span><b class="num">${money(a.week || 0)}</b><span class="sub">${a.camps || 0} campaign-day${a.camps === 1 ? '' : 's'} with spend</span></div>
+        <div class="cd-stat ${thr != null && thr >= 80 ? 'mid' : ''}"><span class="lbl">Balance</span><b class="num">${money(a.balance)}${esc(cur)}</b>${thr != null ? `<span class="sub">of ${money(a.threshold)} threshold</span><i class="aa-thr"><i style="width:${thr}%"></i></i>` : '<span class="sub">no threshold info</span>'}</div>
+        <div class="cd-stat"><span class="lbl">Spent all time</span><b class="num">${money(a.amountSpent)}</b><span class="sub">${capLeft != null ? money(capLeft) + ' left of spend limit' : 'no spend limit'}</span></div>
+      </div>
+      <div class="cd-cols">
+        <div class="cd-col">
+          <section class="cd-sec"><div class="cd-sec-h"><h4>📊 Last 14 days</h4><span class="spacer"></span><span class="hint">${money(dv.reduce((x, y) => x + y, 0))}</span></div>
+            <div class="aa-chart" role="img" aria-label="Spend per day for the last 14 days">${days.map((x, i) => `<div class="aa-col${x === d.today ? ' today' : ''}" title="${esc(nice(x))}: ${money(dv[i])}"><i style="height:${Math.max(dv[i] > 0 ? 4 : 1, dv[i] / dmax * 100).toFixed(1)}%"></i><span>${Number(x.slice(8))}</span></div>`).join('')}</div>
+            <div class="hint">From synced campaigns${a.people.some((p) => p.enabled) ? '' : ' — nobody syncs this account, so there is no daily spend'}.</div></section>
+          <section class="cd-sec"><div class="cd-sec-h"><h4>📄 Pages · last 7 days</h4><span class="countpill">${(a.pages || []).length}</span></div>
+            ${(a.pages || []).length ? `<div class="aa-pages">${a.pages.map((p) => `<div class="aa-pg"><span class="pgav" aria-hidden="true">${esc(String(p.page || '?').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span><span class="aa-pg-n"><b>${esc(p.page || (p.pageId ? 'Page …' + p.pageId.slice(-6) : 'Unknown Page'))}</b><i class="mbar"><i style="width:${Math.max(2, p.spend / pmax * 100).toFixed(1)}%"></i></i></span><b class="num">${money(p.spend)}</b></div>`).join('')}</div>` : '<div class="hint">No Page spend in the last 7 days.</div>'}</section>
+        </div>
+        <div class="cd-col">
+          <section class="cd-sec"><div class="cd-sec-h"><h4>👥 People</h4><span class="hint">who can open it · ticked = synced</span></div>
+            <div class="aa-people">${a.people.map((p) => `<label class="aa-person${p.enabled ? ' on' : ''}"><span class="avatar">${esc(mIni(p.name))}</span><span class="aa-pn"><b>${esc(p.name)}</b><span class="hint">${esc(p.team || 'No team')}</span></span>${d.canEdit ? `<span class="switch"><input type="checkbox" data-aasync="${esc(p.id)}|${esc(a.id)}" ${p.enabled ? 'checked' : ''} aria-label="Sync for ${esc(p.name)}"><span></span></span>` : `<span class="chip ${p.enabled ? 'ok' : 'meta'}">${p.enabled ? 'Synced' : 'Off'}</span>`}</label>`).join('')}</div>
+            ${!a.people.some((p) => p.enabled) ? '<div class="note">Nobody syncs this account, so its spend is not in Boost Desk. Turn sync on for the person who runs it.</div>' : a.people.filter((p) => p.enabled).length > 1 ? '<div class="hint">Synced by more than one person — campaigns are counted once on the Main Dashboard.</div>' : ''}</section>
+          ${!aaOk(a) ? `<section class="cd-sec"><div class="cd-sec-h"><h4>🛠 What to do</h4></div><div class="hint">${a.statusCode === 3 ? 'Unsettled: a payment failed. Open Ads Manager → Billing and pay the balance, or update the card.' : a.statusCode === 2 ? 'Disabled by Meta. Open Account Quality in Business Manager to see why and request a review.' : a.statusCode === 7 || a.statusCode === 9 ? 'In review or grace period — ads may stop soon. Check Account Quality and Billing.' : 'Open Ads Manager to see what Meta needs.'}</div></section>` : ''}
+        </div>
+      </div>
+    </div>`;
   }
-  $('aaSearch').oninput = renderAdAccounts; $('aaPerson').onchange = renderAdAccounts;
-  $('aaFilter').onclick = (ev) => { const b = ev.target.closest('[data-f]'); if (b) { aaF = b.dataset.f; renderAdAccounts(); } };
-  $('aaBody').addEventListener('change', async (ev) => {
+  $('tab-adaccts').addEventListener('click', (ev) => {
+    const t = ev.target.closest('[data-aateam]'); if (t) { aaTeam = t.dataset.aateam; aaPicked = false; renderAdAccounts(); return; }
+    const f = ev.target.closest('#aaFilter [data-f]'); if (f) { aaF = f.dataset.f; aaPicked = false; renderAdAccounts(); return; }
+    const k = ev.target.closest('#aaSort [data-k]'); if (k) { aaSortK = k.dataset.k; renderAdAccounts(); return; }
+    const r = ev.target.closest('[data-aasel]'); if (r) { aaSel = r.dataset.aasel; aaPicked = true; $('aaWrap').classList.add('show-detail'); renderAdAccounts(); if (!matchMedia('(min-width: 901px)').matches) window.scrollTo({ top: $('aaWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); else if (!calm && $('aaDetail').animate) $('aaDetail').animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)' }); return; }
+    if (ev.target.closest('#aaBack')) { $('aaWrap').classList.remove('show-detail'); window.scrollTo({ top: $('aaWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); }
+  });
+  $('aaSearch').oninput = renderAdAccounts;
+  $('tab-adaccts').addEventListener('change', async (ev) => {
     const cb = ev.target.closest('[data-aasync]'); if (!cb) return;
     const [owner, id] = cb.dataset.aasync.split('|');
     try { await api(`/admin/ad-accounts/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`, { method: 'PATCH', body: { enabled: cb.checked } }); const a = aaData.accounts.find((x) => x.id === id), p = a && a.people.find((x) => x.id === owner); if (p) p.enabled = cb.checked; renderAdAccounts(); toast(cb.checked ? 'Included in sync' : 'Left out of sync'); }
@@ -1507,14 +1560,14 @@
   });
   $('aaRefresh').onclick = async () => {
     const b = $('aaRefresh'); b.disabled = true; b.textContent = 'Asking Facebook…';
-    try { const r = await api('/admin/ad-accounts/refresh', { method: 'POST' }); await loadAdAccounts(); toast(`Updated ${r.ok} ${r.ok === 1 ? 'person' : 'people'}${r.failed.length ? ` · ${r.failed.length} failed` : ''}`); if (r.failed.length) $('aaNote').textContent = 'Could not refresh: ' + r.failed.join(' · '); }
+    try { const r = await api('/admin/ad-accounts/refresh', { method: 'POST' }); await loadAdAccounts(); toast(`Updated ${r.ok} ${r.ok === 1 ? 'person' : 'people'}${r.failed.length ? ` · ${r.failed.length} failed` : ''}`); if (r.failed.length) $('aaUpdated').textContent = 'Could not refresh: ' + r.failed.join(' · '); }
     catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = '↻ Refresh from Facebook'; }
   };
-  $('aaAddBtn').onclick = () => { $('aaAdd').hidden = false; $('aaAddBtn').hidden = true; const w = $('aaPerson').value; if (w) $('aaOwner').value = w; $('aaId').focus(); };
+  $('aaAddBtn').onclick = () => { $('aaAdd').hidden = false; $('aaAddBtn').hidden = true; $('aaId').focus(); };
   $('aaAddX').onclick = () => { $('aaAdd').hidden = true; $('aaAddBtn').hidden = !(aaData && aaData.canEdit); };
   $('aaAdd').onsubmit = async (ev) => {
     ev.preventDefault(); const b = $('aaAddGo'); b.disabled = true; b.textContent = 'Checking…';
-    try { const r = await api('/admin/ad-accounts', { method: 'POST', body: { account: $('aaId').value, owner: $('aaOwner').value } }); successBadge(`${r.account.name} added for ${r.owner}`); $('aaId').value = ''; $('aaAdd').hidden = true; $('aaAddBtn').hidden = false; await loadAdAccounts(); }
+    try { const r = await api('/admin/ad-accounts', { method: 'POST', body: { account: $('aaId').value, owner: $('aaOwner').value } }); successBadge(`${r.account.name} added for ${r.owner}`); $('aaId').value = ''; $('aaAdd').hidden = true; await loadAdAccounts(); aaSel = r.account.id; aaPicked = true; renderAdAccounts(); }
     catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Add'; }
   };
 

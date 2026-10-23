@@ -948,7 +948,7 @@
     return out.sort((a, b2) => (a.level === 'bad' ? 0 : 1) - (b2.level === 'bad' ? 0 : 1) || a.rank - b2.rank || (lv[a.level] ?? 2) - (lv[b2.level] ?? 2) || (a.sort || 0) - (b2.sort || 0)); // urgent first
   }
   const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
-  let mPgAll = false, mPerson = null, mView = (() => { try { return localStorage.getItem('mView') || 'cards'; } catch (_) { return 'cards'; } })();
+  let mPgAll = false, mPerson = null, mView = (() => { try { return localStorage.getItem('mView2') || 'list'; } catch (_) { return 'list'; } })();
   async function loadMain() {
     if (!dDate) dDate = me.today;
     paintPeriod();
@@ -1026,7 +1026,19 @@
         <span class="mtc-s">${x.id ? `${Math.round(x.spend / tot * 100)}% · ` : ''}${x.orders.toLocaleString('en-US')} orders · <b class="${tone(x.cpo)}">${x.cpo != null ? money(x.cpo) : '–'}</b></span>
         <span class="mtc-ppl">${ms.slice(0, 5).map((m) => `<span class="mini-av" title="${esc(m.name)}">${esc(mIni(m.name))}</span>`).join('')}${ms.length > 5 ? `<span class="mini-av more">+${ms.length - 5}</span>` : ''}</span>
       </button>`; };
-    $('mTeamList').innerHTML = tcard({ id: '', name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, cpo: avg }, 0) + teams.slice().sort((a, b) => b.spend - a.spend).map((x, i) => tcard(x, i + 1)).join('');
+    // teams as a table (like the redesign): share of spend, orders, cost per order, status
+    const trow = (x) => { const on = (mTeam || '') === (x.id || ''), u = mSug ? teamSug(x.members).filter((y) => y.level === 'bad').length : 0;
+      return `<tr class="mtr${on ? ' on' : ''}" style="--c:${x.id ? colOf(x.id) : 'var(--brand)'}">
+        <td><button type="button" class="mtr-b" data-mteam="${esc(x.id || '')}" aria-pressed="${on}"><i class="mtc-dot"></i><b>${esc(x.name)}</b><span class="hint">${x.pages != null ? x.pages + ' Page' + (x.pages === 1 ? '' : 's') : ''}</span></button></td>
+        <td class="r num"><b>${money(x.spend)}</b></td>
+        <td class="r num">${x.id ? Math.round(x.spend / tot * 100) + '%' : '100%'}</td>
+        <td class="r num">${x.orders.toLocaleString('en-US')}</td>
+        <td class="r num"><b class="${tone(x.cpo)}">${x.cpo != null ? money(x.cpo) : '–'}</b></td>
+        <td class="r">${mSug ? (u ? `<span class="pill bad">${u} urgent</span>` : '<span class="pill ok">On track</span>') : ''}</td>
+      </tr>`; };
+    $('mTeamList').innerHTML = `<div class="tablewrap"><table class="mtt"><thead><tr><th>Team</th><th class="r">Spend</th><th class="r">Share</th><th class="r">Orders</th><th class="r">Per order</th><th class="r">Status</th></tr></thead><tbody>`
+      + trow({ id: '', name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, cpo: avg, pages: d.totals.pages })
+      + teams.slice().sort((a, b) => b.spend - a.spend).map((x) => trow(x)).join('') + '</tbody></table></div>';
     // ---- Pages
     document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
     document.querySelectorAll('#mViewSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === mView)));
@@ -1076,7 +1088,7 @@
     if (b.id === 'mSugMore') { mSugAll = !mSugAll; renderMain(); return; }
     if (b.id === 'mPgMore') { mPgAll = true; renderMain(); return; }
     if (b.closest('#mSortSeg')) { mSortK = b.dataset.k; renderMain(); return; }
-    if (b.closest('#mViewSeg')) { mView = b.dataset.v; try { localStorage.setItem('mView', mView); } catch (_) {} renderMain(); }
+    if (b.closest('#mViewSeg')) { mView = b.dataset.v; try { localStorage.setItem('mView2', mView); } catch (_) {} renderMain(); }
   });
   $('mSearch').oninput = () => renderMain();
 
@@ -3053,6 +3065,7 @@ Thank you for working with Ads Box!`,
         document.documentElement.classList.add('adminsite');
         document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin'].includes(b.dataset.tab); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
+        $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
         document.querySelector('.brand').setAttribute('href', '/admin#main');
         $('whoName').textContent = me.name;
@@ -3072,6 +3085,7 @@ Thank you for working with Ads Box!`,
       await loadDay();
       const h = location.hash.slice(1);
       if (me.canAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      if (me.canAdmin) $('navGrpAdmin').hidden = false;
       showTab(['main', 'board', 'adaccts', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }

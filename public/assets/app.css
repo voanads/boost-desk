@@ -2166,3 +2166,66 @@ html[data-size=xl]{font-size:19px}
 .bwrap .cside #aaSort{grid-template-columns:repeat(3,1fr)}
 #aaSearch{box-sizing:border-box;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;font:inherit;color:var(--ink);min-height:44px}
 #aaSearch:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
+
+/* =====================================================================
+   Professional theme (Oct 2026 redesign) — ink sidebar, calm surfaces,
+   one violet accent, solid fills instead of gradients and glows.
+   ===================================================================== */
+:root{
+  --bg:#F5F6F8; --bg-2:#F1F2F5; --line:#E3E5EA; --ink:#12141C; --muted:#5C6373;
+  --hero:#12141C; --on-hero:#FFFFFF; --hero-muted:#B9BDCB;
+  --side:#12141C; --side-ink:#E9EBF1; --side-muted:rgba(233,235,241,.62); --side-hover:rgba(255,255,255,.06); --side-on:rgba(255,255,255,.10);
+  --shadow:0 1px 2px rgba(18,20,28,.04); --shadow-sm:var(--shadow); --shadow-md:0 4px 14px rgba(18,20,28,.08); --glow:none;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--hero:#1E2233; --side:#0A0C12; --line:#262B3C}}
+:root[data-theme=dark]{--hero:#1E2233; --side:#0A0C12}
+
+/* calm background: no drifting light, no mouse glow */
+body::before{display:none!important}
+html,body{background:var(--bg)!important}
+.summary::after,.panel::after,.ccard::after,.lv::after,.payrow::after{display:none!important}
+.ccard:hover{transform:none!important}
+
+/* solid fills instead of gradients */
+button.primary{background:var(--brand)!important;box-shadow:none!important}
+button.primary:hover{background:color-mix(in srgb,var(--brand) 88%,#000)!important}
+.chips button[aria-pressed=true],.pb-chips button[aria-pressed=true],.fdock .fchips button[aria-pressed=true],#setMsgPresets button[aria-pressed=true]{background:var(--ink)!important;color:var(--surface)!important;box-shadow:none!important}
+.seg button[aria-pressed=true]{background:var(--ink)!important;color:var(--surface)!important}
+.mbar i,.pc-bar i,.pgbar i{background:var(--brand)!important}
+.pill.solid,.rolechip.owner{background:var(--brand)}
+
+/* hero numbers: ink cards (violet stays for a client's own spend) */
+.summary>div.hero,.ostrip,.mk.hero,.bk.bk-hero{background:var(--hero)!important;color:var(--on-hero)!important;box-shadow:none!important}
+.ostrip .lbl,.mk.hero .lbl,.mk.hero .sub,.bk.bk-hero .lbl,.bk.bk-hero .sub{color:var(--hero-muted)!important;opacity:1!important}
+.cd-stat.hero,.bc-stats>div:first-child{background:var(--brand)!important}
+
+/* avatars: soft violet with violet initials; the open item is solid */
+.cr-av,.bc-av{background:var(--brand-soft);color:var(--brand)}
+.cr-av.lg,.crow.on .cr-av{background:var(--brand);color:var(--on-brand)}
+.avatar,.mc-h .avatar{background:var(--bg-2);color:var(--ink)}
+
+/* cards: thin border, almost no shadow */
+.panel,.msec,.mk,.bk,.aak,.setcard,.mcard,.pcard,.mtc,.cdetail,.clist,.bcard{box-shadow:var(--shadow)!important;border-color:var(--line)}
+.mk .lbl,.bk .lbl,.aak .lbl,.cd-stat .lbl{letter-spacing:.06em}
+
+/* desktop: the ink sidebar */
+@media (min-width:1100px){
+  header.appbar{background:var(--side)!important;color:var(--side-ink)!important;border-right:none!important}
+  header.appbar .bname,header.appbar .bname small{color:var(--side-ink)!important}
+  header.appbar .bname small{opacity:.6}
+  nav.tabs button{color:var(--side-muted)!important;border-radius:var(--r-sm)!important}
+  nav.tabs button:hover{color:var(--side-ink)!important;background:var(--side-hover)!important}
+  nav.tabs button[aria-selected=true]{color:#FFFFFF!important}
+  .tab-ink{background:var(--side-on)!important}
+  .tab-ink::before{background:var(--brand-glow,#A78BFA)!important}
+  header.appbar .who,header.appbar .who .wname,#whoName{color:var(--side-ink)!important}
+  header.appbar .who button.ghost,#logoutBtn{color:var(--side-muted)!important}
+  header.appbar .who button.ghost:hover,#logoutBtn:hover{color:#FFFFFF!important;background:var(--side-hover)!important}
+  header.appbar .themebtn{background:transparent!important;border-color:rgba(255,255,255,.16)!important;color:var(--side-ink)!important}
+  header.appbar .avatar{background:rgba(255,255,255,.12)!important;color:#FFFFFF!important}
+  header.appbar .who{border-top:1px solid rgba(255,255,255,.1);padding-top:14px!important}
+}
+
+/* page titles */
+.ohead h2,.bhead h2,#tab-main .ohead h2{font-size:1.5rem;font-weight:700;letter-spacing:-.02em}

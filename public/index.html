@@ -11,13 +11,13 @@
   (function () { var t = 'auto'; try { t = localStorage.getItem('bd-theme') || 'auto'; } catch (e) {}
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
   // Font and text size picked under "Aa" (kept on this device). The font file is loaded only when picked.
-  (function () { var f = 'system', z = 'm'; try { f = localStorage.getItem('bd-font') || 'system'; z = localStorage.getItem('bd-size') || 'm'; } catch (e) {}
+  (function () { var f = 'inter', z = 'm'; try { f = localStorage.getItem('bd-font') || 'inter'; z = localStorage.getItem('bd-size') || 'm'; } catch (e) {}
     var r = document.documentElement; r.setAttribute('data-font', f); r.setAttribute('data-size', z);
     var css = { onest: 'Onest:wght@400;500;600;700;800', inter: 'Inter:wght@400;500;600;700;800', jakarta: 'Plus+Jakarta+Sans:wght@400;500;600;700;800', noto: 'Noto+Sans:wght@400;500;600;700;800', lexend: 'Lexend:wght@400;500;600;700;800' }[f];
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=143">
+<link rel="stylesheet" href="/assets/app.css?v=144">
 </head>
 <body>
 <div class="wrap">
@@ -603,6 +603,6 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/app.js?v=143"></script>
+<script src="/assets/app.js?v=144"></script>
 </body>
 </html>

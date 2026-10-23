@@ -1757,3 +1757,12 @@ body{font-size:15.5px;letter-spacing:0}
 .aisec .hint,.aisec .ai-load{color:color-mix(in srgb,var(--ink) 72%,transparent)}
 @media (hover:none){.tdel{opacity:1}}
 @media (max-width:900px){.cside{position:static}.cwrap.show-detail .cside{display:none}}
+
+/* Main Dashboard: spend on Pages not linked to a client; Orders card: spend with no orders */
+.m-unl{margin-top:var(--s-3);padding:var(--s-3);border-radius:var(--r-lg);background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 30%,var(--line))}
+.m-unl-h{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-2);color:var(--ink)}
+.m-unl-h b{color:var(--warn)}
+.m-unl-p{display:flex;justify-content:space-between;gap:var(--s-2);font-size:var(--fs-md);padding:3px 0;border-top:1px dashed color-mix(in srgb,var(--warn) 25%,transparent)}
+.m-unl .hint{margin:2px 0 6px}
+.oc-noord{color:var(--warn);font-size:var(--fs-sm)}
+#mNote{margin-bottom:0}

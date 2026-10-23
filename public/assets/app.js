@@ -523,7 +523,7 @@
   const typeTags = (t) => (t === 'live' || t === 'both' ? '<span class="chip live">Live</span>' : '') + (t === 'post' || t === 'both' ? '<span class="chip post">Post</span>' : '');
 
   // This month's spend per client, shown on the cards.
-  let cMonth = {}, cOrd = {}, cOrdY = {}, cTodo = null, cWork = {}, cSel = null, cPicked = false;
+  let cOrdQ = null, cMonth = {}, cOrd = {}, cOrdY = {}, cTodo = null, cWork = {}, cSel = null, cPicked = false;
   let cSort = (() => { try { return localStorage.getItem('cSort') || 'attention'; } catch (_) { return 'attention'; } })();
   async function loadClientMonth() {
     const t = (me && me.today) || iso(new Date()), ym = t.slice(0, 7);
@@ -532,7 +532,7 @@
       cMonth = Object.fromEntries(d.clients.map((c) => [c.id, c]));
       renderClients();
     } catch (_) {}
-    api(`/orders/report?from=${ym}-01&to=${t}`).then((r) => { cOrd = Object.fromEntries((r.clients || []).map((c) => [c.id, c])); renderClients(); }).catch(() => {});
+    api(`/orders/report?from=${ym}-01&to=${t}`).then((r) => { cOrd = Object.fromEntries((r.clients || []).map((c) => [c.id, c])); cOrdQ = r.quality || null; renderClients(); }).catch(() => {});
     api('/todo').then((r) => { cTodo = r; renderClients(); }).catch(() => {});
     api('/clients-work').then((r) => { cWork = r.clients || {}; renderClients(); }).catch(() => {});
     const y = addD(t, -1); api(`/orders/report?from=${y}&to=${y}`).then((r) => { cOrdY = Object.fromEntries((r.clients || []).map((c) => [c.id, c])); renderClientDetail(); }).catch(() => {});
@@ -555,7 +555,7 @@
     if (cSel && !clients.some((c) => c.id === cSel)) cSel = null;
     if ((!cSel || !cPicked) && list.length && matchMedia('(min-width: 901px)').matches) cSel = list[0].id; // until someone picks, show the top client
     $('cGrid').innerHTML = list.map((c, i) => {
-      const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? o.spend / o.orders : null;
+      const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
       return `<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span>
         <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span></span>
@@ -582,7 +582,7 @@
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
-    const m = cMonth[c.id] || {}, o = cOrd[c.id] || {}, cpo = o.orders && o.spend ? o.spend / o.orders : null;
+    const m = cMonth[c.id] || {}, o = cOrd[c.id] || {}, cpo = o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
     const keepForm = !!box.querySelector('#cdForm') && cFormEl.parentElement === box.querySelector('#cdForm') && !fresh && box.querySelector('.cd-in') && Number(box.querySelector('.cd-in').dataset.cdid) === c.id;
     const notesVal = keepForm && $('cdNotes') ? $('cdNotes').value : null; // keep what is being typed
     parkForm(); // rescue the form before the panel is redrawn
@@ -593,9 +593,9 @@
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
-        ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + x.spend, 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? y.spend / y.orders : null;
+        ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + ordSpendOf(x), 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? ordSpendOf(y) / y.orders : null;
           return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>`; })()}
-        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : 'this month'}</span></div>
+        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : 'this month'}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       <div class="cd-cols">
@@ -911,6 +911,7 @@
     try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
     catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
+  const ordSpendOf = (c) => (c && c.ordSpend != null ? c.ordSpend : c ? c.spend : 0); // spend on Pages that got orders
   const cpoOf = (spend, orders) => (orders > 0 && spend > 0 ? spend / orders : null);
   // Teams with their members; people in no team go to "No team". A Page boosted by two members counts its orders once.
   function mTeams() {
@@ -932,6 +933,8 @@
     if (rest.length) out.push(agg({ id: '__none', name: (d.teams || []).length ? 'No team' : 'All accounts', members: [] }, rest));
     return out;
   }
+  // Spend on Pages not linked to any client (it has no orders and is not in the totals above).
+  const unlinkedRows = (u) => (u.unlinked && u.unlinked.spend > 0.5 ? `<div class="m-unl"><div class="m-unl-h"><b>⚠ Not linked to a client</b><span class="num">${money(u.unlinked.spend)}</span></div><div class="hint">Add these Pages to a client so their spend and orders count.</div>${u.unlinked.pages.map((p) => `<div class="m-unl-p"><span>${esc(p.page)}</span><span class="num">${money(p.spend)}</span></div>`).join('')}</div>` : '');
   function renderMain() {
     const d = mData; if (!d) return;
     const teams = mTeams(), team = mTeam && teams.find((t) => t.id === mTeam);
@@ -942,6 +945,12 @@
     rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US'));
     rollTo($('mCpo'), tAvg != null ? money(tAvg) : '–'); rollTo($('mUsers'), String(t.users)); rollTo($('mPages'), String(t.pages));
     $('mUsersLbl').textContent = team ? 'admins' : 'accounts';
+    { // notes: older days are estimates · spend on Pages not linked to any client
+      const q = d.quality || {}, unl = team ? team.members.reduce((a, u) => a + ((u.unlinked && u.unlinked.spend) || 0), 0) : d.totals.unlinked || 0, msg = [];
+      if (q.estimate) msg.push(`ⓘ ${q.estimate} of ${q.estimate + (q.kept || 0)} days are order estimates and may be too high.`);
+      if (unl > 0.5) msg.push(`${money(unl)} was spent on Pages not linked to any client — not counted above. Open an admin below to see which Pages.`);
+      $('mNote').hidden = !msg.length; $('mNote').innerHTML = msg.map(esc).join('<br>');
+    }
     document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
     const q = ($('mSearch').value || '').trim().toLowerCase();
     const has = (x) => String(x || '').toLowerCase().includes(q);
@@ -957,7 +966,7 @@
         const ms = [...x.members].sort((a, b) => b.spend - a.spend);
         return `<button type="button" class="ocard mteam ${tn}" data-mteam="${esc(x.id)}" style="--i:${Math.min(i, 12)}">
           <header><div class="oc-n"><b>${esc(x.name)}</b><span class="pill">${ms.length} admin${ms.length === 1 ? '' : 's'}</span></div><div class="oc-cpo mt-tot"><span class="num">${money(x.spend)}</span><small><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</small></div></header>
-          <div class="oc-sub"><span class="mt-cpo ${tn}"><b class="num">${x.cpo != null ? money(x.cpo) : '–'}</b> ${x.cpo != null ? 'per order' : 'no orders yet'}</span><span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span>${x.shared > 0.009 ? `<span class="mt-shared" title="Two people in this team synced the same ad account — those campaigns are counted once">· ${money(x.shared)} shared, counted once</span>` : ''}</div>
+          <div class="oc-sub"><span class="mt-cpo ${tn}"><b class="num">${x.cpo != null ? money(x.cpo) : '–'}</b> ${x.cpo != null ? 'per order' : 'no orders yet'}</span><span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span>${(() => { const ul = x.members.reduce((a, u) => a + ((u.unlinked && u.unlinked.spend) || 0), 0); return ul > 0.5 ? `<span class="mt-shared" title="Spend on Pages not linked to any client">· ${money(ul)} not linked</span>` : ''; })()}${x.shared > 0.009 ? `<span class="mt-shared" title="Two people in this team synced the same ad account — those campaigns are counted once">· ${money(x.shared)} shared, counted once</span>` : ''}</div>
           ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
           ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
           ${(() => { const sg = teamSug(x.members), bad = sg.filter((y) => y.level === 'bad').length, warn = sg.filter((y) => y.level === 'warn').length, good = sg.filter((y) => y.level === 'good').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> important</span>${bad ? `<span class="pill bad">${bad} urgent</span>` : ''}${warn ? `<span class="pill warn">${warn} to watch</span>` : ''}${good ? `<span class="pill ok">${good} going well</span>` : ''}</div>` : ''; })()}
@@ -993,7 +1002,7 @@
             <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
             <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
             <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
-            <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}</div>` : '<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div></div>') : ''}
+            <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}${unlinkedRows(u)}</div>` : `<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div>${unlinkedRows(u)}</div>`) : ''}
       </article>`;
     }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No admins in this team yet — add them in Admin → Teams.'}</div>`) + '</div>';
     $('mBack').onclick = () => { mTeam = null; mSugAll = false; renderMain(); };
@@ -1038,7 +1047,7 @@
     const d = oData2; if (!d) return;
     const q = ($('oSearch').value || '').trim().toLowerCase();
     const all = d.clients.filter((c) => c.spend > 0 || c.orders > 0);
-    const t = all.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, spendW: a.spendW + (c.orders ? c.spend : 0) }), { spend: 0, orders: 0, spendW: 0 });
+    const t = all.reduce((a, c) => ({ spend: a.spend + c.spend, orders: a.orders + c.orders, spendW: a.spendW + (c.orders ? ordSpendOf(c) : 0) }), { spend: 0, orders: 0, spendW: 0 });
     const avg = t.orders ? t.spendW / t.orders : null;
     rollTo($('oCpo'), avg != null ? money(avg) : '–');
     rollTo($('oOrders'), t.orders.toLocaleString('en-US'));
@@ -1048,9 +1057,9 @@
     // cards
     const tone = (cpo) => (cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid');
     const toneTxt = { good: 'cheap', mid: 'average', bad: 'expensive', '': '' };
-    const minCpo = Math.min(...all.filter((c) => c.orders).map((c) => c.spend / c.orders));
+    const minCpo = Math.min(...all.filter((c) => c.orders).map((c) => ordSpendOf(c) / c.orders));
     const list = all.filter((c) => !q || [c.name, ...c.pages.map((x) => x.page)].some((x) => String(x).toLowerCase().includes(q)))
-      .map((c) => ({ ...c, cpo: c.orders ? c.spend / c.orders : null }));
+      .map((c) => ({ ...c, cpo: c.orders ? ordSpendOf(c) / c.orders : null }));
     const cmp = { cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9), orders: (a, b) => b.orders - a.orders, spend: (a, b) => b.spend - a.spend }[oSortK] || ((a, b) => 0);
     list.sort((a, b) => cmp(a, b) || b.spend - a.spend);
     $('oCards').innerHTML = list.map((c, i) => {
@@ -1058,7 +1067,7 @@
       const pages = c.pages.filter((x) => x.spend > 0 || x.orders > 0).sort((a, b) => b.orders - a.orders || b.spend - a.spend);
       return `<article class="ocard ${tn}" style="--i:${Math.min(i, 12)}">
         <header><div class="oc-n"><b>${esc(c.name)}</b>${typeTags(c.type)}</div><div class="oc-cpo ${tn}"><span class="num">${c.cpo != null ? money(c.cpo) : '–'}</span><small>${c.cpo != null ? 'per order' : 'no orders'}</small></div></header>
-        <div class="oc-sub"><span><b class="num">${c.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(c.spend)}</span> spent</div>
+        <div class="oc-sub"><span><b class="num">${c.orders.toLocaleString('en-US')}</b> orders</span><span>·</span><span class="num">${money(c.spend)}</span> spent${c.orders && c.spend - ordSpendOf(c) > 0.5 ? `<span class="oc-noord" title="Spend on this client's Pages that had no orders — not counted in cost per order">· ${money(c.spend - ordSpendOf(c))} on Pages with no orders</span>` : ''}</div>
         ${c.cpo != null ? `<div class="oc-bar ${tn}" title="${toneTxt[tn]} compared with your average ${money(avg)}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] === 'average' ? 'about average' : toneTxt[tn]} · avg ${money(avg)}</div>` : '<div class="oc-tone">Spent but no orders matched — check the Page ID in the client.</div>'}
         ${pages.length > 1 || (pages.length === 1 && pages[0].page !== c.name) ? `<ul class="oc-pages">${pages.map((x) => `<li><span class="op-n" title="${esc(x.page)}">${pageLabel(x)}</span><span class="op-o num">${x.orders ? x.orders.toLocaleString('en-US') : '–'}</span><span class="op-c num ${tone(x.orders ? x.spend / x.orders : null)}">${x.orders ? money(x.spend / x.orders) : '–'}</span></li>`).join('')}</ul>` : ''}
       </article>`;

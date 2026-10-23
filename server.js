@@ -252,10 +252,18 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   for (const r of ordRows) { byId[String(r.page_id)] = r.orders; if (r.page_name) byName[nm(r.page_name)] = (byName[nm(r.page_name)] || 0) + r.orders; }
   const users = [], seenPages = new Map();
   for (const u of await db.allUsers()) {
-    const [ps, clients] = await Promise.all([sync.pageSpend(u.fb_id, from, to), db.listClients(u.fb_id)]);
+    const [ps, clients, dash, unl] = await Promise.all([sync.pageSpend(u.fb_id, from, to), db.listClients(u.fb_id), sync.dashboard(u.fb_id, from, to), sync.unmatchedSpend(u.fb_id, from, to)]);
     const cName = Object.fromEntries(clients.map((c) => [c.id, c.name]));
     const pages = [];
-    for (const [cid, list] of Object.entries(ps)) for (const p of list) {
+    // Spend per client = the saved entries (same as the Dashboard); Pages are scaled to add up to it.
+    const per = {};
+    for (const dc of dash.clients) {
+      if (!(dc.spend > 0)) continue;
+      const raw = ps[dc.id] || [];
+      per[dc.id] = raw.length ? sync.scalePages(raw, dc.spend)
+        : [{ page: dc.name + ' (Page not known)', pageId: '', named: true, spend: dc.spend, live: dc.liveSpend, post: dc.postSpend, list: [{ id: `entry:${u.fb_id}:${dc.id}`, spend: dc.spend }] }];
+    }
+    for (const [cid, list] of Object.entries(per)) for (const p of list) {
       const orders = (p.pageId && byId[String(p.pageId)]) || byName[nm(p.page)] || byName[nm(p.guess)] || 0;
       // Campaign IDs with their spend: two people syncing the same ad account see the same campaigns,
       // so team and company totals count each campaign once.
@@ -269,8 +277,8 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
     pages.sort((a, b) => b.spend - a.spend);
     const spend = pages.reduce((t, p) => t + p.spend, 0), orders = pages.reduce((t, p) => t + p.orders, 0);
     const ordSpend = pages.filter((p) => p.orders > 0).reduce((t, p) => t + p.spend, 0);
-    if (!pages.length && !clients.length) continue;
-    users.push({ id: u.fb_id, name: u.name, you: u.fb_id === req.user.fb_id, spend: Math.round(spend * 100) / 100, orders, ordSpend: Math.round(ordSpend * 100) / 100, clients: clients.filter((c) => !c.archived).length, pages });
+    if (!pages.length && !clients.length && !unl.spend) continue;
+    users.push({ id: u.fb_id, name: u.name, you: u.fb_id === req.user.fb_id, spend: Math.round(spend * 100) / 100, orders, ordSpend: Math.round(ordSpend * 100) / 100, clients: clients.filter((c) => !c.archived).length, pages, unlinked: { spend: unl.spend, pages: unl.pages.slice(0, 12) }, _unl: unl.pages });
   }
   users.sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
   // Totals: a Page boosted from two accounts has its orders counted once.
@@ -279,7 +287,10 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   for (const v of seenPages.values()) { const sp = [...v.camps.values()].reduce((a, b) => a + b, 0); tot.spend += sp; tot.orders += v.orders; if (v.orders > 0) tot.ordSpend += sp; }
   tot.shared = Math.max(0, Math.round((added - tot.spend) * 100) / 100);
   tot.spend = Math.round(tot.spend * 100) / 100; tot.ordSpend = Math.round(tot.ordSpend * 100) / 100;
-  res.json({ from, to, totals: tot, users, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
+  const unlinked = { spend: 0 }; { const seen = new Map(); for (const u of users) for (const p of u._unl) for (const [id, v] of p.camps || []) if (!seen.has(id)) seen.set(id, v); unlinked.spend = Math.round([...seen.values()].reduce((a, b) => a + b, 0) * 100) / 100; }
+  for (const u of users) { delete u._unl; u.unlinked.pages = u.unlinked.pages.map(({ camps, ...p }) => p); }
+  tot.unlinked = unlinked.spend;
+  res.json({ from, to, totals: tot, users, quality: await orders.periodQuality(from, to), teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
 }));
 api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;

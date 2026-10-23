@@ -479,8 +479,8 @@ async function report(owner, from, to, src = 'all') {
   const rows = given && given.length ? given : (await q(`SELECT page_id, max(page_name) AS page_name, sum(${col})::int AS orders, sum(new_c)::int AS new_c FROM page_orders WHERE day BETWEEN $1 AND $2 GROUP BY page_id`, [from, to])).rows;
   const clients = d.clients.filter((c) => !c.archived || c.spend > 0).map((c) => {
     const o = oc.clients[c.id] || { orders: 0, newC: 0, oldC: 0, pages: {} };
-    const pg = (pages[c.id] || []).map((p) => ({ page: p.page, pageId: p.pageId, named: p.named, spend: p.spend, live: p.live, post: p.post, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
-    return { id: c.id, name: c.name, type: c.type, spend: c.spend, live: c.liveSpend, post: c.postSpend, orders: o.orders, newC: o.newC, oldC: o.oldC, pages: pg };
+    const pg = sync.scalePages(pages[c.id] || [], c.spend).map((p) => ({ page: p.page, pageId: p.pageId, named: p.named, spend: p.spend, live: p.live, post: p.post, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
+    return { id: c.id, name: c.name, type: c.type, spend: c.spend, live: c.liveSpend, post: c.postSpend, orders: o.orders, ordSpend: sync.orderSpend(pg, o.orders, c.spend), newC: o.newC, oldC: o.oldC, pages: pg };
   });
   const matched = new Set(); for (const c of Object.values(oc.clients)) for (const k of Object.keys(c.pages)) matched.add(k);
   // Only Pages this person actually boosts (seen in their synced ads) — other teams' Pages stay private.
@@ -491,8 +491,13 @@ async function report(owner, from, to, src = 'all') {
   let prev = null;
   try {
     const len = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1, pf = sync.addDays(from, -len), pt = sync.addDays(from, -1);
-    const [pd, po] = await Promise.all([sync.dashboard(owner, pf, pt), byClient(owner, pf, pt, src)]);
-    let ps = 0, pn = 0; for (const c of pd.clients) { const o = po.clients[c.id]; if (o && o.orders) { ps += c.spend; pn += o.orders; } }
+    const [pd, po, pp] = await Promise.all([sync.dashboard(owner, pf, pt), byClient(owner, pf, pt, src), sync.pageSpend(owner, pf, pt)]);
+    let ps = 0, pn = 0;
+    for (const c of pd.clients) {
+      const o = po.clients[c.id]; if (!o || !o.orders) continue;
+      const pg = sync.scalePages(pp[c.id] || [], c.spend).map((p) => ({ spend: p.spend, orders: o.pages[p.pageId] || o.pages['name:' + norm(p.page)] || 0 }));
+      ps += sync.orderSpend(pg, o.orders, c.spend); pn += o.orders;
+    }
     prev = { from: pf, to: pt, spend: Math.round(ps * 100) / 100, orders: pn };
   } catch (_) { prev = null; }
   return { from, to, live: false, prev, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };

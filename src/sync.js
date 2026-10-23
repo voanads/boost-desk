@@ -645,4 +645,37 @@ async function pageSpend(owner, from, to) {
   return out;
 }
 
-module.exports = { splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+// Spend per Page comes from the raw Meta campaigns; the client's total comes from the saved daily entries (what
+// the Dashboard shows). Scale the Pages so they add up to that total, so every page of the app agrees.
+function scalePages(pages, total) {
+  const raw = pages.reduce((t, p) => t + (Number(p.spend) || 0), 0);
+  if (!(raw > 0)) return pages;
+  const f = (Number(total) || 0) / raw;
+  if (Math.abs(f - 1) < 0.0005) return pages;
+  return pages.map((p) => ({ ...p, spend: round2(p.spend * f), live: round2((p.live || 0) * f), post: round2((p.post || 0) * f), list: (p.list || []).map((x) => ({ ...x, spend: round2(x.spend * f) })) }));
+}
+// Cost per order counts only the spend on Pages that got orders. If some orders can't be tied to a Page,
+// the whole spend is used (better a bit high than too cheap).
+function orderSpend(pages, orders, total) {
+  if (!(orders > 0)) return 0;
+  const attributed = pages.reduce((t, p) => t + (p.orders || 0), 0);
+  if (attributed < orders) return round2(total);
+  return round2(pages.filter((p) => p.orders > 0).reduce((t, p) => t + (Number(p.spend) || 0), 0));
+}
+// Spend whose Page isn't linked to any client (per Page).
+async function unmatchedSpend(owner, from, to) {
+  const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
+  if (!all.length) return { spend: 0, pages: [] };
+  const clients = await clientsWithLearnedPages(owner, all, { save: false });
+  const names = { ...(await db.getSetting('pageNames', {})) };
+  const m = {}; let spend = 0;
+  for (const r of all) {
+    const v = Number(r.spend) || 0; if (!(v > 0) || matchClient(r, clients)) continue;
+    const page = r.page || (r.pageId && names[r.pageId]) || (r.pageId ? 'Page ' + r.pageId : 'Page unknown');
+    const x = m[page] || (m[page] = { page, pageId: r.pageId || '', spend: 0, camps: {} });
+    x.spend += v; spend += v; const k = r.campaignId || r.name; x.camps[k] = (x.camps[k] || 0) + v;
+  }
+  return { spend: round2(spend), pages: Object.values(m).map((x) => ({ page: x.page, pageId: x.pageId, spend: round2(x.spend), camps: Object.entries(x.camps).map(([k, v]) => [String(k), round2(v)]) })).sort((a, b) => b.spend - a.spend) };
+}
+
+module.exports = { scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

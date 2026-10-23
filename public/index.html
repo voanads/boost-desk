@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=129">
+<link rel="stylesheet" href="/assets/app.css?v=130">
 </head>
 <body>
 <div class="wrap">
@@ -64,6 +64,7 @@
   <!-- MAIN DASHBOARD (admins) -->
   <section id="tab-main" class="wrap" hidden>
     <div class="ohead"><div><h2>Main Dashboard</h2><div class="hint">Every account, the Pages it boosts, boost spend and orders from adsbox.biz.</div></div></div>
+    <div class="note onote" id="mNote" hidden></div>
     <div class="ostrip mstrip">
       <div class="ost-main"><span class="val num" id="mSpend">$0.00</span><span class="lbl">boost spend</span></div>
       <div class="ost"><span class="val num" id="mOrders">0</span><span class="lbl">orders</span></div>
@@ -525,6 +526,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=129"></script>
+<script src="/assets/app.js?v=130"></script>
 </body>
 </html>

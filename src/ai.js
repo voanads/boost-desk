@@ -100,10 +100,13 @@ async function clientData(owner, clientId, from, to) {
   }
 
   const spend = r2(liveT + postT), ord = ordersBlock ? ordersBlock.total : 0;
+  // Same rule as the rest of the app: cost per order uses the spend on Pages that got orders.
+  const scaled = sync.scalePages(pages.map((p) => ({ ...p })), spend);
+  const oSpend = ordersBlock ? sync.orderSpend(scaled.map((p) => ({ spend: p.spend, orders: (ordersBlock.perPage[p.page] || 0) })), ord, spend) : spend;
   return {
     client: { name: c.name, type: c.type, pages: c.pages || [] },
     period: { from, to, days, previous: `${pFrom} to ${pTo}` },
-    totals: { spend, live: r2(liveT), post: r2(postT), lives: lives.length, daysWithSpend: daily.length, orders: ord, costPerOrder: ord ? r2(spend / ord) : null, postResults: res, postResultType: resType, postCostPerResult: res ? r2(resSpend / res) : null },
+    totals: { spend, live: r2(liveT), post: r2(postT), lives: lives.length, daysWithSpend: daily.length, orders: ord, costPerOrder: ord ? r2(oSpend / ord) : null, spendOnPagesWithoutOrders: ord ? r2(spend - oSpend) : null, postResults: res, postResultType: resType, postCostPerResult: res ? r2(resSpend / res) : null },
     previous: prev ? { ...prev, orders: ordersBlock ? ordersBlock.previousPeriod : null, costPerOrder: prev && ordersBlock && ordersBlock.previousPeriod ? r2(prev.spend / ordersBlock.previousPeriod) : null } : null,
     daily, lives: lives.slice(-40), pages, orders: ordersBlock, boostSetups: setups,
   };

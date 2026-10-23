@@ -3062,6 +3062,7 @@ Thank you for working with Ads Box!`,
         showTab(['admin', 'board', 'adaccts'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
+      { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
       loadChats(); loadCheck();
       date = me.today || date;
       $('whoName').textContent = me.name;

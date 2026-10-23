@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=145">
+<link rel="stylesheet" href="/assets/app.css?v=146">
 </head>
 <body>
 <div class="wrap">
@@ -148,21 +148,21 @@
 
   <!-- DASHBOARD -->
   <section id="tab-dashboard" class="wrap">
-    <div class="dhead">
-      <div class="pnav dtop">
-        <span class="spacer"></span>
-        <button id="syncBtn" class="primary syncbtn" title="Pulls the last 30 days from Ads Manager — or the period you're viewing, if it's older">Sync from Meta</button>
-        <button id="dTeamReport" class="teambtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Team report</span></button>
+    <div class="phead">
+      <div class="phead-t"><span class="hint" id="dGreet"></span><h2>Dashboard</h2></div>
+      <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
+      <div class="phead-a">
+      <button id="syncBtn" class="primary syncbtn" title="Pulls the last 30 days from Ads Manager — or the period you're viewing, if it's older">Sync from Meta</button>
+      <button id="dTeamReport" class="teambtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Team report</span></button>
       </div>
     </div>
     <div class="progress" id="syncProg" hidden>
       <div class="ptext"><span id="syncProgText">Starting…</span><span class="num hint" id="syncProgTime"></span></div>
       <div class="pbar"><i id="syncProgBar"></i></div>
     </div>
-    <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
-    <div class="panel todo" id="todoPanel" hidden>
-      <div class="top"><h2>ការងារថ្ងៃនេះ <span class="countpill" id="todoCount"></span></h2><button type="button" class="ghost sm" id="todoToggle" aria-expanded="true">លាក់</button></div>
-      <div class="todolist" id="todoList"></div>
+    <div class="perbar" role="group" aria-label="Period">
+      <div class="pb-nav"><button class="navbtn pb-prev" id="dPrev" aria-label="Previous period">‹</button><button class="pb-pick" id="dPick" aria-label="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span class="pb-label" id="dLabel">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="date" id="dDay" class="vh" tabindex="-1" aria-hidden="true"><input type="month" id="dMonth" class="vh" tabindex="-1" aria-hidden="true"><span class="rangeins" id="dRangeBox" hidden><label>From <input type="date" id="dFrom"></label><label>To <input type="date" id="dTo"></label></span><button class="navbtn pb-next" id="dNext" aria-label="Next period">›</button></div>
+      <div class="chips pb-chips" role="group" aria-label="Quick periods"><button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">7 days</button><button data-preset="30">30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="more" class="pb-more">More…</button></div>
     </div>
     <div class="summary">
       <div class="hero"><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Total spent</span><span class="val num" id="dSpend">$0.00</span><span class="sub num" id="dTax"></span></div>
@@ -171,10 +171,8 @@
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/></svg>Clients with spend</span><span class="val num" id="dActive">0</span><span class="sub" id="dActiveSub"></span></div>
       <div><span class="lbl"><svg class="sico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Post cost per result</span><span class="val num" id="dCpr">–</span><span class="sub" id="dRes"></span></div>
     </div>
-    <div class="perbar" role="group" aria-label="Period">
-      <div class="pb-nav"><button class="navbtn pb-prev" id="dPrev" aria-label="Previous period">‹</button><button class="pb-pick" id="dPick" aria-label="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span class="pb-label" id="dLabel">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><input type="date" id="dDay" class="vh" tabindex="-1" aria-hidden="true"><input type="month" id="dMonth" class="vh" tabindex="-1" aria-hidden="true"><span class="rangeins" id="dRangeBox" hidden><label>From <input type="date" id="dFrom"></label><label>To <input type="date" id="dTo"></label></span><button class="navbtn pb-next" id="dNext" aria-label="Next period">›</button></div>
-      <div class="chips pb-chips" role="group" aria-label="Quick periods"><button data-preset="today">Today</button><button data-preset="yesterday">Yesterday</button><button data-preset="7">7 days</button><button data-preset="30">30 days</button><button data-preset="thisMonth">This month</button><button data-preset="lastMonth">Last month</button><button data-preset="more" class="pb-more">More…</button></div>
-    </div>
+    <div class="dgrid">
+      <div class="dmain">
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
       <div class="chart" id="dChart"></div>
@@ -203,6 +201,14 @@
       <h2>Spend not matched to a client</h2>
       <div class="hint">Add the Page as a new client, or add it to an existing client who owns it. The next sync picks it up.</div>
       <div class="tablewrap"><table><thead><tr><th>Campaigns</th><th class="r">Count</th><th class="r">Spend</th><th>Match to</th></tr></thead><tbody id="unmatchedBody"></tbody></table></div>
+    </div>
+      </div>
+      <aside class="dside">
+    <div class="panel todo" id="todoPanel" hidden>
+      <div class="top"><h2>ការងារថ្ងៃនេះ <span class="countpill" id="todoCount"></span></h2><button type="button" class="ghost sm" id="todoToggle" aria-expanded="true">លាក់</button></div>
+      <div class="todolist" id="todoList"></div>
+    </div>
+      </aside>
     </div>
   </section>
 
@@ -603,6 +609,6 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/app.js?v=145"></script>
+<script src="/assets/app.js?v=146"></script>
 </body>
 </html>

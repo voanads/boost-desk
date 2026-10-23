@@ -1043,9 +1043,8 @@ body{font-size:.97rem;letter-spacing:0}
   nav.tabs .full{display:inline!important} nav.tabs .short{display:none!important}
   nav.tabs button[aria-selected=true]{box-shadow:none!important;font-weight:600!important}
   header.appbar .who{margin-top:auto;flex-wrap:wrap;padding:0 8px}
-  body:not([data-tab=clients]):not([data-tab=main]):not([data-tab=board]):not([data-tab=adaccts]) .wrap{max-width:1120px!important}
-  body[data-tab=clients] .wrap,body[data-tab=main] .wrap,body[data-tab=board] .wrap,body[data-tab=adaccts] .wrap{max-width:none;margin-left:0;margin-right:0}
-  body[data-tab=clients],body[data-tab=main],body[data-tab=board],body[data-tab=adaccts]{padding-right:28px}
+  body .wrap{max-width:none!important;margin-left:0!important;margin-right:0!important}
+  body{padding-right:28px!important}
 }
 @media (max-width:760px){
   .summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}
@@ -2167,3 +2166,30 @@ html[data-size=xl]{font-size:19px}
 #aaSearch{box-sizing:border-box;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;font:inherit;color:var(--ink);min-height:44px}
 #aaSearch:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
 
+
+/* ---------- Redesign layout for every page (colours unchanged) ---------- */
+.phead{display:flex;align-items:center;gap:var(--s-3) var(--s-4);flex-wrap:wrap;margin-bottom:var(--s-4)}
+.phead-t{display:flex;flex-direction:column;gap:2px;margin-right:auto}
+.phead-t h2{margin:0;font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+.phead-t .hint:empty{display:none}
+.phead .syncinfo{font-size:var(--fs-md);color:var(--muted);max-width:520px}
+.phead .syncinfo .dot{width:8px;height:8px;margin-top:6px}
+.phead-a{display:flex;gap:var(--s-2);flex-wrap:wrap}
+.phead-a button{min-height:44px}
+/* page titles everywhere */
+.chead2 h2,.ohead h2,.bhead h2,#tab-accounts>.top h2{font-size:1.5rem!important;font-weight:700;letter-spacing:-.02em}
+/* number strips become separate cards */
+.summary{display:grid!important;grid-template-columns:1.4fr!important;grid-auto-flow:column!important;grid-auto-columns:minmax(0,1fr)!important;gap:var(--s-3)!important;background:none!important;border:none!important;overflow:visible!important;box-shadow:none!important}
+.summary>div{background:var(--surface);border:1px solid var(--line)!important;border-radius:var(--r-xl)!important;padding:18px 20px!important;box-shadow:var(--shadow-sm)}
+.summary>div.hero{border-color:transparent!important;box-shadow:var(--shadow-md)}
+.summary>div+div{border-left:1px solid var(--line)!important}
+/* Dashboard: clients on the left, today's work on the right */
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:var(--s-4);align-items:start}
+.dmain{display:flex;flex-direction:column;gap:var(--s-4);min-width:0}
+.dmain>.panel{margin:0}
+.dside{display:flex;flex-direction:column;gap:var(--s-4);position:sticky;top:84px}
+.dside .panel{margin:0}
+.dside .todo .todo-it{padding:10px 12px}
+#tab-dashboard .perbar,#tab-dashboard .summary{margin-bottom:var(--s-4)}
+@media (max-width:1400px){.dgrid{grid-template-columns:1fr}.dside{position:static;order:-1}}
+@media (max-width:760px){.summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}.summary>div.hero{grid-column:1/-1}.summary>div{padding:14px 16px!important}.phead-a{width:100%}.phead-a button{flex:1}}

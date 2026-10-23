@@ -192,4 +192,80 @@ async function clientAdvice(owner, clientId, { from, to, lang = 'en', question =
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, clientData };
+// ---------- daily plan per client: suggestions for each Page + today's tasks ----------
+const DAILY_SYSTEM = `You are the ads advisor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders come from adsbox.biz per Page.
+
+You get ONE client's numbers for the last days (yesterday is the most recent full day). Write the plan for TODAY for the media buyer.
+
+Format exactly:
+## Today
+One line: how yesterday went (spend, orders, cost per order) vs the days before.
+
+Then one section per Facebook Page that had spend, biggest first:
+## <Page name>
+- What happened (numbers).
+- What to do today for this Page (budget, live time, post to boost or stop, audience or video to test).
+
+## Tasks
+- [ ] 3 to 6 short, concrete tasks for today, each starting with a verb, tied to a Page and a number.
+
+Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if orders are missing say so and judge by messages and spend per live; be short — max about 220 words.`;
+
+async function dailyPlan(owner, clientId, { lang = 'en', force = false } = {}) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  const today = sync.todayIn(), wb = await workbook(owner, clientId);
+  if (!force && wb.ai && wb.ai.day === today && wb.ai.lang === lang && wb.ai.text) return wb.ai;
+  const from = sync.addDays(today, -7), to = today;
+  const data = await clientData(owner, clientId, from, to);
+  if (!data.totals.spend && !data.totals.orders) {
+    const ai = { day: today, lang, at: new Date().toISOString(), text: lang === 'km' ? 'មិនមានការចំណាយ Boost ក្នុង ៧ ថ្ងៃចុងក្រោយទេ។' : 'No boost spend in the last 7 days — nothing to plan.', empty: true };
+    wb.ai = ai; await saveWorkbook(owner, clientId, wb); return ai;
+  }
+  const used = Number(await db.getUserSetting(owner, `aiUse:${today}`, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const langLine = lang === 'km' ? 'Write the whole answer in Khmer (ខ្មែរ). Keep Page names, numbers, $, the heading "## Tasks" and the "- [ ]" task markers exactly as they are.' : 'Write the answer in simple English.';
+  const out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, DAILY_SYSTEM, [{ role: 'user', content: `${langLine}\nToday is ${today}.\n\nClient data (JSON):\n${JSON.stringify(data)}` }]);
+  await db.setUserSetting(owner, `aiUse:${today}`, used + 1);
+  // The "- [ ]" lines become today's tasks (ticked ones from earlier stay as they are).
+  const tasks = [];
+  for (const line of out.text.split('\n')) { const m = line.match(/^\s*[-*]\s*\[\s?\]\s*(.+)$/); if (m) tasks.push(m[1].trim().slice(0, 200)); }
+  const text = out.text.replace(/^\s*[-*]\s*\[\s?\]\s*/gm, '- ');
+  const ai = { day: today, lang, at: new Date().toISOString(), text: text.replace(/\n## (Tasks|កិច្ចការ)[^\n]*\n(?:- .*\n?)*/i, '\n').trim() || text, taskCount: tasks.length };
+  const fresh = await workbook(owner, clientId);
+  fresh.ai = ai;
+  fresh.tasks = fresh.tasks.filter((t) => !(t.from === 'ai' && t.day === today && !t.done)); // a new plan replaces today's open AI tasks
+  for (const t of tasks) if (!fresh.tasks.some((x) => x.day === today && x.text === t)) fresh.tasks.push({ id: crypto.randomBytes(5).toString('hex'), text: t, from: 'ai', day: today, done: false });
+  await saveWorkbook(owner, clientId, fresh);
+  return ai;
+}
+
+// ---------- notes and tasks per client (per user) ----------
+async function workbook(owner, clientId) {
+  const w = (await db.getUserSetting(owner, `cwb:${Number(clientId)}`, null)) || {};
+  const keep = sync.addDays(sync.todayIn(), -30);
+  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks: (w.tasks || []).filter((t) => !t.done || (t.doneAt || '').slice(0, 10) >= keep), ai: w.ai || null, ticks: w.ticks || {} };
+}
+async function saveWorkbook(owner, clientId, w) {
+  w.tasks = (w.tasks || []).slice(-80);
+  const keep = sync.addDays(sync.todayIn(), -7); for (const k of Object.keys(w.ticks || {})) if (k.slice(0, 10) < keep) delete w.ticks[k];
+  await db.setUserSetting(owner, `cwb:${Number(clientId)}`, w);
+  return w;
+}
+
+// Every morning: a plan for each client that boosted in the last 3 days (stops early if the AI says it's busy).
+async function morningPlans(log = () => {}) {
+  const cfg = await keyConfig(); if (!cfg.key) return 0;
+  let n = 0; const today = sync.todayIn(), since = sync.addDays(today, -3);
+  for (const u of await db.allUsers()) {
+    const lang = (await db.getUserSetting(u.fb_id, 'aiLang', 'en')) === 'km' ? 'km' : 'en';
+    const active = new Set((await db.monthEntries(u.fb_id, since, today)).filter((r) => { const e = r.data || {}; return Object.values(e.lives || {}).some((l) => Number(l && l.spend) > 0) || Number((e.post || {}).spend) > 0; }).map((r) => r.client_id));
+    for (const c of (await db.listClients(u.fb_id)).filter((x) => !x.archived && active.has(x.id))) {
+      try { await dailyPlan(u.fb_id, c.id, { lang }); n++; }
+      catch (e) { if (e.status === 429) { log('AI daily plans paused: ' + e.message); return n; } log(`AI plan for ${c.name} failed: ${e.message}`); }
+    }
+  }
+  return n;
+}
+
+module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans };

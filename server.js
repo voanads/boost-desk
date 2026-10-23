@@ -1035,6 +1035,48 @@ api.post('/ai/client/:id', wrap(async (req, res) => {
   try { res.json(await require('./src/ai').clientAdvice(req.user.fb_id, req.params.id, { from: b.from, to: b.to, lang: b.lang === 'km' ? 'km' : 'en', question: String(b.question || ''), fresh: !!b.fresh })); }
   catch (e) { if (e.status) return res.status(e.status).json({ error: e.message, notSetUp: !!e.notSetUp }); throw e; }
 }));
+// Client workbook: today's AI plan (per Page + tasks), the user's notes and tasks, and ticks on today's work.
+const AI = () => require('./src/ai');
+const ownClient = async (req) => (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+api.get('/clients/:id/workbook', wrap(async (req, res) => { if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' }); res.json({ today: sync.todayIn(), ...(await AI().workbook(req.user.fb_id, req.params.id)) }); }));
+api.post('/clients/:id/plan', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const lang = (req.body || {}).lang === 'km' ? 'km' : 'en'; await db.setUserSetting(req.user.fb_id, 'aiLang', lang);
+  try { await AI().dailyPlan(req.user.fb_id, req.params.id, { lang, force: !!(req.body || {}).force }); res.json({ today: sync.todayIn(), ...(await AI().workbook(req.user.fb_id, req.params.id)) }); }
+  catch (e) { if (e.status) return res.status(e.status).json({ error: e.message, notSetUp: !!e.notSetUp }); throw e; }
+}));
+api.put('/clients/:id/notes', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const w = await AI().workbook(req.user.fb_id, req.params.id); w.notes = String((req.body || {}).notes || '').slice(0, 5000); w.notesAt = new Date().toISOString();
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ ok: true, notesAt: w.notesAt });
+}));
+api.post('/clients/:id/tasks', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const text = String((req.body || {}).text || '').trim().slice(0, 200); if (!text) return res.status(400).json({ error: 'Type the task.' });
+  const w = await AI().workbook(req.user.fb_id, req.params.id);
+  w.tasks.push({ id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name });
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
+}));
+api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const w = await AI().workbook(req.user.fb_id, req.params.id), t = w.tasks.find((x) => x.id === req.params.tid);
+  if (!t) return res.status(404).json({ error: 'Task not found.' });
+  if ((req.body || {}).done != null) { t.done = !!req.body.done; t.doneAt = t.done ? new Date().toISOString() : null; t.doneBy = t.done ? req.user.name : null; }
+  if (typeof (req.body || {}).text === 'string' && req.body.text.trim()) t.text = req.body.text.trim().slice(0, 200);
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
+}));
+api.delete('/clients/:id/tasks/:tid', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const w = await AI().workbook(req.user.fb_id, req.params.id); w.tasks = w.tasks.filter((x) => x.id !== req.params.tid);
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
+}));
+// Tick an item of "Today's work" (report to send, client not boosting…) as done for today.
+api.put('/clients/:id/tick', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const key = sync.todayIn() + ':' + String((req.body || {}).key || '').slice(0, 60);
+  const w = await AI().workbook(req.user.fb_id, req.params.id); if ((req.body || {}).done) w.ticks[key] = { at: new Date().toISOString(), by: req.user.name }; else delete w.ticks[key];
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
+}));
 api.get('/ai/status', wrap(async (req, res) => { const c = await require('./src/ai').publicConfig(); res.json({ hasKey: c.hasKey }); }));
 api.put('/admin/ai', ownerOnly, wrap(async (req, res) => res.json(await require('./src/ai').saveKey((req.body || {}).key === null ? null : String((req.body || {}).key || ''), req.user.name))));
 // Check one day against adsbox.biz (admins), and take adsbox's numbers for a period when they match its Sales Overview.

@@ -133,6 +133,9 @@ function start() {
   H.register('Spend to adsbox.biz', 30, 'every 30 minutes, at :15 and :45');
   cron.schedule('15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
   cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
+  // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
+  H.register('AI daily plans', 1440, 'daily at 06:40');
+  cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Health check', 5, 'every 5 minutes');
   cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);

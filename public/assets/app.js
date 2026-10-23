@@ -563,13 +563,14 @@
   const cAi = {}, cFormEl = document.getElementById('cForm'); // the edit form moves between the dialog and the detail panel
   const parkForm = () => { if (cFormEl.parentElement !== $('cDlg')) $('cDlg').appendChild(cFormEl); };
   const monthRange = () => { const t = (me && me.today) || iso(new Date()); return [t.slice(0, 8) + '01', t]; };
+  const cWb = {}; // per client: { notes, tasks, ai, ticks, today } from /clients/:id/workbook
+  const IC_TODO = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
-    if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s work, AI suggestions and the client\'s settings in one place.</span></div>'; return; }
+    if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
     const m = cMonth[c.id] || {}, o = cOrd[c.id] || {}, cpo = o.orders && o.spend ? o.spend / o.orders : null;
-    const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id) : null;
-    const IC = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
-    const keepForm = !!box.querySelector('#cdForm') && cFormEl.parentElement === box.querySelector('#cdForm') && !fresh;
+    const keepForm = !!box.querySelector('#cdForm') && cFormEl.parentElement === box.querySelector('#cdForm') && !fresh && box.querySelector('.cd-in') && Number(box.querySelector('.cd-in').dataset.cdid) === c.id;
+    const notesVal = keepForm && $('cdNotes') ? $('cdNotes').value : null; // keep what is being typed
     parkForm(); // rescue the form before the panel is redrawn
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
@@ -580,43 +581,87 @@
         <div class="cd-stat"><span class="lbl">Boost posts</span><b class="num">${money(m.postSpend || 0)}</b><span class="sub">${m.days || 0} day${m.days === 1 ? '' : 's'} with spend</span></div>
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cpo ? money(cpo) + ' per order' : 'from adsbox.biz'}</span></div>
       </div>
-      <section class="cd-sec"><div class="cd-sec-h"><h4>📋 Today's work</h4>${todo ? `<span class="countpill">${todo.length}</span>` : ''}</div>
-        ${todo === null ? '<div class="hint">Loading…</div>' : todo.length ? `<div class="cd-todo">${todo.map((x) => `<div class="todo-it ${esc(x.level || '')}"><span class="todo-ic" aria-hidden="true">${IC[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span></div>${x.action === 'report' ? `<button type="button" class="sm primary" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div>`).join('')}</div>` : '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}
-      </section>
-      ${aiSection(c)}
+      <div class="cd-cols">
+        <div class="cd-col">${workSection(c)}
+          <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
+            <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
+        </div>
+        <div class="cd-col">${aiSection(c)}</div>
+      </div>
       <section class="cd-sec"><div class="cd-sec-h"><h4>⚙ Client settings</h4></div><div id="cdForm"></div></section>
     </div>`;
     $('cdBack').onclick = () => { $('cWrap').classList.remove('show-detail'); window.scrollTo({ top: $('tab-clients').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); };
-    const rb = box.querySelector('[data-cdrep]'); if (rb) rb.onclick = () => openReportDlg({ kind: 'client', cid: c.id, from: (cTodo && cTodo.today) || me.today, to: (cTodo && cTodo.today) || me.today, label: nice((cTodo && cTodo.today) || me.today) });
-    // the edit form, inline
+    let nt; $('cdNotes').oninput = () => { $('cdNotesSt').textContent = 'Saving…'; clearTimeout(nt); nt = setTimeout(async () => { try { const r = await api(`/clients/${c.id}/notes`, { method: 'PUT', body: { notes: $('cdNotes').value } }); if (cWb[c.id]) { cWb[c.id].notes = $('cdNotes').value; cWb[c.id].notesAt = r.notesAt; } if ($('cdNotesSt')) $('cdNotesSt').textContent = 'Saved'; } catch (e) { if ($('cdNotesSt')) $('cdNotesSt').textContent = e.message; } }, 700); };
     if (!keepForm || cEdit !== c) openClientDlg(c, null, { inline: true }); else $('cdForm').appendChild(cFormEl);
     if (!calm && fresh && box.animate) box.animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.22,1,.36,1)' });
-    if (aiReady !== false && !cAi[c.id + '|' + aiLang]) runClientAi(c.id);
+    bindWork(c);
+    if (!cWb[c.id]) loadWorkbook(c.id);
   }
-  async function runClientAi(cid, fresh = false) {
-    const k = cid + '|' + aiLang, [from, to] = monthRange();
+  async function loadWorkbook(cid) {
+    cWb[cid] = { loading: true, tasks: [], ticks: {} };
+    try { cWb[cid] = await api(`/clients/${cid}/workbook`); } catch (e) { cWb[cid] = { tasks: [], ticks: {}, err: e.message }; }
+    if (cid === cSel) { paintWork(); paintAi(); const n = $('cdNotes'); if (n && !n.value && cWb[cid].notes && document.activeElement !== n) n.value = cWb[cid].notes; }
+    const w = cWb[cid];
+    if (aiReady !== false && !w.err && !(w.ai && w.ai.day === w.today && w.ai.lang === aiLang)) runClientAi(cid);
+  }
+  // Today's work (from the rules) + tasks (AI plan and your own), all tickable.
+  function workSection(c) {
+    const w = cWb[c.id] || { tasks: [], ticks: {} }, today = w.today || (cTodo && cTodo.today) || me.today;
+    const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id) : [];
+    const tick = (k) => !!(w.ticks || {})[today + ':' + k];
+    const tasks = (w.tasks || []).slice().sort((a, b) => (a.done - b.done) || (b.day || '').localeCompare(a.day || ''));
+    const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
+    const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
+    const rows = [
+      ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
+      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'ai' ? 'AI plan' : 'Your task'}${t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) : ''}</span></div><button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
+    ];
+    return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
+      <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
+      <form class="ai-ask" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="submit" class="sm">Add</button></form></section>`;
+  }
+  function paintWork() {
+    const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
+    sec.outerHTML = workSection(c); bindWork(c);
+  }
+  function bindWork(c) {
+    const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true; try { cWb[c.id] = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text } }); paintWork(); setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0); } catch (e) { toast(e.message); inp.disabled = false; } };
+    const rb = document.querySelector('#cDetail [data-cdrep]'); if (rb) rb.onclick = () => openReportDlg({ kind: 'client', cid: c.id, from: (cTodo && cTodo.today) || me.today, to: (cTodo && cTodo.today) || me.today, label: nice((cTodo && cTodo.today) || me.today) });
+  }
+  async function runClientAi(cid, force = false) {
+    const k = cid + '|' + aiLang;
     cAi[k] = { loading: true }; if (cid === cSel) paintAi();
-    try { const r = await api(`/ai/client/${cid}`, { method: 'POST', body: { from, to, lang: aiLang, fresh } }); cAi[k] = { text: r.text, cached: r.cached }; }
+    try { const r = await api(`/clients/${cid}/plan`, { method: 'POST', body: { lang: aiLang, force } }); cWb[cid] = r; cAi[k] = { done: true }; if (cid === cSel) paintWork(); }
     catch (e) { cAi[k] = { err: e.message }; if (/not set up/i.test(e.message)) aiReady = false; }
     if (cid === cSel) paintAi();
   }
   function aiSection(c) {
-    const st = cAi[c.id + '|' + aiLang];
-    const body = aiReady === false ? `<div class="hint">${me && me.isOwner ? 'Add a Gemini or Claude key in <b>Admin → Settings → AI advice</b> to get suggestions here.' : 'AI suggestions are not set up yet — ask the app owner.'}</div>`
-      : !st || st.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading this month\'s numbers…</div>'
-      : st.err ? `<div class="note">${esc(st.err)}</div>` : `<div class="ai-text">${mdLite(st.text)}</div>`;
-    return `<section class="cd-sec aisec"><div class="cd-sec-h"><h4>✨ AI suggestions</h4><span class="hint">This month${st && st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span>
+    const st = cAi[c.id + '|' + aiLang], w = cWb[c.id] || {}, plan = w.ai && w.ai.lang === aiLang ? w.ai : null;
+    const body = aiReady === false ? `<div class="hint">${me && me.isOwner ? 'Add a Gemini or Claude key in <b>Admin → Settings → AI advice</b> to get a plan here every morning.' : 'AI plans are not set up yet — ask the app owner.'}</div>`
+      : st && st.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Making today\'s plan…</div>'
+      : st && st.err ? `<div class="note">${esc(st.err)}</div>`
+      : plan ? `<div class="ai-text">${mdLite(plan.text)}</div>` : w.loading || !w.today ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Loading…</div>' : '<div class="hint">No plan yet for today.</div>';
+    const when = plan ? (plan.day === w.today ? 'Today · made ' + new Date(plan.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'From ' + nice(plan.day).replace(/ \d{4}$/, '')) : 'Made every morning at 06:40';
+    return `<section class="cd-sec aisec"><div class="cd-sec-h"><h4>✨ Today's plan</h4><span class="hint">${esc(when)}</span><span class="spacer"></span>
         <div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-cdlang="en" aria-pressed="${aiLang === 'en'}">EN</button><button type="button" data-cdlang="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button></div>
-        ${aiReady === false ? '' : `<button type="button" class="ghost sm" data-cdai="${c.id}" ${st && st.loading ? 'disabled' : ''}>↻ New</button>`}</div>${body}</section>`;
+        ${aiReady === false ? '' : `<button type="button" class="ghost sm" data-cdai="${c.id}" ${st && st.loading ? 'disabled' : ''}>↻ New</button>`}</div>${body}
+        ${plan && plan.taskCount ? `<div class="hint ai-tnote">✨ ${plan.taskCount} task${plan.taskCount === 1 ? '' : 's'} from this plan were added to <b>Today's work & tasks</b>.</div>` : ''}</section>`;
   }
-  // Repaint only the AI section, so the settings form keeps what is being typed.
+  // Repaint only one section, so the form and notes keep what is being typed.
   function paintAi() {
     const sec = document.querySelector('#cDetail .aisec'), c = clients.find((x) => x.id === cSel);
     if (sec && c) sec.outerHTML = aiSection(c);
   }
-  document.addEventListener('click', (ev) => {
+  document.addEventListener('click', async (ev) => {
     const a = ev.target.closest('[data-cdai]'); if (a) { runClientAi(Number(a.dataset.cdai), true); return; }
-    const l = ev.target.closest('[data-cdlang]'); if (l) { aiLang = l.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} const k = cSel + '|' + aiLang; if (cAi[k] && !cAi[k].err) paintAi(); else runClientAi(cSel); }
+    const l = ev.target.closest('[data-cdlang]'); if (l) { aiLang = l.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} const w = cWb[cSel]; if (w && w.ai && w.ai.lang === aiLang && w.ai.day === w.today) paintAi(); else runClientAi(cSel); return; }
+    const c = clients.find((x) => x.id === cSel); if (!c || !ev.target.closest('#cDetail')) return;
+    const tk = ev.target.closest('[data-ctick]'), ts = ev.target.closest('[data-ctask]'), td = ev.target.closest('[data-ctdel]');
+    try {
+      if (tk) { const on = tk.getAttribute('aria-checked') !== 'true'; tk.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tick`, { method: 'PUT', body: { key: tk.dataset.ctick, done: on } }); paintWork(); if (on) successBadge('Done ✓'); }
+      else if (ts) { const on = ts.getAttribute('aria-checked') !== 'true'; ts.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tasks/${ts.dataset.ctask}`, { method: 'PATCH', body: { done: on } }); paintWork(); }
+      else if (td) { cWb[c.id] = await api(`/clients/${c.id}/tasks/${td.dataset.ctdel}`, { method: 'DELETE' }); paintWork(); }
+    } catch (e) { toast(e.message); paintWork(); }
   });
   $('cSearch').oninput = () => renderClients();
 

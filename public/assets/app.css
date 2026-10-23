@@ -1043,7 +1043,8 @@ body{font-size:15.5px;letter-spacing:0}
   nav.tabs .full{display:inline!important} nav.tabs .short{display:none!important}
   nav.tabs button[aria-selected=true]{box-shadow:none!important;font-weight:600!important}
   header.appbar .who{margin-top:auto;flex-wrap:wrap;padding:0 8px}
-  .wrap{max-width:1120px!important}
+  .wrap:not(#tab-clients){max-width:1120px!important}
+  #tab-clients.wrap{max-width:1600px;margin-left:0;padding-left:0}
 }
 @media (max-width:760px){
   .summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}
@@ -1696,3 +1697,33 @@ body{font-size:15.5px;letter-spacing:0}
   .cd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:no-preference){.crow{animation:fadeUp .35s var(--ease) backwards;animation-delay:calc(var(--i,0) * 25ms)}}
+
+/* Clients tab v2: wide, list at the left edge, roomier rows, two columns in the detail */
+.cwrap{grid-template-columns:minmax(300px,380px) minmax(0,1fr);gap:var(--s-5)}
+.crow{padding:14px 14px;gap:var(--s-3);grid-template-columns:40px minmax(0,1fr) auto}
+.crow .cr-av{width:40px;height:40px;font-size:var(--fs-lg)}
+.crow .cr-n b{font-size:var(--fs-2xl)}
+.crow .cr-v b{font-size:var(--fs-2xl)}
+.clist{gap:6px;padding:var(--s-2)}
+.cd-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s-4);align-items:start}
+.cd-col{display:flex;flex-direction:column;gap:var(--s-4);min-width:0}
+.cd-col>.cd-sec:first-child{border-top:none;padding-top:0}
+.cd-col>.aisec{margin-top:0}
+.task{display:flex;align-items:flex-start;gap:var(--s-2);padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease)}
+.task.warn{border-left:3px solid var(--warn)}.task.bad{border-left:3px solid var(--danger)}.task.good{border-left:3px solid var(--ok)}.task.todo{border-left:3px solid var(--brand)}
+.task .todo-ic{font-size:var(--fs-xl);width:22px;margin-top:1px}
+.task.done{opacity:.55;background:var(--bg-2)}
+.task.done .todo-t b{text-decoration:line-through}
+.tcheck{all:unset;cursor:pointer;flex:none;margin-top:1px}
+.tcheck:focus-visible .tbox{outline:2px solid var(--brand);outline-offset:2px}
+.tbox{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;border:2px solid color-mix(in srgb,var(--brand) 45%,var(--line));background:var(--surface);transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease)}
+.tbox svg{width:14px;height:14px;fill:none;stroke:var(--on-brand);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform:scale(.4);transition:opacity var(--t-fast),transform var(--t-fast) var(--ease)}
+.tcheck[aria-checked=true] .tbox{background:var(--ok);border-color:var(--ok)}
+.tcheck[aria-checked=true] .tbox svg{opacity:1;transform:none}
+.tdel{margin-left:auto;opacity:.5;padding:2px 8px}
+.task:hover .tdel{opacity:1}
+.notesec textarea{width:100%;box-sizing:border-box;resize:vertical;min-height:110px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:10px 12px;font:inherit;color:var(--ink);line-height:1.5}
+.notesec textarea:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
+.ai-tnote{margin-top:var(--s-2)}
+@media (max-width:1280px){.cd-cols{grid-template-columns:1fr}}
+.task-act{align-self:flex-start;margin-top:6px}

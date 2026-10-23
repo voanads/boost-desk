@@ -748,6 +748,25 @@ api.patch('/clients/:id', wrap(async (req, res) => {
   if (['name', 'match', 'pages', 'type', 'archived'].some((k) => k in body)) await sync.rematch(req.user);
   res.json(c);
 }));
+// Boost plan: monthly budget + lives a day, its pace, and sending it to Telegram.
+api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
+  const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  res.json(await db.updateClient(req.user.fb_id, c.id, { plan: require('./src/plan').clean(req.body || {}, c.plan) }));
+}));
+api.get('/clients/:id/boost-plan/message', wrap(async (req, res) => {
+  const P = require('./src/plan'), c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  const today = sync.todayIn(), p = await P.forClient(req.user.fb_id, c, today);
+  if (!p) return res.status(400).json({ error: 'Set a monthly budget first.' });
+  res.json({ text: P.message(c, p, req.query.lang === 'km' ? 'km' : 'en', today), pace: p, teamGroup: !!cfg.telegramChatId });
+}));
+api.post('/clients/:id/boost-plan/send', wrap(async (req, res) => {
+  const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  if (!c) return res.status(404).json({ error: 'Client not found.' });
+  const b = req.body || {};
+  res.json(await require('./src/plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en' }));
+}));
 api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 
 // Days

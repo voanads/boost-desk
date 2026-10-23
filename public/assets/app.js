@@ -599,7 +599,7 @@
       const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
       return `<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span>
-        <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span></span>
+        <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span>${(() => { const p = planPace(c, m); return p ? `<span class="cr-plan ${PLAN_ST[p.status][1]}" title="Boost plan: ${money(p.spend)} of ${money(p.b)}"><i style="--w:${Math.min(100, p.pct)}"></i><em>${p.pct}% · ${PLAN_ST[p.status][0]}</em></span>` : ''; })()}</span>
         <span class="cr-v"><b class="num">${m && m.spend ? money(m.spend) : '–'}</b><span class="hint">${o && o.orders ? `${o.orders.toLocaleString('en-US')} orders${cpo ? ' · ' + money(cpo) : ''}` : 'this month'}</span></span>
       </button>`;
     }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on the Dashboard and add the Pages it finds.'}</div>`;
@@ -624,7 +624,7 @@
   const monthRange = () => { const t = (me && me.today) || iso(new Date()); return [t.slice(0, 8) + '01', t]; };
   let cSetOpen = false; // the settings form stays hidden until ⚙ is tapped
   const cWb = {}; // per client: { notes, tasks, ai, ticks, today } from /clients/:id/workbook
-  const IC_TODO = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+  const IC_TODO = { plan: '🎯', report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
@@ -644,6 +644,7 @@
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : 'this month'}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
+      ${planStrip(c, m)}
       <div class="cd-cols">
         <div class="cd-col">${workSection(c)}
           <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
@@ -658,8 +659,74 @@
     let nt; $('cdNotes').oninput = () => { $('cdNotesSt').textContent = 'Saving…'; clearTimeout(nt); nt = setTimeout(async () => { try { const r = await api(`/clients/${c.id}/notes`, { method: 'PUT', body: { notes: $('cdNotes').value } }); if (cWb[c.id]) { cWb[c.id].notes = $('cdNotes').value; cWb[c.id].notesAt = r.notesAt; } if ($('cdNotesSt')) $('cdNotesSt').textContent = 'Saved'; } catch (e) { if ($('cdNotesSt')) $('cdNotesSt').textContent = e.message; } }, 700); };
     if (!keepForm || cEdit !== c) openClientDlg(c, null, { inline: true }); else $('cdForm').appendChild(cFormEl);
     if (!calm && fresh && box.animate) box.animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.22,1,.36,1)' });
-    bindWork(c);
+    bindWork(c); bindPlan(c);
     if (!cWb[c.id]) loadWorkbook(c.id);
+  }
+  // ---- boost plan: monthly budget + lives a day, pace bar, send to Telegram ----
+  const PLAN_ST = { on: ['On plan', 'bp-ok'], behind: ['Behind plan', 'bp-behind'], ahead: ['Ahead of plan', 'bp-warn'], over: ['Over budget', 'bp-bad'] };
+  const planOpen = {}; // client id → 'edit' | 'send'
+  const planSend = { lang: 'en', to: 'client', text: '', err: '' };
+  function planPace(c, m) {
+    const b = Number(c.plan && c.plan.budget) || 0; if (!b) return null;
+    const t = (me && me.today) || iso(new Date()), day = Number(t.slice(8, 10)), [y, mo] = t.split('-').map(Number), dim = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    const spend = Number(m && m.spend) || 0, exp = b * day / dim, left = Math.max(0, b - spend), rest = Math.max(1, dim - day + 1);
+    const status = spend > b ? 'over' : spend > exp * 1.15 ? 'ahead' : spend < exp * 0.85 ? 'behind' : 'on';
+    return { b, lives: Number(c.plan.lives) || 0, spend, pct: Math.round(spend / b * 100), timePct: Math.round(day / dim * 100), exp, left, perDay: left / rest, status, day };
+  }
+  function planStrip(c, m) {
+    const p = planPace(c, m), open = planOpen[c.id], mon = new Date(((me && me.today) || iso(new Date())) + 'T00:00:00').toLocaleString('en-US', { month: 'long' });
+    const edit = open === 'edit' ? `<form class="bp-edit" id="bpForm"><label>Monthly budget ($)<input type="number" id="bpBudget" min="0" step="10" inputmode="decimal" value="${p ? p.b : ''}" placeholder="e.g. 2000" required></label>
+        <label>Lives a day<input type="number" id="bpLives" min="0" max="20" step="1" value="${c.plan && c.plan.lives != null ? c.plan.lives : 1}"></label>
+        <label class="bp-chk"><input type="checkbox" id="bpAuto" ${c.plan && c.plan.autoSend ? 'checked' : ''} ${c.telegram ? '' : 'disabled'}> Send the plan to the client's group every Monday 9:00${c.telegram ? '' : ' <span class="hint">(needs a Telegram group)</span>'}</label>
+        <div class="bp-btns"><button type="submit" class="primary sm">Save plan</button><button type="button" class="ghost sm" data-bp="close">Cancel</button>${p ? '<button type="button" class="ghost sm bp-rm" data-bp="remove">Remove plan</button>' : ''}</div></form>` : '';
+    if (!p) return `<section class="bplan none"><div class="bp-top"><b>🎯 Boost plan</b><span class="hint">No plan yet — set a monthly budget to see if spend is on pace.</span>${open === 'edit' ? '' : '<button type="button" class="sm" data-bp="edit">+ Set boost plan</button>'}</div>${edit}</section>`;
+    const [lbl, cls] = PLAN_ST[p.status];
+    const send = open === 'send' ? `<div class="bp-send"><pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
+        <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
+          <span class="hint">Send to</span>
+          <label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''} ${c.telegram ? '' : 'disabled'}> Client's group${c.telegram ? ' · ' + esc(c.telegram_title || 'Telegram') : ' <span class="hint">(none yet)</span>'}</label>
+          ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> My team group</label>` : ''}
+          <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> Just copy the text</label>
+          <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
+    return `<section class="bplan ${cls}"><div class="bp-top"><b>🎯 Boost plan · ${esc(mon)}</b><span class="hint">${money(p.b)}/month${p.lives ? ' · ' + p.lives + ' live' + (p.lives === 1 ? '' : 's') + ' a day' : ''}${c.plan.autoSend && c.telegram ? ' · auto-sends Mondays' : ''}</span>
+        <span class="bp-st">${lbl}</span><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
+      <div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the budget, ${p.timePct}% of the month gone"><i style="width:${Math.min(100, p.pct)}%"></i><s style="left:${p.timePct}%" title="Where spend should be today"></s></div>
+      <div class="bp-nums"><span>Spent <b>${money(p.spend)}</b> of <b>${money(p.b)}</b> (${p.pct}%)</span><span>Month gone <b>${p.timePct}%</b></span><span>Left <b>${money(p.left)}</b> · <b>${money(p.perDay)}</b>/day</span>${p.lives ? `<span>Lives this month <b>${(m && m.lives) || 0}</b> / ${p.lives * p.day} planned</span>` : ''}</div>${edit}${send}</section>`;
+  }
+  function redrawPlan(c) { const sec = document.querySelector('#cDetail .bplan'); if (!sec) return; sec.outerHTML = planStrip(c, cMonth[c.id] || {}); bindPlan(c); }
+  async function loadPlanMsg(c) {
+    planSend.text = ''; planSend.err = '';
+    try { planSend.text = (await api(`/clients/${c.id}/boost-plan/message?lang=${planSend.lang}`)).text; } catch (e) { planSend.err = e.message; }
+    const el = $('bpMsg'); if (el && cSel === c.id) el.textContent = planSend.err || planSend.text;
+  }
+  async function savePlan(c, body) {
+    const u = await api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body });
+    clients = clients.map((x) => x.id === u.id ? u : x); planOpen[c.id] = null;
+    api('/todo').then((r) => { cTodo = r; renderClients(); }).catch(() => {});
+    renderClients(); return u;
+  }
+  function bindPlan(c) {
+    const sec = document.querySelector('#cDetail .bplan'); if (!sec) return;
+    sec.querySelectorAll('[data-bp]').forEach((b) => b.onclick = async () => {
+      const k = b.dataset.bp;
+      if (k === 'remove') { try { await savePlan(c, { budget: 0, autoSend: false }); toast('Boost plan removed'); } catch (e) { toast(e.message); } return; }
+      planOpen[c.id] = k === 'close' || planOpen[c.id] === k ? null : k;
+      if (planOpen[c.id] === 'send') { planSend.lang = (c.plan && c.plan.lang) || planSend.lang; if (!c.telegram && planSend.to === 'client') planSend.to = 'copy'; redrawPlan(c); loadPlanMsg(c); }
+      else { redrawPlan(c); if (planOpen[c.id] === 'edit' && $('bpBudget')) $('bpBudget').focus(); }
+    });
+    if ($('bpForm')) $('bpForm').onsubmit = async (ev) => {
+      ev.preventDefault();
+      try { await savePlan(c, { budget: Number($('bpBudget').value) || 0, lives: Number($('bpLives').value) || 0, autoSend: $('bpAuto').checked }); successBadge('Boost plan saved'); } catch (e) { toast(e.message); }
+    };
+    sec.querySelectorAll('[data-bpl]').forEach((b) => b.onclick = () => { planSend.lang = b.dataset.bpl; sec.querySelectorAll('[data-bpl]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { lang: planSend.lang } }).then((u) => { clients = clients.map((x) => x.id === u.id ? u : x); }).catch(() => {}); loadPlanMsg(c); });
+    sec.querySelectorAll('input[name="bpTo"]').forEach((r) => r.onchange = () => { planSend.to = r.value; $('bpGo').textContent = r.value === 'copy' ? 'Copy text' : 'Send now'; });
+    if ($('bpGo')) $('bpGo').onclick = async () => {
+      const b = $('bpGo');
+      if (planSend.to === 'copy') { try { await navigator.clipboard.writeText(planSend.text); toast('Copied — paste it to the client'); } catch (_) { toast('Could not copy — select the text and copy it'); } return; }
+      b.disabled = true; b.textContent = 'Sending…';
+      try { await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang } }); planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : 'Plan sent to ' + c.name); }
+      catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send now'; }
+    };
   }
   async function loadWorkbook(cid) {
     cWb[cid] = { loading: true, tasks: [], ticks: {} };
@@ -862,8 +929,8 @@
     $('todoCount').classList.toggle('done', !items.length);
     $('todoToggle').textContent = todoHidden ? 'បង្ហាញ' : 'លាក់'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
     $('todoList').hidden = todoHidden;
-    const btn = { report: 'ផ្ញើរបាយការណ៍', nogroup: 'ជ្រើសគ្រុប', invoice: 'បើកការទូទាត់', unpaid: 'បើកការទូទាត់', missing: 'បើកអតិថិជន', quiet: 'បើកអតិថិជន', high: 'បើកអតិថិជន', 'cpr-up': 'បើកអតិថិជន', 'cpr-down': 'បើកអតិថិជន', best: 'មើល Live' };
-    const IC = { ...TODO_IC, missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+    const btn = { plan: 'បើកអតិថិជន', report: 'ផ្ញើរបាយការណ៍', nogroup: 'ជ្រើសគ្រុប', invoice: 'បើកការទូទាត់', unpaid: 'បើកការទូទាត់', missing: 'បើកអតិថិជន', quiet: 'បើកអតិថិជន', high: 'បើកអតិថិជន', 'cpr-up': 'បើកអតិថិជន', 'cpr-down': 'បើកអតិថិជន', best: 'មើល Live' };
+    const IC = { ...TODO_IC, plan: '🎯', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
     const row = (it, i) => `<div class="todo-it ${it.level}${i >= items.length ? ' tip' : ''}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'បើក'}</button></div>`;
     $('todoList').innerHTML = (items.length ? items.map(row).join('') : '<div class="todo-done">🎉 ការងារអតិថិជនថ្ងៃនេះ រួចរាល់ហើយ</div>')
       + (tips.length ? `<div class="todo-sub">💡 ការណែនាំ</div>` + tips.map((t, j) => row(t, items.length + j)).join('') : '');

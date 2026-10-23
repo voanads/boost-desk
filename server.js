@@ -242,6 +242,30 @@ api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
   }));
   res.json({ today: sync.todayIn(), users: out });
 }));
+// Main Dashboard: everyone's client tasks for one day (AI daily plan tasks + their own), read-only for the COO.
+// Includes tasks left open from earlier days (only when looking at today) and earlier tasks finished on this day.
+api.get('/main/tasks', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn(), day = isDay(req.query.day) ? req.query.day : today;
+  const users = await db.allUsers(), out = {};
+  for (const u of users) out[u.fb_id] = { name: u.name, tasks: [], plans: 0, clients: 0 };
+  const cl = (await db.pool.query('SELECT id, name, owner, archived FROM clients')).rows, cName = {};
+  for (const c of cl) { cName[c.id] = c.name; if (!c.archived && out[c.owner]) out[c.owner].clients++; }
+  const rows = (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows;
+  const localDay = (iso) => { try { return sync.todayIn(undefined, new Date(iso)); } catch (_) { return ''; } };
+  for (const r of rows) {
+    const [owner, , cid] = r.key.split(':'), o = out[owner]; if (!o || !cName[cid]) continue;
+    const w = r.value || {};
+    if (w.ai && w.ai.day === day) o.plans++;
+    for (const t of w.tasks || []) {
+      const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
+      const late = t.day < day && ((!t.done && day === today) || doneDay === day);
+      if (t.day !== day && !late) continue;
+      o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid) });
+    }
+  }
+  for (const o of Object.values(out)) o.tasks.sort((a, b) => a.client.localeCompare(b.client) || (a.done - b.done) || a.day.localeCompare(b.day));
+  res.json({ day, today, users: out, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
+}));
 // Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.
 api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;

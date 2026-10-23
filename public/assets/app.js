@@ -902,21 +902,33 @@
     return out.sort((a, b2) => (a.level === 'bad' ? 0 : 1) - (b2.level === 'bad' ? 0 : 1) || a.rank - b2.rank || (lv[a.level] ?? 2) - (lv[b2.level] ?? 2) || (a.sort || 0) - (b2.sort || 0)); // urgent first
   }
   const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
+  // Tasks for one day across every person (AI daily plan tasks + their own, from each client's workbook).
+  let mTasks = null, mTaskDay = null, mTab = 'tasks', mTaskF = 'all', mShow = false;
+  async function loadTasks() {
+    const day = mTaskDay;
+    try { const x = await api('/main/tasks?day=' + day); if (day === mTaskDay) { mTasks = x; renderMain(); } }
+    catch (e) { if (day === mTaskDay) { mTasks = { day, error: e.message, users: {} }; renderMain(); } }
+  }
   async function loadMain() {
     if (!dDate) dDate = me.today;
     paintPeriod();
     const [from, to] = dRange();
-    if (!mData) $('mList').innerHTML = '<div class="ocards"><div class="ocard skel"></div><div class="ocard skel"></div><div class="ocard skel"></div></div>';
+    // a one-day period also picks the day for tasks
+    const want = from === to ? to : (mTaskDay || me.today);
+    if (want !== mTaskDay || !mTasks) { mTaskDay = want; mTasks = null; loadTasks(); }
+    if (!mData) { $('mTeamList').innerHTML = '<div class="crow skel-card"></div>'.repeat(4); $('mList').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
     if (!mSug || Date.now() - mSugAt > 120e3) api('/main/suggestions').then((x) => { mSug = x; mSugAt = Date.now(); renderMain(); }).catch(() => {});
     try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
-    catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    catch (e) { $('mList').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; }
   }
   const ordSpendOf = (c) => (c && c.ordSpend != null ? c.ordSpend : c ? c.spend : 0); // spend on Pages that got orders
   const cpoOf = (spend, orders) => (orders > 0 && spend > 0 ? spend / orders : null);
+  const mIni = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
   // Teams with their members; people in no team go to "No team". A Page boosted by two members counts its orders once.
+  // `ids` = every person in the team (also people with no spend, so their tasks show).
   function mTeams() {
     const d = mData, inTeam = new Set(), out = [];
-    const agg = (t, members) => {
+    const agg = (t, members, ids) => {
       const pg = new Map(); let added = 0;
       for (const u of members) for (const p of u.pages) {
         added += p.spend;
@@ -926,12 +938,55 @@
       }
       let spend = 0, orders = 0, ordSpend = 0;
       for (const x of pg.values()) { const sp = [...x.camps.values()].reduce((a, b) => a + b, 0); spend += sp; orders += x.orders; if (x.orders > 0) ordSpend += sp; }
-      return { ...t, members, spend, orders, ordSpend, pages: pg.size, shared: Math.max(0, added - spend), cpo: cpoOf(ordSpend, orders) };
+      return { ...t, members, ids, spend, orders, ordSpend, pages: pg.size, shared: Math.max(0, added - spend), cpo: cpoOf(ordSpend, orders), task: taskStat(ids) };
     };
-    for (const t of d.teams || []) { const ms = d.users.filter((u) => t.members.includes(u.id)); ms.forEach((u) => inTeam.add(u.id)); out.push(agg(t, ms)); }
-    const rest = d.users.filter((u) => !inTeam.has(u.id));
-    if (rest.length) out.push(agg({ id: '__none', name: (d.teams || []).length ? 'No team' : 'All accounts', members: [] }, rest));
+    for (const t of d.teams || []) { const ms = d.users.filter((u) => t.members.includes(u.id)); t.members.forEach((id) => inTeam.add(id)); out.push(agg(t, ms, [...t.members])); }
+    const everyone = new Set([...d.users.map((u) => u.id), ...Object.keys((mTasks && mTasks.users) || {}).filter((id) => (mTasks.users[id].tasks || []).length)]);
+    const restIds = [...everyone].filter((id) => !inTeam.has(id));
+    if (restIds.length) out.push(agg({ id: '__none', name: (d.teams || []).length ? 'No team' : 'All accounts', members: [] }, d.users.filter((u) => !inTeam.has(u.id)), restIds));
     return out;
+  }
+  const personName = (id) => { const u = mData && mData.users.find((x) => x.id === id); return u ? u.name : (mTasks && mTasks.users[id] && mTasks.users[id].name) || 'Someone'; };
+  function taskStat(ids) {
+    const s = { total: 0, done: 0, late: 0, people: 0, ready: !!(mTasks && !mTasks.error) };
+    if (!s.ready) return s;
+    for (const id of ids) { const ts = (mTasks.users[id] || {}).tasks || []; if (ts.length) s.people++; for (const t of ts) { s.total++; if (t.done) s.done++; else if (t.late) s.late++; } }
+    s.pct = s.total ? Math.round(s.done / s.total * 100) : null;
+    return s;
+  }
+  const taskTone = (s) => (s.pct == null ? '' : s.pct >= 80 ? 'good' : s.pct >= 40 ? 'mid' : 'bad');
+  const taskBar = (s, big) => s.ready ? (s.total ? `<span class="tk-bar ${big ? 'big ' : ''}${taskTone(s)}" role="img" aria-label="${s.done} of ${s.total} tasks done"><i style="width:${s.pct}%"></i></span>` : '') : '';
+  const dayTxt = (d) => { if (!d) return ''; if (d === me.today) return 'today'; if (d === addD(me.today, -1)) return 'yesterday'; return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); };
+  const hm = (iso) => { try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: me.tz || undefined }); } catch (_) { return ''; } };
+  // One person's tasks, grouped by client.
+  function personTasks(id, q) {
+    const u = (mTasks.users || {})[id] || { tasks: [], plans: 0, clients: 0 }, has = (x) => String(x || '').toLowerCase().includes(q);
+    let ts = u.tasks.filter((t) => mTaskF === 'all' || (mTaskF === 'open' ? !t.done : t.done));
+    if (q && !has(personName(id))) ts = ts.filter((t) => has(t.text) || has(t.client));
+    const st = taskStat([id]);
+    if (q && !ts.length && !has(personName(id))) return '';
+    const groups = new Map(); for (const t of ts) { if (!groups.has(t.client)) groups.set(t.client, []); groups.get(t.client).push(t); }
+    const empty = !u.tasks.length ? `No tasks for ${dayTxt(mTasks.day)}.${u.clients ? ` AI plans made for ${u.plans} of ${u.clients} client${u.clients === 1 ? '' : 's'}.` : ''}` : `Nothing ${mTaskF === 'open' ? 'open' : 'done'}.`;
+    return `<article class="tk-person${u.tasks.length ? '' : ' quiet'}">
+      <header class="tk-ph"><span class="mini-av lg">${esc(mIni(personName(id)))}</span><b>${esc(personName(id))}</b>${st.late ? `<span class="pill warn">${st.late} late</span>` : ''}<span class="spacer"></span><span class="tk-n ${taskTone(st)}"><b class="num">${st.done}</b>/<span class="num">${st.total}</span> done</span>${taskBar(st)}</header>
+      ${ts.length ? [...groups].map(([client, list]) => `<div class="tk-client"><div class="tk-cn">${esc(client)}</div><ul class="tk-list">${list.map((t) => `<li class="tk-it${t.done ? ' done' : ''}"><span class="tk-ck" aria-label="${t.done ? 'Done' : 'Not done'}">${t.done ? '✓' : ''}</span><span class="tk-tx">${esc(t.text)}<span class="tk-meta">${t.from === 'ai' ? '<span class="tk-tag ai">✨ AI plan</span>' : '<span class="tk-tag">Own task</span>'}${t.late ? `<span class="tk-tag late">from ${esc(dayTxt(t.day))}</span>` : ''}${t.done ? `<span>done ${esc(t.doneAt && t.doneAt.slice(0, 10) !== new Date().toISOString().slice(0, 10) && dayTxt(t.doneAt.slice(0, 10)) !== dayTxt(mTasks.day) ? dayTxt(t.doneAt.slice(0, 10)) + ' ' : '')}${esc(hm(t.doneAt))}${t.doneBy && t.doneBy !== personName(id) ? ' by ' + esc(t.doneBy) : ''}</span>` : ''}</span></span></li>`).join('')}</ul></div>`).join('') : `<div class="tk-empty hint">${esc(empty)}</div>`}
+    </article>`;
+  }
+  function tasksPanel(team, q) {
+    const nav = `<div class="tk-tools"><div class="pb-nav tk-day"><button type="button" class="navbtn" data-tday="-1" aria-label="Day before">‹</button><span class="tk-dl">${esc(dayTxt(mTaskDay))}${mTaskDay !== me.today ? ` <button type="button" class="linkbtn" data-tday="0">Today</button>` : ''}</span><button type="button" class="navbtn" data-tday="1" aria-label="Next day" ${mTaskDay >= me.today ? 'disabled' : ''}>›</button></div>
+      <div class="seg" role="group" aria-label="Show tasks">${[['all', 'All'], ['open', 'Not done'], ['done', 'Done']].map(([k, l]) => `<button type="button" data-tf="${k}" aria-pressed="${mTaskF === k}">${l}</button>`).join('')}</div></div>`;
+    if (!mTasks) return nav + '<div class="muted tk-empty">Loading tasks…</div>';
+    if (mTasks.error) return nav + `<div class="over">${esc(mTasks.error)}</div>`;
+    if (team) {
+      const ids = [...team.ids].sort((a, b) => (taskStat([a]).pct ?? 101) - (taskStat([b]).pct ?? 101)); // least done first, no tasks last
+      const html = ids.map((id) => personTasks(id, q)).join('');
+      return nav + `<div class="tk-hint hint">Tasks each person ticks in Clients → their client (✨ from the AI daily plan, or added by them). ${mTaskDay === me.today ? 'Late = left open from an earlier day.' : ''}</div>` + (html || `<div class="tk-empty hint">${team.ids.length ? 'Nothing matches.' : 'No one in this team yet — add people in Admin → Users → Teams.'}</div>`);
+    }
+    // all teams: one line per team with each person's progress
+    return nav + `<div class="tk-teams">${mTeams().map((t) => { const s = t.task; return `<button type="button" class="tk-team" data-mteam="${esc(t.id)}">
+      <span class="tk-tn"><b>${esc(t.name)}</b><span class="tk-n ${taskTone(s)}">${s.total ? `<b class="num">${s.done}</b>/<span class="num">${s.total}</span> done${s.late ? ` · <span class="warn-t">${s.late} late</span>` : ''}` : '<span class="hint">no tasks</span>'}</span></span>${taskBar(s, true)}
+      <span class="tk-people">${t.ids.map((id) => { const p = taskStat([id]); return `<span class="tk-pp ${taskTone(p)}"><span class="mini-av">${esc(mIni(personName(id)))}</span>${esc(personName(id).split(/\s+/)[0])} <b class="num">${p.total ? `${p.done}/${p.total}` : '–'}</b></span>`; }).join('') || '<span class="hint">No one yet</span>'}</span>
+    </button>`; }).join('')}</div>`;
   }
   // Spend on Pages not linked to any client (it has no orders and is not in the totals above).
   const unlinkedRows = (u) => (u.unlinked && u.unlinked.spend > 0.5 ? `<div class="m-unl"><div class="m-unl-h"><b>⚠ Not linked to a client</b><span class="num">${money(u.unlinked.spend)}</span></div><div class="hint">Add these Pages to a client so their spend and orders count.</div>${u.unlinked.pages.map((p) => `<div class="m-unl-p"><span>${esc(p.page)}</span><span class="num">${money(p.spend)}</span></div>`).join('')}</div>` : '');
@@ -939,76 +994,104 @@
     const d = mData; if (!d) return;
     const teams = mTeams(), team = mTeam && teams.find((t) => t.id === mTeam);
     if (mTeam && !team) mTeam = null;
-    // summary: everything, or the open team
-    const t = team ? { spend: team.spend, orders: team.orders, ordSpend: team.ordSpend, users: team.members.filter((u) => u.spend > 0).length, pages: team.pages } : d.totals;
-    const avg = cpoOf(d.totals.ordSpend, d.totals.orders), tAvg = cpoOf(t.ordSpend, t.orders);
-    rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US'));
-    rollTo($('mCpo'), tAvg != null ? money(tAvg) : '–'); rollTo($('mUsers'), String(t.users)); rollTo($('mPages'), String(t.pages));
-    $('mUsersLbl').textContent = team ? 'admins' : 'accounts';
+    const avg = cpoOf(d.totals.ordSpend, d.totals.orders);
+    const all = { spend: d.totals.spend, orders: d.totals.orders, ordSpend: d.totals.ordSpend, task: taskStat(teams.flatMap((t) => t.ids)) };
+    const allSug = mSug ? teamSug(d.users) : null;
+    { // headline numbers (the whole company, or the picked team)
+      const t = team || all, c = cpoOf(t.ordSpend, t.orders), s = t.task, sg = team ? (mSug ? teamSug(team.members) : null) : allSug;
+      rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US')); rollTo($('mCpo'), c != null ? money(c) : '–');
+      rollTo($('mTasks'), s.ready ? (s.total ? `${s.done}/${s.total}` : '0') : '–');
+      $('mTasksLbl').textContent = `tasks done ${dayTxt(mTaskDay)}`;
+      rollTo($('mUrgent'), sg ? String(sg.filter((x) => x.level === 'bad').length) : '–');
+    }
     { // notes: older days are estimates · spend on Pages not linked to any client
       const q = d.quality || {}, unl = team ? team.members.reduce((a, u) => a + ((u.unlinked && u.unlinked.spend) || 0), 0) : d.totals.unlinked || 0, msg = [];
       if (q.estimate) msg.push(`ⓘ ${q.estimate} of ${q.estimate + (q.kept || 0)} days are order estimates and may be too high.`);
-      if (unl > 0.5) msg.push(`${money(unl)} was spent on Pages not linked to any client — not counted above. Open an admin below to see which Pages.`);
+      if (unl > 0.5) msg.push(`${money(unl)} was spent on Pages not linked to any client — not counted above. See People & Pages.`);
       $('mNote').hidden = !msg.length; $('mNote').innerHTML = msg.map(esc).join('<br>');
     }
     document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
     const q = ($('mSearch').value || '').trim().toLowerCase();
     const has = (x) => String(x || '').toLowerCase().includes(q);
-    const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9) }[mSortK];
+    const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9), tasks: (a, b) => (a.task.pct ?? 101) - (b.task.pct ?? 101) }[mSortK];
     const tone = (c) => (c == null || avg == null ? '' : c <= avg * 0.8 ? 'good' : c >= avg * 1.5 ? 'bad' : 'mid');
     const toneTxt = { good: 'cheap', mid: 'about average', bad: 'expensive' };
-    const initials = (n) => String(n || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase();
-    if (!team) { // ---- team cards
-      const list = teams.filter((x) => !q || has(x.name) || x.members.some((u) => has(u.name) || u.pages.some((p) => has(p.page) || has(p.client)))).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-      const minCpo = Math.min(...list.filter((x) => x.cpo != null).map((x) => x.cpo));
-      $('mList').innerHTML = list.length ? `<div class="ocards">${list.map((x, i) => {
-        const tn = tone(x.cpo), score = x.cpo ? Math.max(6, Math.round(minCpo / x.cpo * 100)) : 0;
-        const ms = [...x.members].sort((a, b) => b.spend - a.spend);
-        return `<button type="button" class="ocard mteam ${tn}" data-mteam="${esc(x.id)}" style="--i:${Math.min(i, 12)}">
-          <header><div class="oc-n"><b>${esc(x.name)}</b><span class="pill">${ms.length} admin${ms.length === 1 ? '' : 's'}</span></div><div class="oc-cpo mt-tot"><span class="num">${money(x.spend)}</span><small><b class="num">${x.orders.toLocaleString('en-US')}</b> orders</small></div></header>
-          <div class="oc-sub"><span class="mt-cpo ${tn}"><b class="num">${x.cpo != null ? money(x.cpo) : '–'}</b> ${x.cpo != null ? 'per order' : 'no orders yet'}</span><span>·</span><span>${x.pages} Page${x.pages === 1 ? '' : 's'}</span>${(() => { const ul = x.members.reduce((a, u) => a + ((u.unlinked && u.unlinked.spend) || 0), 0); return ul > 0.5 ? `<span class="mt-shared" title="Spend on Pages not linked to any client">· ${money(ul)} not linked</span>` : ''; })()}${x.shared > 0.009 ? `<span class="mt-shared" title="Two people in this team synced the same ad account — those campaigns are counted once">· ${money(x.shared)} shared, counted once</span>` : ''}</div>
-          ${x.cpo != null ? `<div class="oc-bar ${tn}"><i style="width:${score}%"></i></div><div class="oc-tone ${tn}">${toneTxt[tn] || ''}${tn ? ' · ' : ''}avg ${money(avg)}</div>` : '<div class="oc-tone">No orders matched for this team yet.</div>'}
-          ${ms.length ? `<ul class="oc-pages">${ms.map((u) => { const c = cpoOf(u.ordSpend, u.orders); return `<li><span class="op-n"><span class="mini-av">${esc(initials(u.name))}</span>${esc(u.name)}</span><span class="op-o num" title="Spend">${money(u.spend)}</span><span class="op-c num ${tone(c)}" title="Per order">${c != null ? money(c) : '–'}</span></li>`; }).join('')}</ul>` : '<div class="oc-tone">No admins in this team yet — add them in Admin → Teams.</div>'}
-          ${(() => { const sg = teamSug(x.members), bad = sg.filter((y) => y.level === 'bad').length, warn = sg.filter((y) => y.level === 'warn').length, good = sg.filter((y) => y.level === 'good').length; return mSug && sg.length ? `<div class="mteam-sug"><span>💡 <b>${sg.length}</b> important</span>${bad ? `<span class="pill bad">${bad} urgent</span>` : ''}${warn ? `<span class="pill warn">${warn} to watch</span>` : ''}${good ? `<span class="pill ok">${good} going well</span>` : ''}</div>` : ''; })()}
-          <span class="mteam-go">See Pages & suggestions <span aria-hidden="true">→</span></span>
-        </button>`;
-      }).join('')}</div>` : `<div class="empty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`;
-      document.querySelectorAll('#mList [data-mteam]').forEach((b) => b.onclick = () => { mTeam = b.dataset.mteam; const tm = mTeams().find((x) => x.id === mTeam); mOpen.clear(); (tm ? tm.members : []).forEach((u) => mOpen.add(u.id)); renderMain(); window.scrollTo({ top: $('tab-main').offsetTop - 10, behavior: calm ? 'auto' : 'smooth' }); });
-      return;
+    const urgentOf = (t) => (mSug ? teamSug(t.members).filter((x) => x.level === 'bad').length : 0);
+    const hit = (t) => !q || has(t.name) || t.ids.some((id) => has(personName(id))) || t.members.some((u) => u.pages.some((p) => has(p.page) || has(p.client)))
+      || (mTasks && mTasks.users && t.ids.some((id) => ((mTasks.users[id] || {}).tasks || []).some((x) => has(x.text) || has(x.client))));
+    // ---- left: teams list
+    const list = teams.filter(hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+    const row = (t, i) => { const s = t.task, u = urgentOf(t); return `<button type="button" class="crow mrow2${(mTeam || '') === (t.id || '') ? ' on' : ''}" data-mteam="${esc(t.id || '')}" style="--i:${i}">
+      <span class="cr-av${t.id ? '' : ' all'}">${t.id ? esc(mIni(t.name)) : '★'}</span>
+      <span class="cr-n"><span class="cr-nm"><b>${esc(t.name)}</b>${u ? `<span class="pill bad">${u} urgent</span>` : ''}</span><span class="hint"><span class="num">${money(t.spend)}</span> · <span class="num">${t.orders.toLocaleString('en-US')}</span> orders</span>${s.ready && s.total ? `<span class="tk-row">${taskBar(s)}<span class="hint num">${s.done}/${s.total}</span></span>` : ''}</span>
+      <span class="cr-v"><b class="num ${tone(t.cpo)}">${t.cpo != null ? money(t.cpo) : '–'}</b><span class="hint">per order</span></span>
+    </button>`; };
+    $('mTeamList').innerHTML = row({ id: '', name: 'All teams', spend: all.spend, orders: all.orders, cpo: cpoOf(all.ordSpend, all.orders), task: all.task, members: d.users }, 0)
+      + (list.map((t, i) => row(t, i + 1)).join('') || `<div class="hint mempty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`);
+    // ---- right: the picked team (or all teams)
+    const t = team || { name: 'All teams', members: d.users, ids: teams.flatMap((x) => x.ids), spend: all.spend, orders: all.orders, ordSpend: all.ordSpend, cpo: cpoOf(all.ordSpend, all.orders), pages: d.totals.pages, task: all.task };
+    const sg = mSug ? (team ? teamSug(team.members) : allSug).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)) : null;
+    const tn = tone(t.cpo), s = t.task;
+    const tabs = [['tasks', `Tasks${s.ready && s.total ? ` <span class="countpill">${s.done}/${s.total}</span>` : ''}`], ['people', team ? 'People & Pages' : 'People'], ['sug', `Suggestions${sg && sg.length ? ` <span class="countpill">${sg.length}</span>` : ''}`]];
+    let body = '';
+    if (mTab === 'tasks') body = tasksPanel(team, q);
+    else if (mTab === 'sug') {
+      if (!sg) body = '<div class="muted">Loading…</div>';
+      else if (!sg.length) body = '<div class="todo-done">🎉 Nothing important to fix.</div>';
+      else { const show = mSugAll ? sg : sg.slice(0, 8); body = `<div class="hint tk-hint">Money at risk first, then what's working.</div><div class="todolist msug">${show.map(sugRow).join('')}</div>${sg.length > 8 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}`; }
+    } else {
+      const users = (team ? team.members : d.users).map((u) => {
+        const hitUser = !q || has(u.name);
+        const pages = u.pages.filter((p) => hitUser || has(p.page) || has(p.guess) || has(p.client)).map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => (mSortK === 'tasks' ? 0 : cmp(a, b)) || b.spend - a.spend);
+        return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
+      }).filter((u) => u.hit).sort((a, b) => b.spend - a.spend);
+      body = '<div class="mlist">' + (users.map((u, i) => {
+        const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
+        const tm = !team && (d.teams || []).find((x) => x.members.includes(u.id));
+        return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
+          <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
+            <span class="avatar">${esc(mIni(u.name))}</span>
+            <span class="mc-n"><b>${esc(u.name)}</b>${u.you ? ' <span class="pill brand">You</span>' : ''}<span class="hint">${tm ? esc(tm.name) + ' · ' : ''}${u.pages.length} Page${u.pages.length === 1 ? '' : 's'} · ${u.clients} client${u.clients === 1 ? '' : 's'}</span></span>
+            <span class="mc-s"><span class="lbl">Spend</span><b class="num">${money(u.spend)}</b></span>
+            <span class="mc-s"><span class="lbl">Orders</span><b class="num">${u.orders.toLocaleString('en-US')}</b></span>
+            <span class="mc-s"><span class="lbl">Per order</span><b class="num ${tone(u.cpo)}">${u.cpo != null ? money(u.cpo) : '–'}</b></span>
+            <span class="chev" aria-hidden="true">›</span>
+          </button>
+          ${open ? (u.pages.length ? `<div class="mc-b"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${u.pages.map((p) => `<div class="mrow">
+              <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
+              <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
+              <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
+              <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}${unlinkedRows(u)}</div>` : `<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div>${unlinkedRows(u)}</div>`) : ''}
+        </article>`;
+      }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No one with boost spend in this period.'}</div>`) + '</div>';
     }
-    // ---- one team: its admins, each with their Pages
-    const users = team.members.map((u) => {
-      const hitUser = !q || has(u.name);
-      const pages = u.pages.filter((p) => hitUser || has(p.page) || has(p.guess) || has(p.client)).map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-      return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
-    }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-    $('mList').innerHTML = `<div class="mteam-h"><button type="button" class="ghost" id="mBack">← All teams</button><h3>${esc(team.name)}</h3><span class="hint">${team.members.length} admin${team.members.length === 1 ? '' : 's'} · ${team.pages} Page${team.pages === 1 ? '' : 's'}</span></div>${(() => {
-      if (!mSug) return '<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team</h3></div><div class="muted">Loading…</div></div>';
-      const sg = teamSug(team.members).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)); if (!sg.length) return `<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team</h3></div><div class="todo-done">🎉 Nothing important to fix for this team.</div></div>`;
-      const show = mSugAll ? sg : sg.slice(0, 6);
-      return `<div class="panel msug"><div class="msug-h"><h3>💡 Important for this team <span class="countpill">${sg.length}</span></h3><span class="hint">Money at risk first, then what's working · chores like Telegram groups and reports are left out</span></div><div class="todolist">${show.map(sugRow).join('')}</div>${sg.length > 6 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}</div>`;
-    })()}<div class="mlist">` + (users.map((u, i) => {
-      const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
-      return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
-        <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
-          <span class="avatar">${esc(initials(u.name))}</span>
-          <span class="mc-n"><b>${esc(u.name)}</b>${u.you ? ' <span class="pill brand">You</span>' : ''}<span class="hint">${u.pages.length} Page${u.pages.length === 1 ? '' : 's'} · ${u.clients} client${u.clients === 1 ? '' : 's'}</span></span>
-          <span class="mc-s"><span class="lbl">Spend</span><b class="num">${money(u.spend)}</b></span>
-          <span class="mc-s"><span class="lbl">Orders</span><b class="num">${u.orders.toLocaleString('en-US')}</b></span>
-          <span class="mc-s"><span class="lbl">Per order</span><b class="num ${tone(u.cpo)}">${u.cpo != null ? money(u.cpo) : '–'}</b></span>
-          <span class="chev" aria-hidden="true">›</span>
-        </button>
-        ${open ? (u.pages.length ? `<div class="mc-b"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${u.pages.map((p) => `<div class="mrow">
-            <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
-            <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
-            <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
-            <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}${unlinkedRows(u)}</div>` : `<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div>${unlinkedRows(u)}</div>`) : ''}
-      </article>`;
-    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No admins in this team yet — add them in Admin → Teams.'}</div>`) + '</div>';
-    $('mBack').onclick = () => { mTeam = null; mSugAll = false; renderMain(); };
-    if ($('mSugMore')) $('mSugMore').onclick = () => { mSugAll = !mSugAll; renderMain(); };
-    document.querySelectorAll('#mList [data-muser]').forEach((b) => b.onclick = () => { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); });
+    $('mList').innerHTML = `<div class="cd-in">
+      <div class="cd-head"><button type="button" class="ghost sm cd-back" id="mBack">← Teams</button>
+        <div class="cd-title"><span class="cr-av lg${team ? '' : ' all'}">${team ? esc(mIni(t.name)) : '★'}</span><div><h3>${esc(t.name)}</h3><div class="hint">${t.ids.length} ${t.ids.length === 1 ? 'person' : 'people'} · ${t.pages} Page${t.pages === 1 ? '' : 's'} · ${esc(periodLabel())}${team && team.shared > 0.009 ? ` · ${money(team.shared)} shared spend counted once` : ''}</div></div></div>
+        <div class="cd-stats">
+          <div class="cd-stat hero"><span class="lbl">Boost spend</span><b class="num">${money(t.spend)}</b><span class="sub">${esc(periodLabel())}</span></div>
+          <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${t.orders.toLocaleString('en-US')}</b><span class="sub">from adsbox.biz</span></div>
+          <div class="cd-stat"><span class="lbl">Per order</span><b class="num ${tn}">${t.cpo != null ? money(t.cpo) : '–'}</b><span class="sub">${t.cpo != null ? `${team ? (toneTxt[tn] || '') + ' · ' : ''}avg ${money(avg)}` : 'no orders yet'}</span></div>
+          <div class="cd-stat"><span class="lbl">Tasks ${esc(dayTxt(mTaskDay))}</span><b class="num ${taskTone(s)}">${s.ready ? (s.total ? `${s.done}/${s.total}` : '0') : '…'}</b><span class="sub">${s.ready ? (s.total ? `${s.pct}% done${s.late ? ` · ${s.late} late` : ''}` : 'no tasks yet') : 'loading'}</span></div>
+        </div>
+      </div>
+      <div class="seg mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mtab="${k}" aria-selected="${mTab === k}" aria-pressed="${mTab === k}">${l}</button>`).join('')}</div>
+      <div class="mtab-b">${body}</div>
+    </div>`;
+    $('mWrap').classList.toggle('show-detail', mShow);
   }
+  // clicks (list + detail)
+  $('mWrap').addEventListener('click', (ev) => {
+    const tb = ev.target.closest('[data-mteam]');
+    if (tb) { mTeam = tb.dataset.mteam || null; mSugAll = false; mOpen.clear(); mShow = true; if (tb.classList.contains('tk-team')) mTab = 'tasks'; renderMain(); if (innerWidth <= 900 || tb.classList.contains('tk-team')) window.scrollTo({ top: $('mWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); return; }
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.id === 'mBack') { mShow = false; renderMain(); return; }
+    if (b.id === 'mSugMore') { mSugAll = !mSugAll; renderMain(); return; }
+    if (b.dataset.mtab) { mTab = b.dataset.mtab; renderMain(); return; }
+    if (b.dataset.tf) { mTaskF = b.dataset.tf; renderMain(); return; }
+    if (b.dataset.tday != null) { const n = Number(b.dataset.tday); mTaskDay = n === 0 ? me.today : addD(mTaskDay, n); if (mTaskDay > me.today) mTaskDay = me.today; mTasks = null; renderMain(); loadTasks(); return; }
+    if (b.dataset.muser) { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); }
+  });
   document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });
   $('mSearch').oninput = () => renderMain();
 

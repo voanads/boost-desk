@@ -909,15 +909,15 @@
     return out.sort((a, b2) => (a.level === 'bad' ? 0 : 1) - (b2.level === 'bad' ? 0 : 1) || a.rank - b2.rank || (lv[a.level] ?? 2) - (lv[b2.level] ?? 2) || (a.sort || 0) - (b2.sort || 0)); // urgent first
   }
   const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
-  let mTab = 'pages', mShow = false, mPgAll = false;
+  let mPgAll = false, mPerson = null, mView = (() => { try { return localStorage.getItem('mView') || 'cards'; } catch (_) { return 'cards'; } })();
   async function loadMain() {
     if (!dDate) dDate = me.today;
     paintPeriod();
     const [from, to] = dRange();
-    if (!mData) { $('mTeamList').innerHTML = '<div class="crow skel-card"></div>'.repeat(4); $('mList').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
+    if (!mData) { $('mTeamList').innerHTML = '<div class="mtc skel"></div>'.repeat(4); $('mList').innerHTML = '<div class="pcards">' + '<div class="pcard skel"></div>'.repeat(6) + '</div>'; }
     if (!mSug || Date.now() - mSugAt > 120e3) api('/main/suggestions').then((x) => { mSug = x; mSugAt = Date.now(); renderMain(); }).catch(() => {});
     try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
-    catch (e) { $('mList').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; }
+    catch (e) { $('mList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   }
   const ordSpendOf = (c) => (c && c.ordSpend != null ? c.ordSpend : c ? c.spend : 0); // spend on Pages that got orders
   const cpoOf = (spend, orders) => (orders > 0 && spend > 0 ? spend / orders : null);
@@ -956,111 +956,89 @@
     const teams = mTeams(), team = mTeam && teams.find((t) => t.id === mTeam);
     if (mTeam && !team) mTeam = null;
     const avg = cpoOf(d.totals.ordSpend, d.totals.orders);
-    const allSug = mSug ? teamSug(d.users) : null;
-    const t = team || { name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, ordSpend: d.totals.ordSpend, cpo: cpoOf(d.totals.ordSpend, d.totals.orders), pageList: pagesOf(d.users) }; if (!team) t.pages = t.pageList.length;
-    { // headline numbers (the whole company, or the picked team)
-      const sg = team ? (mSug ? teamSug(team.members) : null) : allSug;
-      rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US')); rollTo($('mCpo'), t.cpo != null ? money(t.cpo) : '–');
-      rollTo($('mPagesN'), String(t.pages)); rollTo($('mUrgent'), sg ? String(sg.filter((x) => x.level === 'bad').length) : '–');
-    }
-    { // notes: older days are estimates · spend on Pages not linked to any client
-      const q = d.quality || {}, unl = team ? team.members.reduce((a, u) => a + ((u.unlinked && u.unlinked.spend) || 0), 0) : d.totals.unlinked || 0, msg = [];
+    const T = team || { id: '', name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, ordSpend: d.totals.ordSpend, cpo: avg, pageList: pagesOf(d.users) };
+    T.pages = T.pageList.length;
+    const sg = mSug ? teamSug(T.members) : null;
+    const tone = (c) => (c == null || avg == null ? '' : c <= avg * 0.8 ? 'good' : c >= avg * 1.5 ? 'bad' : 'mid');
+    const toneTxt = { good: 'cheaper than average', mid: 'about average', bad: 'more than average' };
+    const people = T.members.filter((u) => u.spend > 0);
+    if (mPerson && !people.some((u) => u.id === mPerson)) mPerson = null;
+    // ---- headline numbers
+    rollTo($('mSpend'), money(T.spend)); rollTo($('mOrders'), T.orders.toLocaleString('en-US')); rollTo($('mCpo'), T.cpo != null ? money(T.cpo) : '–');
+    rollTo($('mPagesN'), String(T.pages)); rollTo($('mUrgent'), sg ? String(sg.filter((x) => x.level === 'bad').length) : '–');
+    $('mSpendSub').textContent = team ? `${esc(team.name)} · ${d.totals.spend > 0 ? Math.round(team.spend / d.totals.spend * 100) : 0}% of all spend` : periodLabel();
+    $('mCpoSub').className = 'sub ' + (team ? tone(T.cpo) : ''); $('mCpoSub').textContent = T.cpo == null ? 'no orders yet' : team ? `${toneTxt[tone(T.cpo)] || ''} · avg ${money(avg)}` : 'average, all teams';
+    $('mPeopleSub').textContent = `${people.length} ${people.length === 1 ? 'person' : 'people'} boosting`;
+    $('mUrgentK').classList.toggle('bad', !!(sg && sg.some((x) => x.level === 'bad')));
+    { // notes: older days are estimates
+      const q = d.quality || {}, msg = [];
       if (q.estimate) msg.push(`ⓘ ${q.estimate} of ${q.estimate + (q.kept || 0)} days are order estimates and may be too high.`);
-      if (unl > 0.5) msg.push(`${money(unl)} was spent on Pages not linked to any client — not counted above. See the bottom of Pages.`);
       $('mNote').hidden = !msg.length; $('mNote').innerHTML = msg.map(esc).join('<br>');
     }
+    // ---- teams: share of spend + one card per team
+    const COL = ['#6D4AFF', '#12A36B', '#F08A24', '#E5484D', '#0EA5E9', '#D946EF', '#84CC16', '#F5B041', '#64748B'];
+    const colOf = (id) => COL[Math.max(0, teams.findIndex((x) => x.id === id)) % COL.length];
+    const tot = teams.reduce((a, x) => a + x.spend, 0) || 1;
+    $('mShare').innerHTML = `<div class="ms-bar">${teams.filter((x) => x.spend > 0).map((x) => `<i style="flex:${x.spend.toFixed(2)};background:${colOf(x.id)}" title="${esc(x.name)} · ${money(x.spend)} · ${Math.round(x.spend / tot * 100)}%" class="${mTeam && mTeam !== x.id ? 'dim' : ''}"></i>`).join('')}</div>`;
+    const tcard = (x, i) => { const on = (mTeam || '') === (x.id || ''), u = mSug ? teamSug(x.members).filter((y) => y.level === 'bad').length : 0, ms = x.members.filter((m) => m.spend > 0);
+      return `<button type="button" class="mtc${on ? ' on' : ''}" data-mteam="${esc(x.id || '')}" style="--c:${x.id ? colOf(x.id) : 'var(--brand)'};--i:${i}" aria-pressed="${on}">
+        <span class="mtc-h"><i class="mtc-dot"></i><b>${esc(x.name)}</b>${u ? `<span class="pill bad">${u}</span>` : ''}</span>
+        <span class="mtc-v num">${money(x.spend)}</span>
+        <span class="mtc-s">${x.id ? `${Math.round(x.spend / tot * 100)}% · ` : ''}${x.orders.toLocaleString('en-US')} orders · <b class="${tone(x.cpo)}">${x.cpo != null ? money(x.cpo) : '–'}</b></span>
+        <span class="mtc-ppl">${ms.slice(0, 5).map((m) => `<span class="mini-av" title="${esc(m.name)}">${esc(mIni(m.name))}</span>`).join('')}${ms.length > 5 ? `<span class="mini-av more">+${ms.length - 5}</span>` : ''}</span>
+      </button>`; };
+    $('mTeamList').innerHTML = tcard({ id: '', name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, cpo: avg }, 0) + teams.slice().sort((a, b) => b.spend - a.spend).map((x, i) => tcard(x, i + 1)).join('');
+    // ---- Pages
     document.querySelectorAll('#mSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === mSortK)));
-    const q = ($('mSearch').value || '').trim().toLowerCase();
-    const has = (x) => String(x || '').toLowerCase().includes(q);
-    const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9) }[mSortK];
-    const tone = (c) => (c == null || avg == null ? '' : c <= avg * 0.8 ? 'good' : c >= avg * 1.5 ? 'bad' : 'mid');
-    const toneTxt = { good: 'cheap', mid: 'about average', bad: 'expensive' };
-    const urgentOf = (x) => (mSug ? teamSug(x.members).filter((y) => y.level === 'bad').length : 0);
-    const hit = (x) => !q || has(x.name) || x.members.some((u) => has(u.name) || u.pages.some((p) => has(p.page) || has(p.client)));
-    // ---- left: teams list
-    const list = teams.filter(hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-    const row = (x, i) => { const u = urgentOf(x); return `<button type="button" class="crow mrow2${(mTeam || '') === (x.id || '') ? ' on' : ''}" data-mteam="${esc(x.id || '')}" style="--i:${i}">
-      <span class="cr-av${x.id ? '' : ' all'}">${x.id ? esc(mIni(x.name)) : '★'}</span>
-      <span class="cr-n"><span class="cr-nm"><b>${esc(x.name)}</b>${u ? `<span class="pill bad">${u} urgent</span>` : ''}</span><span class="hint"><span class="num">${money(x.spend)}</span> · <span class="num">${x.orders.toLocaleString('en-US')}</span> orders · ${x.pages} Page${x.pages === 1 ? '' : 's'}</span></span>
-      <span class="cr-v"><b class="num ${tone(x.cpo)}">${x.cpo != null ? money(x.cpo) : '–'}</b><span class="hint">per order</span></span>
-    </button>`; };
-    $('mTeamList').innerHTML = row({ ...t, ...(team ? { name: 'All teams', members: d.users, spend: d.totals.spend, orders: d.totals.orders, cpo: cpoOf(d.totals.ordSpend, d.totals.orders), pages: d.totals.pages } : {}), id: '' }, 0)
-      + (list.map((x, i) => row(x, i + 1)).join('') || `<div class="hint mempty">${q ? 'Nothing matches your search.' : 'No accounts yet.'}</div>`);
-    // ---- right: the picked team (or all teams)
-    const sg = mSug ? (team ? teamSug(team.members) : allSug).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)) : null;
-    const tn = tone(t.cpo), people = t.members.filter((u) => u.spend > 0 || u.pages.length).length;
-    const tabs = [['pages', `Pages <span class="countpill">${t.pages}</span>`], ['people', 'People'], ['sug', `Suggestions${sg && sg.length ? ` <span class="countpill">${sg.length}</span>` : ''}`]];
-    let body = '';
-    if (mTab === 'pages') {
-      const pages = t.pageList.filter((p) => !q || has(p.page) || has(p.guess) || has(p.client) || p.people.some(has)).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-      const top = Math.max(0.01, ...pages.map((p) => p.spend)), show = mPgAll || q ? pages : pages.slice(0, 40);
-      const unl = t.members.filter((u) => u.unlinked && u.unlinked.spend > 0.5);
-      body = pages.length ? `<div class="pgtable"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${show.map((p, i) => `<div class="mrow" style="--i:${Math.min(i, 14)}">
-          <span class="mp"><b class="mp-n"><span class="pgav" aria-hidden="true">${esc(String(p.guess || p.page || '?').replace(/^Page …/, '').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span><span>${pageName(p)}</span></b><span class="hint">${p.client ? esc(p.client) : 'No client'} · ${esc(p.people.join(', '))}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
+    document.querySelectorAll('#mViewSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === mView)));
+    const q = ($('mSearch').value || '').trim().toLowerCase(), has = (x) => String(x || '').toLowerCase().includes(q);
+    const pName = mPerson ? (people.find((u) => u.id === mPerson) || {}).name : '';
+    const cmp = { spend: (a, b) => b.spend - a.spend, orders: (a, b) => b.orders - a.orders, cpo: (a, b) => (a.cpo ?? 1e9) - (b.cpo ?? 1e9), costly: (a, b) => (b.cpo ?? -1) - (a.cpo ?? -1) }[mSortK];
+    const pages = T.pageList.filter((p) => (!pName || p.people.includes(pName)) && (!q || has(p.page) || has(p.guess) || has(p.client) || p.people.some(has))).sort((a, b) => cmp(a, b) || b.spend - a.spend);
+    const top = Math.max(0.01, ...pages.map((p) => p.spend)), show = mPgAll || q ? pages : pages.slice(0, mView === 'cards' ? 24 : 40);
+    $('mPgTitle').innerHTML = `Pages <span class="countpill">${pages.length}</span>${pName ? ` <button type="button" class="pchip-x" data-mperson="">${esc(pName)} ✕</button>` : ''}`;
+    const av = (p, cls = '') => `<span class="pgav ${cls}" aria-hidden="true">${esc(String(p.guess || p.page || '?').replace(/^Page …/, '').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span>`;
+    const split = (p) => (p.live > 0 && p.post > 0 ? `Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? 'Live' : 'Post');
+    let html;
+    if (!pages.length) html = `<div class="empty">${q || pName ? 'No Page matches.' : 'No boost spend in this period.'}</div>`;
+    else if (mView === 'cards') html = `<div class="pcards">${show.map((p, i) => `<article class="pcard ${tone(p.cpo)}" style="--i:${Math.min(i, 18)}">
+        <header>${av(p, 'lg')}<div class="pc-n"><b>${pageName(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}</span></div><span class="pc-rk">#${i + 1}</span></header>
+        <div class="pc-m"><div><span class="lbl">Spend</span><b class="num">${money(p.spend)}</b></div><div><span class="lbl">Orders</span><b class="num">${p.orders ? p.orders.toLocaleString('en-US') : '–'}</b></div><div class="pc-cpo"><span class="lbl">Per order</span><b class="num">${p.cpo != null ? money(p.cpo) : '–'}</b></div></div>
+        <i class="pc-bar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i>
+        <footer><span class="pc-ppl">${p.people.map((n) => `<span class="mini-av" title="${esc(n)}">${esc(mIni(n))}</span>`).join('')}<span class="hint">${esc(p.people.join(', '))}</span></span><span class="hint">${split(p)}</span></footer>
+      </article>`).join('')}</div>`;
+    else html = `<div class="pgtable"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${show.map((p, i) => `<div class="mrow" style="--i:${Math.min(i, 14)}">
+          <span class="mp"><b class="mp-n">${av(p)}<span>${pageName(p)}</span></b><span class="hint">${p.client ? esc(p.client) : 'No client'} · ${esc(p.people.join(', '))} · ${split(p)}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
           <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
           <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
           <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}
-        <div class="mrow mfoot"><span class="mp"><b>${pages.length} Page${pages.length === 1 ? '' : 's'}</b></span><span class="r num" data-l="Spend"><b>${money(pages.reduce((a, p) => a + p.spend, 0))}</b></span><span class="r num" data-l="Orders"><b>${pages.reduce((a, p) => a + p.orders, 0).toLocaleString('en-US')}</b></span><span class="r num" data-l="Per order"></span></div></div>
-        ${pages.length > show.length ? `<button type="button" class="ghost sm" id="mPgMore">Show all ${pages.length} Pages</button>` : ''}`
-        : `<div class="empty">${q ? 'No Page matches your search.' : 'No boost spend in this period.'}</div>`;
-      if (unl.length && !q) body += `<div class="m-unl-wrap">${unl.map((u) => unlinkedRows(u).replace('<b>⚠ Not linked to a client</b>', `<b>⚠ ${esc(u.name)} · not linked to a client</b>`)).join('')}</div>`;
-    } else if (mTab === 'sug') {
-      if (!sg) body = '<div class="muted">Loading…</div>';
-      else if (!sg.length) body = '<div class="todo-done">🎉 Nothing important to fix.</div>';
-      else { const show = mSugAll ? sg : sg.slice(0, 8); body = `<div class="hint tk-hint">Money at risk first, then what's working.</div><div class="todolist msug">${show.map(sugRow).join('')}</div>${sg.length > 8 ? `<button type="button" class="ghost sm" id="mSugMore">${mSugAll ? 'Show less' : `Show all ${sg.length}`}</button>` : ''}`; }
-    } else {
-      const users = t.members.map((u) => {
-        const hitUser = !q || has(u.name);
-        const pages = u.pages.filter((p) => hitUser || has(p.page) || has(p.guess) || has(p.client)).map((p) => ({ ...p, cpo: cpoOf(p.spend, p.orders) })).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-        return { ...u, pages, cpo: cpoOf(u.ordSpend, u.orders), hit: hitUser || pages.length };
-      }).filter((u) => u.hit).sort((a, b) => cmp(a, b) || b.spend - a.spend);
-      body = '<div class="mlist">' + (users.map((u, i) => {
-        const open = mOpen.has(u.id) || !!q, top = Math.max(0.01, ...u.pages.map((p) => p.spend));
-        const tm = !team && (d.teams || []).find((x) => x.members.includes(u.id));
-        return `<article class="mcard${open ? ' open' : ''}" style="--i:${Math.min(i, 12)}">
-          <button type="button" class="mc-h" data-muser="${esc(u.id)}" aria-expanded="${open}">
-            <span class="avatar">${esc(mIni(u.name))}</span>
-            <span class="mc-n"><b>${esc(u.name)}</b>${u.you ? ' <span class="pill brand">You</span>' : ''}<span class="hint">${tm ? esc(tm.name) + ' · ' : ''}${u.pages.length} Page${u.pages.length === 1 ? '' : 's'} · ${u.clients} client${u.clients === 1 ? '' : 's'}</span></span>
-            <span class="mc-s"><span class="lbl">Spend</span><b class="num">${money(u.spend)}</b></span>
-            <span class="mc-s"><span class="lbl">Orders</span><b class="num">${u.orders.toLocaleString('en-US')}</b></span>
-            <span class="mc-s"><span class="lbl">Per order</span><b class="num ${tone(u.cpo)}">${u.cpo != null ? money(u.cpo) : '–'}</b></span>
-            <span class="chev" aria-hidden="true">›</span>
-          </button>
-          ${open ? (u.pages.length ? `<div class="mc-b"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${u.pages.map((p) => `<div class="mrow">
-              <span class="mp"><b class="mp-n"><span class="pgav" aria-hidden="true">${esc(String(p.guess || p.page || '?').replace(/^Page …/, '').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span><span>${pageName(p)}</span></b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
-              <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
-              <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
-              <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}${unlinkedRows(u)}</div>` : `<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div>${unlinkedRows(u)}</div>`) : ''}
-        </article>`;
-      }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : 'No one with boost spend in this period.'}</div>`) + '</div>';
-    }
-    $('mList').innerHTML = `<div class="cd-in">
-      <div class="cd-head"><button type="button" class="ghost sm cd-back" id="mBack">← Teams</button>
-        <div class="cd-title"><span class="cr-av lg${team ? '' : ' all'}">${team ? esc(mIni(t.name)) : '★'}</span><div><h3>${esc(t.name)}</h3><div class="hint">${people} ${people === 1 ? 'person' : 'people'} with spend · ${esc(periodLabel())}${team && team.shared > 0.009 ? ` · ${money(team.shared)} shared spend counted once` : ''}</div></div></div>
-        <div class="cd-stats">
-          <div class="cd-stat hero"><span class="lbl">Boost spend</span><b class="num">${money(t.spend)}</b><span class="sub">${esc(periodLabel())}</span></div>
-          <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${t.orders.toLocaleString('en-US')}</b><span class="sub">from adsbox.biz</span></div>
-          <div class="cd-stat"><span class="lbl">Per order</span><b class="num ${tn}">${t.cpo != null ? money(t.cpo) : '–'}</b><span class="sub">${t.cpo != null ? `${team ? (toneTxt[tn] || '') + ' · ' : ''}avg ${money(avg)}` : 'no orders yet'}</span></div>
-          <div class="cd-stat"><span class="lbl">Pages</span><b class="num">${t.pages}</b><span class="sub">with boost spend</span></div>
-        </div>
-      </div>
-      <div class="seg mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mtab="${k}" aria-selected="${mTab === k}" aria-pressed="${mTab === k}">${l}</button>`).join('')}</div>
-      <div class="mtab-b">${body}</div>
-    </div>`;
-    $('mWrap').classList.toggle('show-detail', mShow);
+        <div class="mrow mfoot"><span class="mp"><b>${pages.length} Page${pages.length === 1 ? '' : 's'}</b></span><span class="r num" data-l="Spend"><b>${money(pages.reduce((a, p) => a + p.spend, 0))}</b></span><span class="r num" data-l="Orders"><b>${pages.reduce((a, p) => a + p.orders, 0).toLocaleString('en-US')}</b></span><span class="r num"></span></div></div>`;
+    if (pages.length > show.length) html += `<button type="button" class="ghost sm mpg-more" id="mPgMore">Show all ${pages.length} Pages</button>`;
+    $('mList').innerHTML = html;
+    // ---- side: needs attention, people, not linked
+    const crit = sg ? sg.filter((x) => x.level === 'bad' || x.level === 'warn') : null;
+    $('mAttn').innerHTML = `<div class="ms-h"><h3>🚨 Needs attention</h3>${crit && crit.length ? `<span class="countpill">${crit.length}</span>` : ''}</div>`
+      + (!crit ? '<div class="muted">Loading…</div>' : !crit.length ? '<div class="todo-done">🎉 Nothing urgent.</div>' : `<div class="todolist msug">${(mSugAll ? crit : crit.slice(0, 5)).map(sugRow).join('')}</div>${crit.length > 5 ? `<button type="button" class="linkbtn" id="mSugMore">${mSugAll ? 'Show less' : `See all ${crit.length}`}</button>` : ''}`)
+      + (sg && sg.some((x) => x.level === 'good') ? `<div class="ms-good">${sg.filter((x) => x.level === 'good').slice(0, 2).map(sugRow).join('')}</div>` : '');
+    const pmax = Math.max(0.01, ...people.map((u) => u.spend));
+    $('mPeople').innerHTML = `<div class="ms-h"><h3>👥 People</h3><span class="hint">tap to see their Pages</span></div><div class="mpl">${people.sort((a, b) => b.spend - a.spend).map((u, i) => { const c = cpoOf(u.ordSpend, u.orders), tm = (d.teams || []).find((x) => x.members.includes(u.id));
+      return `<button type="button" class="mpp${mPerson === u.id ? ' on' : ''}" data-mperson="${esc(u.id)}"><span class="mpp-r num">${i + 1}</span><span class="avatar">${esc(mIni(u.name))}</span><span class="mpp-n"><b>${esc(u.name)}</b><span class="hint">${tm ? esc(tm.name) + ' · ' : ''}${u.pages.length} Page${u.pages.length === 1 ? '' : 's'}</span><i class="mpp-bar"><i style="width:${(u.spend / pmax * 100).toFixed(1)}%"></i></i></span><span class="mpp-v"><b class="num">${money(u.spend)}</b><span class="num ${tone(c)}">${c != null ? money(c) : '–'}</span></span></button>`; }).join('') || '<div class="hint">No one boosted in this period.</div>'}</div>`;
+    const unl = T.members.filter((u) => u.unlinked && u.unlinked.spend > 0.5);
+    $('mUnl').hidden = !unl.length;
+    $('mUnl').innerHTML = unl.length ? `<div class="ms-h"><h3>⚠ Not linked to a client</h3><span class="num">${money(unl.reduce((a, u) => a + u.unlinked.spend, 0))}</span></div><div class="hint">Not counted above — add these Pages to a client.</div>${unl.map((u) => `<div class="m-unl-u"><b>${esc(u.name)}</b>${u.unlinked.pages.map((p) => `<div class="m-unl-p"><span>${esc(p.page)}</span><span class="num">${money(p.spend)}</span></div>`).join('')}</div>`).join('')}` : '';
   }
-  // clicks (list + detail)
-  $('mWrap').addEventListener('click', (ev) => {
+  // clicks
+  $('tab-main').addEventListener('click', (ev) => {
     const tb = ev.target.closest('[data-mteam]');
-    if (tb) { mTeam = tb.dataset.mteam || null; mSugAll = false; mPgAll = false; mOpen.clear(); mShow = true; renderMain(); if (innerWidth <= 900) window.scrollTo({ top: $('mWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); return; }
+    if (tb) { mTeam = tb.dataset.mteam || null; mPerson = null; mSugAll = false; mPgAll = false; renderMain(); return; }
+    const pp = ev.target.closest('[data-mperson]');
+    if (pp) { mPerson = pp.dataset.mperson && mPerson !== pp.dataset.mperson ? pp.dataset.mperson : null; mPgAll = false; renderMain(); if (mPerson && innerWidth <= 1100) $('mPgSec').scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' }); return; }
     const b = ev.target.closest('button'); if (!b) return;
-    if (b.id === 'mBack') { mShow = false; renderMain(); return; }
     if (b.id === 'mSugMore') { mSugAll = !mSugAll; renderMain(); return; }
     if (b.id === 'mPgMore') { mPgAll = true; renderMain(); return; }
-    if (b.dataset.mtab) { mTab = b.dataset.mtab; renderMain(); return; }
-    if (b.dataset.muser) { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); }
+    if (b.closest('#mSortSeg')) { mSortK = b.dataset.k; renderMain(); return; }
+    if (b.closest('#mViewSeg')) { mView = b.dataset.v; try { localStorage.setItem('mView', mView); } catch (_) {} renderMain(); }
   });
-  document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });
   $('mSearch').oninput = () => renderMain();
 
   // ---------- Clients Board (admins): every client of every team, like the Clients page but read-only ----------

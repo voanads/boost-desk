@@ -195,6 +195,44 @@
     };
   }
 
+  // ---------- font and text size ("Aa", kept on this device) ----------
+  const FONT_CSS = { onest: 'Onest:wght@400;500;600;700;800', inter: 'Inter:wght@400;500;600;700;800', jakarta: 'Plus+Jakarta+Sans:wght@400;500;600;700;800', noto: 'Noto+Sans:wght@400;500;600;700;800', lexend: 'Lexend:wght@400;500;600;700;800' };
+  const FONT_NAME = { system: 'System', inter: 'Inter', noto: 'Noto Sans', lexend: 'Lexend', jakarta: 'Plus Jakarta', onest: 'Onest' }, SIZE_NAME = { s: 'Small', m: 'Normal', l: 'Large', xl: 'Extra large' };
+  function paintFontPop() {
+    const r = document.documentElement;
+    document.querySelectorAll('#fontPop [data-font]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.font === r.dataset.font)));
+    document.querySelectorAll('#fontPop [data-size]').forEach((b) => { b.setAttribute('aria-checked', String(b.dataset.size === r.dataset.size)); b.setAttribute('aria-pressed', String(b.dataset.size === r.dataset.size)); b.setAttribute('aria-label', SIZE_NAME[b.dataset.size]); });
+  }
+  function setFont(f) {
+    const r = document.documentElement; r.dataset.font = f; try { localStorage.setItem('bd-font', f); } catch (_) {}
+    let l = document.getElementById('bdFontCss');
+    if (FONT_CSS[f]) { if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = 'bdFontCss'; document.head.appendChild(l); } l.href = 'https://fonts.googleapis.com/css2?family=' + FONT_CSS[f] + '&display=swap'; }
+    paintFontPop(); if (typeof moveInk === 'function') setTimeout(moveInk, 300);
+  }
+  function setSize(z) { document.documentElement.dataset.size = z; try { localStorage.setItem('bd-size', z); } catch (_) {} paintFontPop(); if (typeof moveInk === 'function') setTimeout(moveInk, 50); }
+  if ($('fontBtn')) {
+    const pop = $('fontPop'), btn = $('fontBtn');
+    const close = () => { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      if (!pop.hidden) { close(); return; }
+      if (!document.getElementById('bdFontPreview')) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.id = 'bdFontPreview'; l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Noto+Sans:wght@400;700&family=Lexend:wght@400;700&family=Plus+Jakarta+Sans:wght@400;700&family=Onest:wght@400;700&display=swap'; document.head.appendChild(l); }
+      paintFontPop(); pop.hidden = false; btn.setAttribute('aria-expanded', 'true');
+      const r = btn.getBoundingClientRect(), w = Math.min(340, innerWidth - 24);
+      pop.style.width = w + 'px';
+      pop.style.left = Math.max(12, Math.min(innerWidth - w - 12, r.left)) + 'px';
+      const h = pop.offsetHeight; pop.style.top = (r.bottom + 8 + h < innerHeight ? r.bottom + 8 : Math.max(12, r.top - h - 8)) + 'px';
+      if (!calm && pop.animate) pop.animate([{ opacity: 0, transform: 'translateY(6px) scale(.98)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.22,1,.36,1)' });
+      const first = pop.querySelector('[aria-checked=true]'); if (first) first.focus();
+    };
+    pop.addEventListener('click', (ev) => {
+      const f = ev.target.closest('button[data-font]'); if (f) { setFont(f.dataset.font); toast('Font: ' + FONT_NAME[f.dataset.font]); return; }
+      const z = ev.target.closest('button[data-size]'); if (z) { setSize(z.dataset.size); toast('Text size: ' + SIZE_NAME[z.dataset.size]); }
+    });
+    document.addEventListener('click', (ev) => { if (!pop.hidden && !pop.contains(ev.target) && ev.target !== btn) close(); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !pop.hidden) { close(); btn.focus(); } });
+  }
+
   // Sync errors in plain words: the same problem on many accounts is said once.
   function syncErrText(errs) {
     const noAccess = errs.filter((e) => /Cannot call API for app/i.test(e.message || ''));
@@ -1278,7 +1316,8 @@
     if (sec === 'overview') sec = 'users'; // Overview was removed — spend per team is on the Main Dashboard
     admSec = sec; try { localStorage.setItem('admSec', sec); } catch (_) {}
     document.querySelectorAll('#admNav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.a === sec)));
-    for (const k of ['overview', 'users', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
+    for (const k of ['overview', 'users', 'accounts', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
+    if (sec === 'accounts') loadAdAccounts();
     if (sec === 'users') { loadUsers(); loadTeams(); }
     if (sec === 'health') loadHealth();
     if (sec === 'settings') loadSettings();
@@ -1416,6 +1455,67 @@
     if (b.dataset.hrun) { await runSync(b.dataset.hrun, b); }
     if (b.dataset.hgo) showTab(b.dataset.hgo);
   });
+
+  // ---------- Admin → Ad accounts: every ad account of every person ----------
+  let aaData = null, aaF = 'all';
+  async function loadAdAccounts() {
+    try { aaData = await api('/admin/ad-accounts'); } catch (e) { $('aaBody').innerHTML = `<tr><td colspan="7" class="muted">${esc(e.message)}</td></tr>`; return; }
+    const sel = $('aaPerson'), cur = sel.value;
+    sel.innerHTML = '<option value="">Everyone</option>' + aaData.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${u.team ? ' · ' + esc(u.team) : ''}</option>`).join('');
+    sel.value = cur; $('aaOwner').innerHTML = '<option value="">Who uses it?</option>' + aaData.users.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
+    $('aaAddBtn').hidden = !aaData.canEdit;
+    renderAdAccounts();
+  }
+  const aaOk = (a) => [1, 201].includes(a.statusCode);
+  function renderAdAccounts() {
+    const d = aaData; if (!d) return;
+    const q = ($('aaSearch').value || '').trim().toLowerCase(), who = $('aaPerson').value, has = (x) => String(x || '').toLowerCase().includes(q);
+    document.querySelectorAll('#aaFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === aaF)));
+    const scope = d.accounts.filter((a) => !who || a.people.some((p) => p.id === who));
+    const k = { n: scope.length, ok: scope.filter(aaOk).length, bad: scope.filter((a) => !aaOk(a)).length, today: scope.reduce((t, a) => t + (Number(a.todaySpend) || 0), 0), bal: scope.reduce((t, a) => t + (Number(a.balance) || 0), 0), off: scope.filter((a) => !a.people.some((p) => p.enabled)).length };
+    $('admAccN').textContent = d.accounts.filter((a) => !aaOk(a)).length || '';
+    $('aaKpis').innerHTML = `<div class="aak"><span class="lbl">Ad accounts</span><b class="num">${k.n}</b><span class="sub">${k.off} not synced</span></div>
+      <div class="aak"><span class="lbl">Active</span><b class="num ok-t">${k.ok}</b><span class="sub">running normally</span></div>
+      <div class="aak ${k.bad ? 'bad' : ''}"><span class="lbl">Problems</span><b class="num">${k.bad}</b><span class="sub">disabled, unpaid, in review…</span></div>
+      <div class="aak"><span class="lbl">Spent today</span><b class="num">${money(k.today)}</b><span class="sub">synced accounts</span></div>
+      <div class="aak"><span class="lbl">Balance to pay</span><b class="num">${money(k.bal)}</b><span class="sub">all accounts</span></div>`;
+    const list = scope.filter((a) => aaF === 'all' || (aaF === 'ok' ? aaOk(a) : aaF === 'bad' ? !aaOk(a) : !a.people.some((p) => p.enabled)))
+      .filter((a) => !q || has(a.name) || has(a.id) || has(a.business) || a.people.some((p) => has(p.name)))
+      .sort((a, b) => (aaOk(a) - aaOk(b)) || (Number(b.todaySpend) || 0) - (Number(a.todaySpend) || 0) || a.name.localeCompare(b.name));
+    $('aaBody').innerHTML = list.map((a) => {
+      const warn = [9, 3, 7, 8, 100].includes(a.statusCode), cur = a.currency && a.currency !== 'USD' ? ` <span class="hint">${esc(a.currency)}</span>` : '';
+      const nearCap = a.threshold && a.balance >= a.threshold * 0.8;
+      return `<tr class="${aaOk(a) ? '' : 'aa-bad'}"><td><b>${esc(a.name)}</b><div class="hint num">${esc(a.id)}${a.business ? ' · ' + esc(a.business) : ''}</div></td>
+        <td><span class="chip ${aaOk(a) ? 'ok' : warn ? 'warn' : 'bad'}">${esc(a.status || '—')}</span>${a.disableReason ? `<div class="hint">${esc(a.disableReason)}</div>` : ''}</td>
+        <td><div class="aa-ppl">${a.people.map((p) => `<label class="aa-p${p.enabled ? ' on' : ''}" title="${p.enabled ? 'Synced for ' : 'Not synced for '}${esc(p.name)}">${d.canEdit ? `<input type="checkbox" data-aasync="${esc(p.id)}|${esc(a.id)}" ${p.enabled ? 'checked' : ''} aria-label="Sync for ${esc(p.name)}">` : `<span class="aa-dot" aria-hidden="true"></span>`}<span>${esc(p.name)}</span>${p.team ? `<span class="hint">${esc(p.team)}</span>` : ''}</label>`).join('')}</div></td>
+        <td class="r num">${a.todaySpend != null ? (Number(a.todaySpend) > 0 ? '<b>' + money(a.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
+        <td class="r num ${nearCap ? 'warn-t' : ''}">${money(a.balance)}${cur}</td>
+        <td class="r num">${a.threshold != null ? money(a.threshold) : '<span class="muted">—</span>'}</td>
+        <td class="r num">${money(a.amountSpent)}</td></tr>`;
+    }).join('') || `<tr><td colspan="7" class="muted">${d.accounts.length ? 'Nothing matches.' : 'No ad accounts yet — each person taps Sync from Meta once, or tap Refresh from Facebook.'}</td></tr>`;
+    const newest = d.accounts.map((a) => a.seenAt).filter(Boolean).sort().pop();
+    $('aaNote').textContent = (newest ? 'Account details from Facebook ' + ago(newest) + '. ' : '') + 'One row per ad account; the people listed can open it with their Facebook login. Ticked = included in that person\'s sync.';
+  }
+  $('aaSearch').oninput = renderAdAccounts; $('aaPerson').onchange = renderAdAccounts;
+  $('aaFilter').onclick = (ev) => { const b = ev.target.closest('[data-f]'); if (b) { aaF = b.dataset.f; renderAdAccounts(); } };
+  $('aaBody').addEventListener('change', async (ev) => {
+    const cb = ev.target.closest('[data-aasync]'); if (!cb) return;
+    const [owner, id] = cb.dataset.aasync.split('|');
+    try { await api(`/admin/ad-accounts/${encodeURIComponent(owner)}/${encodeURIComponent(id)}`, { method: 'PATCH', body: { enabled: cb.checked } }); const a = aaData.accounts.find((x) => x.id === id), p = a && a.people.find((x) => x.id === owner); if (p) p.enabled = cb.checked; renderAdAccounts(); toast(cb.checked ? 'Included in sync' : 'Left out of sync'); }
+    catch (e) { cb.checked = !cb.checked; toast(e.message); }
+  });
+  $('aaRefresh').onclick = async () => {
+    const b = $('aaRefresh'); b.disabled = true; b.textContent = 'Asking Facebook…';
+    try { const r = await api('/admin/ad-accounts/refresh', { method: 'POST' }); await loadAdAccounts(); toast(`Updated ${r.ok} ${r.ok === 1 ? 'person' : 'people'}${r.failed.length ? ` · ${r.failed.length} failed` : ''}`); if (r.failed.length) $('aaNote').textContent = 'Could not refresh: ' + r.failed.join(' · '); }
+    catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = '↻ Refresh from Facebook'; }
+  };
+  $('aaAddBtn').onclick = () => { $('aaAdd').hidden = false; $('aaAddBtn').hidden = true; const w = $('aaPerson').value; if (w) $('aaOwner').value = w; $('aaId').focus(); };
+  $('aaAddX').onclick = () => { $('aaAdd').hidden = true; $('aaAddBtn').hidden = !(aaData && aaData.canEdit); };
+  $('aaAdd').onsubmit = async (ev) => {
+    ev.preventDefault(); const b = $('aaAddGo'); b.disabled = true; b.textContent = 'Checking…';
+    try { const r = await api('/admin/ad-accounts', { method: 'POST', body: { account: $('aaId').value, owner: $('aaOwner').value } }); successBadge(`${r.account.name} added for ${r.owner}`); $('aaId').value = ''; $('aaAdd').hidden = true; $('aaAddBtn').hidden = false; await loadAdAccounts(); }
+    catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Add'; }
+  };
 
   // Settings
   async function loadSettings() {

@@ -137,6 +137,11 @@ async function adAccounts(token) {
   }
 }
 
+// One ad account by ID (for adding an account by hand). Throws if this login can't open it.
+async function adAccount(token, actId) {
+  try { return mapAccount(await get(`/${actId}`, { fields: `${ACCOUNT_FIELDS},${THRESHOLD_FIELD}` }, token)); }
+  catch (e) { if (e.needsLogin || e.rateLimited) throw e; return mapAccount(await get(`/${actId}`, { fields: ACCOUNT_FIELDS }, token)); }
+}
 async function accountSpend(token, actId, day) {
   const d = await get(`/${actId}/insights`, { fields: 'spend', time_range: { since: day, until: day } }, token);
   return Number(d.data?.[0]?.spend || 0);
@@ -505,4 +510,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { get, videoKind, adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { get, adAccount, videoKind, adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

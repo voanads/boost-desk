@@ -1001,7 +1001,7 @@ a.btn:hover{border-color:var(--brand)}a.btn.sm{padding:5px 12px;font-size:var(--
   --post:var(--brand); --post-soft:var(--brand-soft); --r:12px!important;
   --f-ui:"Kantumruy Pro","Noto Sans Khmer",system-ui,sans-serif!important; --f-num:"Kantumruy Pro",system-ui,sans-serif!important;
 }
-body{font-size:15.5px;letter-spacing:0}
+body{font-size:.97rem;letter-spacing:0}
 /* labels: sentence case, quieter */
 .summary .lbl,th,.dtable td[data-l]::before,.fld>span,.lv .st span,.lv .kv span,.paydate span,.payprice span,.pgsplit-h,.invitems-h{text-transform:none!important;letter-spacing:0!important;font-size:var(--fs-md)!important;font-weight:500!important;color:var(--muted)!important}
 .sico{display:none!important}
@@ -1925,7 +1925,7 @@ body{font-size:15.5px;letter-spacing:0}
 .bc-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .bc-stats>div{display:flex;flex-direction:column;gap:1px;padding:9px 11px;border-radius:var(--r-lg);background:var(--bg-2);min-width:0}
 .bc-stats>div:first-child{background:var(--grad);color:var(--on-brand)}
-.bc-stats .lbl{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.75}
+.bc-stats .lbl{font-size:.64rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.75}
 .bc-stats b{font-size:var(--fs-2xl);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bc-stats .sub{font-size:var(--fs-xs);opacity:.75}
 .bc-stats .sub.bad{color:var(--danger);opacity:1}.bc-stats .sub.good{color:var(--ok);opacity:1}
@@ -2028,7 +2028,7 @@ body{font-size:15.5px;letter-spacing:0}
 .pc-rk{align-self:flex-start;font-size:var(--fs-xs);font-weight:800;color:var(--muted);background:var(--bg-2);border-radius:var(--r-pill);padding:2px 8px}
 .pc-m{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}
 .pc-m>div{display:flex;flex-direction:column;gap:1px;min-width:0}
-.pc-m .lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pc-m .lbl{font-size:.64rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .pc-m b{font-size:var(--fs-2xl);font-weight:800;white-space:nowrap}
 .pcard.good .pc-cpo b{color:var(--ok)}.pcard.mid .pc-cpo b{color:var(--warn)}.pcard.bad .pc-cpo b{color:var(--danger)}
 .pcard.bad{border-color:color-mix(in srgb,var(--danger) 30%,var(--line))}
@@ -2072,3 +2072,59 @@ body{font-size:15.5px;letter-spacing:0}
 .mpanel .todo-t b{font-size:var(--fs-md);line-height:1.35}
 .mpanel .todo-t .hint{font-size:var(--fs-xs)}
 .mpanel .todo-ic{font-size:var(--fs-lg)}
+
+/* ---------- Font & text size ("Aa") — Khmer always uses Kantumruy Pro (or Noto Sans Khmer with Noto) ---------- */
+:root,html[data-font=system]{--f-ui:system-ui,-apple-system,"Segoe UI",Roboto,"Kantumruy Pro","Noto Sans Khmer",sans-serif;--f-num:var(--f-ui)}
+html[data-font=inter]{--f-ui:"Inter","Kantumruy Pro",system-ui,-apple-system,"Segoe UI",sans-serif;--f-num:var(--f-ui)}
+html[data-font=noto]{--f-ui:"Noto Sans","Noto Sans Khmer",system-ui,-apple-system,"Segoe UI",sans-serif;--f-num:var(--f-ui)}
+html[data-font=lexend]{--f-ui:"Lexend","Kantumruy Pro",system-ui,-apple-system,"Segoe UI",sans-serif;--f-num:var(--f-ui)}
+html[data-font=jakarta]{--f-ui:"Plus Jakarta Sans","Kantumruy Pro",system-ui,-apple-system,"Segoe UI",sans-serif;--f-num:var(--f-ui)}
+html[data-font=onest]{--f-ui:"Onest","Kantumruy Pro",system-ui,-apple-system,"Segoe UI",sans-serif;--f-num:var(--f-ui)}
+button,input,select,textarea{font-family:inherit}
+.num{font-variant-numeric:tabular-nums}
+html[data-size=s]{font-size:15px}
+html[data-size=m]{font-size:16px}
+html[data-size=l]{font-size:17.5px}
+html[data-size=xl]{font-size:19px}
+.fontbtn{font-weight:800;font-size:15px;letter-spacing:-.02em;font-family:Georgia,"Times New Roman",serif}
+.fontpop{position:fixed;z-index:200;display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:var(--r-xl);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-lg);max-height:calc(100vh - 24px);overflow:auto}
+.fontpop[hidden]{display:none}
+.fp-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.fp-h b{font-size:var(--fs-xl)}
+.fp-lbl{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.fp-fonts{display:flex;flex-direction:column;gap:4px}
+.fp-fonts button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:9px 12px;border-radius:var(--r-md);border:1px solid var(--line);color:var(--ink)}
+.fp-fonts button b{font-size:15px}
+.fp-fonts button span{font-size:12.5px;color:var(--muted)}
+.fp-fonts button:hover{background:var(--bg-2)}
+.fp-fonts button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.fp-fonts button[aria-checked=true]{border-color:var(--brand);background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.fp-size{display:grid;grid-template-columns:repeat(4,1fr)}
+.fp-size button{font-family:Georgia,serif;font-weight:700;min-height:40px}
+/* Admin → Ad accounts */
+.aa-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-3);margin-bottom:var(--s-3)}
+.aak{display:flex;flex-direction:column;gap:2px;padding:14px 16px;border-radius:var(--r-xl);background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-sm);min-width:0}
+.aak .lbl{font-size:var(--fs-2xs);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.aak b{font-size:1.45rem;font-weight:800}
+.aak .sub{font-size:var(--fs-sm);color:var(--muted)}
+.aak.bad{background:color-mix(in srgb,var(--danger) 8%,var(--surface));border-color:color-mix(in srgb,var(--danger) 30%,var(--line))}.aak.bad b{color:var(--danger)}
+.aak .ok-t{color:var(--ok)}
+.aa-tools{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap;margin-bottom:var(--s-3)}
+.aa-tools input,.aa-tools select,.aa-add input,.aa-add select{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;font:inherit;color:var(--ink);min-height:40px;min-width:0}
+.aa-tools input{flex:1 1 240px}
+.aa-tools input:focus,.aa-add input:focus,.aa-add select:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
+.aa-add{display:flex;flex-direction:column;gap:8px;padding:var(--s-3);margin-bottom:var(--s-3);border-radius:var(--r-lg);border:1px dashed color-mix(in srgb,var(--brand) 40%,var(--line));background:color-mix(in srgb,var(--brand) 4%,var(--surface))}
+.aa-add[hidden]{display:none}
+.aa-add-h{display:flex;flex-direction:column;gap:2px}
+.aa-add-f{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto auto;gap:var(--s-2)}
+.aa-table td{vertical-align:top}
+.aa-table tr.aa-bad td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.aa-ppl{display:flex;flex-wrap:wrap;gap:4px}
+.aa-p{display:inline-flex;align-items:center;gap:5px;padding:3px 9px 3px 6px;border-radius:var(--r-pill);background:var(--bg-2);font-size:var(--fs-sm);cursor:pointer;color:var(--muted)}
+.aa-p.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+.aa-p input{margin:0;accent-color:var(--brand)}
+.aa-p .hint{font-weight:400}
+.aa-dot{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.aa-p.on .aa-dot{background:var(--brand)}
+#aaNote{margin-top:var(--s-2)}
+@media (max-width:900px){.aa-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.aa-add-f{grid-template-columns:1fr 1fr}.aa-add-f input{grid-column:1/-1}.aa-tools .seg{width:100%;display:grid;grid-template-columns:repeat(4,1fr)}}

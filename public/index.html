@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=150">
+<link rel="stylesheet" href="/assets/app.css?v=151">
 </head>
 <body>
 <div class="wrap">
@@ -234,22 +234,40 @@
   </section>
 
   <dialog id="cDlg" class="dlg" aria-labelledby="cDlgTitle">
-    <form class="dlg-in" id="cForm">
+    <form class="dlg-in csf" id="cForm">
       <div class="dlg-head cdlg-head"><h2 id="cDlgTitle">Add client</h2><button type="button" class="ghost" id="cClose" aria-label="Close">✕</button></div>
-      <label class="fld"><span>Client name</span><input type="text" id="cName" required placeholder="e.g. DC Shop" autocomplete="off"></label>
-      <div class="fld"><span>Boost type</span>
-        <div class="seg seg-lg" id="cType" role="group" aria-label="Boost type"><button type="button" data-v="live">🔴 Live</button><button type="button" data-v="post">📌 Boost post</button><button type="button" data-v="both">Post + live</button></div>
-      </div>
-      <div class="fld"><span>Pages &amp; where reports go</span>
+      <section class="csf-sec">
+        <div class="csf-h"><h3>Basics</h3><p class="hint">Name and what you boost for this client.</p></div>
+        <label class="fld"><span>Client name</span><input type="text" id="cName" required placeholder="e.g. DC Shop" autocomplete="off"></label>
+        <div class="fld"><span>Boost type</span>
+          <div class="ctype" id="cType" role="group" aria-label="Boost type">
+            <button type="button" data-v="live"><b><i class="cdot live" aria-hidden="true"></i>Live</b><small>Boost live videos</small></button>
+            <button type="button" data-v="post"><b><i class="cdot post" aria-hidden="true"></i>Boost post</b><small>Boost posts, with a plan</small></button>
+            <button type="button" data-v="both"><b><i class="cdot both" aria-hidden="true"></i>Post + live</b><small>Both lives and posts</small></button>
+          </div>
+        </div>
+      </section>
+      <section class="csf-sec">
+        <div class="csf-h"><h3>Facebook Pages</h3><p class="hint">Spend from ads on these Pages counts for this client. Pick where each Page's report goes.</p></div>
         <div id="cPageCards" class="pcards"></div>
         <div class="pages pages-lg" id="cPages"></div>
-      </div>
-      <div class="fld"><span>Telegram group</span>
+      </section>
+      <section class="csf-sec">
+        <div class="csf-h"><h3>Telegram group</h3><p class="hint">Reports and boost plans go to this group.</p></div>
+        <div class="csf-tg" id="cTgStatus"></div>
         <div id="cTgBox"></div>
-      </div>
-      <div class="dlg-foot">
-        <button type="button" class="danger" id="cDel" hidden>Delete</button>
-        <button type="button" id="cPause" hidden>Pause</button>
+      </section>
+      <section class="csf-sec" id="cPlanSec" hidden>
+        <div class="csf-h"><h3>Post boost plan</h3><p class="hint">The plan you send before boosting, so the client pays first.</p></div>
+        <label class="csw"><span><b>Show the boost plan on this client</b><small id="cPlanShowHint">Shown under the numbers on the Clients page</small></span><input type="checkbox" id="cPlanShow" role="switch"><i aria-hidden="true"></i></label>
+        <label class="csw"><span><b>Add tax by default</b><small>New plans for this client start with tax ticked</small></span><input type="checkbox" id="cPlanTax" role="switch"><i aria-hidden="true"></i></label>
+      </section>
+      <section class="csf-sec csf-danger" id="cDanger" hidden>
+        <div class="csf-h"><h3>Pause or delete</h3><p class="hint">Pausing keeps all history. Deleting removes the client and its notes.</p></div>
+        <div class="csf-dbtns"><button type="button" id="cPause" hidden>Pause</button><button type="button" class="danger" id="cDel" hidden>Delete</button></div>
+      </section>
+      <div class="dlg-foot csf-bar">
+        <span class="hint" id="cDirty"></span>
         <span class="spacer"></span>
         <button type="button" id="cCancel">Cancel</button>
         <button type="submit" class="primary" id="cSave">Save</button>
@@ -612,6 +630,6 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/app.js?v=150"></script>
+<script src="/assets/app.js?v=151"></script>
 </body>
 </html>

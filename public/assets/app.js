@@ -599,7 +599,7 @@
       const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
       return `<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span>
-        <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span>${c.plan && c.plan.lines && c.plan.lines.length && hasPostType(c) ? (() => { const [st, cls] = planStatus(c); return `<span class="cr-plan ${cls}" title="Post boost plan">🎯 ${money(planTotals(c.plan).total)} · ${esc(st)}</span>`; })() : ''}</span>
+        <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span>${c.plan && c.plan.lines && c.plan.lines.length && !c.plan.hidden && hasPostType(c) ? (() => { const [st, cls] = planStatus(c); return `<span class="cr-plan ${cls}" title="Post boost plan">🎯 ${money(planTotals(c.plan).total)} · ${esc(st)}</span>`; })() : ''}</span>
         <span class="cr-v"><b class="num">${m && m.spend ? money(m.spend) : '–'}</b><span class="hint">${o && o.orders ? `${o.orders.toLocaleString('en-US')} orders${cpo ? ' · ' + money(cpo) : ''}` : 'this month'}</span></span>
       </button>`;
     }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on the Dashboard and add the Pages it finds.'}</div>`;
@@ -684,23 +684,37 @@
   function planEditor(c) {
     const ls = planDraft || [], t = planTotals({ tax: planDraft && planDraft.tax != null ? planDraft.tax : c.plan && c.plan.tax }, ls);
     return `<form class="bp-edit" id="bpForm"><div class="bp-rows">
-        <div class="bp-row bp-hd" aria-hidden="true"><span>Post (name or link)</span><span>$ / day</span><span>Days</span><span>Start</span><span>Amount</span><span></span></div>
-        ${ls.map((l, i) => `<div class="bp-row" data-i="${i}"><input type="text" data-f="post" maxlength="160" placeholder="Post ${i + 1}" value="${esc(l.post || '')}" aria-label="Post ${i + 1}">
-          <input type="number" data-f="daily" min="0" step="0.5" inputmode="decimal" value="${l.daily || ''}" placeholder="10" aria-label="Dollars a day">
-          <input type="number" data-f="days" min="1" max="365" step="1" value="${l.days || ''}" placeholder="5" aria-label="Days">
-          <input type="date" data-f="start" value="${esc(l.start || '')}" aria-label="Start date">
-          <b class="num bp-amt">${money(r2((Number(l.daily) || 0) * (Number(l.days) || 0)))}</b>
-          <button type="button" class="ghost sm" data-bprm="${i}" aria-label="Remove post">✕</button></div>`).join('')}
+        ${ls.map((l, i) => `<div class="bp-row" data-i="${i}">
+          <button type="button" class="bp-pic${l.img ? ' has' : ''}" data-bppic="${i}" aria-label="${l.img ? 'Change' : 'Add'} picture for post ${i + 1}">${l.img ? `<img src="/api/post-img/${esc(l.img)}" alt="">` : l.loading ? '<span class="bp-spin" aria-hidden="true"></span>' : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg><small>Picture</small>'}</button>
+          <div class="bp-f">
+            <input type="url" data-f="link" maxlength="400" placeholder="Paste the post link — picture and name fill in" value="${esc(l.link || '')}" aria-label="Post ${i + 1} link" class="bp-link">
+            <div class="bp-f2">
+              <input type="text" data-f="post" maxlength="160" placeholder="Post ${i + 1} name" value="${esc(l.post || '')}" aria-label="Post ${i + 1} name">
+              <label><span>$ / day</span><input type="number" data-f="daily" min="0" step="0.5" inputmode="decimal" value="${l.daily || ''}" placeholder="10"></label>
+              <label><span>Days</span><input type="number" data-f="days" min="1" max="365" step="1" value="${l.days || ''}" placeholder="5"></label>
+              <label><span>Start</span><input type="date" data-f="start" value="${esc(l.start || '')}"></label>
+              <b class="num bp-amt">${money(r2((Number(l.daily) || 0) * (Number(l.days) || 0)))}</b>
+            </div>
+            ${l.note ? `<span class="hint bp-note">${esc(l.note)}</span>` : ''}
+          </div>
+          <button type="button" class="ghost sm bp-x" data-bprm="${i}" aria-label="Remove post ${i + 1}">✕</button></div>`).join('')}
       </div>
       <button type="button" class="sm bp-add" data-bp="addline">+ Add post</button>
       <label class="bp-chk"><input type="checkbox" id="bpTax" ${(planDraft.tax != null ? planDraft.tax : c.plan && c.plan.tax) ? 'checked' : ''}> Add tax ${taxRate()}%</label>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
       <div class="bp-btns"><button type="submit" class="primary sm">Save plan</button><button type="button" class="ghost sm" data-bp="close">Cancel</button>${c.plan && c.plan.lines && c.plan.lines.length ? '<button type="button" class="ghost sm bp-rm" data-bp="clear">Delete plan</button>' : ''}</div></form>`;
   }
+  // Shrink a picked picture to at most 1280px JPEG before upload.
+  function shrinkImg(file) {
+    return new Promise((ok, bad) => { const fr = new FileReader(); fr.onerror = () => bad(new Error('Could not read that file')); fr.onload = () => { const im = new Image(); im.onerror = () => bad(new Error('That file is not a picture')); im.onload = () => {
+      const k = Math.min(1, 1280 / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
+      cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); ok(cv.toDataURL('image/jpeg', 0.85)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
+  }
   function planStrip(c) {
     if (!hasPostType(c)) return '';
     const open = planOpen[c.id], lines = (c.plan && c.plan.lines) || [];
-    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="sm primary" data-bp="new">+ New plan</button></div></section>`;
+    if (c.plan && c.plan.hidden && open !== 'edit') return `<section class="bplan bp-hidden"><div class="bp-top"><b>Post boost plan hidden</b><span class="hint">${lines.length ? money(planTotals(c.plan).total) + ' · ' + lines.length + ' post' + (lines.length === 1 ? '' : 's') : 'No plan yet'}</span><button type="button" class="sm" data-bp="show">Show plan</button></div></section>`;
+    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="sm primary" data-bp="new">+ New plan</button></div></section>`;
     if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
     const t = planTotals(c.plan), [st, cls] = planStatus(c), p = planProg[c.id];
     const send = open === 'send' ? `<div class="bp-send"><pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
@@ -711,8 +725,8 @@
           <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> Just copy the text</label>
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
     return `<section class="bplan ${cls}"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
-        <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
-      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li"><span class="bp-pn">${esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
+        <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
+      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
       ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>Post spend since ${esc(shortDay(p.from))}: <b>${money(p.spent)}</b> of <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>Ends ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}</section>`;
   }
@@ -737,10 +751,11 @@
   }
   function bindPlan(c) {
     const sec = document.querySelector('#cDetail .bplan'); if (!sec) return;
-    const blank = () => ({ post: '', daily: '', days: '', start: '' });
+    const blank = () => ({ post: '', link: '', img: '', daily: '', days: '', start: '' });
     sec.querySelectorAll('[data-bp]').forEach((b) => b.onclick = async () => {
       const k = b.dataset.bp;
       if (k === 'clear') { if (!confirm('Delete this boost plan?')) return; try { await savePlan(c, { lines: [], sentAt: null }); toast('Plan deleted'); } catch (e) { toast(e.message); } return; }
+      if (k === 'hide' || k === 'show') { try { await savePlan(c, { hidden: k === 'hide' }); toast(k === 'hide' ? 'Plan hidden — Show plan brings it back' : 'Plan shown'); } catch (e) { toast(e.message); } return; }
       if (k === 'addline') { readDraft(); planDraft.push(blank()); redrawPlan(c); const rows = document.querySelectorAll('#bpForm .bp-row[data-i] input[data-f="post"]'); if (rows.length) rows[rows.length - 1].focus(); return; }
       if (k === 'new' || k === 'edit') {
         planDraft = k === 'new' ? [blank()] : ((c.plan && c.plan.lines) || []).map((l) => ({ ...l }));
@@ -757,10 +772,24 @@
       const form = $('bpForm');
       const retotal = () => { readDraft(); const t = planTotals({ tax: planDraft.tax }, planDraft); form.querySelectorAll('.bp-row[data-i]').forEach((r) => { const l = planDraft[Number(r.dataset.i)]; r.querySelector('.bp-amt').textContent = money(r2((Number(l.daily) || 0) * (Number(l.days) || 0))); }); form.querySelector('.bp-tot').innerHTML = `<span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span>`; };
       form.oninput = retotal; form.onchange = retotal;
+      form.querySelectorAll('[data-bppic]').forEach((b) => b.onclick = () => {
+        const i = Number(b.dataset.bppic), inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/jpeg,image/png,image/webp';
+        inp.onchange = async () => { const f = inp.files && inp.files[0]; if (!f) return; readDraft(); const l = planDraft[i]; l.loading = true; l.note = ''; redrawPlan(c);
+          try { l.img = (await api('/post-img', { method: 'POST', body: { data: await shrinkImg(f) } })).id; } catch (e) { l.note = e.message; } l.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c); };
+        inp.click();
+      });
+      form.querySelectorAll('input[data-f="link"]').forEach((x) => x.onchange = async () => {
+        readDraft(); const i = Number(x.closest('[data-i]').dataset.i), l = planDraft[i], url = (l.link || '').trim();
+        if (!/^https:\/\//.test(url) || l.fetched === url) return;
+        l.fetched = url; l.loading = true; l.note = 'Reading the post…'; redrawPlan(c);
+        try { const r = await api('/post-preview', { method: 'POST', body: { url } }); if (r.img) l.img = r.img; if (r.title && !l.post) l.post = r.title; l.note = ''; }
+        catch (e) { l.note = e.message; }
+        l.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c);
+      });
       form.querySelectorAll('[data-bprm]').forEach((b) => b.onclick = () => { readDraft(); planDraft.splice(Number(b.dataset.bprm), 1); if (!planDraft.length) planDraft.push(blank()); redrawPlan(c); });
       form.onsubmit = async (ev) => {
         ev.preventDefault(); readDraft();
-        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: l.post.trim(), daily: Number(l.daily), days: Number(l.days) || 1, start: l.start }));
+        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: (l.post || '').trim(), link: (l.link || '').trim(), img: l.img || '', daily: Number(l.daily), days: Number(l.days) || 1, start: l.start }));
         if (!lines.length) { toast('Add a $ a day for at least one post'); return; }
         try { await savePlan(c, { lines, tax: !!planDraft.tax, ...(planDraft.isNew ? { sentAt: null } : {}) }); successBadge('Boost plan saved — tap Send plan'); } catch (e) { toast(e.message); }
       };
@@ -902,16 +931,29 @@
   }
   function drawDlgTopics() { /* topics now live inside each Page card */ }
   function drawDlgType() { document.querySelectorAll('#cType button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cDraft.type))); }
-  document.querySelectorAll('#cType button').forEach((b) => b.onclick = () => { cDraft.type = b.dataset.v; drawDlgType(); });
+  document.querySelectorAll('#cType button').forEach((b) => b.onclick = () => { cDraft.type = b.dataset.v; drawDlgType(); drawPlanSec(); setDirty(); });
+  const setDirty = () => { if ($('cDirty')) $('cDirty').textContent = cEdit ? 'Unsaved changes' : ''; };
+  $('cForm').addEventListener('input', setDirty); $('cForm').addEventListener('change', setDirty);
+  function drawPlanSec() {
+    const c = cEdit, on = !!c && cDraft.type !== 'live';
+    $('cPlanSec').hidden = !on; if (!on) return;
+    $('cPlanShowHint').textContent = $('cPlanShow').checked ? 'Shown under the numbers on the Clients page' : 'Hidden — tap Show plan on the client to bring it back';
+  }
+  $('cPlanShow').addEventListener('change', drawPlanSec);
+  function drawTgStatus() {
+    const el = $('cTgStatus'); if (!el) return; const on = !!cDraft.telegram;
+    el.className = 'csf-tg ' + (on ? 'on' : 'off');
+    el.innerHTML = `<span class="csf-tgic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21.5 4.5 2.5 11.8l6.2 2.1 2.3 6.6 3.4-4.1 5 3.7Z"/><path d="m8.7 13.9 9.5-6.8"/></svg></span><span><b>${on ? esc(cDraft.telegram_title || 'Telegram group') : 'No group yet'}</b><small>${on ? 'Reports and plans go here' : 'Reports and boost plans can only be copied until a group is picked'}</small></span>`;
+  }
   function drawDlgTg() {
-    const box = $('cTgBox');
+    const box = $('cTgBox'); drawTgStatus();
     if (!me || !me.telegram || !me.telegram.bot) { box.innerHTML = '<div class="note">The Telegram bot is not set up on the server yet (TELEGRAM_BOT_TOKEN in Railway), so groups can’t be picked. Reports can still be copied.</div>'; return; }
     const opts = tgChats.filter((t) => t.type !== 'topic');
     if (cDraft.telegram && !opts.some((o) => o.id === cDraft.telegram)) opts.push({ id: cDraft.telegram, title: cDraft.telegram_title || cDraft.telegram });
     box.innerHTML = `<div class="tgrow"><select id="cTg"><option value="">No group</option>${opts.map((o) => `<option value="${esc(o.id)}" ${o.id === cDraft.telegram ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}</select><button type="button" id="cTgRefresh" title="Refresh list">↻ Refresh</button></div>
       <details class="linkhelp-d"><summary>How to connect a group or topic?</summary><div class="linkhelp"> add ${tgBot ? '<b>@' + esc(tgBot) + '</b>' : 'the bot'} to the client's Telegram group, send <code class="lcode" title="Tap to copy">/link${tgBot ? '@' + esc(tgBot) : ''} ${esc(tgCode)}</code> in the group, then tap <b>Refresh list</b>. Only people who linked a group see it, and teammates can each link the same group. To remove yourself, send <code>/unlink${tgBot ? '@' + esc(tgBot) : ''} ${esc(tgCode)}</code>. If nothing happens, make the bot an <b>admin</b> of the group. For a group with topics, also send the <b>/link</b> code inside each topic so it shows next to the Pages above.</div></details>`;
     const lc = box.querySelector('.lcode'); if (lc) lc.onclick = async () => { try { await navigator.clipboard.writeText(lc.textContent); toast('Copied — paste it in the Telegram group'); } catch (_) {} };
-    $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; drawDlgPages(); };
+    $('cTg').onchange = () => { const o = opts.find((x) => x.id === $('cTg').value); cDraft.telegram = $('cTg').value; cDraft.telegram_title = o ? o.title : ''; drawDlgPages(); drawTgStatus(); };
     $('cTgRefresh').onclick = async () => { await loadChats(); drawDlgTg(); drawDlgPages(); toast(tgChats.length ? `${tgChats.length} group${tgChats.length > 1 ? 's' : ''} found` : 'No groups yet — add the bot to a group and send a message there.'); };
   }
   function openClientDlg(c, preset, opts = {}) {
@@ -923,6 +965,8 @@
     $('cDel').hidden = !c; $('cPause').hidden = !c; if (c) $('cPause').textContent = c.archived ? 'Resume' : 'Pause';
     $('cDel').textContent = 'Delete'; $('cDel').dataset.arm = '';
     drawDlgType(); drawDlgPages(); drawDlgTg(); loadDlgPageNames();
+    $('cDanger').hidden = !c; $('cDirty').textContent = '';
+    $('cPlanShow').checked = !(c && c.plan && c.plan.hidden); $('cPlanTax').checked = !!(c && c.plan && c.plan.tax); drawPlanSec();
     $('cCancel').textContent = cInline ? 'Undo changes' : 'Cancel';
     const formEl = document.getElementById('cForm') || cFormEl;
     if (cInline && $('cdForm')) { $('cdForm').appendChild(formEl); return; } // shown inside the Clients tab's detail panel
@@ -1009,7 +1053,9 @@
     const b = $('cSave'); b.disabled = true;
     try {
       if (cEdit) {
-        const c = await api('/clients/' + cEdit.id, { method: 'PATCH', body: { ...body, match: '' } });
+        let c = await api('/clients/' + cEdit.id, { method: 'PATCH', body: { ...body, match: '' } });
+        if (body.type !== 'live') { const pl = c.plan || {}, hidden = !$('cPlanShow').checked, tax = $('cPlanTax').checked; if (!!pl.hidden !== hidden || !!pl.tax !== tax) c = await api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { hidden, tax } }); }
+        $('cDirty').textContent = '';
         clients = clients.map((x) => x.id === c.id ? c : x); toast('Saved ' + c.name);
       } else {
         const c = await api('/clients', { method: 'POST', body });

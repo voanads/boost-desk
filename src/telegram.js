@@ -126,4 +126,24 @@ async function username() {
   return botName;
 }
 
-module.exports = { configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };
+// Up to 10 pictures as one album; the text goes as the album's caption when it fits, else as a message after it.
+async function sendAlbum(images, text, chatId) {
+  if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
+  if (!chatId) throw new Error('No Telegram group chosen.');
+  const list = images.slice(0, 10), fits = text && text.length <= 1024;
+  if (list.length === 1) {
+    const form = new FormData(); addDest(form, chatId); if (fits) form.append('caption', text);
+    form.append('photo', new Blob([list[0].data], { type: list[0].mime }), 'post.jpg');
+    const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendPhoto`, { method: 'POST', body: form })).json().catch(() => ({}));
+    if (!body.ok) throw new Error('Telegram: ' + (body.description || 'photo failed'));
+  } else {
+    const form = new FormData(); addDest(form, chatId);
+    form.append('media', JSON.stringify(list.map((im, i) => ({ type: 'photo', media: `attach://p${i}`, ...(i === 0 && fits ? { caption: text } : {}) }))));
+    list.forEach((im, i) => form.append(`p${i}`, new Blob([im.data], { type: im.mime }), `p${i}.jpg`));
+    const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendMediaGroup`, { method: 'POST', body: form })).json().catch(() => ({}));
+    if (!body.ok) throw new Error('Telegram: ' + (body.description || 'album failed'));
+  }
+  if (text && !fits) await send(text, chatId);
+}
+
+module.exports = { sendAlbum, configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };

@@ -748,6 +748,43 @@ api.patch('/clients/:id', wrap(async (req, res) => {
   if (['name', 'match', 'pages', 'type', 'archived'].some((k) => k in body)) await sync.rematch(req.user);
   res.json(c);
 }));
+// Post pictures for boost plans: upload one, or read it from a public Facebook post link.
+const IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+api.post('/post-img', wrap(async (req, res) => {
+  const m = String((req.body || {}).data || '').match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) return res.status(400).json({ error: 'Pick a JPG, PNG or WebP picture.' });
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 2.5e6) return res.status(400).json({ error: 'That picture is too big (max 2.5 MB).' });
+  res.json({ id: await db.putPostImage(req.user.fb_id, m[1], buf) });
+}));
+api.get('/post-img/:id', wrap(async (req, res) => {
+  const im = await db.getPostImage(req.user.fb_id, req.params.id);
+  if (!im) return res.status(404).end();
+  res.set('content-type', im.mime).set('cache-control', 'private, max-age=31536000, immutable').send(im.data);
+}));
+const FB_HOST = /^(?:www\.|m\.|web\.|mbasic\.)?(?:facebook\.com|fb\.watch|fb\.com)$/i;
+async function fbGet(url, hops = 0) {
+  const u = new URL(url); if (u.protocol !== 'https:' || !FB_HOST.test(u.hostname)) throw new Error('Paste a facebook.com post link.');
+  const r = await fetch(u, { redirect: 'manual', headers: { 'user-agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)', 'accept-language': 'en' }, signal: AbortSignal.timeout(8000) });
+  if (r.status >= 300 && r.status < 400 && r.headers.get('location') && hops < 3) return fbGet(new URL(r.headers.get('location'), u).toString(), hops + 1);
+  if (!r.ok) throw new Error('Facebook said ' + r.status);
+  return (await r.text()).slice(0, 1.5e6);
+}
+const unesc = (x) => String(x || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+api.post('/post-preview', wrap(async (req, res) => {
+  const url = String((req.body || {}).url || '').trim();
+  let html; try { html = await fbGet(url); } catch (e) { return res.status(400).json({ error: (e.message.startsWith('Paste') ? e.message : 'Could not open that post') + ' — upload the picture instead.' }); }
+  const meta = (k) => { const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${k}["'][^>]*content=["']([^"']+)`, 'i')) || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${k}["']`, 'i')); return m ? unesc(m[1]) : ''; };
+  const imgUrl = meta('og:image'), title = (meta('og:description') || meta('og:title')).replace(/\s+/g, ' ').slice(0, 120);
+  if (!imgUrl) return res.status(404).json({ error: 'That post has no public picture — upload it instead.', title });
+  let iu; try { iu = new URL(imgUrl); } catch (_) { return res.status(404).json({ error: 'No picture found — upload it instead.', title }); }
+  if (iu.protocol !== 'https:' || !/(^|\.)(fbcdn\.net|facebook\.com)$/i.test(iu.hostname)) return res.status(404).json({ error: 'No picture found — upload it instead.', title });
+  const r = await fetch(iu, { signal: AbortSignal.timeout(10000) }).catch(() => null);
+  const mime = r && (r.headers.get('content-type') || '').split(';')[0];
+  if (!r || !r.ok || !IMG_TYPES.includes(mime)) return res.status(404).json({ error: 'Could not download the picture — upload it instead.', title });
+  const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 2.5e6) return res.status(400).json({ error: 'Picture too big — upload a smaller one.', title });
+  res.json({ img: await db.putPostImage(req.user.fb_id, mime, buf), title });
+}));
 // Boost plan: monthly budget + lives a day, its pace, and sending it to Telegram.
 api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));

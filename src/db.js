@@ -95,6 +95,13 @@ async function init() {
       fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (owner, campaign_id)
     );
+    CREATE TABLE IF NOT EXISTS post_images (        -- pictures of posts in boost plans (uploaded, or read from the post link)
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      mime TEXT NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS page_orders (        -- order counts per Facebook Page per day (from adsbox.biz); no customer data
       day DATE NOT NULL,
       page_id TEXT NOT NULL,
@@ -323,7 +330,16 @@ const monthEntries = async (owner, from, to) =>
   (await q(`SELECT to_char(e.day,'YYYY-MM-DD') AS day, e.client_id, e.data FROM day_entries e JOIN clients c ON c.id=e.client_id
             WHERE c.owner=$1 AND e.day BETWEEN $2 AND $3`, [owner, from, to])).rows;
 
+// ---- post pictures (boost plans) ----
+async function putPostImage(owner, mime, buf) {
+  const id = require('crypto').randomBytes(12).toString('hex');
+  await q('INSERT INTO post_images (id, owner, mime, data) VALUES ($1,$2,$3,$4)', [id, owner, mime, buf]);
+  return id;
+}
+const getPostImage = async (owner, id) => (await q('SELECT mime, data FROM post_images WHERE id=$1 AND owner=$2', [String(id), owner])).rows[0] || null;
+
 module.exports = {
+  putPostImage, getPostImage,
   pool, init, getSetups, putSetup,
   upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,

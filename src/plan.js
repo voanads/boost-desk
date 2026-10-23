@@ -19,11 +19,14 @@ function clean(b, cur = {}) {
   const p = { ...cur };
   if (Array.isArray(b.lines)) p.lines = b.lines.slice(0, 30).map((l) => ({
     post: String(l.post || '').trim().slice(0, 160),
+    link: /^https:\/\/[^\s]{4,400}$/.test(String(l.link || '').trim()) ? String(l.link).trim() : '',
+    img: /^[a-f0-9]{24}$/.test(String(l.img || '')) ? String(l.img) : '',
     daily: Math.min(1e5, Math.max(0, round2(l.daily))),
     days: Math.min(365, Math.max(1, parseInt(l.days, 10) || 1)),
     start: isDay(l.start) ? l.start : '',
   })).filter((l) => l.daily > 0);
   if (b.tax != null) p.tax = !!b.tax;
+  if (b.hidden != null) p.hidden = !!b.hidden;
   if (b.lang != null) p.lang = b.lang === 'km' ? 'km' : 'en';
   if (b.sentAt !== undefined) p.sentAt = b.sentAt || null;
   return p;
@@ -54,8 +57,9 @@ function message(c, plan, lang = 'en') {
   const lines = plan.lines.map((l, i) => {
     const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
     const when = l.start ? (km ? ` (ចាប់ពី ${dayTxt(l.start, true)})` : ` (from ${dayTxt(l.start)})`) : '';
-    return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}`
-      : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}`;
+    const link = l.link ? `\n    🔗 ${l.link}` : '';
+    return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}${link}`
+      : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}${link}`;
   });
   return km ? [
     `🎯 ផែនការ Boost Post — ${c.name}`, '', ...lines, '',
@@ -73,7 +77,10 @@ async function send(owner, c, { to = 'client', lang } = {}) {
   if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
   const chat = to === 'team' ? cfg.telegramChatId : c.telegram;
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
-  await telegram.send(message(c, c.plan, lang || c.plan.lang || 'en'), chat);
+  const text = message(c, c.plan, lang || c.plan.lang || 'en');
+  const imgs = [];
+  for (const l of c.plan.lines) if (l.img) { const im = await db.getPostImage(owner, l.img); if (im) imgs.push(im); }
+  if (imgs.length) await telegram.sendAlbum(imgs, text, chat); else await telegram.send(text, chat);
   if (to === 'client') await db.updateClient(owner, c.id, { plan: { ...c.plan, sentAt: new Date().toISOString() } });
   return { ok: true };
 }

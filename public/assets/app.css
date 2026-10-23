@@ -1043,8 +1043,9 @@ body{font-size:15.5px;letter-spacing:0}
   nav.tabs .full{display:inline!important} nav.tabs .short{display:none!important}
   nav.tabs button[aria-selected=true]{box-shadow:none!important;font-weight:600!important}
   header.appbar .who{margin-top:auto;flex-wrap:wrap;padding:0 8px}
-  .wrap:not(#tab-clients){max-width:1120px!important}
-  #tab-clients.wrap{max-width:1600px;margin-left:0;padding-left:0}
+  body:not([data-tab=clients]) .wrap{max-width:1120px!important}
+  body[data-tab=clients] .wrap{max-width:none;margin-left:0;margin-right:0}
+  body[data-tab=clients]{padding-right:28px}
 }
 @media (max-width:760px){
   .summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}
@@ -1727,3 +1728,11 @@ body{font-size:15.5px;letter-spacing:0}
 .ai-tnote{margin-top:var(--s-2)}
 @media (max-width:1280px){.cd-cols{grid-template-columns:1fr}}
 .task-act{align-self:flex-start;margin-top:6px}
+
+/* Client settings: hidden behind the ⚙ button in the client's header, opens at the top */
+.cd-head-row{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
+.cd-head-row .cd-title{flex:1;min-width:0}
+.cd-setbtn[aria-expanded=true]{background:var(--brand-soft);color:var(--brand);border-color:color-mix(in srgb,var(--brand) 35%,var(--line))}
+.cd-settings{border:1px solid color-mix(in srgb,var(--brand) 25%,var(--line));border-radius:var(--r-lg);padding:var(--s-4);background:color-mix(in srgb,var(--brand) 3%,var(--surface))}
+.cd-settings[hidden]{display:none}
+.cd-settings .cd-sec-h{margin-bottom:var(--s-2)}

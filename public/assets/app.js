@@ -220,6 +220,7 @@
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    document.body.dataset.tab = name; // the Clients tab uses the full width
     if ((name === 'admin' || name === 'main') && !(me && me.canAdmin)) name = 'dashboard';
     ['main', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
@@ -554,7 +555,7 @@
     renderClientDetail();
   }
   function selectClient(id) {
-    cSel = id; cPicked = true; $('cWrap').classList.add('show-detail');
+    cSel = id; cPicked = true; cSetOpen = false; $('cWrap').classList.add('show-detail');
     document.querySelectorAll('#cGrid [data-csel]').forEach((b) => { const on = Number(b.dataset.csel) === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     renderClientDetail(true);
     if (!matchMedia('(min-width: 901px)').matches) window.scrollTo({ top: $('tab-clients').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' });
@@ -563,6 +564,7 @@
   const cAi = {}, cFormEl = document.getElementById('cForm'); // the edit form moves between the dialog and the detail panel
   const parkForm = () => { if (cFormEl.parentElement !== $('cDlg')) $('cDlg').appendChild(cFormEl); };
   const monthRange = () => { const t = (me && me.today) || iso(new Date()); return [t.slice(0, 8) + '01', t]; };
+  let cSetOpen = false; // the settings form stays hidden until ⚙ is tapped
   const cWb = {}; // per client: { notes, tasks, ai, ticks, today } from /clients/:id/workbook
   const IC_TODO = { report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
   function renderClientDetail(fresh) {
@@ -574,7 +576,9 @@
     parkForm(); // rescue the form before the panel is redrawn
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
-        <div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div></div>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
+          <button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">⚙ Client settings</button></div></div>
+      <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
         <div class="cd-stat"><span class="lbl">Lives</span><b class="num">${m.lives || 0}</b><span class="sub">${money(m.liveSpend || 0)}</span></div>
@@ -588,8 +592,9 @@
         </div>
         <div class="cd-col">${aiSection(c)}</div>
       </div>
-      <section class="cd-sec"><div class="cd-sec-h"><h4>⚙ Client settings</h4></div><div id="cdForm"></div></section>
     </div>`;
+    const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
+    $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
     $('cdBack').onclick = () => { $('cWrap').classList.remove('show-detail'); window.scrollTo({ top: $('tab-clients').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); };
     let nt; $('cdNotes').oninput = () => { $('cdNotesSt').textContent = 'Saving…'; clearTimeout(nt); nt = setTimeout(async () => { try { const r = await api(`/clients/${c.id}/notes`, { method: 'PUT', body: { notes: $('cdNotes').value } }); if (cWb[c.id]) { cWb[c.id].notes = $('cdNotes').value; cWb[c.id].notesAt = r.notesAt; } if ($('cdNotesSt')) $('cdNotesSt').textContent = 'Saved'; } catch (e) { if ($('cdNotesSt')) $('cdNotesSt').textContent = e.message; } }, 700); };
     if (!keepForm || cEdit !== c) openClientDlg(c, null, { inline: true }); else $('cdForm').appendChild(cFormEl);

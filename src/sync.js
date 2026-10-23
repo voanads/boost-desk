@@ -139,7 +139,8 @@ function entryStats(c, e = {}) {
 
 async function tokenFor(user) {
   if (!user) throw new meta.MetaError('Nobody is logged in with Facebook yet. Log in once so the app can read Ads Manager.', { needsLogin: true });
-  return decrypt(user.token_enc);
+  try { return decrypt(user.token_enc); }
+  catch (_) { throw new meta.MetaError('Facebook login was saved with the old ENCRYPTION_KEY. Log out and log in with Facebook again (or set ENCRYPTION_KEY_OLD to the old key in Railway).', { needsLogin: true }); }
 }
 
 async function refreshAccounts(user) {

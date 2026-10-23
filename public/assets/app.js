@@ -1353,7 +1353,7 @@
       + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
-    $('uList').innerHTML = list.map((u, i) => {
+    const rows = list.map((u, i) => {
       const exp = u.tokenExpires ? Date.parse(u.tokenExpires) : 0, left = exp ? Math.round((exp - Date.now()) / day) : null;
       let st;
       if (u.expired) st = '<span class="ustat bad">Login expired</span>';
@@ -1364,21 +1364,21 @@
       else st = '<span class="ustat ok">Running</span>';
       const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
-      const role = u.role === 'owner' ? '<span class="rolechip owner">Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}"><option value="member" ${u.role === 'member' ? 'selected' : ''}>Member</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select>` : `<span class="rolechip ${u.role}">${u.role === 'admin' ? 'Admin' : 'Member'}</span>`;
-      return `<div class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
-        <div class="uc-top"><span class="avatar">${initials(u.name)}</span><div class="uc-n"><span class="uc-nm"><b>${esc(u.name)}</b>${you ? '<span class="chip meta">You</span>' : ''}</span><span class="hint">${u.team ? esc(u.team) + ' · ' : ''}${u.accounts} ad accounts · ${u.clients} clients</span></div>${role}</div>
-        <div class="uc-grid">
-          <div><span class="lbl">Status</span>${st}</div>
-          <div><span class="lbl">Last active</span><span>${u.lastSeen ? ago(u.lastSeen) : '—'}</span></div>
-          <div><span class="lbl">Facebook login</span><span class="${u.expired ? 'over' : left !== null && left < 7 ? 'warnt' : ''}">${u.expired ? 'Expired' : left !== null ? `${left} day${left === 1 ? '' : 's'} left` : '—'}</span></div>
-          <div><span class="lbl">Auto report</span><span>${u.autoReport && u.autoReport.on ? '⏰ ' + esc(u.autoReport.time) : 'Off'}</span></div>
-        </div>
-        <div class="hint uc-last">${last}</div>
-        <div class="uc-acts">${d.canEdit ? `<label class="switch"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''}><span></span> Auto sync</label>` : ''}<span class="spacer"></span>
-          ${d.canEdit ? `<button class="sm" data-run="${esc(u.id)}" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻ Sync now</button>` : ''}
-          ${edit && !you ? `<button class="sm danger" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>` : ''}</div>
-      </div>`;
-    }).join('') || '<div class="empty">No one matches.</div>';
+      const role = u.role === 'owner' ? '<span class="rolechip owner">Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}"><option value="member" ${u.role === 'member' ? 'selected' : ''}>Member</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select>` : `<span class="rolechip ${u.role}">${u.role === 'admin' ? 'Admin' : 'Member'}</span>`;
+      return `<tr class="utr${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
+        <td data-l="Person"><span class="ut-p"><span class="avatar">${initials(u.name)}</span><span class="ut-n"><b>${esc(u.name)}${you ? ' <span class="chip meta">You</span>' : ''}</b><span class="hint">${u.team ? esc(u.team) : 'No team'}</span></span></span></td>
+        <td data-l="Role">${role}</td>
+        <td class="r num" data-l="Ad accounts">${u.accounts}</td>
+        <td class="r num" data-l="Clients">${u.clients}</td>
+        <td data-l="Sync"><span class="ut-s">${st}<span class="hint" title="${last}">${u.lastSeen ? 'active ' + ago(u.lastSeen) : '—'}</span></span></td>
+        <td data-l="Facebook login"><span class="${u.expired ? 'over' : left !== null && left < 7 ? 'warnt' : ''}">${u.expired ? 'Expired' : left !== null ? `${left} day${left === 1 ? '' : 's'} left` : '—'}</span></td>
+        <td data-l="Auto report">${u.autoReport && u.autoReport.on ? '⏰ ' + esc(u.autoReport.time) : '<span class="hint">Off</span>'}</td>
+        <td class="ut-a">${d.canEdit ? `<label class="switch" title="Auto sync"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''} aria-label="Auto sync for ${esc(u.name)}"><span></span></label>` : ''}
+          ${d.canEdit ? `<button class="sm ut-ib" data-run="${esc(u.id)}" title="Sync now" aria-label="Sync ${esc(u.name)} now" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻</button>` : ''}
+          ${edit && !you ? `<button class="sm danger ut-ib" data-remove="${esc(u.id)}" data-name="${esc(u.name)}" title="Remove" aria-label="Remove ${esc(u.name)}">✕</button>` : ''}</td>
+      </tr>${lr && lr.error ? `<tr class="utr-err"><td colspan="8"><span class="over">${last}</span></td></tr>` : ''}`;
+    }).join('');
+    $('uList').innerHTML = rows ? `<div class="tablewrap"><table class="utable"><thead><tr><th>Person</th><th>Role</th><th class="r">Accounts</th><th class="r">Clients</th><th>Sync</th><th>Login</th><th>Report</th><th class="r">${d.canEdit ? 'Auto sync' : ''}</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No one matches.</div>';
     const b = Object.entries(d.blocked || {});
     $('blockedBox').hidden = !b.length;
     $('blockedBody').innerHTML = b.map(([id, x]) => `<tr><td>${esc(x.name || id)}<div class="hint">Facebook ID ${esc(id)} · removed ${esc(ago(x.at))}</div></td><td class="acts"><button data-restore="${esc(id)}">Restore access</button></td></tr>`).join('');
@@ -2697,7 +2697,8 @@ Notes:
     const svcIds = new Set(d.clients.filter(hasSvc).map((c) => c.id)), loose = {};
     for (const v of d.invoices) if (!svcIds.has(v.clientId)) (loose[v.clientId] = loose[v.clientId] || []).push(v);
     const looseHtml = q ? '' : Object.entries(loose).map(([id, list]) => { const c = d.clients.find((x) => x.id === Number(id)); return `<div class="payrow"><div class="payrow-top"><div class="payname"><b>${esc(c ? c.name : 'Removed client')}</b><span class="hint">Service fee removed — delete the invoice if it is no longer needed</span></div></div>${list.map((v) => invRow(v, c)).join('')}</div>`; }).join('');
-    $('payList').innerHTML = svc.map((c, i) => {
+    const payHead = svc.length ? '<div class="payhead"><span>Client</span><span>Pay date</span><span>Price</span><span>Status</span><span></span></div>' : '';
+    $('payList').innerHTML = payHead + svc.map((c, i) => {
       const due = dueDate(c, ym), list = invOf(c), last = list[0];
       const days = Math.round((parse(due) - parse(d.today)) / 864e5);
       let st = '', cls = '';

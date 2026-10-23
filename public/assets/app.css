@@ -1959,3 +1959,13 @@ body{font-size:15.5px;letter-spacing:0}
 .bd-ro{margin-top:4px}
 .bteams{flex:none}
 @media (max-width:900px){.bwrap.show-detail .cside{display:none}.bwrap:not(.show-detail) .cdetail{display:none}.bwrap .cside{position:static}}
+/* Facebook Page pictures */
+.pgpic{width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:-4px;margin-right:6px;background:var(--bg-2);flex:none}
+.pgpic.av{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:inherit;vertical-align:0;background:var(--surface)}
+.cr-av{position:relative;overflow:hidden}
+.mp .pgpic{width:22px;height:22px;vertical-align:-6px}
+.mp-n{display:flex;align-items:center;gap:10px;min-width:0}
+.mp-n>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pgav{position:relative;overflow:hidden;flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);font-size:var(--fs-md);font-weight:800}
+.mrow .mp .hint,.mrow .mp .mbar{margin-left:42px}
+@media (max-width:560px){.mrow .mp .hint,.mrow .mp .mbar{margin-left:0}}

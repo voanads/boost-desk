@@ -559,7 +559,7 @@
     $('cGrid').innerHTML = list.map((c, i) => {
       const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
       return `<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
-        <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span>
+        <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span>
         <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span></span>
         <span class="cr-v"><b class="num">${m && m.spend ? money(m.spend) : '–'}</b><span class="hint">${o && o.orders ? `${o.orders.toLocaleString('en-US')} orders${cpo ? ' · ' + money(cpo) : ''}` : 'this month'}</span></span>
       </button>`;
@@ -567,6 +567,11 @@
     document.querySelectorAll('#cGrid [data-csel]').forEach((b) => b.onclick = () => selectClient(Number(b.dataset.csel)));
     $('cWrap').classList.toggle('show-detail', !!cSel && $('cWrap').classList.contains('show-detail'));
     renderClientDetail();
+  }
+  // The client's main Facebook Page (its picture is the client's avatar): the Page with most spend, else a Page ID typed on the client.
+  function clientPageId(c) {
+    const o = cOrd[c.id]; const top = o && (o.pages || []).filter((p) => p.pageId).sort((a, b) => b.spend - a.spend)[0];
+    return top ? top.pageId : (c.pages || []).map(String).find((x) => /^\d{5,20}$/.test(x)) || '';
   }
   function selectClient(id) {
     cSel = id; cPicked = true; cSetOpen = false; $('cWrap').classList.add('show-detail');
@@ -590,7 +595,7 @@
     parkForm(); // rescue the form before the panel is redrawn
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
-        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
           <button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">⚙ Client settings</button></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-stats">
@@ -991,7 +996,7 @@
       const top = Math.max(0.01, ...pages.map((p) => p.spend)), show = mPgAll || q ? pages : pages.slice(0, 40);
       const unl = t.members.filter((u) => u.unlinked && u.unlinked.spend > 0.5);
       body = pages.length ? `<div class="pgtable"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${show.map((p, i) => `<div class="mrow" style="--i:${Math.min(i, 14)}">
-          <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'} · ${esc(p.people.join(', '))}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
+          <span class="mp"><b class="mp-n"><span class="pgav" aria-hidden="true">${esc(String(p.guess || p.page || '?').replace(/^Page …/, '').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span><span>${pageName(p)}</span></b><span class="hint">${p.client ? esc(p.client) : 'No client'} · ${esc(p.people.join(', '))}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
           <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
           <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
           <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}
@@ -1022,7 +1027,7 @@
             <span class="chev" aria-hidden="true">›</span>
           </button>
           ${open ? (u.pages.length ? `<div class="mc-b"><div class="mrow mhead"><span>Page</span><span class="r">Spend</span><span class="r">Orders</span><span class="r">Per order</span></div>${u.pages.map((p) => `<div class="mrow">
-              <span class="mp"><b>${pageLabel(p)}</b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
+              <span class="mp"><b class="mp-n"><span class="pgav" aria-hidden="true">${esc(String(p.guess || p.page || '?').replace(/^Page …/, '').trim().slice(0, 1).toUpperCase())}${pagePic(p.pageId, 'av')}</span><span>${pageName(p)}</span></b><span class="hint">${p.client ? esc(p.client) : 'No client'}${p.live > 0 && p.post > 0 ? ` · Live ${money(p.live)} · Post ${money(p.post)}` : p.live > 0 ? ' · Live' : ' · Post'}</span><i class="mbar"><i style="width:${Math.max(2, p.spend / top * 100).toFixed(1)}%"></i></i></span>
               <span class="r num" data-l="Spend"><b>${money(p.spend)}</b></span>
               <span class="r num" data-l="Orders">${p.orders ? p.orders.toLocaleString('en-US') : '<span class="muted">–</span>'}</span>
               <span class="r num ${tone(p.cpo)}" data-l="Per order"><b>${p.cpo != null ? money(p.cpo) : '–'}</b></span></div>`).join('')}${unlinkedRows(u)}</div>` : `<div class="mc-b"><div class="muted mempty">No boost spend in this period.</div>${unlinkedRows(u)}</div>`) : ''}
@@ -1099,7 +1104,7 @@
     $('bList').innerHTML = list.map((c, i) => {
       const head = !bTeam && c.team !== lastTeam ? `<div class="bl-team">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</div>` : ''; lastTeam = c.team;
       return `${head}<button type="button" class="crow${bKey(c) === bSel ? ' on' : ''}" role="option" aria-selected="${bKey(c) === bSel}" data-bsel="${esc(bKey(c))}" style="--i:${Math.min(i, 14)}">
-        <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span>
+        <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(c.pageId, 'av')}</span>
         <span class="cr-n"><b>${esc(c.name)}${c.st.open ? `<span class="cr-badge${c.st.urgent ? ' urgent' : ''}" title="${c.st.open} left to do today">${c.st.open}</span>` : c.st.total ? '<span class="cr-done" title="All done today">✓</span>' : ''}</b><span class="cr-tags">${typeTags(c.type)}<span class="chip who">${esc(c.ownerName)}</span>${!c.hasGroup ? '<span class="chip nogroup">No group</span>' : ''}</span></span>
         <span class="cr-v"><b class="num">${c.month.spend ? money(c.month.spend) : '–'}</b><span class="hint">${c.month.orders ? `${c.month.orders.toLocaleString('en-US')} orders${c.cpo ? ' · ' + money(c.cpo) : ''}` : 'this month'}</span></span>
       </button>`;
@@ -1114,7 +1119,7 @@
     const plan = c.plan, planToday = plan && plan.day === d.today;
     $('bDetail').innerHTML = `<div class="cd-in">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="bBack">← All clients</button>
-        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.hasGroup ? `<span class="tgok">✈ ${esc(c.group || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(c.pageId, 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.hasGroup ? `<span class="tgok">✈ ${esc(c.group || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
           <span class="bd-owner"><span class="mini-av lg">${esc(mIni(c.ownerName))}</span><span><b>${esc(c.ownerName)}</b><span class="hint">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</span></span></span></div></div>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(c.month.spend)}</b>${c.month.spend && d.taxRate ? `<span class="sub">+tax ${money(c.month.spend * (1 + d.taxRate / 100))}</span>` : ''}</div>
@@ -1911,7 +1916,10 @@ Notes:
   }
   // What Meta says about each campaign (Page, scheduled run time), to show why it counts as live or post.
   const runText = (m) => (m === 'unknown' || m === undefined ? '' : m === null ? 'no end date' : m < 60 ? `${m} min boost` : m < 1440 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''} boost` : `${Math.round(m / 1440)}-day boost`);
-  const pageLabel = (p) => (p.named || !p.pageId ? esc(p.page) : p.guess ? `${esc(p.guess)} <span class="hint" title="Page ID ${esc(p.pageId)} — name guessed from the campaign names">…${esc(p.pageId.slice(-4))}</span>` : `Page …${esc(p.pageId.slice(-6))}`);
+  // A Facebook Page's profile picture (falls back to nothing if Meta has none).
+  const pagePic = (id, cls = '') => (/^\d{5,20}$/.test(String(id || '')) ? `<img class="pgpic ${cls}" src="/api/page-pic/${esc(id)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">` : '');
+  const pageLabel = (p) => pagePic(p.pageId) + pageName(p);
+  const pageName = (p) => (p.named || !p.pageId ? esc(p.page) : p.guess ? `${esc(p.guess)} <span class="hint" title="Page ID ${esc(p.pageId)} — name guessed from the campaign names">…${esc(p.pageId.slice(-4))}</span>` : `Page …${esc(p.pageId.slice(-6))}`);
   const nameBtn = (p) => (p.pageId && !p.named ? `<button class="pgname" type="button" data-pgid="${esc(p.pageId)}" data-pgname="${esc(p.guess || '')}">${p.guess ? 'Save name' : 'Add name'}</button>` : '');
   // One campaign, with a switch to correct live/post by hand (remembered for future syncs and reports).
   const campRow = (x) => !x.id ? '' : `<div class="camp${x.set ? ' set' : ''}"><span class="cn" title="${esc(x.name)}">${esc(x.name || 'Campaign')}</span><span class="hint">${[runText(x.run), money(x.spend), x.set ? 'set by you' : ''].filter(Boolean).join(' · ')}</span><span class="camp-b"><button type="button" class="kbtn" data-camp="${esc(x.id)}" data-to="${x.live ? 'post' : 'live'}" title="Correct this campaign">${x.live ? '📌 It’s a post' : '🔴 It’s a live'}</button>${x.set ? `<button type="button" class="kbtn ghost" data-camp="${esc(x.id)}" data-to="" title="Let the app decide again">Auto</button>` : ''}</span></div>`;

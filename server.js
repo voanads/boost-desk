@@ -203,7 +203,7 @@ app.use(wrap(async (req, res, next) => {
   }
   // Google-only people see the admin website and its data, nothing else.
   if (user.google) {
-    if (req.path.startsWith('/api/') && !/^\/api\/(me|main\/|admin\/)/.test(req.path)) return res.status(403).json({ error: 'The admin website only has the Main Dashboard and Admin.' });
+    if (req.path.startsWith('/api/') && !/^\/api\/(me|main\/|admin\/|page-pic\/)/.test(req.path)) return res.status(403).json({ error: 'The admin website only has the Main Dashboard and Admin.' });
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/admin')) return res.redirect('/admin');
   }
   req.user = user;
@@ -351,7 +351,8 @@ async function clientMoney(today) {
     for (const c of d.clients) {
       const o = oc.clients[c.id] || { orders: 0, pages: {} };
       const pg = sync.scalePages(pages[c.id] || [], c.spend).map((p) => ({ spend: p.spend, orders: o.pages[p.pageId] || o.pages['name:' + nm(p.page)] || 0 }));
-      r[c.id] = { spend: c.spend, orders: o.orders, ordSpend: sync.orderSpend(pg, o.orders, c.spend), lives: c.lives || 0, liveSpend: c.liveSpend || 0, postSpend: c.postSpend || 0, days: c.days || 0 };
+      const top = (pages[c.id] || []).filter((p) => p.pageId).sort((a, b) => b.spend - a.spend)[0];
+      r[c.id] = { pageId: top ? String(top.pageId) : '', spend: c.spend, orders: o.orders, ordSpend: sync.orderSpend(pg, o.orders, c.spend), lives: c.lives || 0, liveSpend: c.liveSpend || 0, postSpend: c.postSpend || 0, days: c.days || 0 };
     }
     return r;
   };
@@ -363,7 +364,7 @@ async function clientMoney(today) {
 }
 api.get('/main/board', adminOnly, wrap(async (req, res) => {
   const today = sync.todayIn();
-  const [money, tasks, teams, users, cl] = await Promise.all([clientMoney(today), dayTasks(today), getTeams(), db.allUsers(), db.pool.query('SELECT id, name, owner, type, archived, telegram, telegram_title FROM clients ORDER BY name').then((r) => r.rows)]);
+  const [money, tasks, teams, users, cl] = await Promise.all([clientMoney(today), dayTasks(today), getTeams(), db.allUsers(), db.pool.query('SELECT id, name, owner, type, archived, telegram, telegram_title, pages FROM clients ORDER BY name').then((r) => r.rows)]);
   // each client's AI plan (the same "Today's plan" its owner sees; notes stay private)
   const wb = {}; for (const r of (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows) wb[r.key] = r.value || {};
   const uName = Object.fromEntries(users.map((u) => [u.fb_id, u.name])), teamOf = {};
@@ -376,6 +377,7 @@ api.get('/main/board', adminOnly, wrap(async (req, res) => {
     const ts = ((tasks.users[c.owner] || {}).tasks || []).filter((t) => t.clientId === c.id).map(({ client, clientId, ...t }) => t);
     clients.push({ id: c.id, name: c.name, type: c.type, group: c.telegram_title || '', archived: !!c.archived, owner: c.owner, ownerName: uName[c.owner], team: teamOf[c.owner] || null,
       month: mm || { spend: 0, orders: 0, ordSpend: 0, lives: 0, liveSpend: 0, postSpend: 0, days: 0 }, yest: yy || { spend: 0, orders: 0, ordSpend: 0 }, tasks: ts,
+      pageId: (mm && mm.pageId) || ((Array.isArray(c.pages) ? c.pages : []).map(String).find((x) => /^\d{5,20}$/.test(x)) || ''),
       hasGroup: !!c.telegram, plan: (() => { const a = (wb[`${c.owner}:cwb:${c.id}`] || {}).ai; return a && a.text ? { day: a.day, lang: a.lang, at: a.at, text: String(a.text).slice(0, 6000) } : null; })() });
   }
   res.json({ today, from: money.from, to: money.to, taxRate: sync.TAX_RATE, teams: teams.map((t) => ({ id: t.id, name: t.name, members: t.members })), people: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || null })), clients });
@@ -549,6 +551,33 @@ api.post('/admin/spend-keys', ownerOnly, wrap(async (req, res) => {
 api.delete('/admin/spend-keys/:id', ownerOnly, wrap(async (req, res) => {
   const keys = ((await db.getSetting('spendApiKeys', [])) || []).filter((k) => k.id !== req.params.id);
   await db.setSetting('spendApiKeys', keys); res.json({ keys: pubKeys(keys) });
+}));
+// ---- Facebook Page profile pictures: /api/page-pic/<page id> sends the browser to the picture (kept 12 hours) ----
+const picCache = new Map(); // page id -> { url | null, at }
+const picWait = new Map();
+async function pagePicUrl(id, prefer) {
+  const hit = picCache.get(id);
+  if (hit && Date.now() - hit.at < (hit.url ? 12 : 2) * 3600e3) return hit.url;
+  if (picWait.has(id)) return picWait.get(id);
+  const job = (async () => {
+    const owner = await db.ownerId(), users = await db.activeUsers();
+    const order = [prefer, owner, ...users.map((u) => u.fb_id)].filter((x, i, a) => x && a.indexOf(x) === i).slice(0, 4);
+    let url = null;
+    for (const uid of order) {
+      try { const u = await db.getUser(uid); if (!u) continue; const r = await meta.get(`/${id}/picture`, { redirect: 0, type: 'normal', width: 120, height: 120 }, await sync.tokenFor(u)); url = (r.data && !r.data.is_silhouette && r.data.url) || null; break; }
+      catch (_) { /* try the next person's login */ }
+    }
+    picCache.set(id, { url, at: Date.now() }); if (picCache.size > 3000) picCache.delete(picCache.keys().next().value);
+    return url;
+  })().finally(() => picWait.delete(id));
+  picWait.set(id, job);
+  return job;
+}
+api.get('/page-pic/:id', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^\d{5,20}$/.test(id)) return res.status(404).end();
+  const url = await pagePicUrl(id, req.user.google ? null : req.user.fb_id);
+  if (!url) { res.set('Cache-Control', 'private, max-age=3600'); return res.status(404).end(); }
+  res.set('Cache-Control', 'private, max-age=21600').redirect(302, url);
 }));
 // ---- Admin website: who can sign in with Google (owner) ----
 api.get('/admin/site-access', ownerOnly, wrap(async (req, res) => {

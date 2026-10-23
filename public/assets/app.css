@@ -1849,3 +1849,7 @@ body{font-size:15.5px;letter-spacing:0}
 .tk-tag.work{color:var(--ink)}
 .tk-tag.work.bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
 .tk-tag.own{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
+.tk-person .cd-todo{gap:6px}
+.tk-person .tcheck{cursor:default}
+.tk-person .task .hint{display:block}
+.tk-client{gap:6px}

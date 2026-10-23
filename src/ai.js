@@ -129,11 +129,11 @@ Rules:
 - Be concise and scannable: short headings, bullets, no intro, max about 250 words.`;
 
 // Google Gemini (AI Studio key).
-async function callGemini(key, system, messages) {
+async function callGemini(key, system, messages, model = MODEL_FOR('gemini')) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
   try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL_FOR('gemini'))}:generateContent`, {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', signal: ctl.signal,
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { maxOutputTokens: 2048, temperature: 0.4 } }),
@@ -142,6 +142,8 @@ async function callGemini(key, system, messages) {
   } catch (e) { throw new Error(e.name === 'AbortError' ? 'The AI took too long to answer. Try again.' : 'Could not reach Gemini: ' + e.message); }
   finally { clearTimeout(t); }
   const msg = (body.error && body.error.message) || '';
+  // The default model name can be retired by Google: fall back to the "latest Flash" alias once.
+  if (res.status === 404 && model !== 'gemini-flash-latest') return callGemini(key, system, messages, 'gemini-flash-latest');
   if (res.status === 400 && /api key/i.test(msg) || res.status === 403) throw Object.assign(new Error('The Gemini API key was refused — check it in Admin → Settings.'), { status: 400 });
   if (res.status === 429) throw Object.assign(new Error('Gemini is busy or the free limit was reached. Try again in a minute.'), { status: 429 });
   if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));

@@ -299,8 +299,8 @@ api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
 }));
 // Main Dashboard: everyone's client tasks for one day (AI daily plan tasks + their own), read-only for the COO.
 // Includes tasks left open from earlier days (only when looking at today) and earlier tasks finished on this day.
-api.get('/main/tasks', adminOnly, wrap(async (req, res) => {
-  const today = sync.todayIn(), day = isDay(req.query.day) ? req.query.day : today;
+async function dayTasks(day) {
+  const today = sync.todayIn();
   const users = await db.allUsers(), out = {};
   for (const u of users) out[u.fb_id] = { name: u.name, tasks: [], plans: 0, clients: 0 };
   const cl = (await db.pool.query('SELECT id, name, owner, archived FROM clients')).rows, cName = {};
@@ -332,7 +332,50 @@ api.get('/main/tasks', adminOnly, wrap(async (req, res) => {
   }
   const ord = { work: 0, ai: 1, me: 2 };
   for (const o of Object.values(out)) o.tasks.sort((a, b) => a.client.localeCompare(b.client) || (a.done - b.done) || (ord[a.from] - ord[b.from]) || a.day.localeCompare(b.day));
-  res.json({ day, today, users: out, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
+  return { day, today, users: out };
+}
+api.get('/main/tasks', adminOnly, wrap(async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
+  res.json({ ...(await dayTasks(day)), teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
+}));
+// Clients Board: every client of every person — this month's money (+ yesterday) and today's work & tasks.
+// The money part is kept for 2 minutes (it reads every account); tasks are always fresh.
+let boardMoney = { at: 0, key: '', data: null };
+async function clientMoney(today) {
+  if (boardMoney.data && boardMoney.key === today && Date.now() - boardMoney.at < 120e3) return boardMoney.data;
+  const from = today.slice(0, 8) + '01', yest = sync.addDays(today, -1), out = {};
+  const nm = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const cpoPart = async (owner, f, t) => {
+    const [d, pages, oc] = await Promise.all([sync.dashboard(owner, f, t), sync.pageSpend(owner, f, t), orders.byClient(owner, f, t)]);
+    const r = {};
+    for (const c of d.clients) {
+      const o = oc.clients[c.id] || { orders: 0, pages: {} };
+      const pg = sync.scalePages(pages[c.id] || [], c.spend).map((p) => ({ spend: p.spend, orders: o.pages[p.pageId] || o.pages['name:' + nm(p.page)] || 0 }));
+      r[c.id] = { spend: c.spend, orders: o.orders, ordSpend: sync.orderSpend(pg, o.orders, c.spend), lives: c.lives || 0, liveSpend: c.liveSpend || 0, postSpend: c.postSpend || 0, days: c.days || 0 };
+    }
+    return r;
+  };
+  for (const u of await db.allUsers()) {
+    try { const [m, y] = await Promise.all([cpoPart(u.fb_id, from, today), cpoPart(u.fb_id, yest, yest)]); out[u.fb_id] = { m, y }; } catch (_) { out[u.fb_id] = { m: {}, y: {} }; }
+  }
+  boardMoney = { at: Date.now(), key: today, data: { from, to: today, out } };
+  return boardMoney.data;
+}
+api.get('/main/board', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn();
+  const [money, tasks, teams, users, cl] = await Promise.all([clientMoney(today), dayTasks(today), getTeams(), db.allUsers(), db.pool.query('SELECT id, name, owner, type, archived, telegram_title FROM clients ORDER BY name').then((r) => r.rows).catch(() => db.pool.query('SELECT id, name, owner, type, archived FROM clients ORDER BY name').then((r) => r.rows))]);
+  const uName = Object.fromEntries(users.map((u) => [u.fb_id, u.name])), teamOf = {};
+  for (const t of teams) for (const m of t.members) teamOf[m] = t.id;
+  const clients = [];
+  for (const c of cl) {
+    if (!uName[c.owner]) continue;
+    const mm = ((money.out[c.owner] || {}).m || {})[c.id], yy = ((money.out[c.owner] || {}).y || {})[c.id];
+    if (c.archived && !(mm && mm.spend > 0)) continue;
+    const ts = ((tasks.users[c.owner] || {}).tasks || []).filter((t) => t.clientId === c.id).map(({ client, clientId, ...t }) => t);
+    clients.push({ id: c.id, name: c.name, type: c.type, group: c.telegram_title || '', archived: !!c.archived, owner: c.owner, ownerName: uName[c.owner], team: teamOf[c.owner] || null,
+      month: mm || { spend: 0, orders: 0, ordSpend: 0, lives: 0, liveSpend: 0, postSpend: 0, days: 0 }, yest: yy || { spend: 0, orders: 0, ordSpend: 0 }, tasks: ts, plan: false });
+  }
+  res.json({ today, from: money.from, to: money.to, taxRate: sync.TAX_RATE, teams: teams.map((t) => ({ id: t.id, name: t.name, members: t.members })), people: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || null })), clients });
 }));
 // Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.
 api.get('/main/overview', adminOnly, wrap(async (req, res) => {

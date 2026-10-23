@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=135">
+<link rel="stylesheet" href="/assets/app.css?v=136">
 </head>
 <body>
 <div class="wrap">
@@ -20,6 +20,7 @@
     <a class="brand" href="#checklist" aria-label="Ads Box Boost Desk"><img class="logo" src="/assets/logo.svg" alt=""><span class="bname">Ads Box<small>Boost Desk</small></span></a>
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="main" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.8"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/></svg><span class="full">Main Dashboard</span><span class="short">Main</span></button>
+      <button role="tab" data-tab="board" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="5" height="17" rx="1.6"/><rect x="9.5" y="3.5" width="5" height="11" rx="1.6"/><rect x="16" y="3.5" width="5" height="14" rx="1.6"/></svg><span class="full">Clients Board</span><span class="short">Board</span></button>
       <button role="tab" data-tab="dashboard" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
@@ -63,13 +64,13 @@
 
   <!-- MAIN DASHBOARD (admins) -->
   <section id="tab-main" class="wrap" hidden>
-    <div class="ohead"><div><h2>Main Dashboard</h2><div class="hint">Every team: boost spend, orders from adsbox.biz and today's client tasks.</div></div></div>
+    <div class="ohead"><div><h2>Main Dashboard</h2><div class="hint">Every team and every Page it boosts: spend, orders from adsbox.biz and cost per order.</div></div></div>
     <div class="note onote" id="mNote" hidden></div>
     <div class="ostrip mstrip">
       <div class="ost-main"><span class="val num" id="mSpend">$0.00</span><span class="lbl">boost spend</span></div>
       <div class="ost"><span class="val num" id="mOrders">0</span><span class="lbl">orders</span></div>
       <div class="ost"><span class="val num" id="mCpo">–</span><span class="lbl">per order</span></div>
-      <div class="ost"><span class="val num" id="mTasks">–</span><span class="lbl" id="mTasksLbl">tasks done today</span></div>
+      <div class="ost"><span class="val num" id="mPagesN">0</span><span class="lbl">Pages</span></div>
       <div class="ost"><span class="val num" id="mUrgent">–</span><span class="lbl">urgent</span></div>
     </div>
     <div class="perbar" role="group" aria-label="Period">
@@ -79,11 +80,29 @@
     <div class="cwrap mwrap" id="mWrap">
       <aside class="cside">
         <input type="search" id="mSearch" placeholder="Search team, person, Page or client" aria-label="Search">
-        <div class="seg" id="mSortSeg" role="group" aria-label="Sort teams"><button type="button" data-k="spend" aria-pressed="true">Spend</button><button type="button" data-k="orders" aria-pressed="false">Orders</button><button type="button" data-k="cpo" aria-pressed="false">Cheapest</button><button type="button" data-k="tasks" aria-pressed="false">Tasks</button></div>
+        <div class="seg" id="mSortSeg" role="group" aria-label="Sort teams"><button type="button" data-k="spend" aria-pressed="true">Spend</button><button type="button" data-k="orders" aria-pressed="false">Orders</button><button type="button" data-k="cpo" aria-pressed="false">Cheapest</button></div>
         <div class="clist" id="mTeamList"></div>
       </aside>
       <div class="cdetail" id="mList"></div>
     </div>
+  </section>
+
+  <!-- CLIENTS BOARD (admins): every client of every team, this month + today's work & tasks -->
+  <section id="tab-board" class="wrap" hidden>
+    <div class="bhead">
+      <div><h2>Clients Board</h2><div class="hint">Every client of every team — this month's money and today's work &amp; tasks.</div></div>
+      <div class="bh-r"><span class="hint" id="bUpdated"></span><button type="button" class="ghost sm" id="bRefresh">↻ Refresh</button></div>
+    </div>
+    <div class="bkpis" id="bKpis"></div>
+    <div class="btools">
+      <div class="bteams" id="bTeams" role="group" aria-label="Team"></div>
+      <div class="btools-r">
+        <div class="seg" id="bFilter" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open" aria-pressed="false">Work left</button><button type="button" data-f="urgent" aria-pressed="false">Urgent</button><button type="button" data-f="done" aria-pressed="false">All done</button></div>
+        <select id="bSort" aria-label="Sort"><option value="attn">Needs attention first</option><option value="spend">Most spend this month</option><option value="cpo">Most expensive per order</option><option value="name">Name A–Z</option></select>
+        <input type="search" id="bSearch" placeholder="Search client, person or task" aria-label="Search">
+      </div>
+    </div>
+    <div id="bBody"></div>
   </section>
 
   <!-- DASHBOARD -->
@@ -529,6 +548,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=135"></script>
+<script src="/assets/app.js?v=136"></script>
 </body>
 </html>

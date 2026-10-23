@@ -523,7 +523,8 @@
   const typeTags = (t) => (t === 'live' || t === 'both' ? '<span class="chip live">Live</span>' : '') + (t === 'post' || t === 'both' ? '<span class="chip post">Post</span>' : '');
 
   // This month's spend per client, shown on the cards.
-  let cMonth = {}, cOrd = {}, cTodo = null, cSel = null, cPicked = false;
+  let cMonth = {}, cOrd = {}, cOrdY = {}, cTodo = null, cWork = {}, cSel = null, cPicked = false;
+  let cSort = (() => { try { return localStorage.getItem('cSort') || 'attention'; } catch (_) { return 'attention'; } })();
   async function loadClientMonth() {
     const t = (me && me.today) || iso(new Date()), ym = t.slice(0, 7);
     try {
@@ -532,13 +533,24 @@
       renderClients();
     } catch (_) {}
     api(`/orders/report?from=${ym}-01&to=${t}`).then((r) => { cOrd = Object.fromEntries((r.clients || []).map((c) => [c.id, c])); renderClients(); }).catch(() => {});
-    api('/todo').then((r) => { cTodo = r; renderClientDetail(); }).catch(() => {});
+    api('/todo').then((r) => { cTodo = r; renderClients(); }).catch(() => {});
+    api('/clients-work').then((r) => { cWork = r.clients || {}; renderClients(); }).catch(() => {});
+    const y = addD(t, -1); api(`/orders/report?from=${y}&to=${y}`).then((r) => { cOrdY = Object.fromEntries((r.clients || []).map((c) => [c.id, c])); renderClientDetail(); }).catch(() => {});
   }
 
+  // What needs doing for a client today: to-dos not ticked yet + open tasks; "urgent" = a warning or a report to send.
+  function attentionOf(c) {
+    const w = cWork[c.id] || { openTasks: 0, ticked: [] }, items = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id && !w.ticked.includes(x.kind)) : [];
+    const todo = items.filter((x) => x.level !== 'good');
+    const urgent = todo.some((x) => x.level === 'bad' || x.level === 'warn' || x.kind === 'report');
+    return { n: todo.length + (w.openTasks || 0), urgent };
+  }
   function renderClients() {
     const q = ($('cSearch').value || '').trim().toLowerCase();
+    const att = Object.fromEntries(clients.map((c) => [c.id, attentionOf(c)]));
     const list = clients.filter((c) => !q || [c.name, ...(c.pages || [])].some((x) => String(x).toLowerCase().includes(q)))
-      .sort((a, b) => (a.archived - b.archived) || ((cMonth[b.id]?.spend || 0) - (cMonth[a.id]?.spend || 0)) || a.name.localeCompare(b.name));
+      .sort((a, b) => (a.archived - b.archived) || (cSort === 'attention' ? ((att[b.id].urgent - att[a.id].urgent) || (att[b.id].n - att[a.id].n)) : 0) || ((cMonth[b.id]?.spend || 0) - (cMonth[a.id]?.spend || 0)) || a.name.localeCompare(b.name));
+    if ($('cSortSeg')) $('cSortSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === cSort)));
     $('cCount').textContent = clients.filter((c) => !c.archived).length;
     if (cSel && !clients.some((c) => c.id === cSel)) cSel = null;
     if ((!cSel || !cPicked) && list.length && matchMedia('(min-width: 901px)').matches) cSel = list[0].id; // until someone picks, show the top client
@@ -546,7 +558,7 @@
       const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? o.spend / o.orders : null;
       return `<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span>
-        <span class="cr-n"><b>${esc(c.name)}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="cr-warn" title="No Telegram group">✈︎?</span>' : ''}</span></span>
+        <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span></span>
         <span class="cr-v"><b class="num">${m && m.spend ? money(m.spend) : '–'}</b><span class="hint">${o && o.orders ? `${o.orders.toLocaleString('en-US')} orders${cpo ? ' · ' + money(cpo) : ''}` : 'this month'}</span></span>
       </button>`;
     }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on the Dashboard and add the Pages it finds.'}</div>`;
@@ -581,9 +593,10 @@
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
-        <div class="cd-stat"><span class="lbl">Lives</span><b class="num">${m.lives || 0}</b><span class="sub">${money(m.liveSpend || 0)}</span></div>
-        <div class="cd-stat"><span class="lbl">Boost posts</span><b class="num">${money(m.postSpend || 0)}</b><span class="sub">${m.days || 0} day${m.days === 1 ? '' : 's'} with spend</span></div>
-        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cpo ? money(cpo) + ' per order' : 'from adsbox.biz'}</span></div>
+        ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + x.spend, 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? y.spend / y.orders : null;
+          return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>`; })()}
+        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : 'this month'}</span></div>
+        <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       <div class="cd-cols">
         <div class="cd-col">${workSection(c)}
@@ -627,7 +640,14 @@
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
+    const w = cWb[c.id]; if (w && w.tasks) { cWork[c.id] = { openTasks: w.tasks.filter((t) => !t.done).length, ticked: Object.keys(w.ticks || {}).filter((k) => k.startsWith((w.today || '') + ':')).map((k) => k.slice(11)) }; paintBadge(c); }
     sec.outerHTML = workSection(c); bindWork(c);
+  }
+  // Refresh one client's badge in the list without redrawing the list.
+  function paintBadge(c) {
+    const row = document.querySelector(`#cGrid [data-csel="${c.id}"] .cr-n b`); if (!row) return;
+    const a = attentionOf(c); row.querySelectorAll('.cr-badge').forEach((x) => x.remove());
+    if (a.n) row.insertAdjacentHTML('beforeend', `<span class="cr-badge${a.urgent ? ' urgent' : ''}">${a.n}</span>`);
   }
   function bindWork(c) {
     const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true; try { cWb[c.id] = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text } }); paintWork(); setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0); } catch (e) { toast(e.message); inp.disabled = false; } };
@@ -669,6 +689,7 @@
     } catch (e) { toast(e.message); paintWork(); }
   });
   $('cSearch').oninput = () => renderClients();
+  document.querySelectorAll('#cSortSeg button').forEach((b) => b.onclick = () => { cSort = b.dataset.k; try { localStorage.setItem('cSort', cSort); } catch (_) {} renderClients(); });
 
   // Add / edit dialog
   let cEdit = null, cDraft = null, cInline = false;

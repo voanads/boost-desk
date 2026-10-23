@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=128">
+<link rel="stylesheet" href="/assets/app.css?v=129">
 </head>
 <body>
 <div class="wrap">
@@ -152,7 +152,8 @@
       <button class="primary" id="cAddBtn">+ Add client</button>
     </div>
     <div class="cwrap" id="cWrap">
-      <div class="clist" id="cGrid" role="listbox" aria-label="Clients"><div class="crow skel-card"><div class="sk" style="--w:60%"></div></div><div class="crow skel-card"><div class="sk" style="--w:45%"></div></div><div class="crow skel-card"><div class="sk" style="--w:70%"></div></div></div>
+      <div class="cside"><div class="seg csort" id="cSortSeg" role="group" aria-label="Sort clients"><button type="button" data-k="attention">Needs attention</button><button type="button" data-k="spend">Most spend</button></div>
+      <div class="clist" id="cGrid" role="listbox" aria-label="Clients"><div class="crow skel-card"><div class="sk" style="--w:60%"></div></div><div class="crow skel-card"><div class="sk" style="--w:45%"></div></div><div class="crow skel-card"><div class="sk" style="--w:70%"></div></div></div></div>
       <div class="cdetail" id="cDetail" aria-live="polite"><div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month's numbers, today's work, AI suggestions and the client's settings in one place.</span></div></div>
     </div>
     <datalist id="acctList"></datalist>
@@ -524,6 +525,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=128"></script>
+<script src="/assets/app.js?v=129"></script>
 </body>
 </html>

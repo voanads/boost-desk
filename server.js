@@ -1038,6 +1038,15 @@ api.post('/ai/client/:id', wrap(async (req, res) => {
 // Client workbook: today's AI plan (per Page + tasks), the user's notes and tasks, and ticks on today's work.
 const AI = () => require('./src/ai');
 const ownClient = async (req) => (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+// Open tasks and today's ticks for every client (for the badges in the Clients list).
+api.get('/clients-work', wrap(async (req, res) => {
+  const today = sync.todayIn(), out = {};
+  for (const c of await db.listClients(req.user.fb_id)) {
+    const w = (await db.getUserSetting(req.user.fb_id, `cwb:${c.id}`, null)) || {};
+    out[c.id] = { openTasks: (w.tasks || []).filter((t) => !t.done).length, ticked: Object.keys(w.ticks || {}).filter((k) => k.startsWith(today + ':')).map((k) => k.slice(11)) };
+  }
+  res.json({ today, clients: out });
+}));
 api.get('/clients/:id/workbook', wrap(async (req, res) => { if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' }); res.json({ today: sync.todayIn(), ...(await AI().workbook(req.user.fb_id, req.params.id)) }); }));
 api.post('/clients/:id/plan', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });

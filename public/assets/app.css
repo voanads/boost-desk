@@ -1647,7 +1647,8 @@ body{font-size:15.5px;letter-spacing:0}
 
 /* ---------- Clients tab: list + detail (numbers, today's work, AI suggestions, settings) ---------- */
 .cwrap{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:var(--s-4);align-items:start}
-.clist{display:flex;flex-direction:column;gap:var(--s-1);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);padding:var(--s-2);position:sticky;top:var(--s-3);max-height:calc(100vh - 140px);overflow:auto;box-shadow:var(--shadow-sm)}
+.cside{display:flex;flex-direction:column;gap:var(--s-2);position:sticky;top:var(--s-3);min-width:0}
+.clist{display:flex;flex-direction:column;gap:var(--s-1);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);padding:var(--s-2);max-height:calc(100vh - 190px);overflow:auto;box-shadow:var(--shadow-sm)}
 .crow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:var(--s-3);padding:10px 12px;border-radius:var(--r-lg);transition:background var(--t-fast) var(--ease)}
 .crow:hover{background:var(--bg-2)}
 .crow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
@@ -1736,3 +1737,23 @@ body{font-size:15.5px;letter-spacing:0}
 .cd-settings{border:1px solid color-mix(in srgb,var(--brand) 25%,var(--line));border-radius:var(--r-lg);padding:var(--s-4);background:color-mix(in srgb,var(--brand) 3%,var(--surface))}
 .cd-settings[hidden]{display:none}
 .cd-settings .cd-sec-h{margin-bottom:var(--s-2)}
+
+/* Clients: attention badges, sort, cost-per-order tile, bigger tap targets and contrast */
+.csort{align-self:stretch;display:flex}
+.csort button{flex:1}
+.cr-n b{display:flex;align-items:center;gap:6px}
+.cr-badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--brand-soft);color:var(--brand);font-size:var(--fs-xs);font-weight:800;flex:none}
+.cr-badge.urgent{background:var(--danger);color:var(--on-brand)}
+.chip.nogroup{font-size:var(--fs-2xs);padding:1px 7px;background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.cd-stat.cpo b{color:var(--ink)}
+.cd-stat.cpo.good{background:var(--ok-soft)}.cd-stat.cpo.good b{color:var(--ok)}
+.cd-stat.cpo.mid{background:var(--warn-soft)}.cd-stat.cpo.mid b{color:var(--warn)}
+.cd-stat.cpo.bad{background:var(--danger-soft)}.cd-stat.cpo.bad b{color:var(--danger)}
+.cd-stat .lbl{font-size:var(--fs-xs)}
+.cd-stat .sub{font-size:var(--fs-sm);opacity:.85}
+.cr-v .hint{font-size:var(--fs-sm)}
+.tcheck{position:relative}
+.tcheck::before{content:"";position:absolute;inset:-11px}
+.aisec .hint,.aisec .ai-load{color:color-mix(in srgb,var(--ink) 72%,transparent)}
+@media (hover:none){.tdel{opacity:1}}
+@media (max-width:900px){.cside{position:static}.cwrap.show-detail .cside{display:none}}

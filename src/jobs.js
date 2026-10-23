@@ -137,6 +137,9 @@ function start() {
   H.register('AI daily plans', 1440, 'daily at 06:40');
   cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
+  H.register('Database backup', 1440, 'daily at 03:20');
+  cron.schedule('20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
+
   H.register('Health check', 5, 'every 5 minutes');
   cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);

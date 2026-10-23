@@ -1766,3 +1766,16 @@ body{font-size:15.5px;letter-spacing:0}
 .m-unl .hint{margin:2px 0 6px}
 .oc-noord{color:var(--warn);font-size:var(--fs-sm)}
 #mNote{margin-bottom:0}
+
+/* Security checklist + backup cards */
+.secl{margin:var(--s-2) 0 0;padding-left:1.2em;display:grid;gap:var(--s-2)}
+.secl li label{display:flex;align-items:center;gap:6px;cursor:pointer;min-height:32px}
+.secl li.done>label b{color:var(--muted);text-decoration:line-through}
+.secl .hint{margin-top:2px}
+.secgen{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.secgen code{word-break:break-all;font-size:12px}
+.ok-t{color:var(--ok);margin-top:4px}
+.setcard:has(#secBox){grid-column:1/-1}
+.secl,.secl li{min-width:0}
+.secl code{white-space:normal;overflow-wrap:anywhere}
+.secl li label{flex-wrap:wrap}

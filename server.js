@@ -412,6 +412,21 @@ api.delete('/admin/spend-keys/:id', ownerOnly, wrap(async (req, res) => {
   const keys = ((await db.getSetting('spendApiKeys', [])) || []).filter((k) => k.id !== req.params.id);
   await db.setSetting('spendApiKeys', keys); res.json({ keys: pubKeys(keys) });
 }));
+// ---- Security (secret rotation checklist) and database backups — owner only ----
+api.get('/admin/security', ownerOnly, wrap(async (req, res) => res.json(await require('./src/security').status())));
+api.post('/admin/security/done', ownerOnly, wrap(async (req, res) => {
+  const k = String((req.body || {}).key || ''); if (!/^[a-z]{2,20}$/.test(k)) return res.status(400).json({ error: 'Unknown step.' });
+  const r = await db.getSetting('secretsRotated', {}); if ((req.body || {}).done === false) delete r[k]; else r[k] = new Date().toISOString();
+  await db.setSetting('secretsRotated', r); res.json({ rotated: r });
+}));
+api.post('/admin/backup', ownerOnly, wrap(async (req, res) => {
+  const r = await require('./src/backup').run(telegram); delete r.gz; res.json(r);
+}));
+api.get('/admin/backup/download', ownerOnly, wrap(async (req, res) => {
+  const b = await require('./src/backup').make();
+  res.set({ 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="${b.name}"`, 'Cache-Control': 'no-store' });
+  res.send(b.gz);
+}));
 // Settings overview for the admin panel.
 api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
   const prof = invoice.profileOf(await db.getUserSetting(req.user.fb_id, 'invoiceProfile', {}));
@@ -1151,6 +1166,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 });
 
 db.init().then(() => {
+  require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
   jobs.start();

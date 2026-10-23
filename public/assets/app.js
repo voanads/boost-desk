@@ -1322,8 +1322,31 @@
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
+      d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
+      d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
-    if (d.canEdit) loadKeys();
+    if (d.canEdit) { loadKeys(); loadSecurity(); }
+  }
+  // Steps to change every secret after a leak (e.g. the Railway incident of 21 Oct 2026). New values are made in
+  // this browser only — they are never sent to the server or to chat; you paste them straight into Railway.
+  const SEC_STEPS = [
+    ['telegram', 'Telegram bot token', 'In Telegram open <b>@BotFather</b> → <code>/revoke</code> → pick the bot → copy the new token. In Railway → boost-desk → Variables, replace <code>TELEGRAM_BOT_TOKEN</code>. Groups stay linked.'],
+    ['facebook', 'Facebook App Secret', 'developers.facebook.com → your app → App settings → Basic → App secret → <b>Reset</b>. Replace <code>FB_APP_SECRET</code> in Railway. Logins keep working.'],
+    ['session', 'Session secret', 'Make a new value below and replace <code>SESSION_SECRET</code>. Everyone is logged out once and logs in again with Facebook.', 'session'],
+    ['encryption', 'Encryption key', 'First add a variable <code>ENCRYPTION_KEY_OLD</code> = the current <code>ENCRYPTION_KEY</code> value. Then replace <code>ENCRYPTION_KEY</code> with a new value from below. After deploy, Boost Desk re-saves every login and API key with the new key — when this card says “0 left on old key”, delete <code>ENCRYPTION_KEY_OLD</code>.', 'key'],
+    ['database', 'Database password', 'Make a new value below. Railway → Postgres service → <b>Database → Query</b>, run <code>ALTER USER postgres WITH PASSWORD \'NEW_VALUE\';</code> then on the Postgres service Variables set <code>POSTGRES_PASSWORD</code> and <code>PGPASSWORD</code> to the same value. boost-desk’s <code>DATABASE_URL</code> is a reference, so it follows — after it redeploys, the Health page should show the database OK. Do this one last, after a fresh backup.', 'db'],
+  ];
+  const randHex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('');
+  async function loadSecurity() {
+    let st; try { st = await api('/admin/security'); } catch (e) { const x = $('secBox'); if (x) x.textContent = e.message; return; }
+    const bk = st.lastBackup, bx = $('bkBox');
+    if (bx) bx.innerHTML = (bk ? `Last backup <b>${esc(ago(bk.at))}</b> · ${bk.sizeMb} MB${bk.sent ? ' · sent to your Telegram' : ''}${bk.error ? `<div class="over">${esc(bk.error)}</div>` : ''}` : '<b>No backup yet.</b>')
+      + `<div class="hint">Every night at 03:20 the whole database is saved to one file and sent to your private Telegram chat${st.alertChat ? '' : ' — <b>turn on owner alerts (/alerts code on the Health page) first</b>'}. Facebook logins and API keys inside stay encrypted. Keep the file private: it has your clients and invoices.</div>`;
+    const box = $('secBox'); if (!box) return;
+    const r = st.rotated || {}, done = SEC_STEPS.filter((x) => r[x[0]]).length;
+    box.innerHTML = `<div>Railway had a security incident on 21 Oct 2026 — change these so old copies stop working. <b>${done} of ${SEC_STEPS.length} done.</b> Never paste the values into chat.</div>`
+      + (st.oldKey ? `<div class="${st.leftOnOld ? 'over' : 'ok-t'}">ENCRYPTION_KEY_OLD is set · ${st.leftOnOld} value${st.leftOnOld === 1 ? '' : 's'} left on old key${st.leftOnOld ? '' : ' — you can delete ENCRYPTION_KEY_OLD now'}.</div>` : '')
+      + `<ol class="secl">${SEC_STEPS.map(([k, t, how, gen]) => `<li class="${r[k] ? 'done' : ''}"><label><input type="checkbox" data-secdone="${k}" ${r[k] ? 'checked' : ''}> <b>${t}</b>${r[k] ? ` <span class="hint">· done ${esc(new Date(r[k]).toLocaleDateString('en-GB'))}</span>` : ''}</label><div class="hint">${how}</div>${gen ? `<div class="secgen"><button class="sm ghost" data-secgen="${gen}">Make new value</button><code class="lcode" data-copy="" hidden></code></div>` : ''}</li>`).join('')}</ol>`;
   }
   let skBase = location.origin;
   const devDoc = (key) => `Boost Desk spend API — read boost spend per Facebook Page per day
@@ -1364,12 +1387,18 @@ Notes:
       + (d.key ? `<div class="newkey"><b>New key — copy it now, it won't be shown again:</b><code class="lcode" data-copy="${esc(d.key)}">${esc(d.key)}</code><button class="sm" data-sgo="devdoc" data-key="${esc(d.key)}">Copy instructions with this key</button></div>` : '')
       + (d.keys.length ? d.keys.map((k) => `<div class="skrow"><span><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code><br><span class="hint">${k.calls} call${k.calls === 1 ? '' : 's'}${k.lastUsed ? ' · last used ' + esc(ago(k.lastUsed)) : ' · not used yet'}</span></span><button class="sm ghost danger-t" data-delkey="${esc(k.id)}">Delete</button></div>`).join('') : '<div>No key yet.</div>');
   }
+  $('sGrid').addEventListener('change', async (ev) => {
+    const t = ev.target.closest('[data-secdone]'); if (!t) return;
+    try { await api('/admin/security/done', { method: 'POST', body: { key: t.dataset.secdone, done: t.checked } }); loadSecurity(); } catch (e) { toast(e.message); t.checked = !t.checked; }
+  });
   $('sGrid').addEventListener('click', async (ev) => {
     const cp = ev.target.closest('[data-copy]'); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Key copied'); } catch (_) {} return; }
     const dk = ev.target.closest('[data-delkey]');
     if (dk) { if (!confirm('Delete this key? Anything using it will stop working.')) return; try { loadKeys({ ...(await api('/admin/spend-keys/' + dk.dataset.delkey, { method: 'DELETE' })), base: skBase }); toast('Key deleted'); } catch (e) { toast(e.message); } return; }
     const b = ev.target.closest('button'); if (!b) return;
     const k = b.dataset.sgo;
+    if (b.dataset.secgen) { const c = b.nextElementSibling, v = randHex(32); c.textContent = v; c.dataset.copy = v; c.hidden = false; c.title = 'Tap to copy'; try { await navigator.clipboard.writeText(v); toast('New value copied — paste it in Railway'); } catch (_) {} return; }
+    if (k === 'bknow') { b.disabled = true; b.textContent = 'Backing up…'; try { const r = await api('/admin/backup', { method: 'POST' }); r.error ? toast(r.error) : successBadge(`Backup sent · ${r.sizeMb} MB`); } catch (e) { toast(e.message); } loadSecurity(); b.disabled = false; b.textContent = 'Back up now'; return; }
     if (k === 'newkey') { const name = prompt('Name for this key (who will use it)', 'adsbox.biz'); if (name === null) return; try { loadKeys(await api('/admin/spend-keys', { method: 'POST', body: { name } })); } catch (e) { toast(e.message); } return; }
     if (k === 'devdoc') { try { await navigator.clipboard.writeText(devDoc(b.dataset.key || '')); successBadge('Instructions copied — paste them to the developer'); } catch (_) { toast('Could not copy'); } return; }
     if (k === 'orders-api') { showTab('orders'); setTimeout(() => $('oSetBtn').click(), 400); }

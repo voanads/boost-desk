@@ -139,7 +139,9 @@ async function callClaude(key, system, messages) {
   finally { clearTimeout(t); }
   if (res.status === 401) throw Object.assign(new Error('The Anthropic API key was refused — check it in Admin → Settings.'), { status: 400 });
   if (res.status === 429) throw Object.assign(new Error('The AI is busy or the account hit its limit. Try again in a minute.'), { status: 429 });
-  if (!res.ok) throw new Error('AI error: ' + ((body.error && body.error.message) || 'HTTP ' + res.status));
+  const msg = (body.error && body.error.message) || '';
+  if (/credit balance is too low/i.test(msg)) throw Object.assign(new Error('The Anthropic account has no credit left. The owner adds credit at console.anthropic.com → Plans & Billing, then AI advice works again.'), { status: 402 });
+  if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
   return { text: (body.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim(), usage: body.usage || {} };
 }
 

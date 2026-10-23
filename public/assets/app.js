@@ -915,7 +915,8 @@
     const [from, to] = dRange();
     // a one-day period also picks the day for tasks
     const want = from === to ? to : (mTaskDay || me.today);
-    if (want !== mTaskDay || !mTasks) { mTaskDay = want; mTasks = null; loadTasks(); }
+    if (want !== mTaskDay || !mTasks) { mTaskDay = want; mTasks = null; }
+    loadTasks(); // always fresh: a task someone just added or ticked shows up
     if (!mData) { $('mTeamList').innerHTML = '<div class="crow skel-card"></div>'.repeat(4); $('mList').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
     if (!mSug || Date.now() - mSugAt > 120e3) api('/main/suggestions').then((x) => { mSug = x; mSugAt = Date.now(); renderMain(); }).catch(() => {});
     try { mData = await api(`/main/overview?from=${from}&to=${to}`); renderMain(); }
@@ -966,10 +967,10 @@
     const st = taskStat([id]);
     if (q && !ts.length && !has(personName(id))) return '';
     const groups = new Map(); for (const t of ts) { if (!groups.has(t.client)) groups.set(t.client, []); groups.get(t.client).push(t); }
-    const empty = !u.tasks.length ? `No tasks for ${dayTxt(mTasks.day)}.${u.clients ? ` AI plans made for ${u.plans} of ${u.clients} client${u.clients === 1 ? '' : 's'}.` : ''}` : `Nothing ${mTaskF === 'open' ? 'open' : 'done'}.`;
+    const empty = !u.tasks.length ? `No work or tasks for ${dayTxt(mTasks.day)}.${u.clients ? ` AI plans made for ${u.plans} of ${u.clients} client${u.clients === 1 ? '' : 's'}.` : ''}` : `Nothing ${mTaskF === 'open' ? 'open' : 'done'}.`;
     return `<article class="tk-person${u.tasks.length ? '' : ' quiet'}">
       <header class="tk-ph"><span class="mini-av lg">${esc(mIni(personName(id)))}</span><b>${esc(personName(id))}</b>${st.late ? `<span class="pill warn">${st.late} late</span>` : ''}<span class="spacer"></span><span class="tk-n ${taskTone(st)}"><b class="num">${st.done}</b>/<span class="num">${st.total}</span> done</span>${taskBar(st)}</header>
-      ${ts.length ? [...groups].map(([client, list]) => `<div class="tk-client"><div class="tk-cn">${esc(client)}</div><ul class="tk-list">${list.map((t) => `<li class="tk-it${t.done ? ' done' : ''}"><span class="tk-ck" aria-label="${t.done ? 'Done' : 'Not done'}">${t.done ? '✓' : ''}</span><span class="tk-tx">${esc(t.text)}<span class="tk-meta">${t.from === 'ai' ? '<span class="tk-tag ai">✨ AI plan</span>' : '<span class="tk-tag">Own task</span>'}${t.late ? `<span class="tk-tag late">from ${esc(dayTxt(t.day))}</span>` : ''}${t.done ? `<span>done ${esc(t.doneAt && t.doneAt.slice(0, 10) !== new Date().toISOString().slice(0, 10) && dayTxt(t.doneAt.slice(0, 10)) !== dayTxt(mTasks.day) ? dayTxt(t.doneAt.slice(0, 10)) + ' ' : '')}${esc(hm(t.doneAt))}${t.doneBy && t.doneBy !== personName(id) ? ' by ' + esc(t.doneBy) : ''}</span>` : ''}</span></span></li>`).join('')}</ul></div>`).join('') : `<div class="tk-empty hint">${esc(empty)}</div>`}
+      ${ts.length ? [...groups].map(([client, list]) => `<div class="tk-client"><div class="tk-cn">${esc(client)}</div><ul class="tk-list">${list.map((t) => `<li class="tk-it${t.done ? ' done' : ''}"><span class="tk-ck" aria-label="${t.done ? 'Done' : 'Not done'}">${t.done ? '✓' : ''}</span><span class="tk-tx">${t.from === 'work' ? `<span>${IC_TODO[t.kind] || '📋'} ${esc(t.text)}</span>${t.detail ? `<span class="tk-det">${esc(t.detail)}</span>` : ''}` : esc(t.text)}<span class="tk-meta">${t.from === 'ai' ? '<span class="tk-tag ai">✨ AI plan</span>' : t.from === 'work' ? `<span class="tk-tag work${t.level === 'bad' ? ' bad' : ''}">Today's work</span>` : '<span class="tk-tag own">✍️ Own task</span>'}${t.late ? `<span class="tk-tag late">from ${esc(dayTxt(t.day))}</span>` : ''}${t.done ? `<span>done ${esc(t.doneAt && t.doneAt.slice(0, 10) !== new Date().toISOString().slice(0, 10) && dayTxt(t.doneAt.slice(0, 10)) !== dayTxt(mTasks.day) ? dayTxt(t.doneAt.slice(0, 10)) + ' ' : '')}${esc(hm(t.doneAt))}${t.doneBy && t.doneBy !== personName(id) ? ' by ' + esc(t.doneBy) : ''}</span>` : ''}</span></span></li>`).join('')}</ul></div>`).join('') : `<div class="tk-empty hint">${esc(empty)}</div>`}
     </article>`;
   }
   function tasksPanel(team, q) {
@@ -980,7 +981,7 @@
     if (team) {
       const ids = [...team.ids].sort((a, b) => (taskStat([a]).pct ?? 101) - (taskStat([b]).pct ?? 101)); // least done first, no tasks last
       const html = ids.map((id) => personTasks(id, q)).join('');
-      return nav + `<div class="tk-hint hint">Tasks each person ticks in Clients → their client (✨ from the AI daily plan, or added by them). ${mTaskDay === me.today ? 'Late = left open from an earlier day.' : ''}</div>` + (html || `<div class="tk-empty hint">${team.ids.length ? 'Nothing matches.' : 'No one in this team yet — add people in Admin → Users → Teams.'}</div>`);
+      return nav + `<div class="tk-hint hint">Today's work & tasks from each person's Clients page: 📋 today's work (report, payment, quiet client…), ✨ AI plan tasks and ✍️ tasks they added. ${mTaskDay === me.today ? 'Late = left open from an earlier day. Updates every minute.' : "Today's work is only kept for today — older days show tasks."}</div>` + (html || `<div class="tk-empty hint">${team.ids.length ? 'Nothing matches.' : 'No one in this team yet — add people in Admin → Users → Teams.'}</div>`);
     }
     // all teams: one line per team with each person's progress
     return nav + `<div class="tk-teams">${mTeams().map((t) => { const s = t.task; return `<button type="button" class="tk-team" data-mteam="${esc(t.id)}">
@@ -1001,7 +1002,7 @@
       const t = team || all, c = cpoOf(t.ordSpend, t.orders), s = t.task, sg = team ? (mSug ? teamSug(team.members) : null) : allSug;
       rollTo($('mSpend'), money(t.spend)); rollTo($('mOrders'), t.orders.toLocaleString('en-US')); rollTo($('mCpo'), c != null ? money(c) : '–');
       rollTo($('mTasks'), s.ready ? (s.total ? `${s.done}/${s.total}` : '0') : '–');
-      $('mTasksLbl').textContent = `tasks done ${dayTxt(mTaskDay)}`;
+      $('mTasksLbl').textContent = `work & tasks done ${dayTxt(mTaskDay)}`;
       rollTo($('mUrgent'), sg ? String(sg.filter((x) => x.level === 'bad').length) : '–');
     }
     { // notes: older days are estimates · spend on Pages not linked to any client
@@ -1032,7 +1033,7 @@
     const t = team || { name: 'All teams', members: d.users, ids: teams.flatMap((x) => x.ids), spend: all.spend, orders: all.orders, ordSpend: all.ordSpend, cpo: cpoOf(all.ordSpend, all.orders), pages: d.totals.pages, task: all.task };
     const sg = mSug ? (team ? teamSug(team.members) : allSug).filter((x) => !q || has(x.title) || has(x.detail) || has(x.who)) : null;
     const tn = tone(t.cpo), s = t.task;
-    const tabs = [['tasks', `Tasks${s.ready && s.total ? ` <span class="countpill">${s.done}/${s.total}</span>` : ''}`], ['people', team ? 'People & Pages' : 'People'], ['sug', `Suggestions${sg && sg.length ? ` <span class="countpill">${sg.length}</span>` : ''}`]];
+    const tabs = [['tasks', `Work & tasks${s.ready && s.total ? ` <span class="countpill">${s.done}/${s.total}</span>` : ''}`], ['people', team ? 'People & Pages' : 'People'], ['sug', `Suggestions${sg && sg.length ? ` <span class="countpill">${sg.length}</span>` : ''}`]];
     let body = '';
     if (mTab === 'tasks') body = tasksPanel(team, q);
     else if (mTab === 'sug') {
@@ -1072,7 +1073,7 @@
           <div class="cd-stat hero"><span class="lbl">Boost spend</span><b class="num">${money(t.spend)}</b><span class="sub">${esc(periodLabel())}</span></div>
           <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${t.orders.toLocaleString('en-US')}</b><span class="sub">from adsbox.biz</span></div>
           <div class="cd-stat"><span class="lbl">Per order</span><b class="num ${tn}">${t.cpo != null ? money(t.cpo) : '–'}</b><span class="sub">${t.cpo != null ? `${team ? (toneTxt[tn] || '') + ' · ' : ''}avg ${money(avg)}` : 'no orders yet'}</span></div>
-          <div class="cd-stat"><span class="lbl">Tasks ${esc(dayTxt(mTaskDay))}</span><b class="num ${taskTone(s)}">${s.ready ? (s.total ? `${s.done}/${s.total}` : '0') : '…'}</b><span class="sub">${s.ready ? (s.total ? `${s.pct}% done${s.late ? ` · ${s.late} late` : ''}` : 'no tasks yet') : 'loading'}</span></div>
+          <div class="cd-stat"><span class="lbl">Work & tasks ${esc(dayTxt(mTaskDay))}</span><b class="num ${taskTone(s)}">${s.ready ? (s.total ? `${s.done}/${s.total}` : '0') : '…'}</b><span class="sub">${s.ready ? (s.total ? `${s.pct}% done${s.late ? ` · ${s.late} late` : ''}` : 'no tasks yet') : 'loading'}</span></div>
         </div>
       </div>
       <div class="seg mtabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-mtab="${k}" aria-selected="${mTab === k}" aria-pressed="${mTab === k}">${l}</button>`).join('')}</div>
@@ -1093,6 +1094,8 @@
     if (b.dataset.muser) { const id = b.dataset.muser; if (mOpen.has(id)) mOpen.delete(id); else mOpen.add(id); renderMain(); }
   });
   document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });
+  // keep the Main Dashboard's tasks fresh while it is open
+  setInterval(() => { if (!$('tab-main').hidden && !document.hidden && mData) loadTasks(); }, 60e3);
   $('mSearch').oninput = () => renderMain();
 
   // ---------- Orders page (adsbox.biz) ----------

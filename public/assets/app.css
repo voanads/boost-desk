@@ -1845,3 +1845,7 @@ body{font-size:15.5px;letter-spacing:0}
 .tk-person.quiet{padding-top:var(--s-2);padding-bottom:var(--s-2)}
 .tk-person.quiet .tk-empty{padding:0}
 @media (max-width:560px){.mtabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.mtabs button{justify-content:center;padding:8px 4px;font-size:var(--fs-md)}.mtabs .countpill{display:none}}
+.tk-det{font-size:var(--fs-md);color:var(--muted)}
+.tk-tag.work{color:var(--ink)}
+.tk-tag.work.bad{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
+.tk-tag.own{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}

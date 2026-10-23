@@ -263,7 +263,20 @@ api.get('/main/tasks', adminOnly, wrap(async (req, res) => {
       o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid) });
     }
   }
-  for (const o of Object.values(out)) o.tasks.sort((a, b) => a.client.localeCompare(b.client) || (a.done - b.done) || a.day.localeCompare(b.day));
+  // Today's work (the same rule-based list each person sees in Clients: send report, unpaid, quiet client…), ticked or not.
+  if (day === today) {
+    const wb = {}; for (const r of rows) wb[r.key] = r.value || {};
+    await Promise.all(users.map(async (u) => {
+      let t; try { t = await pm.todo({ fb_id: u.fb_id, name: u.name }); } catch (_) { return; }
+      for (const x of [...(t.items || []), ...(t.tips || [])]) {
+        if (!x.clientId || !cName[x.clientId]) continue;
+        const tk = ((wb[`${u.fb_id}:cwb:${x.clientId}`] || {}).ticks || {})[`${day}:${x.kind}`];
+        out[u.fb_id].tasks.push({ id: `w:${x.clientId}:${x.kind}`, text: x.title, detail: x.detail || '', from: 'work', kind: x.kind, level: x.level || '', day, done: !!tk, doneAt: tk ? tk.at : null, doneBy: tk ? tk.by : null, late: false, client: cName[x.clientId], clientId: Number(x.clientId) });
+      }
+    }));
+  }
+  const ord = { work: 0, ai: 1, me: 2 };
+  for (const o of Object.values(out)) o.tasks.sort((a, b) => a.client.localeCompare(b.client) || (a.done - b.done) || (ord[a.from] - ord[b.from]) || a.day.localeCompare(b.day));
   res.json({ day, today, users: out, teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
 }));
 // Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.

@@ -604,6 +604,12 @@ api.get('/admin/ad-accounts', adminOnly, wrap(async (req, res) => {
     const v = Number(r.spend) || 0; a.daily = a.daily || {}; a.daily[r.day] = Math.round(((a.daily[r.day] || 0) + v) * 100) / 100;
     if (r.day >= from7) { a.week = (a.week || 0) + v; a.camps = (a.camps || 0) + (v > 0 ? 1 : 0); const k = r.pid || r.page || '?'; a._pg = a._pg || {}; const pg = a._pg[k] || (a._pg[k] = { page: r.page || '', pageId: r.pid || '', spend: 0 }); pg.spend += v; }
   }
+  // Today's spend comes from today's sync (the saved account snapshot only has it for accounts nobody syncs).
+  const synced = Object.fromEntries((await db.pool.query(`SELECT owner, max(synced_at) AS at FROM day_meta WHERE day = $1 GROUP BY owner`, [today])).rows.map((r) => [r.owner, r.at]));
+  for (const a of map.values()) {
+    const on = a.people.filter((p) => p.enabled), at = on.map((p) => synced[p.id]).filter(Boolean).sort().pop();
+    if (on.length && (at || (a.daily && a.daily[today] != null))) { a.todaySpend = (a.daily && a.daily[today]) || 0; a.todayAt = at ? new Date(at).toISOString() : a.todayAt; }
+  }
   for (const a of map.values()) { a.week = Math.round((a.week || 0) * 100) / 100; a.pages = Object.values(a._pg || {}).sort((x, y) => y.spend - x.spend).slice(0, 12).map((x) => ({ ...x, spend: Math.round(x.spend * 100) / 100 })); delete a._pg; }
   const teamId = {}; for (const t of teams) for (const m of t.members) teamId[m] = t.id;
   for (const a of map.values()) for (const p of a.people) p.teamId = teamId[p.id] || null;

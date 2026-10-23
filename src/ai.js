@@ -8,7 +8,9 @@ const db = require('./db');
 const sync = require('./sync');
 const { encrypt, decrypt } = require('./crypto');
 
-const MODEL = () => process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+// Works with a Claude key (sk-ant-…) or a Google Gemini key (AIza…); the key's shape picks the provider.
+const providerOf = (key) => (/^AIza/.test(key || '') ? 'gemini' : 'claude');
+const MODEL_FOR = (p) => (p === 'gemini' ? process.env.GEMINI_MODEL || 'gemini-2.5-flash' : process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5');
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 60; // advice requests per person per day
 const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -17,17 +19,18 @@ const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 async function keyConfig() {
   const c = (await db.getSetting('anthropicApi', null)) || {};
   let key = ''; try { key = c.keyEnc ? decrypt(c.keyEnc) : ''; } catch (_) { key = ''; }
-  key = key || process.env.ANTHROPIC_API_KEY || '';
-  return { key, hint: c.keyHint || (process.env.ANTHROPIC_API_KEY ? '…' + process.env.ANTHROPIC_API_KEY.slice(-4) : ''), by: c.by || '', at: c.at || '' };
+  const env = process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY || '';
+  key = key || env;
+  return { key, provider: providerOf(key), hint: c.keyHint || (env ? '…' + env.slice(-4) : ''), by: c.by || '', at: c.at || '' };
 }
-async function publicConfig() { const c = await keyConfig(); return { hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, model: MODEL(), dailyLimit: DAILY_LIMIT }; }
+async function publicConfig() { const c = await keyConfig(); return { hasKey: !!c.key, provider: c.provider, keyHint: c.hint, savedBy: c.by, savedAt: c.at, model: MODEL_FOR(c.provider), dailyLimit: DAILY_LIMIT }; }
 async function saveKey(key, by) {
   const cur = (await db.getSetting('anthropicApi', null)) || {};
   const next = { ...cur, by, at: new Date().toISOString() };
   if (key === null) { delete next.keyEnc; delete next.keyHint; }
   else if (key && String(key).trim()) {
     const k = String(key).trim();
-    if (!/^sk-ant-/.test(k)) throw Object.assign(new Error('That does not look like an Anthropic API key (it starts with sk-ant-).'), { status: 400 });
+    if (!/^sk-ant-/.test(k) && !/^AIza[\w-]{20,}$/.test(k)) throw Object.assign(new Error('That does not look like a Claude key (starts with sk-ant-) or a Gemini key (starts with AIza).'), { status: 400 });
     next.keyEnc = encrypt(k); next.keyHint = '…' + k.slice(-4);
   }
   await db.setSetting('anthropicApi', next);
@@ -125,6 +128,27 @@ Rules:
 - Days where spend is high but orders are low matter most — point them out by date.
 - Be concise and scannable: short headings, bullets, no intro, max about 250 words.`;
 
+// Google Gemini (AI Studio key).
+async function callGemini(key, system, messages) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
+  let res, body;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL_FOR('gemini'))}:generateContent`, {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { maxOutputTokens: 2048, temperature: 0.4 } }),
+    });
+    body = await res.json().catch(() => ({}));
+  } catch (e) { throw new Error(e.name === 'AbortError' ? 'The AI took too long to answer. Try again.' : 'Could not reach Gemini: ' + e.message); }
+  finally { clearTimeout(t); }
+  const msg = (body.error && body.error.message) || '';
+  if (res.status === 400 && /api key/i.test(msg) || res.status === 403) throw Object.assign(new Error('The Gemini API key was refused — check it in Admin → Settings.'), { status: 400 });
+  if (res.status === 429) throw Object.assign(new Error('Gemini is busy or the free limit was reached. Try again in a minute.'), { status: 429 });
+  if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
+  const text = ((body.candidates || [])[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
+  if (!text) throw new Error('Gemini gave no answer (it may have blocked the request). Try again.');
+  return { text, usage: body.usageMetadata || {} };
+}
 async function callClaude(key, system, messages) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
@@ -132,7 +156,7 @@ async function callClaude(key, system, messages) {
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', signal: ctl.signal,
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL(), max_tokens: 1200, system, messages }),
+      body: JSON.stringify({ model: MODEL_FOR('claude'), max_tokens: 1200, system, messages }),
     });
     body = await res.json().catch(() => ({}));
   } catch (e) { throw new Error(e.name === 'AbortError' ? 'The AI took too long to answer. Try again.' : 'Could not reach the AI: ' + e.message); }
@@ -148,7 +172,7 @@ async function callClaude(key, system, messages) {
 const cache = new Map();
 async function clientAdvice(owner, clientId, { from, to, lang = 'en', question = '', fresh = false }) {
   const cfg = await keyConfig();
-  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds an Anthropic API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
   const data = await clientData(owner, clientId, from, to);
   if (!data.totals.spend && !data.totals.orders) return { text: lang === 'km' ? 'មិនមានការចំណាយ Boost ក្នុងរយៈពេលនេះទេ។' : 'No boost spend for this client in this period.', empty: true };
   const ck = crypto.createHash('sha1').update(JSON.stringify([owner, clientId, from, to, lang, question, data.totals, data.daily.length])).digest('hex');
@@ -157,7 +181,7 @@ async function clientAdvice(owner, clientId, { from, to, lang = 'en', question =
   if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
   const langLine = lang === 'km' ? 'Write the whole answer in Khmer (ខ្មែរ). Keep Page names, campaign names, numbers and $ as they are.' : 'Write the answer in simple English.';
   const ask = question ? `\n\nThe media buyer also asks: "${String(question).slice(0, 400)}" — answer it within the advice.` : '';
-  const out = await callClaude(cfg.key, SYSTEM, [{ role: 'user', content: `${langLine}${ask}\n\nClient data (JSON):\n${JSON.stringify(data)}` }]);
+  const out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, SYSTEM, [{ role: 'user', content: `${langLine}${ask}\n\nClient data (JSON):\n${JSON.stringify(data)}` }]);
   await db.setUserSetting(owner, useKey, used + 1);
   const result = { text: out.text, client: data.client.name, totals: data.totals, at: new Date().toISOString() };
   cache.set(ck, { at: Date.now(), out: result });

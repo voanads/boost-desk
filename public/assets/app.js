@@ -74,7 +74,7 @@
   async function api(path, opts = {}) {
     const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
     const body = await res.json().catch(() => ({}));
-    if (res.status === 401 && body.needsLogin) { location.href = '/login?error=' + encodeURIComponent(body.error || 'Please log in again.'); throw new Error(body.error); }
+    if (res.status === 401 && body.needsLogin) { location.href = (document.body.dataset.site === 'admin' ? '/admin/login' : '/login') + '?error=' + encodeURIComponent(body.error || 'Please log in again.'); throw new Error(body.error); }
     if (!res.ok) throw new Error(body.error || 'Request failed (' + res.status + ')');
     return body;
   }
@@ -222,6 +222,7 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     if ((name === 'admin' || name === 'main') && !(me && me.canAdmin)) name = 'dashboard';
+    if (document.body.dataset.site === 'admin' && !['main', 'admin'].includes(name)) name = 'main';
     ['main', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
@@ -1408,10 +1409,11 @@
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
+      d.canEdit ? card('🔑', 'Admin website · Google sign-in', '<span id="asState"></span>', '<div id="asBox" class="hint">Loading…</div>', '') : '',
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
       d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
-    if (d.canEdit) { loadKeys(); loadSecurity(); }
+    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); }
   }
   // Steps to change every secret after a leak (e.g. the Railway incident of 21 Oct 2026). New values are made in
   // this browser only — they are never sent to the server or to chat; you paste them straight into Railway.
@@ -1422,6 +1424,29 @@
     ['encryption', 'Encryption key', 'First add a variable <code>ENCRYPTION_KEY_OLD</code> = the current <code>ENCRYPTION_KEY</code> value. Then replace <code>ENCRYPTION_KEY</code> with a new value from below. After deploy, Boost Desk re-saves every login and API key with the new key — when this card says “0 left on old key”, delete <code>ENCRYPTION_KEY_OLD</code>.', 'key'],
     ['database', 'Database password', 'Make a new value below. Railway → Postgres service → <b>Database → Query</b>, run <code>ALTER USER postgres WITH PASSWORD \'NEW_VALUE\';</code> then on the Postgres service Variables set <code>POSTGRES_PASSWORD</code> and <code>PGPASSWORD</code> to the same value. boost-desk’s <code>DATABASE_URL</code> is a reference, so it follows — after it redeploys, the Health page should show the database OK. Do this one last, after a fresh backup.', 'db'],
   ];
+  // Admin website (/admin): who can sign in with Google, and the one-time Google setup.
+  let asData = null;
+  async function loadSiteAccess(fresh) {
+    const box = $('asBox'); if (!box) return;
+    try { asData = fresh ? { ...asData, ...fresh } : await api('/admin/site-access'); } catch (e) { box.textContent = e.message; return; }
+    const d = asData, uName = (id) => (d.users.find((u) => u.id === id) || {}).name || '';
+    $('asState').outerHTML = `<span id="asState" class="sc-st ${d.google ? 'ok' : 'bad'}">${d.google ? 'Google on' : 'Google not set up'}</span>`;
+    box.innerHTML = `<div>A separate website for admins and the COO with just the <b>Main Dashboard</b> and <b>Admin</b>: <a href="/admin" target="_blank" rel="noopener"><b>${esc(d.url)}</b></a> <button type="button" class="sm ghost" data-ascopy="${esc(d.url)}">Copy link</button></div>
+      <div class="hint">People below sign in there with their Google (Gmail) account. Admins who use Boost Desk can also open it with Facebook.</div>
+      ${d.google ? '' : `<details class="as-setup" open><summary><b>One-time setup (about 5 minutes)</b></summary><ol>
+        <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud → APIs &amp; Services</a> (any Google account; create a project like “Ads Box Admin”).</li>
+        <li><b>OAuth consent screen</b> → External → app name “Ads Box Admin”, your email → Save. Then <b>Publish app</b> (Audience) so any allowed Gmail can sign in — only name and email are asked, so no Google review is needed.</li>
+        <li><b>Credentials → Create credentials → OAuth client ID</b> → Web application. Under <i>Authorized redirect URIs</i> add:<br><code class="lcode" data-ascopy="${esc(d.redirectUri)}" title="Tap to copy">${esc(d.redirectUri)}</code></li>
+        <li>Copy the <b>Client ID</b> and <b>Client secret</b> into Railway → boost-desk → Variables as <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> (not in chat). After the redeploy this card says “Google on”.</li></ol></details>`}
+      <div class="as-list">${d.people.length ? d.people.map((p) => `<div class="skrow"><span><b>${esc(p.name || p.email)}</b>${p.name ? ` <span class="hint">${esc(p.email)}</span>` : ''}<br><span class="hint">${p.linkTo ? 'Acts as ' + esc(uName(p.linkTo) || 'a Boost Desk account') : 'Admin viewer'} · ${p.lastLogin ? 'last sign-in ' + esc(ago(p.lastLogin)) : 'not signed in yet'}</span></span><button class="sm ghost danger-t" data-asdel="${esc(p.email)}">Remove</button></div>`).join('') : '<div class="hint">No one yet.</div>'}</div>
+      <form class="as-add" id="asForm"><input type="email" id="asEmail" placeholder="name@gmail.com" required aria-label="Gmail address"><input type="text" id="asName" placeholder="Name (optional)" aria-label="Name"><select id="asLink" aria-label="Boost Desk account"><option value="">Admin viewer (no Boost Desk account)</option>${d.users.map((u) => `<option value="${esc(u.id)}">Same as ${esc(u.name)}</option>`).join('')}</select><button type="submit" class="sm">+ Allow</button></form>
+      <div class="hint">“Admin viewer” sees every team, task and the Admin pages. “Same as …” signs in as that Boost Desk person (use it for yourself).</div>`;
+    $('asForm').onsubmit = async (ev) => { ev.preventDefault(); try { loadSiteAccess(await api('/admin/site-access', { method: 'POST', body: { email: $('asEmail').value, name: $('asName').value, linkTo: $('asLink').value } })); toast('Allowed on the admin website'); } catch (e) { toast(e.message); } };
+  }
+  $('sGrid').addEventListener('click', async (ev) => {
+    const c = ev.target.closest('[data-ascopy]'); if (c) { try { await navigator.clipboard.writeText(c.dataset.ascopy); toast('Copied'); } catch (_) {} return; }
+    const del = ev.target.closest('[data-asdel]'); if (del) { if (!confirm(`Remove ${del.dataset.asdel} from the admin website?`)) return; try { loadSiteAccess(await api('/admin/site-access/' + encodeURIComponent(del.dataset.asdel), { method: 'DELETE' })); } catch (e) { toast(e.message); } }
+  });
   const randHex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, '0')).join('');
   async function loadSecurity() {
     let st; try { st = await api('/admin/security'); } catch (e) { const x = $('secBox'); if (x) x.textContent = e.message; return; }
@@ -1503,7 +1528,7 @@ Notes:
     try { await api('/admin/invoice-qr', { method: 'PUT', body: { qr: data } }); successBadge('QR changed for everyone'); loadSettings(); } catch (e) { toast(e.message); }
   });
 
-  $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = '/login'; };
+  $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = document.body.dataset.site === 'admin' ? '/admin/login' : '/login'; };
 
   // While the Dashboard shows a period that includes today, pull fresh numbers every 2 minutes (picks up auto sync).
   setInterval(() => {
@@ -2839,9 +2864,22 @@ Thank you for working with Ads Box!`,
   }
 
   // ---------- boot ----------
+  const ADMIN_SITE = document.body.dataset.site === 'admin';
   (async () => {
     try {
       me = await api('/me');
+      if (ADMIN_SITE) { // the admin website: only the Main Dashboard and Admin
+        document.documentElement.classList.add('adminsite');
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'admin'].includes(b.dataset.tab); });
+        const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
+        document.querySelector('.brand').setAttribute('href', '/admin#main');
+        $('whoName').textContent = me.name;
+        $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+        if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
+        $('whoName').title = me.google ? me.google.email : '';
+        showTab(location.hash.slice(1) === 'admin' ? 'admin' : 'main');
+        window.scrollTo(0, 0); return;
+      }
       loadChats(); loadCheck();
       date = me.today || date;
       $('whoName').textContent = me.name;

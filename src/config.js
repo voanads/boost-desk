@@ -29,4 +29,7 @@ module.exports = {
   reportTime: process.env.REPORT_TIME || '21:00', // HH:MM in tz
   autoSyncCron: process.env.AUTO_SYNC_CRON || '5 8-23 * * *', // minute 5 of every hour 08:00–23:00
   pgSsl: process.env.PGSSL === 'true',
+  // Google sign-in for the admin website (/admin). Optional: without these the admin site only takes Facebook.
+  googleClientId: (process.env.GOOGLE_CLIENT_ID || '').trim(),
+  googleClientSecret: (process.env.GOOGLE_CLIENT_SECRET || '').trim(),
 };

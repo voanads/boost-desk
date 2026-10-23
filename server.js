@@ -50,7 +50,7 @@ function stateOk(state) {
 }
 const loggedIn = async (req) => !!(req.session && req.session.fbId && (await db.getUser(req.session.fbId)));
 
-app.get('/auth/facebook', (req, res) => res.redirect(meta.loginUrl(newState())));
+app.get('/auth/facebook', (req, res) => { req.session.next = req.query.next === 'admin' ? '/admin' : null; res.redirect(meta.loginUrl(newState())); });
 
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
@@ -78,10 +78,47 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   req.session.fbId = profile.id;
   req.session.name = profile.name;
   // Each admin starts with an empty workspace; nothing is loaded until they tap Sync from Meta.
-  res.redirect('/');
+  const next = req.session.next === '/admin' ? '/admin' : '/'; req.session.next = null;
+  res.redirect(next);
 }));
 
 app.post('/auth/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
+
+// ---------- Admin website (/admin): Google sign-in for people the owner allows ----------
+// Allowed people live in the setting adminSite.people: { email, name, linkTo (a Boost Desk Facebook ID or ''), addedAt, addedBy, lastLogin }.
+// Someone linked to a Boost Desk account acts as that account; anyone else is an admin viewer (Main Dashboard + Admin).
+const siteCfg = async () => { const v = (await db.getSetting('adminSite', null)) || {}; return { people: Array.isArray(v.people) ? v.people : [] }; };
+const normEmail = (e) => String(e || '').trim().toLowerCase();
+async function sitePerson(email) { const e = normEmail(email); return e ? (await siteCfg()).people.find((p) => p.email === e) || null : null; }
+const googleRedirect = () => cfg.baseUrl + '/auth/google/callback';
+const adminLoginErr = (res, msg) => res.redirect('/admin/login?error=' + encodeURIComponent(msg));
+app.get('/auth/google', (req, res) => {
+  if (!cfg.googleClientId || !cfg.googleClientSecret) return adminLoginErr(res, 'Google sign-in is not set up yet. The app owner adds it in Admin → Settings → Admin website.');
+  const q = new URLSearchParams({ client_id: cfg.googleClientId, redirect_uri: googleRedirect(), response_type: 'code', scope: 'openid email profile', state: newState(), prompt: 'select_account' });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + q);
+});
+app.get('/auth/google/callback', wrap(async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return adminLoginErr(res, error === 'access_denied' ? 'Google sign-in was cancelled.' : 'Google sign-in failed: ' + error);
+  if (!code || !stateOk(state)) return adminLoginErr(res, 'That sign-in link expired. Tap Sign in with Google again.');
+  let tok;
+  try {
+    const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code: String(code), client_id: cfg.googleClientId, client_secret: cfg.googleClientSecret, redirect_uri: googleRedirect(), grant_type: 'authorization_code' }) });
+    tok = await r.json(); if (!r.ok || !tok.id_token) throw new Error(tok.error_description || tok.error || 'no id_token');
+  } catch (e) { return adminLoginErr(res, 'Google sign-in did not finish (' + e.message + '). Try again.'); }
+  // The ID token comes straight from Google over HTTPS (not from the browser), so reading its claims is safe.
+  let c; try { c = JSON.parse(Buffer.from(tok.id_token.split('.')[1], 'base64url').toString('utf8')); } catch (_) { return adminLoginErr(res, 'Google sent an answer we could not read. Try again.'); }
+  if (c.aud !== cfg.googleClientId || !/^(https:\/\/)?accounts\.google\.com$/.test(c.iss || '') || !c.email || c.email_verified === false) return adminLoginErr(res, 'Google could not confirm this email address.');
+  const email = normEmail(c.email), person = await sitePerson(email);
+  if (!person) return adminLoginErr(res, `${email} is not allowed on the admin website. Ask the app owner to add it in Admin → Settings → Admin website.`);
+  const site = await siteCfg(), me = site.people.find((x) => x.email === email); me.lastLogin = new Date().toISOString(); if (!me.name && c.name) me.name = String(c.name).slice(0, 80);
+  await db.setSetting('adminSite', site);
+  req.session.gEmail = email; req.session.gName = String(c.name || me.name || email).slice(0, 80); req.session.gPic = String(c.picture || '').slice(0, 400);
+  res.redirect('/admin');
+}));
+app.get('/admin/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
+app.get('/admin/login/info', wrap(async (req, res) => res.json({ google: !!(cfg.googleClientId && cfg.googleClientSecret) })));
 
 app.get('/login', wrap(async (req, res) => {
   if (await loggedIn(req)) return res.redirect('/'); // already logged in: go straight to the app
@@ -153,19 +190,36 @@ app.post('/public-api/thresholds', wrap(async (req, res) => {
 const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
 app.use(wrap(async (req, res, next) => {
-  const user = req.session.fbId && (await db.getUser(req.session.fbId));
+  let user = req.session.fbId && (await db.getUser(req.session.fbId));
+  if (!user && req.session.gEmail) { // signed in with Google on the admin website
+    const p = await sitePerson(req.session.gEmail);
+    if (!p) { req.session.gEmail = null; }
+    else if (p.linkTo && (user = await db.getUser(p.linkTo))) { req.adminSite = true; }
+    else { user = { fb_id: 'g:' + p.email, name: req.session.gName || p.name || p.email, token_expires: null, google: true }; req.adminSite = true; }
+  }
   if (!user) {
-    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please log in with Facebook.', needsLogin: true });
-    return res.redirect('/login');
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please log in again.', needsLogin: true });
+    return res.redirect(req.path.startsWith('/admin') ? '/admin/login' : '/login');
+  }
+  // Google-only people see the admin website and its data, nothing else.
+  if (user.google) {
+    if (req.path.startsWith('/api/') && !/^\/api\/(me|main\/|admin\/)/.test(req.path)) return res.status(403).json({ error: 'The admin website only has the Main Dashboard and Admin.' });
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/admin')) return res.redirect('/admin');
   }
   req.user = user;
   // When each person was last active (saved at most every 10 minutes).
-  const seen = lastSeenMem.get(user.fb_id) || 0;
+  const seen = user.google ? Date.now() : lastSeenMem.get(user.fb_id) || 0;
   if (Date.now() - seen > 10 * 60e3) { lastSeenMem.set(user.fb_id, Date.now()); db.setUserSetting(user.fb_id, 'lastSeen', new Date().toISOString()).catch(() => {}); }
   next();
 }));
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// The admin website: the same app, showing only the Main Dashboard and Admin.
+app.get(['/admin', '/admin/'], wrap(async (req, res) => {
+  if (!req.user.google && !(await canSeeAdmin(req.user.fb_id))) { req.session = null; return adminLoginErr(res, `${req.user.name} is not an admin. Ask the app owner for access.`); }
+  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="admin">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Admin</title>');
+  res.set('Cache-Control', 'no-cache').send(html);
+}));
 
 // ---------- API ----------
 const api = express.Router();
@@ -175,6 +229,7 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
     canAdmin: await canSeeAdmin(req.user.fb_id),
+    google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
@@ -198,7 +253,7 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
 }));
 // Admin overview: every account's spend for a period (owner, or people the owner allowed).
 const adminViewers = async () => new Set(await db.getSetting('adminViewers', []));
-const canSeeAdmin = async (id) => (await db.ownerId()) === id || (await adminViewers()).has(id);
+const canSeeAdmin = async (id) => (String(id).startsWith('g:') && !!(await sitePerson(String(id).slice(2)))) || (await db.ownerId()) === id || (await adminViewers()).has(id);
 const adminOnly = wrap(async (req, res, next) => {
   if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only the app owner and people they allow can see the Admin dashboard.' });
   next();
@@ -448,6 +503,24 @@ api.post('/admin/spend-keys', ownerOnly, wrap(async (req, res) => {
 api.delete('/admin/spend-keys/:id', ownerOnly, wrap(async (req, res) => {
   const keys = ((await db.getSetting('spendApiKeys', [])) || []).filter((k) => k.id !== req.params.id);
   await db.setSetting('spendApiKeys', keys); res.json({ keys: pubKeys(keys) });
+}));
+// ---- Admin website: who can sign in with Google (owner) ----
+api.get('/admin/site-access', ownerOnly, wrap(async (req, res) => {
+  const users = (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name }));
+  res.json({ google: !!(cfg.googleClientId && cfg.googleClientSecret), url: cfg.baseUrl + '/admin', redirectUri: googleRedirect(), people: (await siteCfg()).people, users });
+}));
+api.post('/admin/site-access', ownerOnly, wrap(async (req, res) => {
+  const email = normEmail((req.body || {}).email), linkTo = String((req.body || {}).linkTo || '');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Type a full email address, like name@gmail.com.' });
+  if (linkTo && !(await db.getUser(linkTo))) return res.status(400).json({ error: 'That Boost Desk account was not found.' });
+  const site = await siteCfg(), old = site.people.find((p) => p.email === email);
+  if (old) Object.assign(old, { linkTo, name: String((req.body || {}).name || old.name || '').slice(0, 80) });
+  else site.people.push({ email, name: String((req.body || {}).name || '').slice(0, 80), linkTo, addedAt: new Date().toISOString(), addedBy: req.user.name, lastLogin: null });
+  await db.setSetting('adminSite', site); res.json({ people: site.people });
+}));
+api.delete('/admin/site-access/:email', ownerOnly, wrap(async (req, res) => {
+  const site = await siteCfg(); site.people = site.people.filter((p) => p.email !== normEmail(req.params.email));
+  await db.setSetting('adminSite', site); res.json({ people: site.people });
 }));
 // ---- Security (secret rotation checklist) and database backups — owner only ----
 api.get('/admin/security', ownerOnly, wrap(async (req, res) => res.json(await require('./src/security').status())));

@@ -48,20 +48,12 @@ async function todo(user) {
 
   const order = { bad: 0, warn: 1, todo: 2 };
   items.sort((a, b) => order[a.level] - order[b.level]);
-  // Boost plans that are off pace (over, too fast, or clearly behind after the first week).
+  // Post boost plans: spend went over the planned budget.
   try {
-    const P = require('./plan'), withPlan = clients.filter((c) => c.plan && Number(c.plan.budget) > 0);
-    if (withPlan.length) {
-      const mo = await P.monthOf(owner, today);
-      for (const c of withPlan) {
-        const m = mo[c.id] || { spend: 0, lives: 0 }, p = P.pace(c.plan, m.spend, m.lives, today);
-        if (!p || p.status === 'on' || (p.status === 'behind' && p.day < 8)) continue;
-        const t = { over: `${c.name} ចំណាយលើសផែនការ Boost ហើយ`, ahead: `${c.name} ចំណាយលឿនជាងផែនការ Boost`, behind: `${c.name} ចំណាយតិចជាងផែនការ Boost` }[p.status];
-        const d = p.status === 'over' ? `${money(p.spend)} / ${money(p.budget)} · លើស ${money(p.spend - p.budget)} · ផ្អាក Boost ឬសួរអតិថិជនបន្ថែមថវិកា`
-          : p.status === 'ahead' ? `${money(p.spend)} / ${money(p.budget)} (${p.pct}%) ខណៈខែទើបកន្លង ${p.timePct}% · រក្សាឲ្យក្រោម ${money(p.perDay)} / ថ្ងៃ`
-          : `${money(p.spend)} / ${money(p.budget)} (${p.pct}%) ខណៈខែកន្លង ${p.timePct}% · Boost ប្រហែល ${money(p.perDay)} / ថ្ងៃ ដើម្បីប្រើថវិកាគ្រប់`;
-        items.push({ kind: 'plan', level: p.status === 'behind' ? 'todo' : 'warn', clientId: c.id, title: t, detail: d, action: 'client' });
-      }
+    const P = require('./plan');
+    for (const c of clients.filter((x) => x.plan && x.plan.lines && x.plan.lines.length)) {
+      const p = await P.progress(owner, c, today);
+      if (p && p.started && p.spent > p.budget * 1.02) items.push({ kind: 'plan', level: 'warn', clientId: c.id, title: `${c.name} ចំណាយ Boost Post លើសផែនការ`, detail: `${money(p.spent)} / ${money(p.budget)} តាមផែនការ · លើស ${money(p.spent - p.budget)} · សូមពិនិត្យ ឬផ្អាក Boost`, action: 'client' });
     }
   } catch (_) {}
   return { today, items, tips: await suggestions(owner, clients, today) };

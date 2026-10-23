@@ -138,9 +138,6 @@ function start() {
   cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Database backup', 1440, 'daily at 03:20');
-  // Boost plans with auto-send on go to each client's group every Monday at 9:00.
-  H.register('Boost plans', 7 * 24 * 60, 'Mondays 09:00');
-  cron.schedule('0 9 * * 1', () => H.track('Boost plans', () => require('./plan').weekly(log)).then((n) => { if (n) log('boost plans sent:', n); }).catch((e) => log('boost plans failed:', e.message)), opts);
   cron.schedule('20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
 
   H.register('Health check', 5, 'every 5 minutes');

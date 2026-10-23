@@ -1,87 +1,81 @@
-// Boost plan per client: a monthly budget + lives a day, the pace against it, and a message
-// that can be sent to the client's Telegram group (by hand or every Monday 9:00).
+// Post boost plan per client: the posts to boost ($ a day × days, start date), optional tax, and a
+// message to send the client before boosting so they can pay first. After it starts, post spend
+// since the first start date is tracked against the plan.
 const cfg = require('./config');
 const db = require('./db');
 const sync = require('./sync');
 const telegram = require('./telegram');
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
-const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('en-US');
-const daysIn = (day) => { const [y, m] = day.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const MONTHS_KM = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+const money = (n) => '$' + round2(n).toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(round2(n)) ? 0 : 2, maximumFractionDigits: 2 });
+const isDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MON_KM = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+const dayTxt = (d, km) => `${Number(d.slice(8, 10))} ${(km ? MON_KM : MON)[Number(d.slice(5, 7)) - 1]}`;
+const addDays = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 
-// Clean what the app sends: budget ($ a month), lives a day, auto-send, language.
+// Clean what the app sends. lines: [{ post, daily, days, start }]
 function clean(b, cur = {}) {
   const p = { ...cur };
-  if (b.budget != null) p.budget = Math.min(1e7, Math.max(0, round2(b.budget)));
-  if (b.lives != null) p.lives = Math.min(20, Math.max(0, parseInt(b.lives, 10) || 0));
-  if (b.autoSend != null) p.autoSend = !!b.autoSend;
+  if (Array.isArray(b.lines)) p.lines = b.lines.slice(0, 30).map((l) => ({
+    post: String(l.post || '').trim().slice(0, 160),
+    daily: Math.min(1e5, Math.max(0, round2(l.daily))),
+    days: Math.min(365, Math.max(1, parseInt(l.days, 10) || 1)),
+    start: isDay(l.start) ? l.start : '',
+  })).filter((l) => l.daily > 0);
+  if (b.tax != null) p.tax = !!b.tax;
   if (b.lang != null) p.lang = b.lang === 'km' ? 'km' : 'en';
+  if (b.sentAt !== undefined) p.sentAt = b.sentAt || null;
   return p;
 }
 
-// Pace for this month: spend vs budget, against how much of the month has gone.
-function pace(plan, spend, lives, today) {
-  const b = Number(plan && plan.budget) || 0; if (!b) return null;
-  const day = Number(today.slice(8, 10)), dim = daysIn(today), rest = Math.max(1, dim - day + 1);
-  const exp = b * day / dim, left = Math.max(0, b - spend);
-  const status = spend > b ? 'over' : spend > exp * 1.15 ? 'ahead' : spend < exp * 0.85 ? 'behind' : 'on';
-  return { budget: b, lives: Number(plan.lives) || 0, spend: round2(spend), livesDone: lives, livesPlan: (Number(plan.lives) || 0) * day,
-    pct: Math.round(spend / b * 100), timePct: Math.round(day / dim * 100), expected: round2(exp), left: round2(left), perDay: round2(left / rest), day, dim, status };
+function totals(plan) {
+  const lines = (plan && plan.lines) || [];
+  const budget = round2(lines.reduce((t, l) => t + l.daily * l.days, 0));
+  const rate = plan && plan.tax ? sync.TAX_RATE : 0, tax = round2(budget * rate / 100);
+  const starts = lines.map((l) => l.start).filter(isDay).sort();
+  const ends = lines.filter((l) => isDay(l.start)).map((l) => addDays(l.start, l.days - 1)).sort();
+  return { budget, rate, tax, total: round2(budget + tax), from: starts[0] || '', to: ends[ends.length - 1] || '' };
 }
 
-// This month's spend + lives per client — the same numbers the Clients page shows.
-async function monthOf(owner, today = sync.todayIn()) {
-  const d = await sync.dashboard(owner, today.slice(0, 8) + '01', today);
-  return Object.fromEntries((d.clients || []).map((c) => [c.id, { spend: Number(c.spend) || 0, lives: c.lives || 0 }]));
+// Post spend since the plan's first start date (nothing before it starts).
+async function progress(owner, c, today = sync.todayIn()) {
+  const t = totals(c.plan); if (!t.budget) return null;
+  let spent = 0;
+  if (t.from && t.from <= today) {
+    const d = await sync.dashboard(owner, t.from, today < t.to || !t.to ? today : t.to);
+    const x = (d.clients || []).find((y) => y.id === c.id); spent = round2(x ? x.postSpend : 0);
+  }
+  return { ...t, spent, pct: Math.round(spent / t.budget * 100), started: !!t.from && t.from <= today, done: !!t.to && t.to < today };
 }
 
-function message(c, p, lang, today) {
-  const mi = Number(today.slice(5, 7)) - 1;
-  if (lang === 'km') return [
-    `🎯 ផែនការ Boost ខែ${MONTHS_KM[mi]} — ${c.name}`,
-    `💰 ថវិកា: ${money(p.budget)} / ខែ`,
-    p.lives ? `📺 Live: ${p.lives} ដង / ថ្ងៃ (ខែនេះបាន ${p.livesDone} ដង)` : '',
-    `📊 បានចំណាយ: ${money(p.spend)} (${p.pct}%)`,
-    `💵 នៅសល់: ${money(p.left)} (${money(p.perDay)} / ថ្ងៃ)`,
-  ].filter(Boolean).join('\n');
-  return [
-    `🎯 Boost plan · ${MONTHS[mi]} — ${c.name}`,
-    `💰 Budget: ${money(p.budget)} / month`,
-    p.lives ? `📺 Lives: ${p.lives} a day (${p.livesDone} done this month)` : '',
-    `📊 Spent: ${money(p.spend)} (${p.pct}%)`,
-    `💵 Left: ${money(p.left)} (${money(p.perDay)} a day)`,
-  ].filter(Boolean).join('\n');
+function message(c, plan, lang = 'en') {
+  const km = lang === 'km', t = totals(plan);
+  const lines = plan.lines.map((l, i) => {
+    const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
+    const when = l.start ? (km ? ` (ចាប់ពី ${dayTxt(l.start, true)})` : ` (from ${dayTxt(l.start)})`) : '';
+    return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}`
+      : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}`;
+  });
+  return km ? [
+    `🎯 ផែនការ Boost Post — ${c.name}`, '', ...lines, '',
+    t.rate ? `ថវិកាផ្សាយ: ${money(t.budget)}` : '', t.rate ? `ពន្ធ ${t.rate}%: ${money(t.tax)}` : '',
+    `💰 សរុបត្រូវបង់: ${money(t.total)}`, '', 'សូមបង់ប្រាក់មុន ដើម្បីចាប់ផ្តើម Boost 🙏',
+  ].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i)).join('\n') : [
+    `🎯 Boost plan — ${c.name}`, '', ...lines, '',
+    t.rate ? `Ad budget: ${money(t.budget)}` : '', t.rate ? `Tax ${t.rate}%: ${money(t.tax)}` : '',
+    `💰 Total to pay: ${money(t.total)}`, '', 'Please pay first so we can start boosting 🙏',
+  ].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i)).join('\n');
 }
 
-async function forClient(owner, c, today = sync.todayIn()) {
-  const m = (await monthOf(owner, today))[c.id] || { spend: 0, lives: 0 };
-  return pace(c.plan, m.spend, m.lives, today);
-}
-
-// Send one client's plan. to: 'client' (their group) or 'team' (the team group).
+// to: 'client' (their group) or 'team' (the team group).
 async function send(owner, c, { to = 'client', lang } = {}) {
-  const today = sync.todayIn(), p = await forClient(owner, c, today);
-  if (!p) throw new Error('Set a monthly budget for this client first.');
+  if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
   const chat = to === 'team' ? cfg.telegramChatId : c.telegram;
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
-  await telegram.send(message(c, p, lang || (c.plan && c.plan.lang) || 'en', today), chat);
+  await telegram.send(message(c, c.plan, lang || c.plan.lang || 'en'), chat);
+  if (to === 'client') await db.updateClient(owner, c.id, { plan: { ...c.plan, sentAt: new Date().toISOString() } });
   return { ok: true };
 }
 
-// Monday 9:00: send every plan that has auto-send on and a group.
-async function weekly(log = () => {}) {
-  if (!telegram.hasBot()) return 0;
-  let n = 0; const seen = new Set();
-  for (const u of await db.activeUsers()) {
-    if (seen.has(u.fb_id)) continue; seen.add(u.fb_id);
-    for (const c of await db.listClients(u.fb_id)) {
-      if (c.archived || !c.telegram || !c.plan || !c.plan.autoSend || !(Number(c.plan.budget) > 0)) continue;
-      try { await send(u.fb_id, c, { to: 'client' }); n++; } catch (e) { log('boost plan to', c.name, 'failed:', e.message); }
-    }
-  }
-  return n;
-}
-
-module.exports = { clean, pace, monthOf, message, forClient, send, weekly };
+module.exports = { clean, totals, progress, message, send };

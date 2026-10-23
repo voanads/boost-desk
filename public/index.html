@@ -12,7 +12,7 @@
     var r = document.documentElement; r.setAttribute('data-theme-pick', t); if (t !== 'auto') r.setAttribute('data-theme', t); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=136">
+<link rel="stylesheet" href="/assets/app.css?v=137">
 </head>
 <body>
 <div class="wrap">
@@ -94,15 +94,16 @@
       <div class="bh-r"><span class="hint" id="bUpdated"></span><button type="button" class="ghost sm" id="bRefresh">↻ Refresh</button></div>
     </div>
     <div class="bkpis" id="bKpis"></div>
-    <div class="btools">
-      <div class="bteams" id="bTeams" role="group" aria-label="Team"></div>
-      <div class="btools-r">
-        <div class="seg" id="bFilter" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open" aria-pressed="false">Work left</button><button type="button" data-f="urgent" aria-pressed="false">Urgent</button><button type="button" data-f="done" aria-pressed="false">All done</button></div>
-        <select id="bSort" aria-label="Sort"><option value="attn">Needs attention first</option><option value="spend">Most spend this month</option><option value="cpo">Most expensive per order</option><option value="name">Name A–Z</option></select>
+    <div class="bteams" id="bTeams" role="group" aria-label="Team"></div>
+    <div class="cwrap bwrap" id="bWrap">
+      <aside class="cside">
         <input type="search" id="bSearch" placeholder="Search client, person or task" aria-label="Search">
-      </div>
+        <div class="seg" id="bSortSeg" role="group" aria-label="Sort"><button type="button" data-k="attn" aria-pressed="true">Needs attention</button><button type="button" data-k="spend" aria-pressed="false">Most spend</button></div>
+        <div class="seg bfilter" id="bFilter" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="open" aria-pressed="false">Work left</button><button type="button" data-f="urgent" aria-pressed="false">Urgent</button><button type="button" data-f="done" aria-pressed="false">Done</button></div>
+        <div class="clist" id="bList" role="listbox" aria-label="Clients"></div>
+      </aside>
+      <div class="cdetail" id="bDetail"></div>
     </div>
-    <div id="bBody"></div>
   </section>
 
   <!-- DASHBOARD -->
@@ -548,6 +549,6 @@
     <div class="dlg-foot"><span class="hint">You can edit the text before sending.</span><span class="spacer"></span><button type="button" id="ckCopy">Copy</button><button type="button" id="ckSend" class="primary">Send to Telegram</button></div>
   </form>
 </dialog>
-<script src="/assets/app.js?v=136"></script>
+<script src="/assets/app.js?v=137"></script>
 </body>
 </html>

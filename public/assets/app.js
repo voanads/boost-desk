@@ -1058,80 +1058,88 @@
   document.querySelectorAll('#mSortSeg button').forEach((b) => b.onclick = () => { mSortK = b.dataset.k; renderMain(); });
   $('mSearch').oninput = () => renderMain();
 
-  // ---------- Clients Board (admins): every client of every team, this month's money + today's work & tasks ----------
-  let bData = null, bTeam = '', bF = 'all', bSortK = 'attn', bAt = 0; const bOpen = new Set();
+  // ---------- Clients Board (admins): every client of every team, like the Clients page but read-only ----------
+  let bData = null, bTeam = '', bF = 'all', bSortK = 'attn', bAt = 0, bSel = null, bPicked = false;
   async function loadBoard(force) {
-    if (!bData) $('bBody').innerHTML = '<div class="bgrid">' + '<div class="bcard skel"></div>'.repeat(6) + '</div>';
+    if (!bData) { $('bList').innerHTML = '<div class="crow skel-card"></div>'.repeat(6); $('bDetail').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
     try { bData = await api('/main/board' + (force ? '?fresh=1' : '')); bAt = Date.now(); renderBoard(); }
-    catch (e) { if (!bData) $('bBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+    catch (e) { if (!bData) $('bDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; }
   }
   const bState = (c) => { const open = c.tasks.filter((t) => !t.done), urgent = open.filter((t) => t.from === 'work' && t.level === 'bad').length; return { total: c.tasks.length, done: c.tasks.length - open.length, open: open.length, urgent }; };
   const bCpo = (x) => (x && x.orders > 0 && x.spend > 0 ? (x.ordSpend || x.spend) / x.orders : null);
+  const bKey = (c) => c.owner + ':' + c.id;
   function renderBoard() {
     const d = bData; if (!d) return;
     const teamName = Object.fromEntries(d.teams.map((t) => [t.id, t.name]));
     const q = ($('bSearch').value || '').trim().toLowerCase(), has = (x) => String(x || '').toLowerCase().includes(q);
-    let list = d.clients.map((c) => ({ ...c, st: bState(c), cpo: bCpo(c.month), cpoY: bCpo(c.yest) }));
+    const all = d.clients.map((c) => ({ ...c, st: bState(c), cpo: bCpo(c.month), cpoY: bCpo(c.yest) }));
     const inTeam = (c) => !bTeam || (bTeam === '__none' ? !c.team : c.team === bTeam);
-    // numbers for the chosen team (before the Show filter)
-    const scope = list.filter(inTeam), sum = (f) => scope.reduce((a, c) => a + f(c), 0);
+    const scope = all.filter(inTeam), sum = (f) => scope.reduce((a, c) => a + f(c), 0);
     const tot = { clients: scope.length, total: sum((c) => c.st.total), done: sum((c) => c.st.done), urgent: sum((c) => c.st.urgent), spend: sum((c) => c.month.spend), busy: scope.filter((c) => c.st.open).length };
     const pct = tot.total ? Math.round(tot.done / tot.total * 100) : 0;
+    const ords = scope.filter((c) => c.month.orders > 0), avg = ords.length ? ords.reduce((a, c) => a + (c.month.ordSpend || c.month.spend), 0) / ords.reduce((a, c) => a + c.month.orders, 0) : null;
     $('bKpis').innerHTML = `
       <div class="bk bk-ring"><span class="ring" style="--p:${pct}"><b class="num">${pct}%</b></span><span><span class="lbl">Done today</span><b class="num">${tot.done}<small>/${tot.total}</small></b><span class="sub">work &amp; tasks</span></span></div>
       <div class="bk"><span class="lbl">Clients</span><b class="num">${tot.clients}</b><span class="sub">${tot.busy} with work left</span></div>
       <div class="bk ${tot.urgent ? 'bad' : ''}"><span class="lbl">Urgent</span><b class="num">${tot.urgent}</b><span class="sub">${tot.urgent ? 'unpaid, overspend…' : 'nothing urgent'}</span></div>
-      <div class="bk"><span class="lbl">Spent this month</span><b class="num">${money(tot.spend)}</b><span class="sub">${esc(nice(d.from).replace(/ \d{4}$/, ''))} – today</span></div>`;
-    // team chips
-    const cnt = (id) => list.filter((c) => (id === '__none' ? !c.team : c.team === id)).length;
-    const chips = [['', 'All teams', list.length], ...d.teams.map((t) => [t.id, t.name, cnt(t.id)]), ...(cnt('__none') ? [['__none', 'No team', cnt('__none')]] : [])];
+      <div class="bk"><span class="lbl">Spent this month</span><b class="num">${money(tot.spend)}</b><span class="sub">${avg != null ? 'avg ' + money(avg) + ' per order' : esc(nice(d.from).replace(/ \d{4}$/, '')) + ' – today'}</span></div>`;
+    const cnt = (id) => all.filter((c) => (id === '__none' ? !c.team : c.team === id)).length;
+    const chips = [['', 'All teams', all.length], ...d.teams.map((t) => [t.id, t.name, cnt(t.id)]), ...(cnt('__none') ? [['__none', 'No team', cnt('__none')]] : [])];
     $('bTeams').innerHTML = chips.map(([id, n, k]) => `<button type="button" class="bchip" data-bteam="${esc(id)}" aria-pressed="${bTeam === id}">${esc(n)} <span class="num">${k}</span></button>`).join('');
     document.querySelectorAll('#bFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === bF)));
-    // filter + sort
-    list = list.filter(inTeam).filter((c) => bF === 'all' || (bF === 'open' ? c.st.open > 0 : bF === 'urgent' ? c.st.urgent > 0 : c.st.total > 0 && !c.st.open))
+    document.querySelectorAll('#bSortSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === bSortK)));
+    let list = scope.filter((c) => bF === 'all' || (bF === 'open' ? c.st.open > 0 : bF === 'urgent' ? c.st.urgent > 0 : c.st.total > 0 && !c.st.open))
       .filter((c) => !q || has(c.name) || has(c.ownerName) || has(c.group) || c.tasks.some((t) => has(t.text)));
-    const srt = { attn: (a, b) => b.st.urgent - a.st.urgent || b.st.open - a.st.open || b.month.spend - a.month.spend, spend: (a, b) => b.month.spend - a.month.spend, cpo: (a, b) => (b.cpo ?? -1) - (a.cpo ?? -1), name: (a, b) => a.name.localeCompare(b.name) }[bSortK];
-    list.sort((a, b) => srt(a, b) || a.name.localeCompare(b.name));
-    // groups: one per team when looking at all teams
-    const groups = new Map();
-    for (const c of list) { const k = bTeam ? bTeam : (c.team || '__none'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); }
-    const order = [...d.teams.map((t) => t.id), '__none'];
-    const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
-    const card = (c, i) => {
-      const st = c.st, state = st.urgent ? 'urgent' : st.open ? 'open' : st.total ? 'done' : 'quiet';
-      const badge = { urgent: `${st.urgent} urgent`, open: `${st.open} left`, done: 'All done', quiet: 'No work today' }[state];
-      const tasks = [...c.tasks].sort((a, b) => a.done - b.done || ({ work: 0, ai: 1, me: 2 }[a.from] - { work: 0, ai: 1, me: 2 }[b.from])), open = bOpen.has(c.owner + ':' + c.id), show = open ? tasks : tasks.slice(0, 4);
-      const cpoT = c.cpo != null && c.cpoY != null ? (c.cpoY > c.cpo * 1.15 ? 'bad' : c.cpoY < c.cpo * 0.85 ? 'good' : '') : '';
-      return `<article class="bcard ${state}" style="--i:${Math.min(i, 16)}">
-        <header class="bc-h"><span class="bc-av">${esc(mIni(c.name))}</span><div class="bc-n"><b>${esc(c.name)}</b><span class="bc-sub"><span class="bc-who">${esc(c.ownerName)}</span>${c.type === 'both' ? '<i class="dot live"></i>Live <i class="dot post"></i>Post' : c.type === 'post' ? '<i class="dot post"></i>Post' : '<i class="dot live"></i>Live'}${c.group ? ` · ✈ ${esc(c.group)}` : ''}</span></div><span class="bc-badge ${state}">${badge}</span></header>
-        <div class="bc-stats">
-          <div><span class="lbl">Spent this month</span><b class="num">${money(c.month.spend)}</b><span class="sub">${d.taxRate ? `+tax ${money(c.month.spend * (1 + d.taxRate / 100))}` : `${c.month.days} days`}</span></div>
-          <div class="${c.cpo != null && c.cpo > 0 ? '' : 'mute'}"><span class="lbl">Per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub ${cpoT}">${c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : 'Yesterday –'}</span></div>
-          <div><span class="lbl">Orders</span><b class="num">${c.month.orders.toLocaleString('en-US')}</b><span class="sub">Yesterday ${c.yest.orders.toLocaleString('en-US')}</span></div>
-          <div><span class="lbl">Lives · Posts</span><b class="num">${c.month.lives} · ${money(c.month.postSpend)}</b><span class="sub">${money(c.month.liveSpend)} on lives</span></div>
-        </div>
-        ${st.total ? `<div class="bc-prog"><span class="tk-bar big ${st.open ? (st.urgent ? 'bad' : 'mid') : 'good'}"><i style="width:${Math.round(st.done / st.total * 100)}%"></i></span><span class="hint num">${st.done}/${st.total} done</span></div>` : ''}
-        <div class="cd-todo bc-todo">${show.map((t) => `<div class="task${t.done ? ' done' : ''}${t.from === 'work' ? ' ' + esc(t.level || 'todo') : ''}"><span class="tcheck" role="checkbox" aria-checked="${!!t.done}" aria-readonly="true" aria-label="${t.done ? 'Done' : 'Not done'}">${box}</span><span class="todo-ic" aria-hidden="true">${t.from === 'work' ? (IC_TODO[t.kind] || '📋') : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${[t.from === 'work' ? (t.detail || '') : t.from === 'ai' ? 'AI plan' : 'Own task', t.late ? 'from ' + nice(t.day).replace(/ \d{4}$/, '') : '', t.done && t.doneAt ? 'done ' + new Date(t.doneAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + (t.doneBy && t.doneBy !== c.ownerName ? ' by ' + t.doneBy : '') : ''].filter(Boolean).map(esc).join(' · ')}</span></div></div>`).join('') || '<div class="bc-none">🎉 Nothing to do for this client today.</div>'}</div>
-        ${tasks.length > 4 ? `<button type="button" class="linkbtn bc-more" data-bmore="${esc(c.owner + ':' + c.id)}">${open ? 'Show less' : `+ ${tasks.length - 4} more`}</button>` : ''}
-      </article>`;
-    };
-    let i = 0;
-    const html = [...groups.entries()].sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([k, cs]) => {
-      const tot2 = cs.reduce((a, c) => ({ t: a.t + c.st.total, d: a.d + c.st.done, s: a.s + c.month.spend }), { t: 0, d: 0, s: 0 });
-      const ppl = [...new Set(cs.map((c) => c.ownerName))];
-      return `<section class="bgroup"><header class="bg-h"><h3>${esc(k === '__none' ? 'No team' : teamName[k] || 'Team')}</h3><span class="bg-ppl">${ppl.map((n) => `<span class="mini-av" title="${esc(n)}">${esc(mIni(n))}</span>`).join('')}</span><span class="hint">${cs.length} client${cs.length === 1 ? '' : 's'} · ${money(tot2.s)} this month</span><span class="spacer"></span>${tot2.t ? `<span class="bg-p"><span class="tk-bar"><i style="width:${Math.round(tot2.d / tot2.t * 100)}%"></i></span><b class="num">${tot2.d}/${tot2.t}</b> done</span>` : ''}</header>
-        <div class="bgrid">${cs.map((c) => card(c, i++)).join('')}</div></section>`;
-    }).join('');
-    $('bBody').innerHTML = html || `<div class="empty">${q ? 'Nothing matches your search.' : bF !== 'all' ? 'No client in this view.' : 'No clients yet.'}</div>`;
+    const srt = bSortK === 'attn' ? (a, b) => b.st.urgent - a.st.urgent || b.st.open - a.st.open || b.month.spend - a.month.spend : (a, b) => b.month.spend - a.month.spend;
+    const tOrder = [...d.teams.map((t) => t.id), null];
+    list.sort((a, b) => (bTeam ? 0 : tOrder.indexOf(a.team) - tOrder.indexOf(b.team)) || srt(a, b) || a.name.localeCompare(b.name));
+    if (bSel && !list.some((c) => bKey(c) === bSel)) bSel = null;
+    if ((!bSel || !bPicked) && list.length && matchMedia('(min-width: 901px)').matches) bSel = bKey(list[0]);
+    let lastTeam;
+    $('bList').innerHTML = list.map((c, i) => {
+      const head = !bTeam && c.team !== lastTeam ? `<div class="bl-team">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</div>` : ''; lastTeam = c.team;
+      return `${head}<button type="button" class="crow${bKey(c) === bSel ? ' on' : ''}" role="option" aria-selected="${bKey(c) === bSel}" data-bsel="${esc(bKey(c))}" style="--i:${Math.min(i, 14)}">
+        <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span>
+        <span class="cr-n"><b>${esc(c.name)}${c.st.open ? `<span class="cr-badge${c.st.urgent ? ' urgent' : ''}" title="${c.st.open} left to do today">${c.st.open}</span>` : c.st.total ? '<span class="cr-done" title="All done today">✓</span>' : ''}</b><span class="cr-tags">${typeTags(c.type)}<span class="chip who">${esc(c.ownerName)}</span>${!c.hasGroup ? '<span class="chip nogroup">No group</span>' : ''}</span></span>
+        <span class="cr-v"><b class="num">${c.month.spend ? money(c.month.spend) : '–'}</b><span class="hint">${c.month.orders ? `${c.month.orders.toLocaleString('en-US')} orders${c.cpo ? ' · ' + money(c.cpo) : ''}` : 'this month'}</span></span>
+      </button>`;
+    }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : bF !== 'all' ? 'No client in this view.' : 'No clients yet.'}</div>`;
     $('bUpdated').textContent = 'Updated ' + new Date(bAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    // ---- detail: the picked client, like the Clients page (read-only)
+    const c = list.find((x) => bKey(x) === bSel);
+    if (!c) { $('bDetail').innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s work &amp; tasks and the AI plan.</span></div>'; return; }
+    const tn = c.cpo == null || avg == null ? '' : c.cpo <= avg * 0.8 ? 'good' : c.cpo >= avg * 1.5 ? 'bad' : 'mid';
+    const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
+    const tasks = [...c.tasks].sort((a, b) => a.done - b.done || ({ work: 0, ai: 1, me: 2 }[a.from] - { work: 0, ai: 1, me: 2 }[b.from]));
+    const plan = c.plan, planToday = plan && plan.day === d.today;
+    $('bDetail').innerHTML = `<div class="cd-in">
+      <div class="cd-head"><button type="button" class="ghost sm cd-back" id="bBack">← All clients</button>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.hasGroup ? `<span class="tgok">✈ ${esc(c.group || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
+          <span class="bd-owner"><span class="mini-av lg">${esc(mIni(c.ownerName))}</span><span><b>${esc(c.ownerName)}</b><span class="hint">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</span></span></span></div></div>
+      <div class="cd-stats">
+        <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(c.month.spend)}</b>${c.month.spend && d.taxRate ? `<span class="sub">+tax ${money(c.month.spend * (1 + d.taxRate / 100))}</span>` : ''}</div>
+        <div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub">${c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : c.yest.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>
+        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${c.month.orders ? c.month.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${c.yest.orders ? 'Yesterday ' + c.yest.orders.toLocaleString('en-US') : 'this month'}</span></div>
+        <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${c.month.lives || 0} · ${money(c.month.postSpend || 0)}</b><span class="sub">${money(c.month.liveSpend || 0)} on lives · ${c.month.days || 0} day${c.month.days === 1 ? '' : 's'}</span></div>
+      </div>
+      <div class="cd-cols">
+        <div class="cd-col"><section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${c.st.open}</span>${c.st.total ? `<span class="spacer"></span><span class="hint">${c.st.done}/${c.st.total} done</span>` : ''}</div>
+          <div class="cd-todo bc-todo">${tasks.map((t) => `<div class="task${t.done ? ' done' : ''}${t.from === 'work' ? ' ' + esc(t.level || 'todo') : ''}"><span class="tcheck" role="checkbox" aria-checked="${!!t.done}" aria-readonly="true" aria-label="${t.done ? 'Done' : 'Not done'}">${box}</span><span class="todo-ic" aria-hidden="true">${t.from === 'work' ? (IC_TODO[t.kind] || '📋') : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${[t.from === 'work' ? (t.detail || '') : t.from === 'ai' ? 'AI plan' : 'Own task', t.late ? 'from ' + nice(t.day).replace(/ \d{4}$/, '') : '', t.done && t.doneAt ? 'done ' + new Date(t.doneAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + (t.doneBy && t.doneBy !== c.ownerName ? ' by ' + t.doneBy : '') : ''].filter(Boolean).map(esc).join(' · ')}</span></div></div>`).join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
+          <div class="hint bd-ro">Only ${esc(c.ownerName)} ticks these, in their Clients page.</div></section></div>
+        <div class="cd-col"><section class="cd-sec aisec"><div class="cd-sec-h"><h4>✨ Today's plan</h4><span class="hint">${plan ? (planToday ? 'Today · made ' + new Date(plan.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'From ' + esc(nice(plan.day).replace(/ \d{4}$/, ''))) : 'Made every morning at 06:40'}</span>${plan ? `<span class="spacer"></span><span class="chip meta">${plan.lang === 'km' ? 'ខ្មែរ' : 'EN'}</span>` : ''}</div>
+          ${plan ? `<div class="ai-text">${mdLite(plan.text)}</div>` : `<div class="hint">No AI plan yet for this client today${me && me.isOwner ? ' — add a Gemini or Claude key in <b>Admin → Settings → AI advice</b>' : ''}.</div>`}</section></div>
+      </div>
+    </div>`;
+    $('bWrap').classList.toggle('show-detail', $('bWrap').classList.contains('show-detail') && !!c);
   }
   $('tab-board').addEventListener('click', (ev) => {
-    const t = ev.target.closest('[data-bteam]'); if (t) { bTeam = t.dataset.bteam; renderBoard(); return; }
-    const f = ev.target.closest('#bFilter [data-f]'); if (f) { bF = f.dataset.f; renderBoard(); return; }
-    const m = ev.target.closest('[data-bmore]'); if (m) { const k = m.dataset.bmore; if (bOpen.has(k)) bOpen.delete(k); else bOpen.add(k); renderBoard(); return; }
+    const t = ev.target.closest('[data-bteam]'); if (t) { bTeam = t.dataset.bteam; bPicked = false; renderBoard(); return; }
+    const f = ev.target.closest('#bFilter [data-f]'); if (f) { bF = f.dataset.f; bPicked = false; renderBoard(); return; }
+    const k = ev.target.closest('#bSortSeg [data-k]'); if (k) { bSortK = k.dataset.k; renderBoard(); return; }
+    const r = ev.target.closest('[data-bsel]'); if (r) { bSel = r.dataset.bsel; bPicked = true; $('bWrap').classList.add('show-detail'); renderBoard(); if (!matchMedia('(min-width: 901px)').matches) window.scrollTo({ top: $('bWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); else if (!calm && $('bDetail').animate) $('bDetail').animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)' }); return; }
+    if (ev.target.closest('#bBack')) { $('bWrap').classList.remove('show-detail'); window.scrollTo({ top: $('bWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); return; }
     if (ev.target.closest('#bRefresh')) loadBoard(true);
   });
-  $('bSort').onchange = () => { bSortK = $('bSort').value; renderBoard(); };
   $('bSearch').oninput = () => renderBoard();
   setInterval(() => { if (!$('tab-board').hidden && !document.hidden) loadBoard(); }, 60e3);
 

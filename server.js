@@ -363,7 +363,9 @@ async function clientMoney(today) {
 }
 api.get('/main/board', adminOnly, wrap(async (req, res) => {
   const today = sync.todayIn();
-  const [money, tasks, teams, users, cl] = await Promise.all([clientMoney(today), dayTasks(today), getTeams(), db.allUsers(), db.pool.query('SELECT id, name, owner, type, archived, telegram_title FROM clients ORDER BY name').then((r) => r.rows).catch(() => db.pool.query('SELECT id, name, owner, type, archived FROM clients ORDER BY name').then((r) => r.rows))]);
+  const [money, tasks, teams, users, cl] = await Promise.all([clientMoney(today), dayTasks(today), getTeams(), db.allUsers(), db.pool.query('SELECT id, name, owner, type, archived, telegram, telegram_title FROM clients ORDER BY name').then((r) => r.rows)]);
+  // each client's AI plan (the same "Today's plan" its owner sees; notes stay private)
+  const wb = {}; for (const r of (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows) wb[r.key] = r.value || {};
   const uName = Object.fromEntries(users.map((u) => [u.fb_id, u.name])), teamOf = {};
   for (const t of teams) for (const m of t.members) teamOf[m] = t.id;
   const clients = [];
@@ -373,7 +375,8 @@ api.get('/main/board', adminOnly, wrap(async (req, res) => {
     if (c.archived && !(mm && mm.spend > 0)) continue;
     const ts = ((tasks.users[c.owner] || {}).tasks || []).filter((t) => t.clientId === c.id).map(({ client, clientId, ...t }) => t);
     clients.push({ id: c.id, name: c.name, type: c.type, group: c.telegram_title || '', archived: !!c.archived, owner: c.owner, ownerName: uName[c.owner], team: teamOf[c.owner] || null,
-      month: mm || { spend: 0, orders: 0, ordSpend: 0, lives: 0, liveSpend: 0, postSpend: 0, days: 0 }, yest: yy || { spend: 0, orders: 0, ordSpend: 0 }, tasks: ts, plan: false });
+      month: mm || { spend: 0, orders: 0, ordSpend: 0, lives: 0, liveSpend: 0, postSpend: 0, days: 0 }, yest: yy || { spend: 0, orders: 0, ordSpend: 0 }, tasks: ts,
+      hasGroup: !!c.telegram, plan: (() => { const a = (wb[`${c.owner}:cwb:${c.id}`] || {}).ai; return a && a.text ? { day: a.day, lang: a.lang, at: a.at, text: String(a.text).slice(0, 6000) } : null; })() });
   }
   res.json({ today, from: money.from, to: money.to, taxRate: sync.TAX_RATE, teams: teams.map((t) => ({ id: t.id, name: t.name, members: t.members })), people: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || null })), clients });
 }));

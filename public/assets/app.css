@@ -1943,3 +1943,19 @@ body{font-size:15.5px;letter-spacing:0}
 @media (max-width:560px){.bgrid{grid-template-columns:1fr}.btools-r .seg{width:100%;display:grid;grid-template-columns:repeat(4,1fr)}.btools-r .seg button{padding:8px 4px;font-size:var(--fs-md)}.btools-r select{flex:1}.bk b{font-size:1.4rem}.bk-ring{grid-column:1/-1}}
 .bc-prog .tk-bar{flex:1;width:auto}
 .bc-prog .hint{white-space:nowrap}
+/* Clients Board v2: list + detail like the Clients page */
+.bwrap .cside .seg{display:grid;grid-template-columns:repeat(2,1fr)}
+.bwrap .cside .seg.bfilter{grid-template-columns:repeat(4,1fr)}
+.bwrap .cside .seg button{padding-left:4px;padding-right:4px}
+#bSearch{box-sizing:border-box;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 14px;font:inherit;color:var(--ink);min-height:44px}
+#bSearch:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
+.bl-team{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px 12px 2px}
+.bl-team:first-child{padding-top:4px}
+.chip.who{background:var(--brand-soft);color:var(--brand);font-weight:700}
+.cr-done{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font-size:11px;font-weight:800;margin-left:6px;vertical-align:middle}
+.bd-owner{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:var(--r-pill);background:var(--bg-2)}
+.bd-owner>span:last-child{display:flex;flex-direction:column;line-height:1.2}
+.bd-owner .hint{font-size:var(--fs-xs)}
+.bd-ro{margin-top:4px}
+.bteams{flex:none}
+@media (max-width:900px){.bwrap.show-detail .cside{display:none}.bwrap:not(.show-detail) .cdetail{display:none}.bwrap .cside{position:static}}

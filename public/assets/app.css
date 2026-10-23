@@ -1618,3 +1618,27 @@ body{font-size:15.5px;letter-spacing:0}
 .cmp-p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cmp-foot{flex-wrap:wrap;gap:var(--s-2)}
 @media (max-width:560px){.cmp-row{grid-template-columns:minmax(0,1fr) 64px 64px 50px}}
+
+/* ✨ AI advice in the client breakdown */
+.dexp-foot{align-items:center;gap:var(--s-2)}
+.aibtn{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:var(--r-pill);font-weight:700;font-size:var(--fs-lg);color:var(--brand);background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 30%,var(--line))}
+.aibtn:hover{background:color-mix(in srgb,var(--brand) 18%,var(--surface))}
+.aibox{margin-top:var(--s-3);padding:var(--s-3) var(--s-4);border-radius:var(--r-lg);background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 7%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--brand) 28%,var(--line));box-shadow:var(--shadow-sm)}
+.ai-h{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap;margin-bottom:var(--s-2)}
+.ai-h b{color:var(--brand);font-size:var(--fs-xl)}
+.ai-lang button{padding:4px 10px;font-size:var(--fs-sm)}
+.ai-text{font-size:var(--fs-xl);line-height:1.55;color:var(--ink)}
+.ai-text h4{margin:var(--s-3) 0 4px;font-size:var(--fs-lg);text-transform:none;color:var(--brand)}
+.ai-text h4:first-child{margin-top:0}
+.ai-text p{margin:4px 0}
+.ai-text ul,.ai-text ol{margin:4px 0;padding-left:20px}
+.ai-text li{margin:3px 0}
+.ai-load{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:var(--fs-lg);padding:var(--s-2) 0}
+.ai-dot{width:7px;height:7px;border-radius:50%;background:var(--brand);animation:aiDot 1s infinite ease-in-out}
+.ai-dot:nth-child(2){animation-delay:.15s}.ai-dot:nth-child(3){animation-delay:.3s;margin-right:6px}
+@keyframes aiDot{0%,80%,100%{opacity:.25;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+.ai-ask{display:flex;gap:var(--s-2);margin-top:var(--s-3)}
+.ai-ask input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;font:inherit;color:var(--ink)}
+.ai-ask input:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
+@media (max-width:560px){.dexp-foot{flex-wrap:wrap}.aibtn{width:100%;justify-content:center}.dexp-foot .spacer{display:none}}
+@media (prefers-reduced-motion:reduce){.ai-dot{animation:none}}

@@ -1165,6 +1165,7 @@
       card('⏰', 'My auto report', '', 'Sends each client’s report to their Telegram group at a set time every day. Each person sets their own.', '<button class="sm" data-sgo="autoreport">Open auto report</button>'),
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
+      card('✨', 'AI advice (Claude)', d.ai && d.ai.hasKey ? on('On') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to Anthropic — no customer data.</div>` : 'Add an Anthropic API key (from console.anthropic.com) to turn on ✨ AI advice for each client. Each advice costs a few cents.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
     ].join('');
     if (d.canEdit) loadKeys();
@@ -1220,6 +1221,8 @@ Notes:
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();
     if (k === 'qr') $('sQrFile').click();
+    if (k === 'aikey') { const v = prompt('Paste the Anthropic API key (starts with sk-ant-)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI advice is on'); aiReady = true; loadSettings(); } catch (e) { toast(e.message); } return; }
+    if (k === 'aikeydel') { if (!confirm('Remove the AI key? AI advice stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); aiReady = false; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
   });
   $('sGrid').addEventListener('change', async (ev) => {
@@ -1627,6 +1630,53 @@ Notes:
       loadTodo(); loadDash();
     } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Delete from group'; }
   });
+  // ---------- ✨ AI advice for one client (Claude) ----------
+  let aiReady = null; const aiState = {};
+  let aiLang = (() => { try { return localStorage.getItem('aiLang') || 'en'; } catch (_) { return 'en'; } })();
+  api('/ai/status').then((x) => { aiReady = !!x.hasKey; }).catch(() => { aiReady = false; });
+  const aiKey = (cid) => cid + '|' + dRange().join('|') + '|' + aiLang;
+  // Light Markdown: headings, bullets, numbered lines, **bold**.
+  function mdLite(t) {
+    const out = []; let list = null;
+    const inline = (x) => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+    for (const raw of String(t || '').split('\n')) {
+      const l = raw.trim();
+      if (!l) { close(); continue; }
+      let m;
+      if ((m = l.match(/^#{1,4}\s+(.*)$/))) { close(); out.push(`<h4>${inline(m[1])}</h4>`); }
+      else if ((m = l.match(/^[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
+      else if ((m = l.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
+      else { close(); out.push(`<p>${inline(l)}</p>`); }
+    }
+    close(); return out.join('');
+  }
+  function aiBox(c) {
+    const st = aiState[aiKey(c.id)]; if (!st) return '';
+    const langBtns = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-ailang="en" aria-pressed="${aiLang === 'en'}">EN</button><button type="button" data-ailang="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button></div>`;
+    const body = st.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading this client\'s numbers…</div>'
+      : st.err ? `<div class="note">${esc(st.err)}</div>` : `<div class="ai-text">${mdLite(st.text)}</div>`;
+    return `<div class="aibox" data-aicid="${c.id}"><div class="ai-h"><b>✨ AI advice</b><span class="hint">${esc(periodLabel())}${st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span>${langBtns}<button type="button" class="ghost sm" data-airefresh="${c.id}" ${st.loading ? 'disabled' : ''}>↻ New answer</button><button type="button" class="ghost sm" data-aiclose="${c.id}" aria-label="Close AI advice">✕</button></div>${body}
+      ${st.loading || st.err ? '' : `<form class="ai-ask" data-aiask="${c.id}"><input type="text" maxlength="300" placeholder="Ask about this client… e.g. Which live time works best?" aria-label="Ask about this client"><button type="submit" class="sm">Ask</button></form>`}</div>`;
+  }
+  async function runAi(cid, { fresh = false, question = '' } = {}) {
+    const k = aiKey(cid), [from, to] = dRange();
+    aiState[k] = { loading: true }; renderDash();
+    try { const r = await api(`/ai/client/${cid}`, { method: 'POST', body: { from, to, lang: aiLang, fresh, question } }); aiState[k] = { text: r.text, cached: r.cached }; }
+    catch (e) { aiState[k] = { err: e.message }; }
+    renderDash();
+    const box = document.querySelector(`.aibox[data-aicid="${cid}"]`); if (box && !calm && box.animate) box.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' });
+  }
+  document.addEventListener('click', (ev) => {
+    const go = ev.target.closest('[data-aigo]'); if (go) { ev.stopPropagation(); if (aiReady === false) return toast(me && me.isOwner ? 'Add your Anthropic API key in Admin → Settings → AI advice first.' : 'AI advice is not set up yet — ask the app owner.'); const cid = Number(go.dataset.aigo); const st = aiState[aiKey(cid)]; if (st && !st.err) { delete aiState[aiKey(cid)]; renderDash(); return; } runAi(cid); return; }
+    const rf = ev.target.closest('[data-airefresh]'); if (rf) { runAi(Number(rf.dataset.airefresh), { fresh: true }); return; }
+    const cl = ev.target.closest('[data-aiclose]'); if (cl) { delete aiState[aiKey(Number(cl.dataset.aiclose))]; renderDash(); return; }
+    const lg = ev.target.closest('[data-ailang]'); if (lg) { const box = lg.closest('[data-aicid]'); aiLang = lg.dataset.ailang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (box) runAi(Number(box.dataset.aicid)); return; }
+  });
+  document.addEventListener('submit', (ev) => {
+    const f = ev.target.closest('[data-aiask]'); if (!f) return; ev.preventDefault();
+    const q = f.querySelector('input').value.trim(); if (q) runAi(Number(f.dataset.aiask), { question: q });
+  });
   function detailRow(c) {
     const days = dEntries[c.id] || {};
     let body = '';
@@ -1656,7 +1706,7 @@ Notes:
         return `<div class="dday"><div class="dday-h"><b>${esc(nice(x.d).replace(/ \d{4}$/, ''))}</b><span class="num">${money(tot)}</span></div>${x.parts.map((p) => partLine(p, pick)).join('')}</div>`;
       }).join('') : '<div class="muted">No boost spend in this period.</div>';
     }
-    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${sentLine(c)}${pagePick(c)}<div class="dexp-foot"><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
+    return `<tr class="dexp"><td colspan="9"><div class="dexp-in">${dMode === 'day' ? '' : pageBlock(c)}${body}${sentLine(c)}${aiBox(c)}${pagePick(c)}<div class="dexp-foot"><button type="button" class="aibtn" data-aigo="${c.id}">✨ AI advice</button><span class="spacer"></span><button class="primary${sentFlash && sentFlash.cid === c.id && Date.now() < sentFlash.until ? ' sent-ok' : ''}" data-dreport="${c.id}"><span class="plane"><svg class="pl" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 11.2 3.4 3.1a.9.9 0 0 0-1.2 1.1L4.6 11 2.2 17.8a.9.9 0 0 0 1.2 1.1l18.1-8.1a.9.9 0 0 0 0-1.6Z" fill="currentColor"/><path d="M4.6 11h7" stroke="rgba(0,0,0,.25)" stroke-width="1.4" stroke-linecap="round"/></svg></span> Send ${dTypeF === 'post' ? 'post ' : dTypeF === 'live' ? 'live ' : ''}report · ${esc(periodLabel())}<span class="rlabel">${pickLabel(c)}${(() => { const l = reportPages(c), n = l.filter((p) => !skipSetOf(c.id).has(p.page)).length; return l.length > 1 && n < l.length ? ` · ${n} of ${l.length} Pages` : ''; })()}</span></button></div></div></td></tr>`;
   }
 
   // ---------- open / close motion ----------

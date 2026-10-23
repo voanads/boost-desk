@@ -410,6 +410,7 @@ api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
     invoice: { company: prof.company, bankName: prof.bankName, accountName: prof.accountName, accountNo: prof.accountNo, qr: prof.qr },
     autoSyncServer: process.env.AUTO_SYNC !== 'off', tz: cfg.tz, taxRate: sync.TAX_RATE,
     canEdit: (await db.ownerId()) === req.user.fb_id,
+    ai: await require('./src/ai').publicConfig(),
   });
 }));
 api.put('/admin/invoice-qr', ownerOnly, wrap(async (req, res) => {
@@ -1027,6 +1028,15 @@ api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders
 api.get('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.pushStatus())));
 api.put('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.setPush(!!(req.body || {}).on))));
 api.post('/orders/push', adminOnly, wrap(async (req, res) => { await orders.setPush(true); res.json(await orders.pushSpend(Math.min(31, Number((req.body || {}).days) || 7))); }));
+// AI advice for one client (Claude API). The owner adds the key in Admin → Settings.
+api.post('/ai/client/:id', wrap(async (req, res) => {
+  const b = req.body || {};
+  if (!isDay(b.from) || !isDay(b.to) || b.from > b.to || (Date.parse(b.to) - Date.parse(b.from)) / 864e5 > 185) return res.status(400).json({ error: 'Pick a period of up to 6 months.' });
+  try { res.json(await require('./src/ai').clientAdvice(req.user.fb_id, req.params.id, { from: b.from, to: b.to, lang: b.lang === 'km' ? 'km' : 'en', question: String(b.question || ''), fresh: !!b.fresh })); }
+  catch (e) { if (e.status) return res.status(e.status).json({ error: e.message, notSetUp: !!e.notSetUp }); throw e; }
+}));
+api.get('/ai/status', wrap(async (req, res) => { const c = await require('./src/ai').publicConfig(); res.json({ hasKey: c.hasKey }); }));
+api.put('/admin/ai', ownerOnly, wrap(async (req, res) => res.json(await require('./src/ai').saveKey((req.body || {}).key === null ? null : String((req.body || {}).key || ''), req.user.name))));
 // Check one day against adsbox.biz (admins), and take adsbox's numbers for a period when they match its Sales Overview.
 api.get('/orders/compare', adminOnly, wrap(async (req, res) => {
   const day = String(req.query.day || ''); if (!isDay(day)) return res.status(400).json({ error: 'Pick a day.' });

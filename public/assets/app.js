@@ -1221,7 +1221,7 @@ Notes:
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();
     if (k === 'qr') $('sQrFile').click();
-    if (k === 'aikey') { const v = prompt('Paste a Claude key (starts with sk-ant-) or a Gemini key (starts with AIza)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI advice is on'); aiReady = true; loadSettings(); } catch (e) { toast(e.message); } return; }
+    if (k === 'aikey') { const v = prompt('Paste your Gemini key (from aistudio.google.com) or Claude key (starts with sk-ant-)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI advice is on'); aiReady = true; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'aikeydel') { if (!confirm('Remove the AI key? AI advice stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); aiReady = false; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
   });

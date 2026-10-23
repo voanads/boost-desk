@@ -9,7 +9,8 @@ const sync = require('./sync');
 const { encrypt, decrypt } = require('./crypto');
 
 // Works with a Claude key (sk-ant-…) or a Google Gemini key (AIza…); the key's shape picks the provider.
-const providerOf = (key) => (/^AIza/.test(key || '') ? 'gemini' : 'claude');
+// Claude keys start with sk-ant-; anything else is treated as a Google Gemini key (AI Studio keys have changed shape over time).
+const providerOf = (key) => (/^sk-ant-/.test(key || '') ? 'claude' : 'gemini');
 const MODEL_FOR = (p) => (p === 'gemini' ? process.env.GEMINI_MODEL || 'gemini-2.5-flash' : process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5');
 const DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 60; // advice requests per person per day
 const r2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
@@ -29,8 +30,8 @@ async function saveKey(key, by) {
   const next = { ...cur, by, at: new Date().toISOString() };
   if (key === null) { delete next.keyEnc; delete next.keyHint; }
   else if (key && String(key).trim()) {
-    const k = String(key).trim();
-    if (!/^sk-ant-/.test(k) && !/^AIza[\w-]{20,}$/.test(k)) throw Object.assign(new Error('That does not look like a Claude key (starts with sk-ant-) or a Gemini key (starts with AIza).'), { status: 400 });
+    const k = String(key).trim().replace(/^["'`]+|["'`]+$/g, '').replace(/^(Bearer|key=|api_key=)\s*/i, '').replace(/\s+/g, '');
+    if (k.length < 20 || /[^\w.\-]/.test(k)) throw Object.assign(new Error('That does not look like an API key. Copy the whole key from Google AI Studio (Gemini) or console.anthropic.com (Claude).'), { status: 400 });
     next.keyEnc = encrypt(k); next.keyHint = '…' + k.slice(-4);
   }
   await db.setSetting('anthropicApi', next);

@@ -1642,3 +1642,57 @@ body{font-size:15.5px;letter-spacing:0}
 .ai-ask input:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-soft)}
 @media (max-width:560px){.dexp-foot{flex-wrap:wrap}.aibtn{width:100%;justify-content:center}.dexp-foot .spacer{display:none}}
 @media (prefers-reduced-motion:reduce){.ai-dot{animation:none}}
+
+/* ---------- Clients tab: list + detail (numbers, today's work, AI suggestions, settings) ---------- */
+.cwrap{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:var(--s-4);align-items:start}
+.clist{display:flex;flex-direction:column;gap:var(--s-1);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);padding:var(--s-2);position:sticky;top:var(--s-3);max-height:calc(100vh - 140px);overflow:auto;box-shadow:var(--shadow-sm)}
+.crow{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:var(--s-3);padding:10px 12px;border-radius:var(--r-lg);transition:background var(--t-fast) var(--ease)}
+.crow:hover{background:var(--bg-2)}
+.crow:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.crow.on{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.crow.paused{opacity:.55}
+.crow.skel-card{cursor:default;min-height:52px;display:block}
+.cr-av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--grad);color:var(--on-brand);font-weight:700;font-size:var(--fs-md)}
+.cr-av.lg{width:46px;height:46px;font-size:var(--fs-h3)}
+.cr-n{display:flex;flex-direction:column;min-width:0;gap:2px}
+.cr-n b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-xl)}
+.cr-tags{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.cr-tags .chip{font-size:var(--fs-2xs);padding:1px 7px}
+.cr-warn{font-size:var(--fs-2xs);color:var(--warn);font-weight:700}
+.cr-v{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}
+.cr-v b{font-size:var(--fs-xl)}
+.cr-v .hint{font-size:var(--fs-xs)}
+.cdetail{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);box-shadow:var(--shadow-sm);min-height:420px}
+.cd-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;min-height:420px;padding:var(--s-6)}
+.cd-empty-ic{font-size:2rem}
+.cd-in{display:flex;flex-direction:column;gap:var(--s-4);padding:var(--s-5)}
+.cd-head{display:flex;flex-direction:column;gap:var(--s-2)}
+.cd-back{display:none;align-self:flex-start}
+.cd-title{display:flex;align-items:center;gap:var(--s-3)}
+.cd-title h3{margin:0 0 4px;font-size:var(--fs-h2)}
+.cd-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-2)}
+.cd-stat{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:var(--r-lg);background:var(--bg-2)}
+.cd-stat.hero{background:var(--grad);color:var(--on-brand)}
+.cd-stat .lbl{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.06em;font-weight:600;opacity:.75}
+.cd-stat b{font-size:var(--fs-h3);font-weight:800}
+.cd-stat .sub{font-size:var(--fs-xs);opacity:.75}
+.cd-sec{display:flex;flex-direction:column;gap:var(--s-2);border-top:1px solid var(--line);padding-top:var(--s-4)}
+.cd-sec-h{display:flex;align-items:center;gap:var(--s-2);flex-wrap:wrap}
+.cd-sec-h h4{margin:0;font-size:var(--fs-xl)}
+.cd-todo{display:flex;flex-direction:column;gap:var(--s-2)}
+.aisec{background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 6%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--brand) 25%,var(--line));border-radius:var(--r-lg);padding:var(--s-4)}
+.aisec .cd-sec-h h4{color:var(--brand)}
+/* the edit form, inline */
+.cdetail #cForm{padding:0;max-height:none;overflow:visible;box-shadow:none;background:none;border:none;border-radius:0;width:auto}
+.cdetail .cdlg-head{display:none}
+.cdetail #cForm .dlg-foot{position:static;background:none;border-top:none;padding:var(--s-2) 0 0}
+@media (max-width:900px){
+  .cwrap{grid-template-columns:1fr}
+  .clist{position:static;max-height:none}
+  .cwrap.show-detail .clist{display:none}
+  .cwrap:not(.show-detail) .cdetail{display:none}
+  .cd-back{display:inline-flex}
+  .cd-in{padding:var(--s-4)}
+  .cd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (prefers-reduced-motion:no-preference){.crow{animation:fadeUp .35s var(--ease) backwards;animation-delay:calc(var(--i,0) * 25ms)}}

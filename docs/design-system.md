@@ -43,6 +43,11 @@ A small status label. Variants: `.ok` `.warn` `.bad` `.brand` `.solid`, and the 
 - `dialog.dlg`: dialog.
 - `.dtable`: tables that turn into cards on phones.
 
+### Patterns
+- **List + detail** (`.cwrap` → `.clist` of `.crow` + `.cdetail`): the Clients tab. Desktop: sticky list on the left, detail on the right, first item open. Phones (≤900px): the list, then the detail full width with **← All clients**. Rows use `role="option"` / `aria-selected`.
+- **Detail panel** (`.cd-in`): header (`.cr-av` initial, name, tags) → stat tiles (`.cd-stats`, first one `.hero` with `--grad`) → sections (`.cd-sec`, top border, `h4` title + `countpill`). The client edit form is moved into the last section instead of opening a dialog; the dialog is still used for **+ Add client**.
+- **AI section** (`.aisec` / `.aibox`): soft brand gradient + brand border, EN / ខ្មែរ segmented control, **↻ New**, loading dots (`.ai-dot`), answer rendered with light Markdown (`.ai-text`: `h4`, lists, bold). Only the AI section repaints when the answer arrives, so the form keeps what is being typed.
+
 ## Rules
 1. Use colours, sizes, radii, shadows and motion only from tokens. Dark mode then works automatically.
 2. Make a new screen from Card, Pill, Button, Panel and Chips before inventing a new box.

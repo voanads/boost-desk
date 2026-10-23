@@ -876,7 +876,7 @@
         oPulled.add(pk);
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
       }
-      $('oSetBtn').hidden = !(me && me.canAdmin);
+      $('oSetBtn').hidden = !(me && me.canAdmin); $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey);
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
@@ -929,6 +929,32 @@
     catch (e) { toast(e.message); }
     finally { b.disabled = false; b.classList.remove('spin'); loadOrders(); }
   };
+  // ---- check one day against adsbox.biz (admins) ----
+  let oCmp = null;
+  async function runCompare() {
+    const day = $('oCmpDay').value; if (!day) return;
+    const out = $('oCmpOut'); out.innerHTML = '<div class="muted">Asking adsbox.biz…</div>'; $('oUseDay').disabled = true;
+    try {
+      oCmp = await api('/orders/compare?day=' + day);
+      const d = oCmp, diff = d.live - d.kept, st = { locked: 'kept from when it was recent', fresh: 'still updating (today / yesterday)', backfill: 'estimate', missing: 'not fetched yet' }[d.state] || d.state;
+      const rows = d.pages.filter((x) => x.kept || x.live);
+      out.innerHTML = `<div class="cmp-sum"><div><span class="lbl">Boost Desk</span><b class="num">${d.kept.toLocaleString('en-US')}</b></div><div><span class="lbl">adsbox.biz now</span><b class="num">${d.live.toLocaleString('en-US')}</b></div><div><span class="lbl">Difference</span><b class="num ${diff ? (diff > 0 ? 'is-warn' : 'is-danger') : 'is-ok'}">${diff > 0 ? '+' : ''}${diff.toLocaleString('en-US')}</b></div></div>
+        <div class="hint">Boost Desk's number for this day: ${esc(st)}. Compare "adsbox.biz now" with the adsbox <b>Sales Overview</b> for the same day.</div>
+        ${rows.length ? `<div class="cmp-list"><div class="cmp-row cmp-head"><span>Page</span><span class="r">Boost Desk</span><span class="r">adsbox now</span><span class="r">Diff</span></div>${rows.slice(0, 60).map((x) => `<div class="cmp-row${x.diff ? ' off' : ''}"><span class="cmp-p">${esc(x.page || 'Page ' + x.pageId)}</span><span class="r num">${x.kept}</span><span class="r num">${x.live}</span><span class="r num ${x.diff ? (x.diff > 0 ? 'is-warn' : 'is-danger') : 'is-ok'}">${x.diff > 0 ? '+' : ''}${x.diff || '✓'}</span></div>`).join('')}</div>` : '<div class="muted">No orders on this day.</div>'}`;
+      $('oUseDay').disabled = !diff;
+    } catch (e) { out.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
+  }
+  async function useLive(from, to, btn) {
+    if (!confirm(`Replace Boost Desk's order numbers for ${from === to ? nice(from) : nice(from) + ' – ' + nice(to)} with adsbox.biz's numbers as they are now?`)) return;
+    btn.disabled = true; btn.classList.add('busy');
+    try { await api('/orders/use-live', { method: 'POST', body: { from, to } }); successBadge('Orders updated from adsbox.biz'); oData2 = null; loadOrders(); mData = null; if ($('oCmpDay').value) runCompare(); }
+    catch (e) { toast(e.message); } finally { btn.disabled = false; btn.classList.remove('busy'); }
+  }
+  $('oCmpBtn').onclick = () => { if (!$('oCmpDay').value) $('oCmpDay').value = addD(me.today, -1); $('oCmpDay').max = me.today; $('oCmpOut').innerHTML = ''; dlgOpen($('oCmpDlg')); runCompare(); };
+  $('oCmpGo').onclick = runCompare; $('oCmpDay').onchange = runCompare;
+  $('oUseDay').onclick = () => useLive($('oCmpDay').value, $('oCmpDay').value, $('oUseDay'));
+  $('oUse7').onclick = () => useLive(addD(me.today, -7), addD(me.today, -1), $('oUse7'));
+  $('oUse30').onclick = () => useLive(addD(me.today, -30), addD(me.today, -1), $('oUse30'));
   $('oSetBtn').onclick = async () => {
     if (!(me && me.canAdmin)) return;
     const c = oCfg || await api('/orders/api').catch(() => ({}));

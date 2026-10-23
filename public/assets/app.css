@@ -1600,3 +1600,21 @@ body{font-size:15.5px;letter-spacing:0}
 @media (max-width:1400px){.perbar.stuck .pb-mini span:nth-child(3){display:none}}
 @media (max-width:980px){.perbar.stuck .pb-mini{display:none}}
 @media (prefers-reduced-motion:reduce){.perbar.stuck .pb-mini{animation:none}}
+
+/* Orders: check against adsbox.biz */
+.cmp-bar{display:flex;align-items:flex-end;gap:var(--s-2);flex-wrap:wrap}
+.cmp-day{flex:1;min-width:160px;margin:0}
+.cmp-out{display:flex;flex-direction:column;gap:var(--s-2);margin-top:var(--s-3);max-height:52vh;overflow:auto}
+.cmp-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s-2)}
+.cmp-sum>div{background:var(--bg-2);border-radius:var(--r-lg);padding:10px 12px;display:flex;flex-direction:column}
+.cmp-sum .lbl{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.cmp-sum b{font-size:var(--fs-h2);font-weight:800}
+.cmp-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.cmp-row{display:grid;grid-template-columns:minmax(0,1fr) 90px 90px 70px;gap:var(--s-2);padding:7px 12px;border-top:1px solid var(--line);font-size:var(--fs-md)}
+.cmp-row:first-child{border-top:none}
+.cmp-row .r{text-align:right}
+.cmp-head{background:var(--bg-2);font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.cmp-row.off{background:color-mix(in srgb,var(--warn) 6%,transparent)}
+.cmp-p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmp-foot{flex-wrap:wrap;gap:var(--s-2)}
+@media (max-width:560px){.cmp-row{grid-template-columns:minmax(0,1fr) 64px 64px 50px}}

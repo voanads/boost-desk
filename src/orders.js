@@ -261,18 +261,8 @@ async function pullRangeNow(from, to, force) {
       const lst = await listOrders(plan[0], plan[plan.length - 1], await knownPageIds(plan[0], plan[plan.length - 1])); if (lst === null) return null;
       for (const day of plan) await store(day, lst.rows.filter((r) => r.day === day));
     } else for (const day of plan) {
-      const got = await fetchAll(day, day); if (got === null) return null;
-      const agg = new Map(), rows = mapRows(got.list);
-      // The API filters by day: everything it sends belongs to that day (its times may be in UTC, a day off).
-      // If it sends rows far from that day, it ignored the filter — then keep only rows dated that day.
-      const far = rows.some((r) => r.day && (r.day < sync.addDays(day, -1) || r.day > sync.addDays(day, 1)));
-      for (const r of rows) {
-        if (far && r.day !== day) continue;
-        r.day = day;
-        const k = r.pageId + '|' + (r.pageId ? '' : r.pageName), a = agg.get(k) || { day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
-        for (const f of ['orders', 'newC', 'oldC', 'total', 'oc', 'om', 'oa', 'cust']) a[f] = (a[f] || 0) + (Number(r[f]) || 0); if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
-      }
-      await store(day, [...agg.values()]);
+      const rows = await summaryDayRows(day); if (rows === null) return null;
+      await store(day, rows);
     }
     for (const d of Object.keys(done)) if (d < sync.addDays(today, -800)) delete done[d];
     for (const d of Object.keys(state)) if (d < sync.addDays(today, -800)) delete state[d];
@@ -282,6 +272,50 @@ async function pullRangeNow(from, to, force) {
     await db.setSetting('ordersLastError', null);
     return n;
   } catch (e) { await db.setSetting('ordersDayState', state).catch(() => {}); await db.setSetting('ordersLastError', { at: new Date().toISOString(), message: e.message }); throw e; }
+}
+// One day from the summary API, one row per Page.
+async function summaryDayRows(day) {
+  const got = await fetchAll(day, day); if (got === null) return null;
+  const agg = new Map(), rows = mapRows(got.list);
+  // The API filters by day: everything it sends belongs to that day (its times may be in UTC, a day off).
+  // If it sends rows far from that day, it ignored the filter — then keep only rows dated that day.
+  const far = rows.some((r) => r.day && (r.day < sync.addDays(day, -1) || r.day > sync.addDays(day, 1)));
+  for (const r of rows) {
+    if (far && r.day !== day) continue;
+    r.day = day;
+    const k = r.pageId + '|' + (r.pageId ? '' : r.pageName), a = agg.get(k) || { day, pageId: r.pageId, pageName: r.pageName, orders: 0, newC: 0, oldC: 0, total: 0 };
+    for (const f of ['orders', 'newC', 'oldC', 'total', 'oc', 'om', 'oa', 'cust']) a[f] = (a[f] || 0) + (Number(r[f]) || 0); if (!a.pageName) a.pageName = r.pageName; agg.set(k, a);
+  }
+  return [...agg.values()];
+}
+// Compare one day: what Boost Desk kept vs what adsbox.biz's API says right now, per Page.
+async function compareDay(day) {
+  const cfgx = await apiConfig(); if (!cfgx.url || !cfgx.key) return null;
+  let live;
+  if (cfgx.listUrl) { const l = await listOrders(day, day, await knownPageIds(day, day)); live = l ? l.rows : []; }
+  else live = (await summaryDayRows(day)) || [];
+  const kept = (await q(`SELECT page_id, max(page_name) AS page_name, sum(orders)::int AS orders FROM page_orders WHERE day=$1 GROUP BY page_id`, [day])).rows;
+  const m = new Map();
+  const key = (id, name) => (id ? String(id) : 'name:' + norm(name));
+  for (const r of kept) { const k = key(r.page_id.startsWith('name:') ? '' : r.page_id, r.page_name); m.set(k, { pageId: r.page_id.startsWith('name:') ? '' : r.page_id, page: r.page_name || '', kept: r.orders, live: 0 }); }
+  for (const r of live) { const k = key(r.pageId, r.pageName), x = m.get(k) || { pageId: String(r.pageId || ''), page: r.pageName || '', kept: 0, live: 0 }; x.live += Number(r.orders) || 0; if (!x.page) x.page = r.pageName || ''; m.set(k, x); }
+  const pages = [...m.values()].map((x) => ({ ...x, diff: x.live - x.kept })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || b.live - a.live);
+  const state = (await dayStates())[day] || 'missing';
+  return { day, state, kept: pages.reduce((t, x) => t + x.kept, 0), live: pages.reduce((t, x) => t + x.live, 0), pages };
+}
+// Take adsbox.biz's numbers as they are now for these days and keep them (the admin checked they match
+// the adsbox Sales Overview). Old days are then locked again.
+async function useLive(from, to) {
+  const today = sync.todayIn(), yest = sync.addDays(today, -1);
+  const st = await dayStates();
+  for (let d = from; d <= to && d <= today; d = sync.addDays(d, 1)) delete st[d];
+  await db.setSetting('ordersDayState', st);
+  const n = await pullRange(from, to, { force: true });
+  const st2 = await dayStates();
+  for (let d = from; d <= to && d < yest; d = sync.addDays(d, 1)) if (st2[d]) st2[d] = 'locked';
+  await db.setSetting('ordersDayState', st2);
+  liveCache.clear();
+  return n;
 }
 // How trustworthy a period's order numbers are: days kept from when they were recent vs. estimates.
 async function periodQuality(from, to) {
@@ -464,4 +498,4 @@ async function report(owner, from, to, src = 'all') {
   return { from, to, live: false, prev, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+module.exports = { compareDay, useLive, periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

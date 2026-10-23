@@ -1027,6 +1027,16 @@ api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders
 api.get('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.pushStatus())));
 api.put('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.setPush(!!(req.body || {}).on))));
 api.post('/orders/push', adminOnly, wrap(async (req, res) => { await orders.setPush(true); res.json(await orders.pushSpend(Math.min(31, Number((req.body || {}).days) || 7))); }));
+// Check one day against adsbox.biz (admins), and take adsbox's numbers for a period when they match its Sales Overview.
+api.get('/orders/compare', adminOnly, wrap(async (req, res) => {
+  const day = String(req.query.day || ''); if (!isDay(day)) return res.status(400).json({ error: 'Pick a day.' });
+  const r = await orders.compareDay(day); if (!r) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json(r);
+}));
+api.post('/orders/use-live', adminOnly, wrap(async (req, res) => {
+  const { from, to } = req.body || {}, today = sync.todayIn();
+  if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick up to 3 months.' });
+  const n = await orders.useLive(from, to > today ? today : to); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json({ ok: true, rows: n });
+}));
 api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
 api.post('/orders/pull', wrap(async (req, res) => {
   const b = req.body || {}, today = sync.todayIn();

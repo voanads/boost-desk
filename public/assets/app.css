@@ -1043,9 +1043,9 @@ body{font-size:.97rem;letter-spacing:0}
   nav.tabs .full{display:inline!important} nav.tabs .short{display:none!important}
   nav.tabs button[aria-selected=true]{box-shadow:none!important;font-weight:600!important}
   header.appbar .who{margin-top:auto;flex-wrap:wrap;padding:0 8px}
-  body:not([data-tab=clients]):not([data-tab=main]):not([data-tab=board]) .wrap{max-width:1120px!important}
-  body[data-tab=clients] .wrap,body[data-tab=main] .wrap,body[data-tab=board] .wrap{max-width:none;margin-left:0;margin-right:0}
-  body[data-tab=clients],body[data-tab=main],body[data-tab=board]{padding-right:28px}
+  body:not([data-tab=clients]):not([data-tab=main]):not([data-tab=board]):not([data-tab=adaccts]) .wrap{max-width:1120px!important}
+  body[data-tab=clients] .wrap,body[data-tab=main] .wrap,body[data-tab=board] .wrap,body[data-tab=adaccts] .wrap{max-width:none;margin-left:0;margin-right:0}
+  body[data-tab=clients],body[data-tab=main],body[data-tab=board],body[data-tab=adaccts]{padding-right:28px}
 }
 @media (max-width:760px){
   .summary{grid-template-columns:1fr 1fr!important;grid-auto-flow:row!important}
@@ -2128,3 +2128,9 @@ html[data-size=xl]{font-size:19px}
 .aa-p.on .aa-dot{background:var(--brand)}
 #aaNote{margin-top:var(--s-2)}
 @media (max-width:900px){.aa-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.aa-add-f{grid-template-columns:1fr 1fr}.aa-add-f input{grid-column:1/-1}.aa-tools .seg{width:100%;display:grid;grid-template-columns:repeat(4,1fr)}}
+
+#tab-adaccts{display:flex;flex-direction:column;gap:var(--s-4)}
+#tab-adaccts[hidden]{display:none}
+#tab-adaccts .aa-kpis{margin-bottom:0}
+.navbadge:empty{display:none}
+.navbadge{margin-left:auto;font-size:var(--fs-2xs);font-weight:800;background:var(--danger);color:#fff;border-radius:var(--r-pill);padding:1px 7px}

@@ -259,9 +259,9 @@
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
-    if ((name === 'admin' || name === 'main' || name === 'board') && !(me && me.canAdmin)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'admin'].includes(name)) name = 'main';
-    ['main', 'board', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (['admin', 'main', 'board', 'adaccts'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
@@ -272,6 +272,7 @@
     if (name === 'orders') loadOrders();
     if (name === 'main') loadMain();
     if (name === 'board') loadBoard();
+    if (name === 'adaccts') loadAdAccounts();
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -1316,8 +1317,8 @@
     if (sec === 'overview') sec = 'users'; // Overview was removed — spend per team is on the Main Dashboard
     admSec = sec; try { localStorage.setItem('admSec', sec); } catch (_) {}
     document.querySelectorAll('#admNav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.a === sec)));
-    for (const k of ['overview', 'users', 'accounts', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
-    if (sec === 'accounts') loadAdAccounts();
+    if (sec === 'accounts') sec = 'users'; // moved to its own page
+    for (const k of ['overview', 'users', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
     if (sec === 'users') { loadUsers(); loadTeams(); }
     if (sec === 'health') loadHealth();
     if (sec === 'settings') loadSettings();
@@ -3000,14 +3001,15 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE) { // the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'admin'].includes(b.dataset.tab); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin'].includes(b.dataset.tab); });
+        const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
         document.querySelector('.brand').setAttribute('href', '/admin#main');
         $('whoName').textContent = me.name;
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       loadChats(); loadCheck();
@@ -3018,8 +3020,8 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (me.canAdmin) ['admin', 'main', 'board'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
-      showTab(['main', 'board', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      if (me.canAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      showTab(['main', 'board', 'adaccts', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

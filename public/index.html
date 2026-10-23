@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=141">
+<link rel="stylesheet" href="/assets/app.css?v=142">
 </head>
 <body>
 <div class="wrap">
@@ -26,6 +26,7 @@
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="main" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.8"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/></svg><span class="full">Main Dashboard</span><span class="short">Main</span></button>
       <button role="tab" data-tab="board" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="5" height="17" rx="1.6"/><rect x="9.5" y="3.5" width="5" height="11" rx="1.6"/><rect x="16" y="3.5" width="5" height="14" rx="1.6"/></svg><span class="full">Clients Board</span><span class="short">Board</span></button>
+      <button role="tab" data-tab="adaccts" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">All ad accounts</span><span class="short">All ads</span><span class="navbadge" id="admAccN"></span></button>
       <button role="tab" data-tab="dashboard" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
@@ -120,6 +121,31 @@
       </aside>
       <div class="cdetail" id="bDetail"></div>
     </div>
+  </section>
+
+  <!-- AD ACCOUNTS (admins): every ad account of every person -->
+  <section id="tab-adaccts" class="wrap" hidden>
+    <div class="ohead"><div><h2>Ad accounts</h2><div class="hint">Every ad account of every person — status, today's spend, balance and who syncs it.</div></div></div>
+      <div class="aa-kpis" id="aaKpis"></div>
+      <div class="panel aa-panel">
+        <div class="aa-tools">
+          <input type="search" id="aaSearch" placeholder="Search account, ID, business or person" aria-label="Search ad accounts">
+          <div class="seg" id="aaFilter" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="ok" aria-pressed="false">Active</button><button type="button" data-f="bad" aria-pressed="false">Problems</button><button type="button" data-f="off" aria-pressed="false">Not synced</button></div>
+          <select id="aaPerson" aria-label="Person"><option value="">Everyone</option></select>
+          <span class="spacer"></span>
+          <button type="button" class="ghost sm" id="aaRefresh">↻ Refresh from Facebook</button>
+          <button type="button" class="sm primary" id="aaAddBtn" hidden>+ Add ad account</button>
+        </div>
+        <form class="aa-add" id="aaAdd" hidden>
+          <div class="aa-add-h"><b>Add an ad account</b><span class="hint">Boost Desk checks it with that person's Facebook login. They need access to it in Business Manager first.</span></div>
+          <div class="aa-add-f"><input type="text" id="aaId" placeholder="Ad account ID, e.g. 1234567890 or act_1234567890" aria-label="Ad account ID" required inputmode="numeric"><select id="aaOwner" aria-label="Who uses it" required></select><button type="submit" class="sm primary" id="aaAddGo">Add</button><button type="button" class="ghost sm" id="aaAddX">Cancel</button></div>
+        </form>
+        <div class="tablewrap"><table class="aa-table">
+          <thead><tr><th>Ad account</th><th>Status</th><th>People · sync</th><th class="r">Today</th><th class="r">Balance</th><th class="r">Threshold</th><th class="r">Spent (all time)</th></tr></thead>
+          <tbody id="aaBody"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+        </table></div>
+        <div class="hint" id="aaNote"></div>
+      </div>
   </section>
 
   <!-- DASHBOARD -->
@@ -349,7 +375,7 @@
     <div class="dhead">
       <div class="chead2"><div><h2>Admin</h2><div class="hint">The people who use Boost Desk and their teams, what needs attention, and the app's settings. Spend per team is on the Main Dashboard.</div></div></div>
       <div class="seg admnav" id="admNav" role="tablist" aria-label="Admin sections">
-        <button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="accounts" role="tab">💳 Ad accounts <span class="admbadge" id="admAccN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
+        <button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
       </div>
     </div>
 
@@ -388,29 +414,6 @@
         <h2>Removed accounts</h2>
         <div class="hint">These Facebook accounts can't log in to Boost Desk. Restore one to let them log in again (they start with an empty workspace).</div>
         <div class="tablewrap"><table><tbody id="blockedBody"></tbody></table></div>
-      </div>
-    </div>
-
-    <div id="adm-accounts" hidden>
-      <div class="aa-kpis" id="aaKpis"></div>
-      <div class="panel aa-panel">
-        <div class="aa-tools">
-          <input type="search" id="aaSearch" placeholder="Search account, ID, business or person" aria-label="Search ad accounts">
-          <div class="seg" id="aaFilter" role="group" aria-label="Show"><button type="button" data-f="all" aria-pressed="true">All</button><button type="button" data-f="ok" aria-pressed="false">Active</button><button type="button" data-f="bad" aria-pressed="false">Problems</button><button type="button" data-f="off" aria-pressed="false">Not synced</button></div>
-          <select id="aaPerson" aria-label="Person"><option value="">Everyone</option></select>
-          <span class="spacer"></span>
-          <button type="button" class="ghost sm" id="aaRefresh">↻ Refresh from Facebook</button>
-          <button type="button" class="sm primary" id="aaAddBtn" hidden>+ Add ad account</button>
-        </div>
-        <form class="aa-add" id="aaAdd" hidden>
-          <div class="aa-add-h"><b>Add an ad account</b><span class="hint">Boost Desk checks it with that person's Facebook login. They need access to it in Business Manager first.</span></div>
-          <div class="aa-add-f"><input type="text" id="aaId" placeholder="Ad account ID, e.g. 1234567890 or act_1234567890" aria-label="Ad account ID" required inputmode="numeric"><select id="aaOwner" aria-label="Who uses it" required></select><button type="submit" class="sm primary" id="aaAddGo">Add</button><button type="button" class="ghost sm" id="aaAddX">Cancel</button></div>
-        </form>
-        <div class="tablewrap"><table class="aa-table">
-          <thead><tr><th>Ad account</th><th>Status</th><th>People · sync</th><th class="r">Today</th><th class="r">Balance</th><th class="r">Threshold</th><th class="r">Spent (all time)</th></tr></thead>
-          <tbody id="aaBody"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
-        </table></div>
-        <div class="hint" id="aaNote"></div>
       </div>
     </div>
 
@@ -602,6 +605,6 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/app.js?v=141"></script>
+<script src="/assets/app.js?v=142"></script>
 </body>
 </html>

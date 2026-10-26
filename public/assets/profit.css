@@ -143,3 +143,8 @@
 #tab-profit .pf-sheet th[lang=km],#tab-profit .pf-sheet th [lang=km]{text-transform:none;letter-spacing:0;font-size:var(--fs-sm)}
 #tab-profit .pf-locked{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:var(--pf-good-soft);color:var(--pf-green);font-size:var(--fs-sm);font-weight:700}
 #tab-profit .pf-locked b{color:inherit}
+#tab-profit .pf-accseg{display:inline-flex;padding:2px;gap:2px}
+#tab-profit .pf-accseg button{font-size:var(--fs-xs);padding:5px 10px;min-height:30px;border-radius:6px}
+#tab-profit .pf-accseg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-text);font-weight:700}
+#tab-profit .pf-accseg button[data-val=none][aria-pressed=true]{background:var(--danger-soft);color:var(--danger)}
+#tab-profit .pf-accseg button{white-space:nowrap}#tab-profit .pf-sheet td:last-child{white-space:nowrap}

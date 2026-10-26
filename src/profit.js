@@ -58,11 +58,19 @@ async function roleOf(id) {
   return ROLES.includes(r) ? r : null;
 }
 
-// ---- ad accounts from the Meta sync (every workspace), for "Fill from Meta" ----
+// ---- ad accounts for "Fill from Meta": only the ones a Profit admin's Facebook login can open
+// (the app owner and anyone set to admin on the Access page) ----
+async function adminIds() {
+  const ids = new Set(Object.entries(await accessMap()).filter(([, r]) => r === 'admin').map(([id]) => id));
+  const owner = await db.ownerId(); if (owner) ids.add(owner);
+  return [...ids].filter((id) => !id.startsWith('g:')); // Google-only people have no ad accounts
+}
 async function metaAccounts() {
-  const rows = (await q('SELECT owner, id, name, enabled, info, seen_at FROM ad_accounts')).rows;
-  const ext = {}; // thresholds pushed by the browser extension (any person's), newest wins
-  for (const r of (await q("SELECT value FROM settings WHERE key LIKE '%:extThresholds'")).rows) {
+  const admins = await adminIds();
+  if (!admins.length) return [];
+  const rows = (await q('SELECT owner, id, name, enabled, info, seen_at FROM ad_accounts WHERE owner = ANY($1)', [admins])).rows;
+  const ext = {}; // billing thresholds the admins' browser extension pushed, newest wins
+  for (const r of (await q('SELECT value FROM settings WHERE key = ANY($1)', [admins.map((id) => id + ':extThresholds')])).rows) {
     for (const [id, e] of Object.entries(r.value || {})) if (e && e.v != null && (!ext[id] || String(e.at || '') > String(ext[id].at || ''))) ext[id] = e;
   }
   const map = new Map();

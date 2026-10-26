@@ -11,7 +11,7 @@ window.BDProfit = (() => {
 
   let root = null, app = null, statusEl = null, booted = false, pollT = null;
   let viewBook = '', myId = '', books = [], serviceUse = {}; // whose book is open (admins can open anyone's)
-  let months = {}, current = null, draft = null, dirty = false, saveTimer = null, rulesTimer = null, confirmDel = false;
+  let months = {}, current = null, draft = null, dirty = false, saveTimer = null, rulesTimer = null, confirmDel = false, confirmSubmit = false;
   let page = 'accounts', role = 'viewer', canEdit = false, isAdmin = false, me = null;
   let services = JSON.parse(JSON.stringify(DEFAULT_SERVICES)), accessPeople = [];
   // Names in the Developer / Doer / Spender / Supporter dropdowns (settings/main.team). Admins edit the list.
@@ -102,9 +102,20 @@ window.BDProfit = (() => {
   const stCls = (s) => (s === 'Active' ? 'st-Active' : s === 'Disabled' ? 'st-Disabled' : 'st-Need');
   const when = (iso) => { try { const d = new Date(iso); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
 
+  // A submitted month is locked (the server refuses changes); Profit admins can unlock it.
+  const locked = () => !!(draft && draft.submitted);
+  const editable = () => canEdit && !locked();
   function topRow() {
+    const sub = draft && draft.submitted;
+    const lockBadge = sub ? `<span class="pf-locked">✓ Submitted by <b>${esc(sub.by || '')}</b> · ${esc(when(sub.at))}</span>${isAdmin ? '<button class="sm" type="button" id="pfUnlock">Unlock</button>' : ''}` : '';
+    let right;
+    if (!canEdit) right = `${lockBadge}<span class="pf-roleb viewer">${esc(bookName())}’s book · view only</span>`;
+    else if (sub) right = lockBadge;
+    else if (confirmDel) right = `<span class="hint">Delete ${esc(monthLabel(current))} for good?</span><button class="sm danger" type="button" id="pfDelYes">Delete</button><button class="sm" type="button" id="pfDelNo">Keep</button>`;
+    else if (confirmSubmit) right = `<span class="hint">Submit ${esc(monthLabel(current))}? After this nobody can change it${isAdmin ? ' until an admin unlocks it' : ''}.</span><button class="sm primary" type="button" id="pfSubmitYes">Submit</button><button class="sm" type="button" id="pfSubmitNo">Cancel</button>`;
+    else right = '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button><button class="sm primary" type="button" id="pfSubmitBtn">Submit month</button>';
     return `<div class="pf-top"><div><span class="pf-eyebrow">${page === 'split' ? 'Profit split' : 'Ad accounts &amp; clients'}</span><h2>${esc(monthLabel(current))}</h2>${draft && draft._by ? `<span class="pf-lastedit">Last edited by <b>${esc(draft._by)}</b> · ${esc(when(draft._at))}</span>` : ''}</div>
-    <div class="pf-confirm">${!canEdit ? `<span class="pf-roleb viewer">${esc(bookName())}’s book · view only</span>` : confirmDel ? `<span class="hint">Delete ${esc(monthLabel(current))} for good?</span><button class="sm danger" type="button" id="pfDelYes">Delete</button><button class="sm" type="button" id="pfDelNo">Keep</button>` : '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button>'}</div></div>`;
+    <div class="pf-confirm">${right}</div></div>`;
   }
   const emptyHTML = () => `<div class="pf-empty"><h3>${canEdit ? 'No months yet' : esc(bookName()) + ' has no months yet'}</h3><p>Each month keeps its own ad accounts, client balances and transactions.${canEdit ? ' Start one with <b>+ New month</b>.' : ''}</p></div>`;
 
@@ -256,11 +267,11 @@ window.BDProfit = (() => {
     if (page === 'access') { renderAccess(); return; }
     if (!current) { app.innerHTML = emptyHTML(); return; }
     page === 'split' ? renderSplit() : renderAccounts();
-    if (!canEdit) { app.querySelectorAll('[data-path]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("[data-add],[data-remove^='accounts.'],[data-remove^='clients.'],[data-remove^='transactions.'],#pfFillMeta").forEach((e) => { e.hidden = true; }); }
+    if (!editable()) { app.querySelectorAll('[data-path]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("[data-add],[data-remove^='accounts.'],[data-remove^='clients.'],[data-remove^='transactions.'],#pfFillMeta").forEach((e) => { e.hidden = true; }); }
     if (!isAdmin && page === 'split') { app.querySelectorAll('[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("#pfAddService,[data-remove^='services.'],[data-remove^='team.'],#pfPeopleAdd").forEach((e) => { e.hidden = true; }); }
   }
   const update = () => (page === 'split' ? updateSplit() : page === 'accounts' ? updateAccounts() : null);
-  function goPage(p) { page = p; confirmDel = false; render(); }
+  function goPage(p) { page = p; confirmDel = false; confirmSubmit = false; render(); }
   const bookName = () => { const b = books.find((x) => x.id === viewBook); return b ? b.name : 'Someone'; };
   function renderBookSel() {
     const w = $('#pfBookWrap'); w.hidden = !isAdmin || !books.length; if (w.hidden) return;
@@ -271,17 +282,29 @@ window.BDProfit = (() => {
     const ids = Object.keys(months).sort().reverse();
     if (current && !ids.includes(current)) ids.unshift(current);
     const s = $('#pfMonthSel');
-    s.innerHTML = ids.length ? ids.map((id) => `<option value="${id}"${id === current ? ' selected' : ''}>${monthLabel(id)}</option>`).join('') : '<option value="">No months</option>';
+    s.innerHTML = ids.length ? ids.map((id) => `<option value="${id}"${id === current ? ' selected' : ''}>${monthLabel(id)}${(id === current ? draft : months[id]) && (id === current ? draft : months[id]).submitted ? ' ✓' : ''}</option>`).join('') : '<option value="">No months</option>';
     s.disabled = !ids.length;
   }
 
-  function scheduleSave() { if (!canEdit) return; dirty = true; setStatus('Saving…'); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 800); }
+  function scheduleSave() { if (!editable()) return; dirty = true; setStatus('Saving…'); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 800); }
   async function saveNow() {
     clearTimeout(saveTimer);
     if (!current) return;
     const id = current, body = clone(draft);
     try { const r = await api('/months/' + id, 'PUT', body); body._by = r._by; body._at = r._at; months[id] = body; if (current === id && draft) { draft._by = r._by; draft._at = r._at; } dirty = false; setStatus('Saved'); }
-    catch (e) { setStatus("Couldn't save: " + e.message); if (!e.status || e.status >= 500) setTimeout(saveNow, 2000); }
+    catch (e) { setStatus("Couldn't save: " + e.message); if (e.status === 423) { dirty = false; refresh(true); } else if (!e.status || e.status >= 500) setTimeout(saveNow, 2000); }
+  }
+  async function submitMonth() {
+    if (!current || !editable()) return;
+    if (dirty) await saveNow();
+    if (dirty) return; // the save failed; the message is already shown
+    try { const r = await api('/months/' + current + '/submit', 'POST', {}); draft.submitted = r.submitted; if (months[current]) months[current].submitted = r.submitted; confirmSubmit = false; setStatus('Submitted'); renderMonthSel(); render(); }
+    catch (e) { setStatus("Couldn't submit: " + e.message); }
+  }
+  async function unlockMonth() {
+    if (!current || !isAdmin) return;
+    try { await api('/months/' + current + '/unlock' + (viewBook && viewBook !== myId ? '?book=' + encodeURIComponent(viewBook) : ''), 'POST', {}); delete draft.submitted; if (months[current]) delete months[current].submitted; setStatus('Unlocked'); renderMonthSel(); render(); }
+    catch (e) { setStatus("Couldn't unlock: " + e.message); }
   }
   function scheduleRules() {
     if (!isAdmin) return;
@@ -372,7 +395,11 @@ window.BDProfit = (() => {
         let n = 1, name = 'New service'; while (services.some((s) => s.name === name)) { n++; name = 'New service ' + n; }
         services.push({ name, pct: [0, 0, 0, 0, 100] }); scheduleRules(); renderSplit(); const f = byId('pf-rn-' + (services.length - 1)); if (f) { f.focus(); f.select(); } return;
       }
-      if (b.id === 'pfDelBtn') { confirmDel = true; render(); return; }
+      if (b.id === 'pfDelBtn') { confirmDel = true; confirmSubmit = false; render(); return; }
+      if (b.id === 'pfSubmitBtn') { confirmSubmit = true; confirmDel = false; render(); return; }
+      if (b.id === 'pfSubmitNo') { confirmSubmit = false; render(); return; }
+      if (b.id === 'pfSubmitYes') { submitMonth(); return; }
+      if (b.id === 'pfUnlock') { unlockMonth(); return; }
       if (b.id === 'pfDelNo') { confirmDel = false; render(); return; }
       if (b.id === 'pfDelYes') { deleteMonth(); return; }
       if (b.id === 'pfNewBtn') { openNew(); return; }
@@ -380,7 +407,7 @@ window.BDProfit = (() => {
       if (b.id === 'pfCancelNew') { render(); }
     });
     $('#pfBookSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); viewBook = e.target.value; current = null; draft = null; confirmDel = false; if (page === 'access') page = 'accounts'; setStatus(''); refresh(true); });
-    $('#pfMonthSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); current = e.target.value; draft = normalize(months[current]); confirmDel = false; render(); });
+    $('#pfMonthSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); current = e.target.value; draft = normalize(months[current]); confirmDel = false; confirmSubmit = false; render(); });
   }
   function addPerson() {
     const f = byId('pfNewPerson'); if (!f || !isAdmin) return;

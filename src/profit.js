@@ -36,6 +36,8 @@ async function claimShared() {
 const put = (book, col, id, data) => q(`INSERT INTO profit_docs (book, col, id, data) VALUES ($1,$2,$3,$4)
   ON CONFLICT (book, col, id) DO UPDATE SET data=$4, updated_at=now()`, [book, col, id, JSON.stringify(data)]);
 const del = (book, col, id) => q('DELETE FROM profit_docs WHERE book=$1 AND col=$2 AND id=$3', [book, col, id]);
+const getDoc = async (book, col, id) => ((await q('SELECT data FROM profit_docs WHERE book=$1 AND col=$2 AND id=$3', [book, col, id])).rows[0] || {}).data || null;
+const LOCKED = 'This month was submitted, so it can’t be changed. Ask a Profit admin to unlock it.';
 async function state(book) {
   await claimShared();
   const out = { months: {}, settings: {} };
@@ -134,13 +136,38 @@ function router({ sitePeople }) {
     if (col === 'settings' && req.profitRole !== 'admin') return res.status(403).json({ error: 'Only admins can change the split rules' });
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Body must be an object' });
+    if (col === 'months') { // a submitted month is locked; "submitted" is only set by /submit
+      const cur = await getDoc(me(req), 'months', id);
+      if (cur && cur.submitted) return res.status(423).json({ error: LOCKED, locked: true });
+      delete body.submitted;
+    }
     body._by = req.user.name; body._at = new Date().toISOString();
     await put(col === 'settings' ? '' : me(req), col, id, body);
     res.json({ ok: true, _by: body._by, _at: body._at });
   }));
   r.delete('/months/:id', wrap(async (req, res) => {
     if (!VALID_ID.test(req.params.id)) return res.status(400).json({ error: 'Bad path' });
+    const cur = await getDoc(me(req), 'months', req.params.id);
+    if (cur && cur.submitted) return res.status(423).json({ error: LOCKED, locked: true });
     await del(me(req), 'months', req.params.id); res.json({ ok: true });
+  }));
+  // Submit: lock your own month. Unlock: Profit admins, on anyone's book (?book=).
+  r.post('/months/:id/submit', wrap(async (req, res) => {
+    const cur = VALID_ID.test(req.params.id) && await getDoc(me(req), 'months', req.params.id);
+    if (!cur) return res.status(404).json({ error: 'Save the month first.' });
+    if (cur.submitted) return res.json({ ok: true, submitted: cur.submitted });
+    cur.submitted = { by: req.user.name, at: new Date().toISOString() };
+    await put(me(req), 'months', req.params.id, cur);
+    res.json({ ok: true, submitted: cur.submitted });
+  }));
+  r.post('/months/:id/unlock', admin, wrap(async (req, res) => {
+    const book = String(req.query.book || me(req));
+    if (!VALID_BOOK.test(book) || !VALID_ID.test(req.params.id)) return res.status(400).json({ error: 'Bad path' });
+    const cur = await getDoc(book, 'months', req.params.id);
+    if (!cur) return res.status(404).json({ error: 'Month not found.' });
+    delete cur.submitted; cur.unlockedBy = req.user.name; cur.unlockedAt = new Date().toISOString();
+    await put(book, 'months', req.params.id, cur);
+    res.json({ ok: true });
   }));
   r.get('/meta-accounts', wrap(async (req, res) => res.json({ accounts: await metaAccounts(me(req)) })));
 

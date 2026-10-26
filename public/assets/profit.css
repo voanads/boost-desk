@@ -141,3 +141,5 @@
 #tab-profit td.pf-ref{text-align:center}
 #tab-profit td.pf-ref input{width:16px;height:16px;accent-color:var(--brand);cursor:pointer}
 #tab-profit .pf-sheet th[lang=km],#tab-profit .pf-sheet th [lang=km]{text-transform:none;letter-spacing:0;font-size:var(--fs-sm)}
+#tab-profit .pf-locked{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:var(--pf-good-soft);color:var(--pf-green);font-size:var(--fs-sm);font-weight:700}
+#tab-profit .pf-locked b{color:inherit}

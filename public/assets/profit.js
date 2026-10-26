@@ -256,7 +256,7 @@ window.BDProfit = (() => {
     setText('pfAccCount', `${accessPeople.filter((p) => p.access === 'admin').length} admins · ${accessPeople.filter((p) => p.access === 'member').length} with own book`);
     t.innerHTML = `<table style="min-width:480px"><thead><tr><th>Name</th><th>Login</th><th class="n">Months</th><th style="width:170px">Profit access</th></tr></thead><tbody>
       ${accessPeople.map((p) => `<tr><td class="v"><span class="who">${avatar(p.name)}${esc(p.name)}</span></td><td class="v mut">${esc(p.kind)}${p.email ? ' · ' + esc(p.email) : ''}</td><td class="v n">${p.months || '—'}</td>
-        <td>${p.owner ? '<span class="pf-roleb admin" style="margin-left:8px">admin · app owner</span>' : `<select data-access="${esc(p.id)}" aria-label="Profit access for ${esc(p.name)}">${['member', 'admin', 'none'].map((v) => `<option value="${v}"${p.access === v ? ' selected' : ''}>${ACCESS_LABEL[v]}</option>`).join('')}</select>`}</td></tr>`).join('')}
+        <td>${p.owner ? '<span class="pf-roleb admin" style="margin-left:8px">admin · app owner</span>' : `<div class="seg pf-accseg" role="group" aria-label="Profit access for ${esc(p.name)}">${['member', 'admin', 'none'].map((v) => `<button type="button" data-access="${esc(p.id)}" data-val="${v}" aria-pressed="${p.access === v}" title="${esc(ACCESS_INFO[v])}">${ACCESS_LABEL[v]}</button>`).join('')}</div>`}</td></tr>`).join('')}
     </tbody></table>`;
   }
 
@@ -275,8 +275,12 @@ window.BDProfit = (() => {
   const bookName = () => { const b = books.find((x) => x.id === viewBook); return b ? b.name : 'Someone'; };
   function renderBookSel() {
     const w = $('#pfBookWrap'); w.hidden = !isAdmin || !books.length; if (w.hidden) return;
-    const others = books.filter((b) => b.id !== myId);
-    $('#pfBookSel').innerHTML = `<option value="${esc(myId)}"${viewBook === myId ? ' selected' : ''}>My book</option>` + others.map((b) => `<option value="${esc(b.id)}"${b.id === viewBook ? ' selected' : ''}>${esc(b.name)}${b.months ? '' : ' (empty)'}</option>`).join('');
+    const others = books.filter((b) => b.id !== myId).sort((a, b) => a.name.localeCompare(b.name));
+    const opt = (b) => `<option value="${esc(b.id)}"${b.id === viewBook ? ' selected' : ''}>${esc(b.name)}${b.months ? ` · ${b.months} month${b.months === 1 ? '' : 's'}` : ''}</option>`;
+    const withData = others.filter((b) => b.months), empty = others.filter((b) => !b.months);
+    $('#pfBookSel').innerHTML = `<option value="${esc(myId)}"${viewBook === myId ? ' selected' : ''}>My book</option>`
+      + (withData.length ? `<optgroup label="Team books">${withData.map(opt).join('')}</optgroup>` : '')
+      + (empty.length ? `<optgroup label="No months yet">${empty.map(opt).join('')}</optgroup>` : '');
   }
   function renderMonthSel() {
     const ids = Object.keys(months).sort().reverse();
@@ -355,11 +359,17 @@ window.BDProfit = (() => {
       if (t.dataset.path) { setPath(draft, t.dataset.path, t.dataset.type === 'bool' ? t.checked : t.dataset.type === 'num' ? (t.value === '' ? '' : num(t.value)) : t.value); update(); scheduleSave(); return; }
       if (t.dataset.rulePct) { const [i, j] = t.dataset.rulePct.split('|').map(Number); services[i].pct[j] = num(t.value); updateSplit(); scheduleRules(); }
     });
+    app.addEventListener('click', async (e) => {
+      const t = e.target.closest('button[data-access]'); if (!t) return;
+      if (t.getAttribute('aria-pressed') === 'true') return;
+      try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { access: t.dataset.val }); const p = accessPeople.find((x) => x.id === t.dataset.access); if (p) p.access = t.dataset.val; setStatus('Access saved'); drawAccess(); refresh(false); }
+      catch (err) { setStatus(err.message); }
+    });
     app.addEventListener('change', async (e) => {
       const t = e.target;
       if (t.tagName === 'SELECT' && t.dataset.path) { setPath(draft, t.dataset.path, t.value); update(); scheduleSave(); return; }
       if (t.dataset.ruleName !== undefined) { renameService(+t.dataset.ruleName, t); return; }
-      if (t.dataset.access !== undefined) {
+      if (t.dataset.access !== undefined && t.tagName === 'SELECT') {
         try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { access: t.value }); const p = accessPeople.find((x) => x.id === t.dataset.access); if (p) p.access = t.value; setStatus('Access saved'); drawAccess(); refresh(false); }
         catch (err) { setStatus(err.message); }
       }

@@ -255,7 +255,7 @@
   }
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
-  const KEEP = ['dashboard', 'clients', 'lives', 'payments'];
+  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'board', 'target'] : ['dashboard', 'clients', 'lives', 'payments'];
   function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !KEEP.includes(b.dataset.tab)); }
   function paintMore() { const m = $('navMore'); if (!m) return; const cur = document.body.dataset.tab; m.setAttribute('aria-selected', String(!KEEP.includes(cur) && moreTabs().some((b) => b.dataset.tab === cur))); }
   if ($('navMore')) $('navMore').onclick = () => {
@@ -280,7 +280,7 @@
     if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && me && me.google && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
     ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
@@ -3557,6 +3557,10 @@ Thank you for working with Ads Box!`,
       }
       // /projectmanager shows only the Work pages, even to the owner; /admin shows everything.
       const showAdmin = me.canAdmin && !PM_SITE;
+      if (ADMIN_SITE) { // /admin: only the Admin group — Main Dashboard, Clients Board, All ad accounts, Target, Profit, Admin
+        ['dashboard', 'clients', 'lives', 'orders', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
+        $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');
+      }
       if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages

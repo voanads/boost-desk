@@ -87,7 +87,7 @@ async function listChats(offset = 0) {
     if (list.length) next = list[list.length - 1].update_id + 1;
     if (list.length < 100) break;
   }
-  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], taps = [];
+  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], taps = [], cmds = [];
   for (const u of result) {
     // A button under a bot message was tapped (e.g. a media buyer's "Done").
     if (u.callback_query) { const q = u.callback_query; taps.push({ qid: q.id, data: q.data || '', chat: String((q.message && q.message.chat && q.message.chat.id) || (q.from && q.from.id) || ''), msgId: q.message && q.message.message_id, text: (q.message && q.message.text) || '', name: [q.from && q.from.first_name, q.from && q.from.last_name].filter(Boolean).join(' ') }); continue; }
@@ -98,6 +98,9 @@ async function listChats(offset = 0) {
       // A media buyer opened the bot from their invite link (t.me/<bot>?start=mb_CODE).
       const st = ((u.message || {}).text || '').trim().match(/^\/start\s+mb_([A-Za-z0-9]{8})\b/);
       if (st) starts.push({ id: String(chat.id), code: st[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
+      // A media buyer asking for their dashboard link (/dashboard, or /start without a code).
+      const cm = ((u.message || {}).text || '').trim().match(/^\/(dashboard|start|mytasks)(?:@\w+)?\s*$/i);
+      if (cm) cmds.push({ id: String(chat.id), cmd: cm[1].toLowerCase() });
       continue;
     }
     if (!chat) continue;
@@ -121,7 +124,7 @@ async function listChats(offset = 0) {
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links, moved, alerts, starts, taps, next };
+  return { chats: [...found.values()], links, moved, alerts, starts, taps, cmds, next };
 }
 
 let botName = null;
@@ -155,7 +158,7 @@ async function sendAlbum(images, text, chatId) {
 async function sendButtons(text, chatId, buttons) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...dest(chatId), text, disable_web_page_preview: true, reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } }) })).json().catch(() => ({}));
+    body: JSON.stringify({ ...dest(chatId), text, disable_web_page_preview: true, reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => (b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.data }))) } }) })).json().catch(() => ({}));
   if (!body.ok) throw new Error('Telegram: ' + (body.description || 'send failed'));
   return body.result && body.result.message_id;
 }

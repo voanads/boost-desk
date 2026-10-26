@@ -190,6 +190,96 @@ app.post('/public-api/thresholds', wrap(async (req, res) => {
 
 const lastSeenMem = new Map();
 // Everything below needs a logged-in user.
+// ---------- Media buyer dashboard (/mb) ----------
+// Media buyers have no Boost Desk account: the Telegram bot gives them a signed link (60 days) that opens
+// their own page — today's tasks, target, monthly KPI, clients and history. They can tick tasks and type
+// what they reached, the same as tapping ✅ Done in Telegram.
+const MB = () => require('./src/buyers');
+app.get('/mb/login', wrap(async (req, res) => {
+  const { b, e, s: sig } = req.query;
+  if (!MB().checkLink(b, e, sig) || !(await MB().get(b))) return res.status(400).send('<meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>This link is old or wrong</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> to get a new one.</p>');
+  req.session.mb = String(b); req.session.mbAt = Date.now();
+  res.redirect('/mb');
+}));
+app.get(['/mb', '/mb/'], wrap(async (req, res) => {
+  const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
+  if (!b) return res.status(401).send('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer dashboard</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>');
+  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'mb.html'));
+}));
+const mbOnly = wrap(async (req, res, next) => {
+  const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
+  if (!b) return res.status(401).json({ error: 'Open your dashboard from the Telegram bot (/dashboard).', needsLogin: true });
+  req.buyer = b; next();
+});
+app.post('/mb/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
+// Every task assigned to this buyer, across every client workbook, with the day's done / late state.
+async function buyerTasks(buyer, day) {
+  const today = sync.todayIn();
+  const cl = (await db.pool.query('SELECT id, name, owner, archived, plan FROM clients')).rows, cById = Object.fromEntries(cl.map((c) => [c.id, c]));
+  const users = Object.fromEntries((await db.allUsers()).map((u) => [u.fb_id, u.name]));
+  const rows = (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows;
+  const localDay = (iso) => { try { return sync.todayIn(undefined, new Date(iso)); } catch (_) { return ''; } };
+  const out = [], all = [], logs = [], kpiNames = {};
+  for (const r of rows) {
+    const [owner, , cid] = r.key.split(':'), c = cById[cid]; if (!c) continue;
+    const w = r.value || {};
+    for (const x of w.log || []) if (x.by === buyer.name) logs.push({ ...x, client: c.name, clientId: Number(cid) });
+    for (const t of w.tasks || []) {
+      if (!(t.to && t.to.id === buyer.id)) continue;
+      const base = { id: t.id, clientId: Number(cid), client: c.name, owner, pm: users[owner] || '', text: t.text, repeat: !!t.repeat, kpi: t.kpi || '', sentAt: t.sentAt || null, day: t.day };
+      all.push({ ...base, done: !!t.done, doneAt: t.doneAt || null });
+      const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
+      if (t.repeat) { if (t.day > day) continue; out.push({ ...base, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, late: false, ...tgt(t, day) }); continue; }
+      const late = t.day < day && !t.done && day === today;
+      if (t.day !== day && !late && !(doneDay === day)) continue;
+      out.push({ ...base, done: !!t.done, doneAt: t.doneAt || null, late, ...tgt(t, t.day) });
+    }
+  }
+  // KPI names for chips
+  for (const key of new Set(out.map((t) => t.owner))) { try { for (const k of await KPI().getList(buyer.id, today.slice(0, 7))) kpiNames[k.id] = k.name; } catch (_) {} }
+  out.sort((a, b) => (a.done - b.done) || (b.late - a.late) || a.client.localeCompare(b.client));
+  return { tasks: out.map((t) => ({ ...t, kpiName: kpiNames[t.kpi] || '' })), all, logs, clients: cl };
+}
+app.get('/mb/api/me', mbOnly, wrap(async (req, res) => {
+  const b = req.buyer, today = sync.todayIn(), ym = today.slice(0, 7);
+  const { tasks, all, logs, clients } = await buyerTasks(b, today);
+  const counts = { done: tasks.filter((t) => t.done).length, open: tasks.filter((t) => !t.done).length, late: tasks.filter((t) => t.late).length };
+  const tg = tasks.filter((t) => Number(t.target) > 0), target = { total: tg.reduce((s, t) => s + t.target, 0), reached: tg.reduce((s, t) => s + Math.min(t.reached || 0, t.target), 0), tasks: tg.length };
+  target.pct = target.total ? Math.round(target.reached / target.total * 100) : null;
+  let kpis = []; try { kpis = await KPI().results(b.id, ym, true); } catch (_) {}
+  const scored = kpis.filter((k) => k.target > 0), kpiAvg = scored.length ? Math.round(scored.reduce((s, k) => s + Math.min(k.score, 150), 0) / scored.length) : null;
+  // my clients: every client with a task for me, with its boost plan summary
+  const plan = require('./src/plan');
+  const myClientIds = [...new Set(all.map((t) => t.clientId))];
+  const myClients = clients.filter((c) => myClientIds.includes(c.id) && !c.archived).map((c) => {
+    const p = c.plan && !c.plan.hidden ? plan.clean(c.plan) : null, tt = p && p.lines && p.lines.length ? plan.totals(p) : null;
+    return { id: c.id, name: c.name, pm: all.find((t) => t.clientId === c.id).pm, open: all.filter((t) => t.clientId === c.id && !t.done).length, plan: tt ? { posts: p.lines.length, total: tt.total, from: tt.from, to: tt.to, sentAt: p.sentAt || null } : null };
+  });
+  // history: the last 30 days of ticks, newest first; completion rate = done ÷ assigned in that window
+  const since = sync.addDays(today, -30);
+  const hist = logs.filter((x) => x.day >= since).sort((a, b) => (b.day + b.at).localeCompare(a.day + a.at)).slice(0, 60).map((x) => ({ day: x.day, at: x.at, text: x.text, client: x.client }));
+  const assigned = all.filter((t) => t.day >= since), rate = assigned.length ? Math.round(assigned.filter((t) => t.done).length / assigned.length * 100) : null;
+  const byDay = {}; for (const x of logs) if (x.day >= sync.addDays(today, -13)) byDay[x.day] = (byDay[x.day] || 0) + 1;
+  res.json({ me: { id: b.id, name: b.name, linked: !!b.chat, pm: b.addedBy || '' }, today, month: ym, counts, tasks, target, kpis, kpiAvg, clients: myClients, history: hist, rate, byDay, assigned: assigned.length, notifications: { bot: telegram.hasBot(), linked: !!b.chat } });
+}));
+// Tick a task done (or undo), or type what was reached — the same rules as the PM's page and the Telegram button.
+app.post('/mb/api/tasks/:cid/:tid', mbOnly, wrap(async (req, res) => {
+  const b = req.buyer, cid = String(req.params.cid), tid = String(req.params.tid);
+  const owner = ((await db.pool.query('SELECT owner FROM clients WHERE id=$1', [cid])).rows[0] || {}).owner;
+  if (!owner) return res.status(404).json({ error: 'Client not found.' });
+  const w = await AI().workbook(owner, cid), t = (w.tasks || []).find((x) => x.id === tid);
+  if (!t || !t.to || t.to.id !== b.id) return res.status(404).json({ error: 'This task is not yours.' });
+  const day = sync.todayIn(), body = req.body || {};
+  if (body.reached != null && Number(t.target) > 0) { t.hit = t.hit || {}; t.hit[day] = Math.max(0, Number(body.reached) || 0); }
+  if (body.done != null) {
+    const lid = 't:' + t.id + ':' + day; w.log = (w.log || []).filter((x) => x.id !== lid);
+    if (body.done) { const at = new Date().toISOString(); t.done = true; t.doneAt = at; t.doneBy = b.name; w.log.push({ id: lid, day, at, by: b.name, text: t.text, kind: t.repeat ? 'repeat' : 'me' }); }
+    else { t.done = false; t.doneAt = null; t.doneBy = null; }
+  }
+  await AI().saveWorkbook(owner, cid, w);
+  res.json({ ok: true });
+}));
+
 app.use(wrap(async (req, res, next) => {
   let user = req.session.fbId && (await db.getUser(req.session.fbId));
   if (!user && req.session.gEmail) { // signed in with Google on the admin website
@@ -229,7 +319,7 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
-    canAdmin: await canSeeAdmin(req.user.fb_id),
+    canAdmin: await canSeeAdmin(req.user.fb_id), role: await roleOf(req.user.fb_id),
     profitRole: await profit.roleOf(req.user.fb_id),
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE,
@@ -258,6 +348,15 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
 }));
 // Admin overview: every account's spend for a period (owner, or people the owner allowed).
 const adminViewers = async () => new Set(await db.getSetting('adminViewers', []));
+// Company roles: ceo (the app owner, or anyone given it), coo (sees everything, like an admin), pm (own clients).
+// Stored in the setting roles = { fbId: 'ceo'|'coo'|'pm' }; ceo/coo are also admin viewers so every older check holds.
+const ROLES = ['ceo', 'coo', 'pm'];
+const roleMap = async () => (await db.getSetting('roles', {})) || {};
+async function roleOf(id) {
+  if ((await db.ownerId()) === id) return 'ceo';
+  const r = (await roleMap())[id]; if (ROLES.includes(r)) return r;
+  return (await adminViewers()).has(id) ? 'coo' : 'pm';
+}
 const canSeeAdmin = async (id) => (String(id).startsWith('g:') && !!(await sitePerson(String(id).slice(2)))) || (await db.ownerId()) === id || (await adminViewers()).has(id);
 const adminOnly = wrap(async (req, res, next) => {
   if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only the app owner and people they allow can see the Admin dashboard.' });
@@ -322,12 +421,12 @@ async function dayTasks(day) {
       const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
       if (t.repeat) { // every day from the day it was added: done only if ticked that day
         if (t.day > day || day > today) continue;
-        o.tasks.push({ id: t.id, text: t.text, from: 'me', day, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, doneBy: doneDay === day ? t.doneBy || null : null, late: false, repeat: true, client: cName[cid], clientId: Number(cid), ...tgt(t, day) });
+        o.tasks.push({ id: t.id, text: t.text, from: 'me', day, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, doneBy: doneDay === day ? t.doneBy || null : null, late: false, repeat: true, client: cName[cid], clientId: Number(cid), ...tgt(t, day), to: t.to ? { id: t.to.id, name: t.to.name } : null, sentAt: t.sentAt || null, kpi: t.kpi || '' });
         continue;
       }
       const late = t.day < day && ((!t.done && day === today) || doneDay === day);
       if (t.day !== day && !late) continue;
-      o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid), ...tgt(t, t.day) });
+      o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid), ...tgt(t, t.day), to: t.to ? { id: t.to.id, name: t.to.name } : null, sentAt: t.sentAt || null, kpi: t.kpi || '' });
     }
   }
   // Today's work (the same rule-based list each person sees in Clients: send report, unpaid, quiet client…), ticked or not.
@@ -444,6 +543,11 @@ api.get('/main/overview', adminOnly, wrap(async (req, res) => {
   tot.unlinked = unlinked.spend;
   res.json({ from, to, totals: tot, users, quality: await orders.periodQuality(from, to), teams: (await getTeams()).map((t) => ({ id: t.id, name: t.name, members: t.members })) });
 }));
+// Company dashboard (CEO / COO): one month of the whole company.
+const company = require('./src/company');
+api.get('/company/summary', adminOnly, wrap(async (req, res) => {
+  res.json(await company.summary({ month: req.query.month, getTeams, dayTasks, clientMoney }));
+}));
 api.get('/admin/overview', adminOnly, wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
@@ -489,7 +593,7 @@ api.get('/admin/users', adminOnly, wrap(async (req, res) => {
   for (const st of status) {
     const u = users.find((x) => x.fb_id === st.id) || {};
     const t = teams.find((x) => x.members.includes(st.id));
-    out.push({ ...st, role: st.id === owner ? 'owner' : viewers.has(st.id) ? 'admin' : 'member', team: t ? t.name : '', lastLogin: u.updated_at || null,
+    out.push({ ...st, role: st.id === owner ? 'owner' : viewers.has(st.id) ? 'admin' : 'member', company: await roleOf(st.id), team: t ? t.name : '', lastLogin: u.updated_at || null,
       lastSeen: await db.getUserSetting(st.id, 'lastSeen', null), autoReport: await db.getUserSetting(st.id, 'autoReport', null) });
   }
   out.sort((a, b) => ({ owner: 0, admin: 1, member: 2 }[a.role] - { owner: 0, admin: 1, member: 2 }[b.role]) || String(a.name).localeCompare(String(b.name)));
@@ -498,8 +602,11 @@ api.get('/admin/users', adminOnly, wrap(async (req, res) => {
 api.put('/admin/role/:id', ownerOnly, wrap(async (req, res) => {
   const id = req.params.id; if (id === req.user.fb_id) return res.status(400).json({ error: 'You are the owner.' });
   if (!(await db.getUser(id))) return res.status(404).json({ error: 'Account not found.' });
-  const v = await adminViewers(); if ((req.body || {}).role === 'admin') v.add(id); else v.delete(id);
-  await db.setSetting('adminViewers', [...v]); res.json({ ok: true });
+  const role = String((req.body || {}).role || ''), map = await roleMap();
+  // ceo / coo see everything (admin viewers); pm and the older "member" see only their own clients.
+  const v = await adminViewers(); if (role === 'admin' || role === 'ceo' || role === 'coo') v.add(id); else v.delete(id);
+  if (ROLES.includes(role)) map[id] = role; else delete map[id];
+  await db.setSetting('roles', map); await db.setSetting('adminViewers', [...v]); res.json({ ok: true, role: await roleOf(id) });
 }));
 // Everything that needs attention, worst first.
 api.get('/admin/health', adminOnly, wrap(async (req, res) => {
@@ -1425,6 +1532,27 @@ api.get('/targets/mine', wrap(async (req, res) => {
   }
   res.json({ day, today: sync.todayIn(), tasks: out });
 }));
+// PM dashboard: my team — media buyers I work with, today's tasks (done / open / overdue), what was sent to Telegram.
+api.get('/team/mine', wrap(async (req, res) => {
+  const today = sync.todayIn(), me = req.user.fb_id;
+  const teams = await getTeams(), team = teams.find((t) => t.members.includes(me)) || null;
+  const members = team ? team.members : [me], users = await db.allUsers(), uName = Object.fromEntries(users.map((u) => [u.fb_id, u.name]));
+  const byName = Object.fromEntries(users.map((u) => [u.name, u.fb_id]));
+  const bl = (await require('./src/buyers').all()).filter((b) => members.includes(b.addedById || byName[b.addedBy] || '') || (!team && !b.addedById && !byName[b.addedBy]));
+  const dt = await dayTasks(today);
+  const mine = (dt.users[me] || { tasks: [] }).tasks, counts = { done: 0, open: 0, overdue: 0, sent: 0, notSent: 0, buyerDone: 0, buyerOpen: 0 };
+  const buyerTasks = [];
+  for (const t of mine) {
+    if (t.done) counts.done++; else counts.open++;
+    if (t.late && !t.done) counts.overdue++;
+    if (t.to) { if (t.sentAt) counts.sent++; else counts.notSent++; if (t.done) counts.buyerDone++; else counts.buyerOpen++; buyerTasks.push(t); }
+  }
+  const perBuyer = bl.map((b) => { const ts = buyerTasks.filter((t) => t.to && t.to.id === b.id); return { ...b, today: ts.length, done: ts.filter((t) => t.done).length, late: ts.filter((t) => t.late && !t.done).length, notSent: ts.filter((t) => !t.sentAt).length }; });
+  // the KPI score of each media buyer this month (average of KPIs with a target)
+  const K = KPI(); for (const b of perBuyer) { try { const rs = (await K.results(b.id, today.slice(0, 7), true)).filter((k) => k.target > 0); b.kpi = rs.length ? Math.round(rs.reduce((t, k) => t + Math.min(k.score, 150), 0) / rs.length) : null; } catch (_) { b.kpi = null; } }
+  const teammates = members.filter((id) => id !== me && uName[id]).map((id) => { const o = dt.users[id] || { tasks: [] }; return { id, name: uName[id], done: o.tasks.filter((t) => t.done).length, open: o.tasks.filter((t) => !t.done).length, clients: o.clients || 0 }; });
+  res.json({ today, team: team ? { id: team.id, name: team.name } : null, counts, buyers: perBuyer, teammates, buyerTasks: buyerTasks.slice(0, 30), clients: (dt.users[me] || {}).clients || 0 });
+}));
 // Admin: every team's target tasks for a day, with totals.
 api.get('/admin/targets', adminOnly, wrap(async (req, res) => {
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
@@ -1472,7 +1600,7 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
 }));
 // Media buyers (no login needed: they connect Telegram once from an invite link).
 api.get('/media-buyers', wrap(async (req, res) => res.json({ buyers: await require('./src/buyers').all(), bot: telegram.hasBot() })));
-api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name)); } catch (e) { res.status(400).json({ error: e.message }); } }));
+api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
 api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });

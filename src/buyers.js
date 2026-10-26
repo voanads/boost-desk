@@ -5,17 +5,25 @@ const db = require('./db');
 const sync = require('./sync');
 const telegram = require('./telegram');
 
+const cfg = require('./config');
 const KEY = 'mediaBuyers';
+// A signed link that opens the media buyer's own dashboard (valid 60 days; the bot sends a fresh one any time).
+const sign = (id, exp) => crypto.createHmac('sha256', cfg.sessionSecret).update(`mb.${id}.${exp}`).digest('hex').slice(0, 32);
+const dashLink = (b) => { const exp = Date.now() + 60 * 864e5; return `${cfg.baseUrl}/mb/login?b=${b.id}&e=${exp}&s=${sign(b.id, exp)}`; };
+function checkLink(id, exp, sig) {
+  if (!/^[a-f0-9]{8}$/.test(String(id)) || !(Number(exp) > Date.now()) || !/^[a-f0-9]{32}$/.test(String(sig))) return false;
+  const good = sign(id, Number(exp)); return crypto.timingSafeEqual(Buffer.from(String(sig)), Buffer.from(good));
+}
 const list = async () => (await db.getSetting(KEY, [])) || [];
 const save = (all) => db.setSetting(KEY, all);
 const code = () => Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[crypto.randomInt(32)]).join('');
-const pub = (b, bot) => ({ id: b.id, name: b.name, linked: !!b.chat, tgName: b.tgName || '', link: bot ? `https://t.me/${bot}?start=mb_${b.code}` : '', addedBy: b.addedBy || '' });
+const pub = (b, bot) => ({ id: b.id, name: b.name, linked: !!b.chat, tgName: b.tgName || '', link: bot ? `https://t.me/${bot}?start=mb_${b.code}` : '', addedBy: b.addedBy || '', addedById: b.addedById || '' });
 
 async function all() { const bot = await telegram.username(); return (await list()).map((b) => pub(b, bot)); }
-async function add(name, by) {
+async function add(name, by, byId) {
   const n = String(name || '').trim().slice(0, 60); if (!n) throw new Error('Type the media buyer\'s name.');
   const cur = await list(); if (cur.length >= 50) throw new Error('Too many media buyers.');
-  const b = { id: crypto.randomBytes(4).toString('hex'), name: n, code: code(), chat: '', tgName: '', addedBy: by || '', at: new Date().toISOString() };
+  const b = { id: crypto.randomBytes(4).toString('hex'), name: n, code: code(), chat: '', tgName: '', addedBy: by || '', addedById: byId || '', at: new Date().toISOString() };
   await save([...cur, b]); return pub(b, await telegram.username());
 }
 async function remove(id) { await save((await list()).filter((b) => b.id !== String(id))); }
@@ -25,7 +33,7 @@ async function get(id) { return (await list()).find((b) => b.id === String(id)) 
 async function notify(buyer, { client, text, from, repeat, cid, tid }) {
   if (!buyer || !buyer.chat) throw new Error(`${buyer ? buyer.name : 'The media buyer'} hasn't connected Telegram yet.`);
   const msg = `📋 New task${from ? ' from ' + from : ''}\n👤 ${client}\n\n${text}${repeat ? '\n\n🔁 Every day' : ''}`;
-  return telegram.sendButtons(msg, buyer.chat, [[{ text: '✅ Done', data: `td:${cid}:${tid}` }]]);
+  return telegram.sendButtons(msg, buyer.chat, [[{ text: '✅ Done', data: `td:${cid}:${tid}` }, { text: '📊 My dashboard', url: dashLink(buyer) }]]);
 }
 
 // Called with each batch of Telegram updates: invite links opened, and "Done" buttons tapped.
@@ -35,9 +43,13 @@ async function onTelegram(fresh, AI) {
     for (const s of fresh.starts) {
       const b = cur.find((x) => x.code === s.code); if (!b) continue;
       if (b.chat !== s.id) { b.chat = s.id; b.tgName = s.name; changed = true; }
-      telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.`, s.id).catch(() => {});
+      telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.\n\nYour dashboard shows today's tasks, your target and KPI — send /dashboard any time to get the link again.`, s.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
     }
     if (changed) await save(cur);
+  }
+  for (const c of fresh.cmds || []) {
+    const b = (await list()).find((x) => x.chat === c.id); if (!b) continue;
+    telegram.sendButtons(`📊 ${b.name}, here is your dashboard — today's tasks, target, KPI and history.`, c.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => {});
   }
   for (const t of fresh.taps || []) {
     const m = String(t.data).match(/^td:(\d+):([a-f0-9]{6,20})$/); if (!m) { telegram.answerTap(t.qid); continue; }
@@ -80,4 +92,4 @@ async function morning(log = () => {}) {
   return n;
 }
 
-module.exports = { all, add, remove, get, notify, onTelegram, morning };
+module.exports = { dashLink, checkLink, all, add, remove, get, notify, onTelegram, morning };

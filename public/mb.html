@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2563EB">
+<title>My tasks · Boost Desk</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/assets/app.css?v=165">
+<link rel="stylesheet" href="/assets/mb.css?v=165">
+</head>
+<body class="mbpage">
+<header class="mb-head">
+  <a class="brand" href="/mb" aria-label="Boost Desk"><img class="logo" src="/assets/logo.svg" alt=""><span class="bname">Ads Box<small>Boost Desk</small></span></a>
+  <div class="mb-who"><b id="mbName">…</b><span class="hint" id="mbPm"></span></div>
+  <button type="button" class="themebtn" id="themeBtn" aria-label="Theme"><svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"/></svg></button>
+</header>
+<main class="mb-main">
+  <div class="note err" id="mbErr" hidden></div>
+  <section class="mb-sec" aria-labelledby="mbTodayT">
+    <div class="mb-sec-h"><h1 id="mbTodayT">My tasks today</h1><span class="hint" id="mbDate"></span></div>
+    <div class="mb-stats" id="mbStats"></div>
+    <div class="mb-target" id="mbTarget" hidden></div>
+    <div class="mb-tasks" id="mbTasks"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+  </section>
+  <section class="mb-sec" aria-labelledby="mbKpiT">
+    <div class="mb-sec-h"><h2 id="mbKpiT">📊 My KPI · <span id="mbMonth"></span></h2><span class="kpi-score" id="mbKpiAvg" hidden></span></div>
+    <div id="mbKpis"></div>
+  </section>
+  <section class="mb-sec" aria-labelledby="mbClT">
+    <div class="mb-sec-h"><h2 id="mbClT">My clients &amp; boost plans</h2><span class="hint" id="mbClHint"></span></div>
+    <div id="mbClients"></div>
+  </section>
+  <section class="mb-sec" aria-labelledby="mbHistT">
+    <div class="mb-sec-h"><h2 id="mbHistT">History</h2><span class="hint" id="mbRate"></span></div>
+    <div class="mb-days" id="mbDays"></div>
+    <div id="mbHist"></div>
+  </section>
+  <section class="mb-sec mb-tg" id="mbTg"></section>
+  <p class="mb-foot"><button type="button" class="ghost sm" id="mbLogout">Log out</button></p>
+</main>
+<div class="toast" id="toast" hidden></div>
+<script src="/assets/mb.js?v=165"></script>
+</body>
+</html>

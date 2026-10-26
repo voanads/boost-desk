@@ -586,7 +586,20 @@
   // This month's spend per client, shown on the cards.
   let cOrdQ = null, cMonth = {}, cOrd = {}, cOrdY = {}, cTodo = null, cWork = {}, cSel = null, cPicked = false;
   let cSort = (() => { try { return localStorage.getItem('cSort') || 'attention'; } catch (_) { return 'attention'; } })();
+  // Period for the numbers on a client (Today / 7 days / This month): the month comes from the list's data, the others are fetched once.
+  let cPer = (() => { try { return ['day', 'week', 'month'].includes(localStorage.getItem('cPer')) ? localStorage.getItem('cPer') : 'month'; } catch (_) { return 'month'; } })();
+  const cPerData = {};
+  async function loadClientPeriod(per) {
+    const t = (me && me.today) || iso(new Date()), from = per === 'day' ? t : addD(t, -6);
+    cPerData[per] = null;
+    try {
+      const [d, r] = await Promise.all([api(`/dashboard?from=${from}&to=${t}`), api(`/orders/report?from=${from}&to=${t}`).catch(() => ({ clients: [] }))]);
+      cPerData[per] = { from, to: t, month: Object.fromEntries(d.clients.map((c) => [c.id, c])), ord: Object.fromEntries((r.clients || []).map((c) => [c.id, c])) };
+    } catch (_) { cPerData[per] = { from, to: t, month: {}, ord: {} }; }
+    if (cPer === per) renderClientDetail();
+  }
   async function loadClientMonth() {
+    delete cPerData.day; delete cPerData.week;
     const t = (me && me.today) || iso(new Date()), ym = t.slice(0, 7);
     try {
       const d = await api(`/dashboard?from=${ym}-01&to=${t}`);
@@ -648,7 +661,9 @@
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
-    const m = cMonth[c.id] || {}, o = cOrd[c.id] || {}, cpo = o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
+    const pd = cPer === 'month' ? null : cPerData[cPer]; if (cPer !== 'month' && !pd) loadClientPeriod(cPer);
+    const m = (pd ? pd.month[c.id] : cMonth[c.id]) || {}, o = (pd ? pd.ord[c.id] : cOrd[c.id]) || {}, cpo = o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
+    const perLbl = { day: 'today', week: 'last 7 days', month: 'this month' }[cPer], perTitle = { day: 'Spent today', week: 'Spent · 7 days', month: 'Spent this month' }[cPer];
     const keepForm = !!box.querySelector('#cdForm') && cFormEl.parentElement === box.querySelector('#cdForm') && !fresh && box.querySelector('.cd-in') && Number(box.querySelector('.cd-in').dataset.cdid) === c.id;
     const notesVal = keepForm && $('cdNotes') ? $('cdNotes').value : null; // keep what is being typed
     parkForm(); // rescue the form before the panel is redrawn
@@ -657,11 +672,12 @@
         <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
           <button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">⚙ Client settings</button></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
+      <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
-        <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
+        <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
         ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + ordSpendOf(x), 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? ordSpendOf(y) / y.orders : null;
           return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>`; })()}
-        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : 'this month'}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
+        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : perLbl}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       ${planStrip(c)}
@@ -673,6 +689,7 @@
         <div class="cd-col">${histSection(c)}</div>
       </div>
     </div>`;
+    box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
     $('cdBack').onclick = () => { $('cWrap').classList.remove('show-detail'); window.scrollTo({ top: $('tab-clients').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); };

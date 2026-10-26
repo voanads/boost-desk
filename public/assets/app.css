@@ -2474,3 +2474,6 @@ dialog .csf-bar{position:static}
 .tablewrap td.empty,.tablewrap .empty{white-space:normal}
 /* page titles are h1 (one per page); same look as before */
 .phead-t h1,.ohead h1,.chead2 h1,.top>div>h1,.chead2>div>h1{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;line-height:1.2}
+.cd-per{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.cd-per .seg{border-radius:var(--r-md)}
+.cd-per .seg button{padding:6px 12px}

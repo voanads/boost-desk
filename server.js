@@ -204,7 +204,8 @@ app.get(['/mediabuyer/login', '/mb/login'], wrap(async (req, res) => {
 const MB_LOGIN_PAGE = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer site</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>';
 app.get(['/mediabuyer', '/mediabuyer/'], wrap(async (req, res) => {
   const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
-  if (!b) return res.status(401).send(MB_LOGIN_PAGE);
+  const fbUser = !b && req.session && req.session.fbId ? await db.getUser(req.session.fbId) : null; // a PM / owner looking at the buyer site
+  if (!b && !fbUser) return res.status(401).send(MB_LOGIN_PAGE);
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="mb">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Media buyer</title>');
   res.set('Cache-Control', 'no-cache').send(html);
 }));

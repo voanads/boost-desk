@@ -293,7 +293,7 @@
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
-    if (name === 'dashboard') loadMyTargets();
+    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); }
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -864,12 +864,13 @@
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
       ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" data-ctitle="${esc(x.title)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
-      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span>${Number(t.target) > 0 ? (() => { const k = t.repeat ? today : t.day, r = Number((t.hit || {})[k]) || 0, pct = Math.min(100, Math.round(r / t.target * 100)); return `<div class="ttgt ${pct >= 100 ? 'hit' : ''}"><span class="ttgt-bar"><i style="width:${pct}%"></i></span><label class="ttgt-in"><span class="vh">Reached</span><input type="number" min="0" step="1" inputmode="numeric" value="${r || ''}" placeholder="0" data-ctreach="${esc(t.id)}" aria-label="Reached"></label><span class="ttgt-of">/ ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pct}%</span></div>`; })() : ''}</div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
+      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.kpi && kpiNames[t.kpi] ? `<span class="kpi-chip" title="Counts toward this KPI">KPI · ${esc(kpiNames[t.kpi])}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span>${Number(t.target) > 0 ? (() => { const k = t.repeat ? today : t.day, r = Number((t.hit || {})[k]) || 0, pct = Math.min(100, Math.round(r / t.target * 100)); return `<div class="ttgt ${pct >= 100 ? 'hit' : ''}"><span class="ttgt-bar"><i style="width:${pct}%"></i></span><label class="ttgt-in"><span class="vh">Reached</span><input type="number" min="0" step="1" inputmode="numeric" value="${r || ''}" placeholder="0" data-ctreach="${esc(t.id)}" aria-label="Reached"></label><span class="ttgt-of">/ ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pct}%</span></div>`; })() : ''}</div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
       <form class="ai-ask task-new" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task">
         <div class="task-opts"><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
+        <label class="tkpi-new"><span>KPI</span><select id="cdTaskKpi" aria-label="Count this task toward a KPI"><option value="">—</option></select></label>
         <label class="ttgt-new" title="A number to reach, e.g. 5 posts"><span>🎯</span><input type="number" id="cdTaskTgt" min="0" step="1" inputmode="numeric" placeholder="Target" aria-label="Target number"><input type="text" id="cdTaskUnit" maxlength="20" placeholder="unit" aria-label="Unit, e.g. posts"></label>
         <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm primary">Add</button></div></form></section>`;
   }
@@ -886,12 +887,13 @@
   }
   function bindWork(c) {
     document.querySelectorAll('#cDetail [data-ctreach]').forEach((inp) => inp.onchange = async () => { try { cWb[c.id] = await api(`/clients/${c.id}/tasks/${inp.dataset.ctreach}`, { method: 'PATCH', body: { reached: Number(inp.value) || 0 } }); paintWork(); } catch (e) { toast(e.message); } });
-    if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; }; }
+    if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; fillTaskKpis(); }; }
+    fillTaskKpis();
     const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => {
       ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
       const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);
       try {
-        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '', target: $('cdTaskTgt') ? Number($('cdTaskTgt').value) || 0 : 0, unit: $('cdTaskUnit') ? $('cdTaskUnit').value : '' } });
+        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '', target: $('cdTaskTgt') ? Number($('cdTaskTgt').value) || 0 : 0, unit: $('cdTaskUnit') ? $('cdTaskUnit').value : '', kpi: $('cdTaskKpi') ? $('cdTaskKpi').value : '' } });
         const { warn, ...wb } = r; cWb[c.id] = wb; paintWork();
         if (warn) toast('Task added, but not sent: ' + warn); else if (b) successBadge('Sent to ' + b.name + ' on Telegram');
         setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0);
@@ -1763,6 +1765,52 @@
 
   // ---------- Ad accounts (admins): every ad account of every team, like the Clients Board ----------
   let aaData = null, aaF = 'all', aaSortK = 'today', aaTeam = '', aaSel = null, aaPicked = false;
+  // ---------- Monthly KPIs (like the GenZ-KPI sheet): target, auto result from daily tasks, score ----------
+  const kpiNames = {}; // kpi id → name, for the chips on task rows
+  const kpiState = {}; // host id → { person, month, data, timer }
+  const ym = (d) => d.slice(0, 7), ymLabel = (m) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+  const ymAdd = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+  const scoreCls = (s) => s >= 100 ? 'ok' : s >= 60 ? 'mid' : 'bad';
+  const fmtN = (v) => Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
+  async function kpiPanel(hostId, person, month) {
+    const host = $(hostId); if (!host) return;
+    const st = kpiState[hostId] = kpiState[hostId] || {}; st.person = person; st.month = month || st.month || ym((me && me.today) || iso(new Date()));
+    let d; try { d = await api(`/kpis?person=${encodeURIComponent(person)}&month=${st.month}`); } catch (e) { host.innerHTML = `<div class="hint">${esc(e.message)}</div>`; return; }
+    st.data = d; for (const k of d.kpis) kpiNames[k.id] = k.name;
+    const total = d.kpis.length, avg = total ? Math.round(d.kpis.reduce((s, k) => s + Math.min(k.score, 100), 0) / total) : 0;
+    const today = (me && me.today) || iso(new Date());
+    host.innerHTML = `<div class="kpi-top"><div class="kpi-nav"><button type="button" class="navbtn" data-km="-1" aria-label="Previous month">‹</button><b>${esc(ymLabel(st.month))}</b><button type="button" class="navbtn" data-km="1" aria-label="Next month" ${st.month >= ym(today) ? 'disabled' : ''}>›</button></div>
+        <span class="kpi-sum ${scoreCls(avg)}" title="Average score, each KPI capped at 100%">${total ? avg + '%' : '–'}</span><span class="hint">${total} KPI${total === 1 ? '' : 's'}${hostId === 'tgKpiPanel' ? ' · ' + esc(d.person.name) : ''}</span><span class="spacer"></span>
+        ${d.prev && !total ? `<button type="button" class="sm" data-kcopy="${esc(d.prev)}">Add ${esc(ymLabel(d.prev))} KPIs</button>` : ''}<button type="button" class="sm primary" data-kadd>+ Add KPI</button><span class="hint kpi-st" aria-live="polite"></span></div>
+      ${total ? `<div class="kpi-head"><span>#</span><span>KPI</span><span class="r">Target</span><span class="r">Result</span><span class="r">Score</span><span></span></div>
+      <div class="kpi-rows">${d.kpis.map((k, i) => `<div class="kpi-row" data-ki="${i}">
+        <span class="kpi-n">${i + 1}</span>
+        <input type="text" class="kpi-name" value="${esc(k.name)}" data-kf="name" aria-label="KPI ${i + 1} name" maxlength="120">
+        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"></span>
+        <span class="kpi-res ${k.estimated ? 'est' : ''}" title="${k.estimated ? `Auto from ${k.tasks} linked task${k.tasks === 1 ? '' : 's'} (${k.done} of ${k.due} done). Type a value to confirm it.` : 'Typed · auto would be ' + fmtN(k.auto)}"><input type="number" min="0" step="any" inputmode="decimal" value="${fmtN(k.result)}" data-kf="manual" aria-label="Result"><small>${esc(k.unit || '')}</small></span>
+        <span class="kpi-score ${scoreCls(k.score)}">${k.estimated ? '≈' : ''}${fmtN(k.score)}%</span>
+        <span class="kpi-x">${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
+      <div class="hint kpi-foot">✨ ≈ = auto from daily tasks linked to the KPI (pick the KPI when you add a task). Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
+    const kpis = d.kpis.map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit, manual: k.estimated ? null : k.result }));
+    const save = async (msg) => { const s = host.querySelector('.kpi-st'); if (s) s.textContent = 'Saving…'; try { await api('/kpis', { method: 'PUT', body: { person, month: st.month, kpis } }); if (s) s.textContent = msg || 'Saved'; } catch (e) { if (s) s.textContent = e.message; } };
+    const reload = () => kpiPanel(hostId, person, st.month);
+    host.querySelectorAll('[data-km]').forEach((b) => b.onclick = () => kpiPanel(hostId, person, ymAdd(st.month, Number(b.dataset.km))));
+    host.querySelector('[data-kadd]').onclick = async () => { kpis.push({ id: '', name: 'New KPI', target: 100, unit: '%', manual: null }); await save(); await reload(); const last = host.querySelector('.kpi-row:last-child .kpi-name'); if (last) { last.focus(); last.select(); } };
+    const cp = host.querySelector('[data-kcopy]'); if (cp) cp.onclick = async () => { try { const p = await api(`/kpis?person=${encodeURIComponent(person)}&month=${cp.dataset.kcopy}`); kpis.push(...p.kpis.map((k) => ({ id: '', name: k.name, target: k.target, unit: k.unit, manual: null }))); await save('Copied'); reload(); } catch (e) { toast(e.message); } };
+    host.querySelectorAll('.kpi-row').forEach((row) => {
+      const i = Number(row.dataset.ki);
+      row.querySelectorAll('[data-kf]').forEach((inp) => inp.onchange = async () => { const f = inp.dataset.kf; kpis[i][f] = f === 'name' || f === 'unit' ? inp.value : inp.value === '' ? (f === 'manual' ? null : 0) : Number(inp.value); await save(); reload(); });
+      const au = row.querySelector('[data-kauto]'); if (au) au.onclick = async () => { kpis[i].manual = null; await save('Back to auto'); reload(); };
+      row.querySelector('[data-kdel]').onclick = async () => { if (!confirm('Remove this KPI?')) return; kpis.splice(i, 1); await save('Removed'); reload(); };
+    });
+  }
+  function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
+  // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
+  async function fillTaskKpis() {
+    const sel = $('cdTaskKpi'); if (!sel) return;
+    const to = $('cdTaskTo') ? $('cdTaskTo').value : '', person = to && to !== '__manage' ? 'mb:' + to : me.id;
+    try { const d = await api(`/kpis?person=${encodeURIComponent(person)}&month=${ym(me.today)}`); for (const k of d.kpis) kpiNames[k.id] = k.name; const cur = sel.value; sel.innerHTML = '<option value="">— no KPI —</option>' + d.kpis.map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join(''); sel.value = d.kpis.some((k) => k.id === cur) ? cur : ''; sel.closest('label').hidden = !d.kpis.length; } catch (_) { sel.closest('label').hidden = true; }
+  }
   // ---------- Target: my target tasks today (Dashboard panel) ----------
   async function loadMyTargets() {
     const p = $('tgMine'); if (!p) return;
@@ -1795,6 +1843,12 @@
       return `<section class="panel tg-team ${tT && tp >= 100 ? 'hit' : ''}"><div class="tg-th"><div><h2>${esc(tn)}</h2><span class="hint">${list.map((p) => esc(p.name)).join(', ')}</span></div><div class="tg-tsum"><b>${tT ? tp + '%' : '–'}</b><span class="hint">${tT ? tR + ' of ' + tT : 'no target tasks'}</span></div></div>${tT ? `<div class="tgt-bar"><i class="${tp >= 100 ? 'hit' : ''}" style="width:${Math.min(100, tp)}%"></i></div>` : ''}
         ${list.map((p) => `<div class="tg-person"><div class="tg-ph"><span class="avatar">${initials(p.name)}</span><b>${esc(p.name)}</b><span class="hint">${p.tasksDone} / ${p.tasksTotal} tasks done${p.target ? ` · ${p.reached} of ${p.target} reached` : ''}</span></div>${p.tasks.length ? `<div class="tg-tasks">${p.tasks.map((t) => { const pc = Math.min(100, Math.round(t.reached / t.target * 100)); return `<div class="tgt-it ${pc >= 100 ? 'hit' : ''}"><div class="tgt-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · every day' : ''}${t.done ? ' · ✓ done' : ''}</span><span class="ttgt-bar"><i style="width:${pc}%"></i></span></div><span class="ttgt-of"><b>${t.reached}</b> / ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pc}%</span></div>`; }).join('')}</div>` : '<div class="hint tg-none">No target tasks this day.</div>'}</div>`).join('')}</section>`; }).join('') || '<div class="empty"><b>No tasks for this day.</b><br>Targets appear here once a team adds a task with a 🎯 target on a client.</div>';
   }
+  let tgPeople = null;
+  document.querySelectorAll('#tgView button').forEach((b) => b.onclick = async () => {
+    document.querySelectorAll('#tgView button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    const kpi = b.dataset.v === 'kpi'; $('tgDayView').hidden = kpi; $('tgKpiView').hidden = !kpi;
+    if (kpi) { if (!tgPeople) { try { tgPeople = (await api('/kpis/people')).people; } catch (e) { toast(e.message); return; } $('tgPerson').innerHTML = tgPeople.map((p) => `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.kind)}</option>`).join(''); $('tgPerson').value = me.id; $('tgPerson').onchange = () => kpiPanel('tgKpiPanel', $('tgPerson').value); } kpiPanel('tgKpiPanel', $('tgPerson').value); }
+  });
   if ($('tgPrev')) { $('tgPrev').onclick = () => { tgDay = addD(tgDay || me.today, -1); loadTargets(); }; $('tgNext').onclick = () => { tgDay = addD(tgDay || me.today, 1); loadTargets(); }; $('tgToday').onclick = () => { tgDay = me.today; loadTargets(); }; }
   async function loadAdAccounts() {
     if (!aaData) { $('aaList').innerHTML = '<div class="crow skel-card"></div>'.repeat(6); $('aaDetail').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }

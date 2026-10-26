@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=162">
+<link rel="stylesheet" href="/assets/app.css?v=163">
 <link rel="stylesheet" href="/assets/profit.css?v=1">
 </head>
 <body>
@@ -162,8 +162,9 @@
       <div><h1>Target</h1><div class="hint">Each team's tasks with a target, and how much they reached — day by day.</div></div>
       <div class="bh-r"><div class="pb-nav tg-nav"><button type="button" class="navbtn" id="tgPrev" aria-label="Previous day">‹</button><b id="tgDay"></b><button type="button" class="navbtn" id="tgNext" aria-label="Next day">›</button><button type="button" class="sm" id="tgToday">Today</button></div></div>
     </div>
-    <div class="bkpis" id="tgKpis"></div>
-    <div id="tgTeams"></div>
+    <div class="seg tg-view" id="tgView" role="group" aria-label="View"><button type="button" data-v="day" aria-pressed="true">Daily targets</button><button type="button" data-v="kpi" aria-pressed="false">Month KPIs</button></div>
+    <div id="tgDayView"><div class="bkpis" id="tgKpis"></div><div id="tgTeams"></div></div>
+    <div id="tgKpiView" hidden><div class="kpi-who"><label>Person <select id="tgPerson" aria-label="Person"></select></label></div><div id="tgKpiPanel"></div></div>
   </section>
 
   <!-- DASHBOARD -->
@@ -193,6 +194,7 @@
     </div>
     <div class="dgrid">
       <div class="dmain">
+    <div class="panel kpi-mine" id="kpiMine"></div>
     <div class="panel tgt-mine" id="tgMine" hidden><div class="top"><h2>🎯 Target today <span class="countpill" id="tgMineSum"></span></h2><span class="hint" id="tgMineHint">Type what you reached on each task</span></div><div class="tgt-bar"><i id="tgMineBar"></i></div><div class="tgt-list" id="tgMineList"></div></div>
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
@@ -649,6 +651,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=1"></script>
-<script src="/assets/app.js?v=162"></script>
+<script src="/assets/app.js?v=163"></script>
 </body>
 </html>

@@ -1383,6 +1383,34 @@ api.post('/ai/client/:id', wrap(async (req, res) => {
 const AI = () => require('./src/ai');
 const ownClient = async (req) => (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
 // Open tasks and today's ticks for every client (for the badges in the Clients list).
+// Monthly KPIs (per person or media buyer). person = a user id, or mb:<media buyer id>.
+const KPI = () => require('./src/kpi');
+const kpiPerson = async (req, raw) => {
+  const p = String(raw || req.user.fb_id);
+  if (p.startsWith('mb:')) { const b = await require('./src/buyers').get(p.slice(3)); return b ? { id: p, name: b.name, buyer: true, canEdit: true } : null; }
+  if (p === req.user.fb_id) return { id: p, name: req.user.name, buyer: false, canEdit: true };
+  if (!(await canSeeAdmin(req.user.fb_id))) return null;
+  const u = await db.getUser(p); return u ? { id: p, name: u.name, buyer: false, canEdit: true } : null;
+};
+api.get('/kpis', wrap(async (req, res) => {
+  const who = await kpiPerson(req, req.query.person); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const month = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : sync.todayIn().slice(0, 7);
+  const K = KPI(), kpis = await K.results(who.buyer ? who.id.slice(3) : who.id, month, who.buyer), ms = await K.months(who.buyer ? who.id.slice(3) : who.id);
+  const prev = ms.filter((m) => m < month).pop() || '';
+  res.json({ person: who, month, kpis, months: ms, prev, today: sync.todayIn() });
+}));
+api.put('/kpis', wrap(async (req, res) => {
+  const who = await kpiPerson(req, (req.body || {}).person); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const month = /^\d{4}-\d{2}$/.test((req.body || {}).month) ? req.body.month : sync.todayIn().slice(0, 7);
+  await KPI().putList(who.buyer ? who.id.slice(3) : who.id, month, (req.body || {}).kpis);
+  res.json({ ok: true });
+}));
+// People whose KPIs an admin can open: every user and every media buyer.
+api.get('/kpis/people', adminOnly, wrap(async (req, res) => {
+  const users = (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name, kind: 'PM' }));
+  const buyers = (await require('./src/buyers').all()).map((b) => ({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer' }));
+  res.json({ people: [...users, ...buyers] });
+}));
 // My target tasks for a day: every task of mine with a target, with what I reached.
 api.get('/targets/mine', wrap(async (req, res) => {
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn(), out = [];
@@ -1432,7 +1460,7 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   const B = require('./src/buyers'), buyer = (req.body || {}).to ? await B.get(req.body.to) : null;
   if ((req.body || {}).to && !buyer) return res.status(400).json({ error: 'That media buyer was removed.' });
   const tg = Math.min(1e6, Math.max(0, Number((req.body || {}).target) || 0));
-  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}), ...(tg ? { target: tg, unit: String((req.body || {}).unit || '').trim().slice(0, 20), hit: {} } : {}) };
+  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}), ...(tg ? { target: tg, unit: String((req.body || {}).unit || '').trim().slice(0, 20), hit: {} } : {}), ...(/^[a-f0-9]{8}$/.test(String((req.body || {}).kpi || '')) ? { kpi: req.body.kpi } : {}) };
   let warn = '';
   if (buyer) {
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
@@ -1459,6 +1487,7 @@ api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if ((req.body || {}).repeat != null) { if (req.body.repeat) t.repeat = true; else delete t.repeat; }
   if ((req.body || {}).target != null) { const tg = Math.min(1e6, Math.max(0, Number(req.body.target) || 0)); if (tg) { t.target = tg; t.hit = t.hit || {}; } else { delete t.target; delete t.unit; delete t.hit; } }
   if (typeof (req.body || {}).unit === 'string' && t.target) t.unit = req.body.unit.trim().slice(0, 20);
+  if ((req.body || {}).kpi !== undefined) { if (/^[a-f0-9]{8}$/.test(String(req.body.kpi || ''))) t.kpi = req.body.kpi; else delete t.kpi; }
   if ((req.body || {}).reached != null && t.target) { t.hit = t.hit || {}; const k = t.repeat ? sync.todayIn() : t.day; t.hit[k] = Math.min(1e7, Math.max(0, Number(req.body.reached) || 0)); }
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
 }));

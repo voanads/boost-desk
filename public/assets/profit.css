@@ -41,7 +41,7 @@
 #tab-profit .pf-strip .meter{height:4px;border-radius:2px;background:var(--bg-2);overflow:hidden}
 #tab-profit .pf-strip .meter i{display:block;height:100%;border-radius:2px}
 #tab-profit .pf-strip .hl{position:relative;overflow:hidden;background:var(--grad);border:none;color:var(--on-brand);box-shadow:var(--glow)}
-#tab-profit .pf-strip .hl::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 2px,transparent 2px 12px);pointer-events:none}
+#tab-profit .pf-strip .hl::after{display:none}
 #tab-profit .pf-strip .hl .k,#tab-profit .pf-strip .hl .sub{color:rgba(255,255,255,.85)}
 #tab-profit .pf-strip .hl .ic{background:rgba(255,255,255,.2);color:#fff}
 #tab-profit .pf-strip button.hl{cursor:pointer;padding:14px 16px}

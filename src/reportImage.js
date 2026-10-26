@@ -134,7 +134,7 @@ async function render({ client, ads, reach }, from, to) {
   const title = await fit(client.name, 620, 22, 600);
   let y = headH;
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#5B45F0"/></linearGradient>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3B82F6"/><stop offset="1" stop-color="#2563EB"/></linearGradient>
   ${shown.map((_, i) => `<clipPath id="c${i}"><rect x="${pad + 16}" y="${headH + colH + i * rowH + 10}" width="44" height="44" rx="8"/></clipPath>`).join('')}</defs>
   <rect width="${W}" height="${H}" fill="#f0f2f5"/>
   <rect x="${pad / 2}" y="${pad / 2}" width="${W - pad}" height="${H - pad}" rx="18" fill="#ffffff"/>
@@ -142,7 +142,7 @@ async function render({ client, ads, reach }, from, to) {
   ${await txt(pad + 26, pad + 36, 'A', { size: 22, weight: 600, fill: '#fff', anchor: 'middle' })}
   ${await txt(pad + 62, pad + 26, title, { size: 22, weight: 600 })}
   ${await txt(pad + 62, pad + 50, `Ads · ${periodTitle(from, to)}`, { size: 15, fill: '#65676b' })}
-  ${await txt(W - pad - 16, pad + 26, 'Ads Box', { size: 16, weight: 600, fill: '#5B45F0', anchor: 'end' })}
+  ${await txt(W - pad - 16, pad + 26, 'Ads Box', { size: 16, weight: 600, fill: '#2563EB', anchor: 'end' })}
   ${await txt(W - pad - 16, pad + 48, `${ads.length} ad${ads.length === 1 ? '' : 's'}`, { size: 14, fill: '#65676b', anchor: 'end' })}
   <rect x="${pad}" y="${y}" width="${W - 2 * pad}" height="${colH}" fill="#f5f6f7"/>
   <line x1="${pad}" y1="${y + colH}" x2="${W - pad}" y2="${y + colH}" stroke="#dadde1"/>
@@ -170,7 +170,7 @@ async function render({ client, ads, reach }, from, to) {
   svg += await txt(pad + 16, y + 48, tot.res ? plural(tot.res, tot.type || 'result') : '', { size: 13, fill: '#65676b' });
   svg += await txt(cols[1].x, y + 38, tot.res ? int(tot.res) : '—', { weight: 600, anchor: 'end' });
   svg += await txt(cols[2].x, y + 38, tot.res ? money(tot.spend / tot.res) : '—', { weight: 600, anchor: 'end' });
-  svg += await txt(cols[3].x, y + 38, money(tot.spend), { weight: 600, fill: '#5B45F0', anchor: 'end', size: 18 });
+  svg += await txt(cols[3].x, y + 38, money(tot.spend), { weight: 600, fill: '#2563EB', anchor: 'end', size: 18 });
   svg += await txt(cols[4].x, y + 38, int(tot.imp), { weight: 600, anchor: 'end' });
   svg += await txt(cols[5].x, y + 38, reach ? int(reach) : '—', { weight: 600, anchor: 'end' });
   svg += await txt(cols[6].x, y + 38, tot.msg ? int(tot.msg) : '—', { weight: 600, anchor: 'end' });

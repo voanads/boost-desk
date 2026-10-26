@@ -277,10 +277,11 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'adaccts'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
+    if (['admin', 'main', 'board', 'adaccts', 'profits'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
+    if (name === 'profits' && !(me && me.profitRole === 'admin')) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'profit', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'profits'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'profit', 'profits', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadTodo(); }
@@ -292,6 +293,7 @@
     if (name === 'main') loadMain();
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
+    if (name === 'profits') loadProfits();
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -1742,6 +1744,67 @@
 
   // ---------- Ad accounts (admins): every ad account of every team, like the Clients Board ----------
   let aaData = null, aaF = 'all', aaSortK = 'today', aaTeam = '', aaSel = null, aaPicked = false;
+  // ---------- Profit overview (admin): every team's Profit book side by side ----------
+  let poData = null, poMonth = '', poRangeN = 12, poOpen = {};
+  const PO_COL = ['#5B45F0', '#12A36B', '#F59E0B', '#E5484D', '#0EA5E9', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#64748B'];
+  const poMon = (ym) => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }); };
+  const poMonShort = (ym) => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' }) + (m === 1 ? ' ' + String(y).slice(2) : ''); };
+  async function loadProfits(force) {
+    const box = $('poTable'); if (!poData || force) box.innerHTML = '<div class="empty">Loading…</div>';
+    try { poData = await api(`/admin/profit-overview?months=${poRangeN}`); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    if (!poMonth || !poData.months.includes(poMonth)) poMonth = poData.months[poData.months.length - 1] || '';
+    renderProfits();
+  }
+  document.querySelectorAll('#poRange button').forEach((b) => b.onclick = () => { poRangeN = Number(b.dataset.n); document.querySelectorAll('#poRange button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); loadProfits(true); });
+  if ($('poRefresh')) $('poRefresh').onclick = () => loadProfits(true);
+  function renderProfits() {
+    const d = poData, books = d.books, months = d.months, m = poMonth;
+    if (!months.length) { $('poMonths').innerHTML = ''; $('poKpis').innerHTML = ''; $('poChart').innerHTML = ''; $('poLegend').innerHTML = ''; $('poPending').innerHTML = ''; $('poTable').innerHTML = '<div class="empty"><b>No Profit months yet.</b><br>Numbers appear here once people save months in their Profit tab.</div>'; return; }
+    $('poMonths').innerHTML = months.slice().reverse().map((x) => `<button type="button" data-pom="${x}" aria-pressed="${x === m}">${esc(poMon(x))}</button>`).join('');
+    $('poMonths').querySelectorAll('[data-pom]').forEach((b) => b.onclick = () => { poMonth = b.dataset.pom; renderProfits(); });
+    const inM = books.map((b) => ({ b, c: b.months[m] })).filter((x) => x.c), subm = inM.filter((x) => x.c.submitted), open = inM.filter((x) => !x.c.submitted);
+    const noMonth = books.filter((b) => !b.months[m]);
+    const sum = (k) => inM.reduce((t, x) => t + (x.c[k] || 0), 0), company = inM.reduce((t, x) => t + (x.c.roles.company || 0), 0), ppl = inM.reduce((t, x) => t + Object.entries(x.c.people).filter(([n]) => n !== 'Company').reduce((s, [, v]) => s + v, 0), 0);
+    $('poKpis').innerHTML = `
+      <div class="bk bk-hero"><span class="lbl">Profit to split · ${esc(poMon(m))}</span><b class="num">${money(sum('split'))}</b><span class="sub">${inM.length} book${inM.length === 1 ? '' : 's'} · deals' profit ${money(sum('profit'))}</span></div>
+      <div class="bk ${open.length ? 'warn' : ''}"><span class="lbl">Submitted</span><b class="num">${subm.length} / ${inM.length + noMonth.length}</b><span class="sub">${open.length ? open.length + ' still open' : noMonth.length ? noMonth.length + ' with no month yet' : 'everyone is in'}</span></div>
+      <div class="bk"><span class="lbl">Company share</span><b class="num">${money(company)}</b><span class="sub">${sum('split') ? Math.round(company / sum('profit') * 100) || 0 : 0}% of deals' profit</span></div>
+      <div class="bk"><span class="lbl">To people</span><b class="num">${money(ppl)}</b><span class="sub">${sum('deals')} deal${sum('deals') === 1 ? '' : 's'} · carry over ${money(sum('carry'))}</span></div>`;
+    // stacked bars: profit to split per team per month
+    const withData = books.filter((b) => Object.keys(b.months).length), col = Object.fromEntries(withData.map((b, i) => [b.id, PO_COL[i % PO_COL.length]]));
+    const tot = months.map((x) => withData.reduce((t, b) => t + Math.max(0, (b.months[x] || {}).split || 0), 0)), max = Math.max(1, ...tot);
+    const W = Math.max(320, $('poChart').clientWidth || 600), H = 220, L = 44, B = 26, bw = (W - L - 8) / months.length, gap = Math.min(10, bw * .25);
+    const ticks = [0, .25, .5, .75, 1].map((f) => f * max);
+    const fmtK = (v) => v >= 1000 ? '$' + (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : '$' + Math.round(v);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Profit to split per month, stacked by team">`;
+    for (const t of ticks) { const y = H - B - (t / max) * (H - B - 12); svg += `<line x1="${L}" x2="${W - 4}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${fmtK(t)}</text>`; }
+    months.forEach((x, i) => {
+      let y0 = H - B; const x0 = L + i * bw + gap / 2, w = bw - gap;
+      for (const b of withData) { const v = Math.max(0, (b.months[x] || {}).split || 0); if (!v) continue; const h = (v / max) * (H - B - 12); y0 -= h; svg += `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" fill="${col[b.id]}" opacity="${x === m ? 1 : .55}" rx="2"><title>${esc(b.name)} · ${esc(poMon(x))}: ${money(v)}</title></rect>`; }
+      svg += `<rect x="${L + i * bw}" y="0" width="${bw}" height="${H - B}" fill="transparent" data-pobar="${x}" style="cursor:pointer"/>`;
+      svg += `<text x="${x0 + w / 2}" y="${H - 8}" text-anchor="middle" font-size="10" font-weight="${x === m ? 700 : 500}" fill="${x === m ? 'var(--brand)' : 'var(--muted)'}">${esc(poMonShort(x))}</text>`;
+      if (tot[i]) svg += `<text x="${x0 + w / 2}" y="${H - B - (tot[i] / max) * (H - B - 12) - 4}" text-anchor="middle" font-size="10" fill="var(--ink)">${fmtK(tot[i])}</text>`;
+    });
+    svg += '</svg>';
+    $('poChart').innerHTML = svg;
+    $('poChart').querySelectorAll('[data-pobar]').forEach((r) => r.onclick = () => { poMonth = r.dataset.pobar; renderProfits(); });
+    $('poLegend').innerHTML = withData.map((b) => `<span><i style="background:${col[b.id]}"></i>${esc(b.name)}</span>`).join('');
+    // pending
+    $('poPendTitle').textContent = open.length || noMonth.length ? `Not submitted yet · ${open.length + noMonth.length}` : 'Everyone has submitted';
+    $('poPending').innerHTML = (open.length || noMonth.length) ? `<div class="po-pend">${open.map((x) => `<div class="po-pr"><span class="avatar">${initials(x.b.name)}</span><div><b>${esc(x.b.name)}</b><span class="hint">Saved, not submitted · last edit ${esc(x.c.by || '')} ${esc(ago(x.c.at))} · ${money(x.c.split)} so far</span></div></div>`).join('')}${noMonth.map((b) => `<div class="po-pr off"><span class="avatar">${initials(b.name)}</span><div><b>${esc(b.name)}</b><span class="hint">No ${esc(poMon(m))} month yet</span></div></div>`).join('')}</div>` : '<div class="todo-done">🎉 Every book for this month is submitted.</div>';
+    // table
+    const rows = [...inM.sort((a, b) => (b.c.split || 0) - (a.c.split || 0)), ...noMonth.map((b) => ({ b, c: null }))];
+    $('poTableTitle').textContent = `Teams · ${poMon(m)}`;
+    $('poTable').innerHTML = `<table class="dtable po-t"><thead><tr><th>Team</th><th>Status</th><th class="r">Deals</th><th class="r">Deals' profit</th><th class="r">Profit to split</th><th class="r">Company</th><th class="r">To people</th><th class="r">Increase</th><th class="r">Carry over</th></tr></thead><tbody>${rows.map(({ b, c }) => {
+      const key = b.id + '|' + m, isOpen = !!poOpen[key];
+      if (!c) return `<tr class="off"><td><span class="po-team"><i style="background:${col[b.id] || 'var(--line)'}"></i>${esc(b.name)}</span></td><td><span class="chip meta">No month</span></td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="r">–</td><td class="r">–</td></tr>`;
+      const people = Object.entries(c.people).filter(([n]) => n !== 'Company').sort((a, b) => b[1] - a[1]), toPpl = people.reduce((s, [, v]) => s + v, 0);
+      const st = c.submitted ? `<span class="chip ok" title="Submitted by ${esc(c.submitted.by)}">✓ Submitted ${esc(nice(String(c.submitted.at).slice(0, 10)).replace(/ \d{4}$/, ''))}</span>` : '<span class="chip warn">Open</span>';
+      return `<tr class="po-row" data-pok="${esc(key)}" aria-expanded="${isOpen}"><td><span class="po-team"><i style="background:${col[b.id]}"></i>${esc(b.name)}${c.splitTyped ? '<small title="Profit to split was typed in">typed</small>' : ''}</span></td><td>${st}</td><td class="r num">${c.deals}</td><td class="r num">${money(c.profit)}</td><td class="r num"><b>${money(c.split)}</b></td><td class="r num">${money(c.roles.company)}</td><td class="r num">${money(toPpl)}</td><td class="r num">${money(c.increase)}</td><td class="r num ${c.carry < 0 ? 'bad' : ''}">${money(c.carry)}</td></tr>` +
+        (isOpen ? `<tr class="po-detail"><td colspan="9"><div class="po-d"><div><b>Each person's share</b>${people.length ? `<table class="po-sub"><tbody>${people.map(([n, v]) => `<tr><td>${esc(n)}</td><td class="r num">${money(v)}</td></tr>`).join('')}<tr><td>Company</td><td class="r num">${money(c.roles.company)}</td></tr></tbody></table>` : '<span class="hint">No deals this month.</span>'}</div><div><b>By role</b><table class="po-sub"><tbody>${d.roles.map((r) => `<tr><td>${esc(r[0].toUpperCase() + r.slice(1))}</td><td class="r num">${money(c.roles[r])}</td></tr>`).join('')}</tbody></table></div><div><b>By service</b><table class="po-sub"><tbody>${Object.entries(c.svc).sort((a, b) => b[1].total - a[1].total).map(([n, v]) => `<tr><td>${esc(n)} <span class="hint">×${v.count}</span></td><td class="r num">${money(v.total)}</td></tr>`).join('') || '<tr><td class="hint">—</td><td></td></tr>'}</tbody></table></div><div><b>Money</b><table class="po-sub"><tbody><tr><td>ABA</td><td class="r num">${money(c.aba)}</td></tr><tr><td>To receive</td><td class="r num">${money(c.toReceive)}</td></tr><tr><td>Boost deposits</td><td class="r num">${money(c.deposit)}</td></tr><tr><td>FB debt</td><td class="r num">${money(c.fbDebt)}</td></tr><tr><td>Increase</td><td class="r num">${money(c.increase)}</td></tr><tr><td>Carry over</td><td class="r num">${money(c.carry)}</td></tr></tbody></table></div></div></td></tr>` : '');
+    }).join('')}${inM.length ? `<tr class="total"><td>Total</td><td>${subm.length} of ${inM.length} submitted</td><td class="r num">${sum('deals')}</td><td class="r num">${money(sum('profit'))}</td><td class="r num"><b>${money(sum('split'))}</b></td><td class="r num">${money(company)}</td><td class="r num">${money(ppl)}</td><td class="r num">${money(sum('increase'))}</td><td class="r num">${money(sum('carry'))}</td></tr>` : ''}</tbody></table>`;
+    $('poTable').querySelectorAll('.po-row').forEach((r) => r.onclick = () => { poOpen[r.dataset.pok] = !poOpen[r.dataset.pok]; renderProfits(); });
+  }
   async function loadAdAccounts() {
     if (!aaData) { $('aaList').innerHTML = '<div class="crow skel-card"></div>'.repeat(6); $('aaDetail').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
     try { aaData = await api('/admin/ad-accounts'); } catch (e) { if (!aaData) $('aaDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; return; }
@@ -3335,7 +3398,7 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE) { // the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole) && !(b.dataset.tab === 'profits' && me.profitRole === 'admin'); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -3344,7 +3407,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'profit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts', 'profit', 'profits'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -3359,7 +3422,8 @@ Thank you for working with Ads Box!`,
       if (me.canAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (me.canAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { document.querySelector('nav.tabs [data-tab=profit]').hidden = false; $('navGrpAdmin').hidden = false; }
-      showTab(['main', 'board', 'adaccts', 'profit', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      if (me.canAdmin && me.profitRole === 'admin') document.querySelector('nav.tabs [data-tab=profits]').hidden = false;
+      showTab(['main', 'board', 'adaccts', 'profit', 'profits', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

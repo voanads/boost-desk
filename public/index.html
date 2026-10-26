@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=158">
+<link rel="stylesheet" href="/assets/app.css?v=159">
 <link rel="stylesheet" href="/assets/profit.css?v=1">
 </head>
 <body>
@@ -36,6 +36,7 @@
       <button role="tab" data-tab="main" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.8"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/></svg><span class="full">Main Dashboard</span><span class="short">Main</span></button>
       <button role="tab" data-tab="board" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="5" height="17" rx="1.6"/><rect x="9.5" y="3.5" width="5" height="11" rx="1.6"/><rect x="16" y="3.5" width="5" height="14" rx="1.6"/></svg><span class="full">Clients Board</span><span class="short">Board</span></button>
       <button role="tab" data-tab="adaccts" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">All ad accounts</span><span class="short">All ads</span><span class="navbadge" id="admAccN"></span></button>
+      <button role="tab" data-tab="profits" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M6 16V9M11 16V4M16 16v-6M21 16v-3"/></svg><span class="full">Profit overview</span><span class="short">Profits</span></button>
       <button role="tab" data-tab="profit" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/><path d="M15 6h4v4"/></svg><span class="full">Profit</span><span class="short">Profit</span></button>
       <span class="navgrp" id="navGrpManage" hidden>Manage</span>
       <button type="button" id="navMore" aria-haspopup="dialog" aria-label="More pages"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span class="short">More</span></button>
@@ -153,6 +154,21 @@
       </aside>
       <div class="cdetail" id="aaDetail"></div>
     </div>
+  </section>
+
+  <!-- PROFIT OVERVIEW (admin) -->
+  <section id="tab-profits" class="wrap" hidden>
+    <div class="bhead">
+      <div><h1>Profit overview</h1><div class="hint">Every team's Profit book side by side — who has submitted, the profit to split, and how it splits.</div></div>
+      <div class="bh-r"><div class="seg" id="poRange" role="group" aria-label="How far back"><button type="button" data-n="6" aria-pressed="false">6 months</button><button type="button" data-n="12" aria-pressed="true">12 months</button><button type="button" data-n="24" aria-pressed="false">24 months</button></div><button type="button" class="ghost sm" id="poRefresh">↻ Refresh</button></div>
+    </div>
+    <div class="chips po-months" id="poMonths" role="group" aria-label="Month"></div>
+    <div class="bkpis" id="poKpis"></div>
+    <div class="po-grid">
+      <section class="panel po-panel"><div class="thead"><h2>Profit to split by month</h2><span class="hint" id="poChartHint">Each colour is a team · tap a bar to pick that month</span></div><div class="po-chart" id="poChart"></div><div class="po-legend" id="poLegend"></div></section>
+      <section class="panel po-panel"><div class="thead"><h2 id="poPendTitle">Not submitted yet</h2><span class="hint">Books still open for the chosen month</span></div><div id="poPending"></div></section>
+    </div>
+    <section class="panel po-panel"><div class="thead"><h2 id="poTableTitle">Teams</h2><span class="hint">Tap a team to see each person's share</span></div><div class="tablewrap" id="poTable"></div></section>
   </section>
 
   <!-- DASHBOARD -->
@@ -637,6 +653,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=1"></script>
-<script src="/assets/app.js?v=158"></script>
+<script src="/assets/app.js?v=159"></script>
 </body>
 </html>

@@ -195,13 +195,13 @@ const lastSeenMem = new Map();
 // their own page — today's tasks, target, monthly KPI, clients and history. They can tick tasks and type
 // what they reached, the same as tapping ✅ Done in Telegram.
 const MB = () => require('./src/buyers');
-app.get('/mb/login', wrap(async (req, res) => {
+app.get(['/mediabuyer/login', '/mb/login'], wrap(async (req, res) => {
   const { b, e, s: sig } = req.query;
   if (!MB().checkLink(b, e, sig) || !(await MB().get(b))) return res.status(400).send('<meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>This link is old or wrong</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> to get a new one.</p>');
   req.session.mb = String(b); req.session.mbAt = Date.now();
-  res.redirect('/mb');
+  res.redirect('/mediabuyer');
 }));
-app.get(['/mb', '/mb/'], wrap(async (req, res) => {
+app.get(['/mediabuyer', '/mediabuyer/', '/mb', '/mb/'], wrap(async (req, res) => {
   const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
   if (!b) return res.status(401).send('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer dashboard</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>');
   res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'mb.html'));
@@ -304,10 +304,23 @@ app.use(wrap(async (req, res, next) => {
   next();
 }));
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Three websites, one app. The owner gives each person a role in Admin → Users and that decides their site:
+//   /admin           CEO / COO — everything (company view first)
+//   /projectmanager  Project Managers — their own clients, team and media buyers
+//   /mediabuyer      Media buyers — their tasks page, opened from the Telegram bot (no account)
+// The front door (/) sends each person to their site.
+app.get('/', wrap(async (req, res) => {
+  if (req.user.google) return res.redirect('/admin');
+  const r = await roleOf(req.user.fb_id);
+  res.redirect(r === 'pm' ? '/projectmanager' : '/admin');
+}));
+app.get(['/projectmanager', '/projectmanager/'], (req, res) => {
+  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="pm">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Project Manager</title>');
+  res.set('Cache-Control', 'no-cache').send(html);
+});
 // The admin website: the same app, showing only the Main Dashboard and Admin.
 app.get(['/admin', '/admin/'], wrap(async (req, res) => {
-  if (!req.user.google && !(await canSeeAdmin(req.user.fb_id))) { req.session = null; return adminLoginErr(res, `${req.user.name} is not an admin. Ask the app owner for access.`); }
+  if (!req.user.google && !(await canSeeAdmin(req.user.fb_id))) return res.redirect('/projectmanager'); // a PM's site is /projectmanager
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="admin">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Admin</title>');
   res.set('Cache-Control', 'no-cache').send(html);
 }));

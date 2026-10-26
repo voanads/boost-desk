@@ -132,3 +132,7 @@
 #tab-profit .pf-chip button:hover{background:var(--pf-bad-soft);color:var(--pf-red)}
 #tab-profit .pf-addp{display:flex;gap:6px;align-items:center}
 #tab-profit .pf-addp input{height:32px;width:200px;border-radius:var(--r-sm);padding:0 10px;background:var(--surface)}
+#tab-profit .pf-pct{position:relative;display:block}
+#tab-profit .pf-pct input{padding-right:24px!important}
+#tab-profit .pf-pct::after{content:"%";position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600;font-size:var(--fs-md);pointer-events:none}
+#tab-profit td.pf-sum{font-weight:800}

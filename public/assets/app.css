@@ -2744,3 +2744,9 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 .tm-rt{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25} .tm-rt .hint{font-size:var(--fs-xs)}
 .tm-mates{display:flex;flex-wrap:wrap;gap:6px}
 @media (max-width:560px){.tm-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* media buyer inside the PM's account */
+.asbuyer #syncBtn,.asbuyer .cd-setbtn,.asbuyer #cdSettings,.asbuyer #cDel,.asbuyer #cPause{display:none!important}
+nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-sm);padding:7px 12px;color:var(--muted);font-weight:600;font-size:var(--fs-xl);text-decoration:none;white-space:nowrap}
+@media (min-width:1100px){nav.tabs a.navlink{padding:9px 10px;font-size:var(--fs-xl);border-radius:var(--r-md);width:100%;box-sizing:border-box}nav.tabs a.navlink:hover{background:var(--bg-2);color:var(--ink)}}
+@media (max-width:760px){nav.tabs a.navlink{flex-direction:column;gap:3px;font-size:var(--fs-2xs);flex:1}nav.tabs a.navlink .full{display:none}nav.tabs a.navlink .short{display:inline}nav.tabs a.navlink .ic{width:22px;height:22px}}
+.asbuyer #kpiMine,.asbuyer #tgMine{display:none!important}

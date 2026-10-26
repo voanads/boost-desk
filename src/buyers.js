@@ -43,7 +43,7 @@ async function onTelegram(fresh, AI) {
     for (const s of fresh.starts) {
       const b = cur.find((x) => x.code === s.code); if (!b) continue;
       if (b.chat !== s.id) { b.chat = s.id; b.tgName = s.name; changed = true; }
-      telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.\n\nYour dashboard shows today's tasks, your target and KPI — send /dashboard any time to get the link again.`, s.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
+      telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.\n\nYour site shows your PM's clients, reports and invoices; My tasks shows today's tasks, your target and KPI — send /dashboard any time to get the link again.`, s.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
     }
     if (changed) await save(cur);
   }

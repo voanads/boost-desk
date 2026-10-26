@@ -201,7 +201,14 @@ app.get(['/mediabuyer/login', '/mb/login'], wrap(async (req, res) => {
   req.session.mb = String(b); req.session.mbAt = Date.now();
   res.redirect('/mediabuyer');
 }));
-app.get(['/mediabuyer', '/mediabuyer/', '/mb', '/mb/'], wrap(async (req, res) => {
+const MB_LOGIN_PAGE = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer site</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>';
+app.get(['/mediabuyer', '/mediabuyer/'], wrap(async (req, res) => {
+  const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
+  if (!b) return res.status(401).send(MB_LOGIN_PAGE);
+  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="mb">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Media buyer</title>');
+  res.set('Cache-Control', 'no-cache').send(html);
+}));
+app.get(['/mediabuyer/tasks', '/mb', '/mb/'], wrap(async (req, res) => {
   const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
   if (!b) return res.status(401).send('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer dashboard</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>');
   res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'mb.html'));
@@ -288,6 +295,23 @@ app.use(wrap(async (req, res, next) => {
     else if (p.linkTo && (user = await db.getUser(p.linkTo))) { req.adminSite = true; }
     else { user = { fb_id: 'g:' + p.email, name: req.session.gName || p.name || p.email, token_expires: null, google: true }; req.adminSite = true; }
   }
+  // A media buyer (signed in from the Telegram link) works inside their PM's account, with limits:
+  // no deleting clients, no client settings, no Sync from Meta, nothing in Admin / Profit / KPIs.
+  if (!user && req.session.mb) {
+    const b = await MB().get(req.session.mb);
+    const pmId = b && (b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy]);
+    const pm = pmId && (await db.getUser(pmId));
+    if (b && pm) {
+      if (req.method !== 'GET' && req.path.startsWith('/api/') && (
+        /^\/api\/(sync|sync-recent|sync-range|admin|auto-sync|profit|media-buyers|kpis|accounts|main|company|team|targets)/.test(req.path)
+        || (req.method === 'DELETE' && /^\/api\/clients\/\d+$/.test(req.path))
+        || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path))
+      )) return res.status(403).json({ error: 'Media buyers can\'t do this — ask your PM.' });
+      if (req.path.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(req.path)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
+      if (!req.path.startsWith('/api/') && !req.path.startsWith('/mediabuyer') && !req.path.startsWith('/mb')) return res.redirect('/mediabuyer');
+      user = { ...pm, buyer: { id: b.id, name: b.name } };
+    }
+  }
   if (!user) {
     if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please log in again.', needsLogin: true });
     return res.redirect(req.path.startsWith('/admin') ? '/admin/login' : '/login');
@@ -332,8 +356,8 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
-    canAdmin: await canSeeAdmin(req.user.fb_id), role: await roleOf(req.user.fb_id),
-    profitRole: await profit.roleOf(req.user.fb_id),
+    canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
+    profitRole: req.user.buyer ? null : await profit.roleOf(req.user.fb_id),
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE,
     today: sync.todayIn(), tz: cfg.tz,

@@ -2763,3 +2763,5 @@ nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:
 .mbm-reach{display:flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap}
 .mbm-reach input{width:70px;min-height:38px;border:1px solid var(--line);border-radius:var(--r-md);padding:0 8px;font:inherit;font-weight:700;text-align:right}
 .kpi-chip{font-weight:700;color:var(--ok);background:var(--ok-soft);border-radius:var(--r-pill);padding:0 8px}
+/* /admin on a phone: Main · Board · Target in the bottom bar, the rest under More */
+@media (max-width:760px){.adminsite nav.tabs button[data-tab=main]:not([hidden]),.adminsite nav.tabs button[data-tab=board]:not([hidden]),.adminsite nav.tabs button[data-tab=target]:not([hidden]){display:inline-flex}}

@@ -11,7 +11,10 @@ window.BDProfit = (() => {
   let root = null, app = null, statusEl = null, booted = false, pollT = null;
   let months = {}, current = null, draft = null, dirty = false, saveTimer = null, rulesTimer = null, confirmDel = false;
   let page = 'accounts', role = 'viewer', canEdit = false, isAdmin = false, me = null;
-  let services = JSON.parse(JSON.stringify(DEFAULT_SERVICES)), people = [];
+  let services = JSON.parse(JSON.stringify(DEFAULT_SERVICES)), accessPeople = [];
+  // Names in the Developer / Doer / Spender / Supporter dropdowns (settings/main.team). Admins edit the list.
+  const DEFAULT_TEAM = ['Dorn Sovandara', 'Hor Vannak', 'Phat Sopheak', 'Eng Khunngoun', 'Nang Sokhy', 'Nuon Ni', 'Van Chivarn', 'Eng Khunmeng', 'Run Vannak', 'Choeun Phanith', 'Van Socheat', 'Chamroun Chetara', 'Chea Lykheang', 'En Chomrey', 'Chhon Bunna', 'Another'];
+  let team = DEFAULT_TEAM.slice();
 
   const $ = (s) => root.querySelector(s);
   const byId = (id) => document.getElementById(id);
@@ -74,6 +77,8 @@ window.BDProfit = (() => {
   const fid = (path) => 'pf-' + path.replace(/\./g, '-');
   const inp = (path, val, type = 'text', extra = '') => `<input id="${fid(path)}" data-path="${path}" data-type="${type === 'number' ? 'num' : 'text'}" type="${type}" ${type === 'number' ? 'step="any" inputmode="decimal" class="n"' : ''} value="${esc(val ?? '')}" ${extra}>`;
   const sel = (path, val, opts, label, cls = '') => { const o = opts.includes(val) || !val ? opts : [val].concat(opts); return `<select id="${fid(path)}" data-path="${path}" data-type="text" aria-label="${label}" class="${cls}">${o.map((x) => `<option${x === val ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`; };
+  // A person dropdown: the team list, plus the saved name if it isn't on the list any more.
+  const personSel = (path, val, label) => { const v = String(val || '').trim(), opts = v && !team.includes(v) ? [v, ...team] : team; return `<select id="${fid(path)}" data-path="${path}" data-type="text" aria-label="${label}"><option value=""${v ? '' : ' selected'}>—</option>${opts.map((x) => `<option${x === v ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`; };
   const rm = (path, label, disabled, title) => `<td class="x"><button type="button" data-remove="${path}" aria-label="Remove ${esc(label)}"${disabled ? ` disabled title="${esc(title)}"` : ' title="Remove row"'}>✕</button></td>`;
   const avatar = (name) => { const s = String(name || '?').trim(); let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)) % 360; const w = s.split(/\s+/).filter(Boolean); const ini = (w.length > 1 ? w[0][0] + w[1][0] : s.slice(0, 2)).toUpperCase(); return `<span class="av" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`; };
   const stCls = (s) => (s === 'Active' ? 'st-Active' : s === 'Disabled' ? 'st-Disabled' : 'st-Need');
@@ -153,10 +158,6 @@ window.BDProfit = (() => {
     setText('pfCliTitle', `${c.recvCount} to receive · ${c.depCount} deposit`);
   }
 
-  function peopleList() {
-    const set = new Set(); const add = (m) => (m.transactions || []).forEach((t) => PEOPLE_ROLES.forEach((r) => { if ((t[r] || '').trim()) set.add(t[r].trim()); }));
-    Object.values(months).forEach(add); if (draft) add(draft); return [...set].sort();
-  }
   function renderSplit() {
     const d = draft, names = services.map((s) => s.name);
     app.innerHTML = `
@@ -164,9 +165,8 @@ window.BDProfit = (() => {
     <section class="pf-strip" id="pfStripS" aria-label="Split by person"></section>
     <section class="pf-sheet">
       <div class="pf-title t-blue"><span>Transactions</span><span class="t2" id="pfTTitle"></span></div>
-      <datalist id="pfPeopleOpts">${peopleList().map((p) => `<option value="${esc(p)}"></option>`).join('')}</datalist>
       <div class="pf-scroll"><table style="min-width:1380px"><thead><tr><th>No</th><th>Service</th><th class="n">Amount</th><th class="n">Profit</th><th>Ad account</th>${PEOPLE_ROLES.map((r) => `<th>${ROLE_LABEL[r]}</th>`).join('')}${ROLES.map((r) => `<th class="n shade">${ROLE_LABEL[r]}</th>`).join('')}<th></th></tr></thead><tbody>
-      ${d.transactions.map((t, i) => `<tr><td class="idx">${i + 1}</td><td style="width:130px">${sel(`transactions.${i}.service`, t.service || names[0] || '', names, 'Service')}</td><td style="width:95px">${inp(`transactions.${i}.amount`, t.amount, 'number', 'aria-label="Amount"')}</td><td style="width:95px">${inp(`transactions.${i}.profit`, t.profit, 'number', 'aria-label="Profit"')}</td><td style="width:140px">${inp(`transactions.${i}.account`, t.account, 'text', 'aria-label="Ad account" placeholder="Account"')}</td>${PEOPLE_ROLES.map((r) => `<td style="width:120px">${inp(`transactions.${i}.${r}`, t[r], 'text', `list="pfPeopleOpts" aria-label="${ROLE_LABEL[r]}" placeholder="—"`)}</td>`).join('')}${ROLES.map((r, j) => `<td class="v n${r === 'company' ? '' : ' mut'}" id="pf-ts-${i}-${j}" style="width:90px"></td>`).join('')}${rm(`transactions.${i}`, 'transaction ' + (i + 1))}</tr>`).join('')}
+      ${d.transactions.map((t, i) => `<tr><td class="idx">${i + 1}</td><td style="width:130px">${sel(`transactions.${i}.service`, t.service || names[0] || '', names, 'Service')}</td><td style="width:95px">${inp(`transactions.${i}.amount`, t.amount, 'number', 'aria-label="Amount"')}</td><td style="width:95px">${inp(`transactions.${i}.profit`, t.profit, 'number', 'aria-label="Profit"')}</td><td style="width:140px">${inp(`transactions.${i}.account`, t.account, 'text', 'aria-label="Ad account" placeholder="Account"')}</td>${PEOPLE_ROLES.map((r) => `<td style="width:140px">${personSel(`transactions.${i}.${r}`, t[r], ROLE_LABEL[r])}</td>`).join('')}${ROLES.map((r, j) => `<td class="v n${r === 'company' ? '' : ' mut'}" id="pf-ts-${i}-${j}" style="width:90px"></td>`).join('')}${rm(`transactions.${i}`, 'transaction ' + (i + 1))}</tr>`).join('')}
       <tr class="total"><td class="idx"></td><td>Total</td><td class="n" id="pfTAmt"></td><td class="n" id="pfTPro"></td><td colspan="5"></td>${ROLES.map((r, j) => `<td class="n" id="pf-tt-${j}"></td>`).join('')}<td></td></tr>
       </tbody></table></div>
       <div class="pf-foot"><button class="ghost sm pf-link" type="button" data-add="transactions">+ Add transaction</button><span>Shares come from the split rules below</span></div>
@@ -181,6 +181,11 @@ window.BDProfit = (() => {
       ${services.map((s, i) => { const used = usage(s.name); return `<tr><td class="idx">${i + 1}</td><td><input id="pf-rn-${i}" type="text" data-rule-name="${i}" value="${esc(s.name)}" aria-label="Service type name" style="font-weight:600"></td>${s.pct.map((x, j) => `<td style="width:100px"><input id="pf-rp-${i}-${j}" class="n" type="number" step="any" inputmode="decimal" data-rule-pct="${i}|${j}" value="${num(x)}" aria-label="${esc(s.name)} ${ROLE_LABEL[ROLES[j]]} percent"></td>`).join('')}<td class="v n" id="pf-rt-${i}" style="width:70px"></td><td class="v" style="width:90px"><span class="pf-badge${used ? ' on' : ''}">${used} ${used === 1 ? 'deal' : 'deals'}</span></td>${rm('services.' + i, s.name, used > 0, 'Used in ' + used + ' deals. Change those deals first.')}</tr>`; }).join('')}
       </tbody></table></div>
       <div class="pf-foot"><button class="ghost sm pf-link" type="button" id="pfAddService">+ Add service type</button><span>${isAdmin ? 'Click a name or % to edit · each row should total 100%' : 'Ask a Profit admin to change these'}</span></div>
+    </section>
+    <section class="pf-sheet">
+      <div class="pf-title t-green"><span>People · dropdown names</span><span class="t2">${team.length} names · used for Developer, Doer, Spender and Supporter</span></div>
+      <div class="pf-chips">${team.map((n, i) => `<span class="pf-chip">${avatar(n)}<span>${esc(n)}</span><button type="button" data-remove="team.${i}" aria-label="Remove ${esc(n)} from the list" title="Remove from the list (deals keep the name)">✕</button></span>`).join('')}</div>
+      <div class="pf-foot" id="pfPeopleAdd"><span class="pf-addp"><input type="text" id="pfNewPerson" placeholder="Add a name" aria-label="New name for the dropdown" maxlength="60"><button class="sm" type="button" id="pfAddPerson">+ Add</button></span><span>${isAdmin ? 'Names show in this order in the dropdowns' : ''}</span></div>
     </section>`;
     updateSplit();
   }
@@ -211,14 +216,14 @@ window.BDProfit = (() => {
     app.innerHTML = `<div class="pf-top"><div><span class="pf-eyebrow">Profit</span><h2>Who can use Profit</h2><span class="pf-lastedit">Everyone logs in with Boost Desk. Pick what each person can do here.</span></div></div>
       <div class="pf-grid2"><section class="pf-sheet pf-main"><div class="pf-title t-blue"><span>People</span><span class="t2" id="pfAccCount"></span></div><div class="pf-scroll" id="pfAccessTable"><p class="hint" style="padding:0 16px 16px">Loading…</p></div></section>
       <div class="pf-side"><section class="pf-sheet"><div class="pf-title t-purple"><span>What each role can do</span></div><div class="pf-roles">${['admin', 'editor', 'viewer'].map((r) => `<div><span class="pf-roleb ${r}">${r}</span><span>${ACCESS_INFO[r]}</span></div>`).join('')}<div><span class="pf-roleb">no access</span><span>Doesn't see the Profit tab</span></div></div></section></div></div>`;
-    try { people = (await api('/access')).people || []; drawAccess(); }
+    try { accessPeople = (await api('/access')).people || []; drawAccess(); }
     catch (e) { const t = byId('pfAccessTable'); if (t) t.innerHTML = `<p class="bad" style="padding:0 16px 16px">${esc(e.message)}</p>`; }
   }
   function drawAccess() {
     const t = byId('pfAccessTable'); if (!t) return;
-    setText('pfAccCount', `${people.filter((p) => p.role).length} with access`);
+    setText('pfAccCount', `${accessPeople.filter((p) => p.role).length} with access`);
     t.innerHTML = `<table style="min-width:480px"><thead><tr><th>Name</th><th>Login</th><th style="width:160px">Profit access</th></tr></thead><tbody>
-      ${people.map((p) => `<tr><td class="v"><span class="who">${avatar(p.name)}${esc(p.name)}</span></td><td class="v mut">${esc(p.kind)}${p.email ? ' · ' + esc(p.email) : ''}</td>
+      ${accessPeople.map((p) => `<tr><td class="v"><span class="who">${avatar(p.name)}${esc(p.name)}</span></td><td class="v mut">${esc(p.kind)}${p.email ? ' · ' + esc(p.email) : ''}</td>
         <td>${p.owner ? '<span class="pf-roleb admin" style="margin-left:8px">admin · app owner</span>' : `<select data-access="${esc(p.id)}" aria-label="Profit access for ${esc(p.name)}">${[['', 'No access'], ['viewer', 'Viewer'], ['editor', 'Editor'], ['admin', 'Admin']].map(([v, l]) => `<option value="${v}"${p.role === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td></tr>`).join('')}
     </tbody></table>`;
   }
@@ -231,7 +236,7 @@ window.BDProfit = (() => {
     if (!current) { app.innerHTML = emptyHTML(); return; }
     page === 'split' ? renderSplit() : renderAccounts();
     if (!canEdit) { app.querySelectorAll('[data-path],[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll('[data-add],[data-remove],#pfAddService,#pfFillMeta').forEach((e) => { e.hidden = true; }); }
-    if (!isAdmin && page === 'split') { app.querySelectorAll('[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("#pfAddService,[data-remove^='services.']").forEach((e) => { e.hidden = true; }); }
+    if (!isAdmin && page === 'split') { app.querySelectorAll('[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("#pfAddService,[data-remove^='services.'],[data-remove^='team.'],#pfPeopleAdd").forEach((e) => { e.hidden = true; }); }
   }
   const update = () => (page === 'split' ? updateSplit() : page === 'accounts' ? updateAccounts() : null);
   function goPage(p) { page = p; confirmDel = false; render(); }
@@ -254,7 +259,7 @@ window.BDProfit = (() => {
   function scheduleRules() {
     if (!isAdmin) return;
     setStatus('Saving…'); clearTimeout(rulesTimer);
-    rulesTimer = setTimeout(async () => { try { await api('/settings/main', 'PUT', { services: clone(services) }); setStatus('Saved'); } catch (e) { setStatus("Couldn't save rules: " + e.message); } }, 700);
+    rulesTimer = setTimeout(async () => { try { await api('/settings/main', 'PUT', { services: clone(services), team: team.slice() }); setStatus('Saved'); } catch (e) { setStatus("Couldn't save rules: " + e.message); } }, 700);
   }
   async function renameService(i, input) {
     const oldName = services[i].name, nn = input.value.trim(), msg = byId('pfRuleMsg');
@@ -305,13 +310,14 @@ window.BDProfit = (() => {
       if (t.tagName === 'SELECT' && t.dataset.path) { setPath(draft, t.dataset.path, t.value); update(); scheduleSave(); return; }
       if (t.dataset.ruleName !== undefined) { renameService(+t.dataset.ruleName, t); return; }
       if (t.dataset.access !== undefined) {
-        try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { role: t.value }); const p = people.find((x) => x.id === t.dataset.access); if (p) p.role = t.value; setStatus('Access saved'); setText('pfAccCount', `${people.filter((p) => p.role).length} with access`); }
+        try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { role: t.value }); const p = accessPeople.find((x) => x.id === t.dataset.access); if (p) p.role = t.value; setStatus('Access saved'); setText('pfAccCount', `${accessPeople.filter((p) => p.role).length} with access`); }
         catch (err) { setStatus(err.message); }
       }
     });
     app.addEventListener('keydown', (e) => {
       const t = e.target; if (e.key !== 'Enter' || t.tagName !== 'INPUT') return;
       if (t.dataset.ruleName !== undefined) { t.blur(); return; }
+      if (t.id === 'pfNewPerson') { e.preventDefault(); addPerson(); return; }
       const td = t.closest('td'), tr = td && td.closest('tr'); if (!tr) return;
       const col = [...tr.children].indexOf(td); const next = tr.nextElementSibling && tr.nextElementSibling.children[col];
       const f = next && next.querySelector('input,select'); if (f) { e.preventDefault(); f.focus(); if (f.select) f.select(); }
@@ -331,8 +337,10 @@ window.BDProfit = (() => {
       if (b.dataset.remove) {
         const [k, i] = b.dataset.remove.split('.');
         if (k === 'services') { services.splice(+i, 1); scheduleRules(); renderSplit(); return; }
+        if (k === 'team') { team.splice(+i, 1); scheduleRules(); renderSplit(); return; }
         draft[k].splice(+i, 1); scheduleSave(); render(); return;
       }
+      if (b.id === 'pfAddPerson') { addPerson(); return; }
       if (b.id === 'pfAddService') {
         let n = 1, name = 'New service'; while (services.some((s) => s.name === name)) { n++; name = 'New service ' + n; }
         services.push({ name, pct: [0, 0, 0, 0, 100] }); scheduleRules(); renderSplit(); const f = byId('pf-rn-' + (services.length - 1)); if (f) { f.focus(); f.select(); } return;
@@ -345,6 +353,14 @@ window.BDProfit = (() => {
       if (b.id === 'pfCancelNew') { render(); }
     });
     $('#pfMonthSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); current = e.target.value; draft = normalize(months[current]); confirmDel = false; render(); });
+  }
+  function addPerson() {
+    const f = byId('pfNewPerson'); if (!f || !isAdmin) return;
+    const n = f.value.trim().replace(/\s+/g, ' ');
+    if (!n) { f.focus(); return; }
+    if (team.some((x) => x.toLowerCase() === n.toLowerCase())) { setStatus(`“${n}” is already on the list`); f.select(); return; }
+    const k = team.indexOf('Another'); if (k >= 0) team.splice(k, 0, n); else team.push(n); // “Another” stays last
+    scheduleRules(); renderSplit(); const g = byId('pfNewPerson'); if (g) g.focus();
   }
   function openNew() {
     if (page === 'access') goPage('accounts');
@@ -382,7 +398,9 @@ window.BDProfit = (() => {
     role = s.role || 'viewer'; canEdit = role === 'admin' || role === 'editor'; isAdmin = role === 'admin';
     $('#pfNewBtn').hidden = !canEdit; $('#pfAccessTab').hidden = !isAdmin;
     const nextServices = s.settings && s.settings.main ? servicesFrom(s.settings.main) : services;
-    const servicesChanged = JSON.stringify(nextServices) !== JSON.stringify(services); services = nextServices;
+    const main = (s.settings && s.settings.main) || {};
+    const nextTeam = Array.isArray(main.team) ? main.team.map((x) => String(x || '').trim()).filter(Boolean) : DEFAULT_TEAM.slice();
+    const servicesChanged = JSON.stringify(nextServices) !== JSON.stringify(services) || JSON.stringify(nextTeam) !== JSON.stringify(team); services = nextServices; team = nextTeam;
     months = s.months || {};
     if (first || !current || (!months[current] && !dirty)) { const ids = Object.keys(months).sort(); current = ids.pop() || null; draft = current ? normalize(months[current]) : null; renderMonthSel(); render(); return; }
     let changed = servicesChanged;

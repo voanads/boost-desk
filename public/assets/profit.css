@@ -125,3 +125,10 @@
 #tab-profit .pf-roles div{display:flex;gap:8px;align-items:baseline}
 #tab-profit td select[data-access]{height:32px;border-radius:var(--r-sm);padding:0 8px;margin:0 8px;width:calc(100% - 16px);background:var(--surface);border:1px solid var(--line)}
 @media (max-width:600px){#tab-profit .pf-strip{grid-template-columns:repeat(2,1fr)} #tab-profit .pf-strip .v{font-size:1.15rem} #tab-profit .pf-top h2{font-size:var(--fs-h2)}}
+#tab-profit .pf-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 14px}
+#tab-profit .pf-chip{display:inline-flex;align-items:center;gap:8px;padding:4px 6px 4px 4px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:var(--fs-md);font-weight:600}
+#tab-profit .pf-chip .av{width:22px;height:22px;border-radius:999px;font-size:9.5px}
+#tab-profit .pf-chip button{width:22px;height:22px;padding:0;border:0;border-radius:999px;background:transparent;color:var(--muted);box-shadow:none;font-size:12px}
+#tab-profit .pf-chip button:hover{background:var(--pf-bad-soft);color:var(--pf-red)}
+#tab-profit .pf-addp{display:flex;gap:6px;align-items:center}
+#tab-profit .pf-addp input{height:32px;width:200px;border-radius:var(--r-sm);padding:0 10px;background:var(--surface)}

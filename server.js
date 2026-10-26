@@ -248,7 +248,7 @@ async function buyerTasks(buyer, day) {
   out.sort((a, b) => (a.done - b.done) || (b.late - a.late) || a.client.localeCompare(b.client));
   return { tasks: out.map((t) => ({ ...t, kpiName: kpiNames[t.kpi] || '' })), all, logs, clients: cl };
 }
-app.get('/mb/api/me', mbOnly, wrap(async (req, res) => {
+app.get(['/mb/api/me', '/api/mb/me'], mbOnly, wrap(async (req, res) => {
   const b = req.buyer, today = sync.todayIn(), ym = today.slice(0, 7);
   const { tasks, all, logs, clients } = await buyerTasks(b, today);
   const counts = { done: tasks.filter((t) => t.done).length, open: tasks.filter((t) => !t.done).length, late: tasks.filter((t) => t.late).length };
@@ -271,7 +271,7 @@ app.get('/mb/api/me', mbOnly, wrap(async (req, res) => {
   res.json({ me: { id: b.id, name: b.name, linked: !!b.chat, pm: b.addedBy || '' }, today, month: ym, counts, tasks, target, kpis, kpiAvg, clients: myClients, history: hist, rate, byDay, assigned: assigned.length, notifications: { bot: telegram.hasBot(), linked: !!b.chat } });
 }));
 // Tick a task done (or undo), or type what was reached — the same rules as the PM's page and the Telegram button.
-app.post('/mb/api/tasks/:cid/:tid', mbOnly, wrap(async (req, res) => {
+app.post(['/mb/api/tasks/:cid/:tid', '/api/mb/tasks/:cid/:tid'], mbOnly, wrap(async (req, res) => {
   const b = req.buyer, cid = String(req.params.cid), tid = String(req.params.tid);
   const owner = ((await db.pool.query('SELECT owner FROM clients WHERE id=$1', [cid])).rows[0] || {}).owner;
   if (!owner) return res.status(404).json({ error: 'Client not found.' });

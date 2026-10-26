@@ -95,7 +95,6 @@ async function metaAccounts(owner) {
   return [...map.values()].sort((x, y) => String(x.name).localeCompare(String(y.name)));
 }
 
-let peopleFn = null; // set by router(), used by the admin Profit overview
 function router({ sitePeople }) {
   const r = express.Router();
   // Everything needs access; req.user is set by the app's login middleware.
@@ -119,7 +118,6 @@ function router({ sitePeople }) {
     });
   }
 
-  peopleFn = people;
   // ?book=<id> lets admins look at someone else's book (read only).
   r.get('/state', wrap(async (req, res) => {
     let book = String(req.query.book || me(req));
@@ -199,4 +197,4 @@ function router({ sitePeople }) {
   return r;
 }
 
-module.exports = { init, router, roleOf, people: (...a) => peopleFn(...a) };
+module.exports = { init, router, roleOf };

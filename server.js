@@ -590,12 +590,6 @@ api.get('/page-pic/:id', wrap(async (req, res) => {
   res.set('Cache-Control', 'private, max-age=21600').redirect(302, url);
 }));
 // ---- Every ad account of every person (Admin → Ad accounts) ----
-// Profit overview (admin website): every book side by side — who submitted, profit to split, shares.
-api.get('/admin/profit-overview', adminOnly, wrap(async (req, res) => {
-  if ((await profit.roleOf(req.user.fb_id)) !== 'admin') return res.status(403).json({ error: 'Only Profit admins can see every team\'s profit.' });
-  const monthsBack = Math.min(36, Math.max(3, parseInt(req.query.months, 10) || 12));
-  res.json(await require('./src/profitOverview').overview({ people: profit.people, monthsBack }));
-}));
 api.get('/admin/ad-accounts', adminOnly, wrap(async (req, res) => {
   const [rows, users, teams] = await Promise.all([db.pool.query('SELECT owner, id, name, enabled, info, seen_at FROM ad_accounts ORDER BY lower(name)').then((r) => r.rows), db.allUsers(), getTeams()]);
   const uName = Object.fromEntries(users.map((u) => [u.fb_id, u.name])), teamOf = {};

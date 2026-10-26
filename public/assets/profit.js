@@ -84,8 +84,12 @@ window.BDProfit = (() => {
     //   កើនឡើង (increase)              = ABA + to receive − boost deposits − FB debt
     //   ដកចែកគ្នា (profit to split)     = the profit (ជាក់ស្តែង) of every deal
     //   នៅសល់សម្រាប់ខែក្រោយ (carry over) = increase − profit to split
-    const increase = num(d.aba) + toReceive - deposit - fbDebt, carry = increase - profit;
-    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, increase, carry, net: profit, people: ppl, roles, rolesNet: roles, svc };
+    // ដកចែកគ្នា can be typed in; left empty it is the deals' profit.
+    const splitTyped = d.split !== undefined && d.split !== null && d.split !== '';
+    const split = splitTyped ? num(d.split) : profit;
+    const r2 = (x) => Math.round(x * 100) / 100 || 0; // cents, so $0.00 is never “below zero”
+    const increase = r2(num(d.aba) + toReceive - deposit - fbDebt), carry = r2(increase - split);
+    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, split, splitTyped, increase, carry, net: profit, people: ppl, roles, rolesNet: roles, svc };
   }
 
   const fid = (path) => 'pf-' + path.replace(/\./g, '-');
@@ -132,7 +136,7 @@ window.BDProfit = (() => {
             <tr><td class="k"><span lang="km">លុយត្រូវទទួលបានថែម</span> <small>to receive</small></td><td class="v n good" id="pfSRecv"></td></tr>
             <tr><td class="k"><span lang="km">លុយភ្ញៀវតម្កល់ប៊ូស</span> <small>boost deposits</small></td><td class="v n blue" id="pfSDep"></td></tr>
             <tr class="pf-calc"><td class="k"><span lang="km">កើនឡើង</span> <small>increase = ABA + to receive − deposits − FB debt</small></td><td class="v n" id="pfSInc"></td></tr>
-            <tr class="pf-calc"><td class="k"><span lang="km">ដកចែកគ្នា</span> <small>profit to split</small></td><td class="v n" id="pfSSplit"></td></tr>
+            <tr class="pf-calc"><td class="k"><span lang="km">ដកចែកគ្នា</span> <small id="pfSSplitHint">profit to split · empty = deals' profit</small></td><td>${inp('split', d.split, 'number', `aria-label="Profit to split" placeholder="${calc(d).profit.toFixed(2)}"`)}</td></tr>
             <tr class="pf-calc"><td class="k"><span lang="km">នៅសល់សម្រាប់ខែក្រោយ</span> <small>carry over = increase − profit to split</small></td><td class="v n" id="pfSCarry"></td></tr>
           </tbody></table>
         </section>
@@ -153,7 +157,7 @@ window.BDProfit = (() => {
     const d = draft, c = calc(d), k = byId('pfStripA'); if (!k) return;
     const usedPct = c.fbThresh ? c.fbDebt / c.fbThresh * 100 : 0;
     k.innerHTML = `
-      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.profit)}</span><span class="sub">See profit split →</span></button>
+      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.split)}</span><span class="sub">${c.splitTyped ? `Typed · deals' profit ${money(c.profit)} · ` : ''}See profit split →</span></button>
       <div><span class="k"><span class="ic c-blue">B</span>ABA balance</span><span class="v">${money(d.aba)}</span><span class="sub">Cash in bank</span></div>
       <div><span class="k"><span class="ic c-gold">f</span>FB debt</span><span class="v">${money(c.fbDebt)}</span><div class="meter"><i style="width:${pct(usedPct)}%;background:var(--pf-gold)"></i></div><span class="sub">${Math.round(usedPct)}% of ${money(c.fbThresh, 0)} threshold</span></div>
       <div><span class="k"><span class="ic c-green">↓</span>To receive</span><span class="v good">${money(c.toReceive)}</span><span class="sub">From ${c.recvCount} clients</span></div>
@@ -170,7 +174,7 @@ window.BDProfit = (() => {
     });
     setText('pfSumUpd', d.updatedOn ? 'Updated ' + d.updatedOn : '');
     setText('pfSActive', `${money(c.fbDebt)} / ${money(c.fbThresh, 0)}`); setText('pfSDis', `${money(c.disabled)} / ${money(c.disT, 0)}`); setText('pfSNeed', `${money(c.needPay)} / ${money(c.needT, 0)}`);
-    setText('pfSFb', money(c.fbDebt)); setText('pfSRecv', money(c.toReceive)); setText('pfSDep', money(c.deposit)); setText('pfSInc', money(c.increase)); setText('pfSSplit', money(c.profit)); setText('pfSCarry', money(c.carry)); { const e = byId('pfSCarry'); if (e) e.classList.toggle('bad', c.carry < 0); }
+    setText('pfSFb', money(c.fbDebt)); setText('pfSRecv', money(c.toReceive)); setText('pfSDep', money(c.deposit)); setText('pfSInc', money(c.increase)); setText('pfSSplitHint', c.splitTyped ? `profit to split · typed (deals' profit ${money(c.profit)})` : 'profit to split · empty = deals\' profit'); { const e = byId('pf-split'); if (e) e.placeholder = c.profit.toFixed(2); } setText('pfSCarry', money(c.carry)); { const e = byId('pfSCarry'); if (e) e.classList.toggle('bad', c.carry < 0); }
     setText('pfCRecv', money(c.toReceive)); setText('pfCDep', money(c.deposit));
     setText('pfCliTitle', `${c.recvCount} to receive · ${c.depCount} deposit`);
   }

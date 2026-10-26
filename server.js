@@ -310,7 +310,7 @@ app.use(wrap(async (req, res, next) => {
       )) return res.status(403).json({ error: 'Media buyers can\'t do this — ask your PM.' });
       if (req.path.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(req.path)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
       if (!req.path.startsWith('/api/') && !req.path.startsWith('/mediabuyer') && !req.path.startsWith('/mb')) return res.redirect('/mediabuyer');
-      user = { ...pm, buyer: { id: b.id, name: b.name } };
+      user = { ...pm, buyer: { id: b.id, name: b.name, photo: !!b.photo } };
     }
   }
   if (!user) {
@@ -1645,6 +1645,19 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
 }));
 // Media buyers (no login needed: they connect Telegram once from an invite link).
 api.get('/media-buyers', wrap(async (req, res) => res.json({ buyers: await require('./src/buyers').all(), bot: telegram.hasBot() })));
+// A media buyer's Telegram picture (synced when they connect and once a day).
+app.get('/mb-pic/:id', wrap(async (req, res) => {
+  const p = await require('./src/buyers').photoOf(req.params.id); if (!p) return res.status(404).end();
+  const m = p.match(/^data:(image\/\w+);base64,(.+)$/); if (!m) return res.status(404).end();
+  res.set('Content-Type', m[1]).set('Cache-Control', 'private, max-age=3600').send(Buffer.from(m[2], 'base64'));
+}));
+api.post('/media-buyers/:id/sync', wrap(async (req, res) => { // re-read name + picture from Telegram now
+  const B = require('./src/buyers'), all = await B.list(), b = all.find((x) => x.id === req.params.id);
+  if (!b) return res.status(404).json({ error: 'Media buyer not found.' });
+  if (!b.chat) return res.status(400).json({ error: 'Not connected to Telegram yet.' });
+  if (await B.syncProfile(b, '')) await B.save(all);
+  res.json({ ok: true, name: b.name, photo: !!b.photo });
+}));
 api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
 api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {

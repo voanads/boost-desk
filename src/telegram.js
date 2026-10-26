@@ -127,6 +127,20 @@ async function listChats(offset = 0) {
   return { chats: [...found.values()], links, moved, alerts, starts, taps, cmds, next };
 }
 
+// A user's Telegram profile photo (smallest size), as a data URL — or '' when they have none / it's hidden.
+async function profilePhoto(userId) {
+  if (!cfg.telegramToken || !userId) return '';
+  try {
+    const r = await (await fetch(`${API}/bot${cfg.telegramToken}/getUserProfilePhotos?user_id=${encodeURIComponent(userId)}&limit=1`)).json();
+    const sizes = r.ok && r.result && r.result.photos && r.result.photos[0]; if (!sizes || !sizes.length) return '';
+    const small = sizes.find((p) => p.width >= 150) || sizes[sizes.length - 1];
+    const f = await (await fetch(`${API}/bot${cfg.telegramToken}/getFile?file_id=${encodeURIComponent(small.file_id)}`)).json();
+    if (!f.ok || !f.result || !f.result.file_path) return '';
+    const bin = await (await fetch(`${API}/file/bot${cfg.telegramToken}/${f.result.file_path}`)).arrayBuffer();
+    if (bin.byteLength > 200000) return '';
+    return 'data:image/jpeg;base64,' + Buffer.from(bin).toString('base64');
+  } catch (_) { return ''; }
+}
 let botName = null;
 async function username() {
   if (botName || !cfg.telegramToken) return botName;
@@ -172,4 +186,4 @@ async function editText(chatId, msgId, text) {
   await fetch(`${API}/bot${cfg.telegramToken}/editMessageText`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: String(chatId).split(':')[0], message_id: msgId, text, disable_web_page_preview: true }) }).catch(() => {});
 }
 
-module.exports = { sendButtons, answerTap, editText, sendAlbum, configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };
+module.exports = { profilePhoto, sendButtons, answerTap, editText, sendAlbum, configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };

@@ -17,7 +17,7 @@ function checkLink(id, exp, sig) {
 const list = async () => (await db.getSetting(KEY, [])) || [];
 const save = (all) => db.setSetting(KEY, all);
 const code = () => Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[crypto.randomInt(32)]).join('');
-const pub = (b, bot) => ({ id: b.id, name: b.name, linked: !!b.chat, tgName: b.tgName || '', link: bot ? `https://t.me/${bot}?start=mb_${b.code}` : '', addedBy: b.addedBy || '', addedById: b.addedById || '' });
+const pub = (b, bot) => ({ id: b.id, name: b.name, alias: b.alias || '', linked: !!b.chat, tgName: b.tgName || '', photo: !!b.photo, link: bot ? `https://t.me/${bot}?start=mb_${b.code}` : '', addedBy: b.addedBy || '', addedById: b.addedById || '' });
 
 async function all() { const bot = await telegram.username(); return (await list()).map((b) => pub(b, bot)); }
 async function add(name, by, byId) {
@@ -42,7 +42,8 @@ async function onTelegram(fresh, AI) {
     const cur = await list(); let changed = false;
     for (const s of fresh.starts) {
       const b = cur.find((x) => x.code === s.code); if (!b) continue;
-      if (b.chat !== s.id) { b.chat = s.id; b.tgName = s.name; changed = true; }
+      if (b.chat !== s.id) { b.chat = s.id; changed = true; }
+      if (await syncProfile(b, s.name)) changed = true;
       telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.\n\nYour site shows your PM's clients, reports and invoices; My tasks shows today's tasks, your target and KPI — send /dashboard any time to get the link again.`, s.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
     }
     if (changed) await save(cur);
@@ -75,9 +76,21 @@ async function onTelegram(fresh, AI) {
 }
 
 // Every morning: send each media buyer their every-day tasks again, each with a fresh Done button.
+// Keep the media buyer's name and picture the same as on Telegram. The name the PM typed stays as an alias.
+async function syncProfile(b, tgName) {
+  let changed = false;
+  if (tgName && b.tgName !== tgName) { b.tgName = tgName; changed = true; }
+  if (b.tgName && b.name !== b.tgName) { if (!b.alias && b.name !== b.tgName) b.alias = b.name; b.name = b.tgName; changed = true; }
+  const photo = await telegram.profilePhoto(b.chat);
+  if (photo && photo !== b.photo) { b.photo = photo; b.photoAt = new Date().toISOString(); changed = true; }
+  return changed;
+}
+async function photoOf(id) { const b = await get(id); return b && b.photo ? b.photo : ''; }
 async function morning(log = () => {}) {
   if (!telegram.hasBot()) return 0;
   const buyers = await list(); if (!buyers.some((b) => b.chat)) return 0;
+  // once a day: refresh pictures from Telegram
+  try { let ch = false; for (const b of buyers) if (b.chat && await syncProfile(b, '')) ch = true; if (ch) await save(buyers); } catch (e) { log('media buyer profiles:', e.message); }
   const rows = (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows;
   const names = Object.fromEntries((await db.pool.query('SELECT id, name, archived FROM clients')).rows.filter((c) => !c.archived).map((c) => [String(c.id), c.name]));
   let n = 0;
@@ -92,4 +105,4 @@ async function morning(log = () => {}) {
   return n;
 }
 
-module.exports = { dashLink, checkLink, all, add, remove, get, notify, onTelegram, morning };
+module.exports = { dashLink, checkLink, photoOf, syncProfile, save, list, all, add, remove, get, notify, onTelegram, morning };

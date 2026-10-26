@@ -480,9 +480,9 @@ window.BDProfit = (() => {
     if (!booted) {
       booted = true;
       root.innerHTML = `<div class="pf">
-        <div class="bhead"><div><h2>Profit</h2><div class="hint">Your monthly ad accounts, client balances and profit split.</div></div>
+        <div class="bhead"><div><h1>Profit</h1><div class="hint">Your monthly ad accounts, client balances and profit split.</div></div>
           <div class="bh-r" id="pfMonthBar"><span id="pfBookWrap" hidden><label for="pfBookSel" class="hint">Book</label><select id="pfBookSel" aria-label="Whose Profit book"></select></span><label for="pfMonthSel" class="hint">Month</label><select id="pfMonthSel" aria-label="Month"></select><button class="sm" id="pfNewBtn" type="button" hidden>+ New month</button><span class="pf-status" id="pfStatus" aria-live="polite"></span></div></div>
-        <div class="seg pf-seg" role="group" aria-label="Profit pages"><button type="button" data-pfpage="accounts" aria-pressed="true">Ad accounts &amp; clients</button><button type="button" data-pfpage="split" aria-pressed="false">Profit split · <span lang="km">ចំណេញ</span></button><button type="button" data-pfpage="access" aria-pressed="false" id="pfAccessTab" hidden>Access</button></div>
+        <div class="seg pf-seg" role="group" aria-label="Profit pages"><button type="button" data-pfpage="accounts" aria-pressed="true">Accounts &amp; clients</button><button type="button" data-pfpage="split" aria-pressed="false">Profit split</button><button type="button" data-pfpage="access" aria-pressed="false" id="pfAccessTab" hidden>Access</button></div>
         <div id="pfApp"><div class="pf-empty"><h3>Loading…</h3></div></div></div>`;
       app = byId('pfApp'); statusEl = byId('pfStatus');
       wire();

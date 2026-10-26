@@ -283,7 +283,7 @@
     ['main', 'board', 'adaccts', 'profit', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
-    if (name === 'dashboard') { loadDash(); loadTodo(); }
+    if (name === 'dashboard') { loadDash(); }
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') { showAdm(admSec); if (admSec !== 'health') loadHealth(); }
     if (name === 'lives') loadLives();
@@ -1126,7 +1126,7 @@
   async function loadTodo() {
     let d; try { d = await api('/todo'); } catch (_) { return; }
     const items = d.items, tips = d.tips || [], all = [...items, ...tips], panel = $('todoPanel');
-    panel.hidden = false;
+    panel.hidden = true; // the Dashboard no longer shows today's to-do (it lives on each client in Clients)
     $('todoCount').textContent = items.length || '✓';
     $('todoCount').classList.toggle('done', !items.length);
     $('todoToggle').textContent = todoHidden ? 'បង្ហាញ' : 'លាក់'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));

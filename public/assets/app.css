@@ -2187,7 +2187,8 @@ html[data-size=xl]{font-size:19px}
 .summary>div.hero{border-color:transparent!important;box-shadow:var(--shadow-md)}
 .summary>div+div{border-left:1px solid var(--line)!important}
 /* Dashboard: clients on the left, today's work on the right */
-.dgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:var(--s-4);align-items:start}
+.dgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s-4);align-items:start}
+.dside:not(:has(.panel:not([hidden]))){display:none}
 .dmain{display:flex;flex-direction:column;gap:var(--s-4);min-width:0}
 .dmain>.panel{margin:0}
 .dside{display:flex;flex-direction:column;gap:var(--s-4);position:sticky;top:84px}

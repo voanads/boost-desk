@@ -663,7 +663,7 @@
   const IC_TODO = { plan: '🎯', report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
-    if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
+    if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
     const pd = cPer === 'month' ? null : cPerData[cPer]; if (cPer !== 'month' && !pd) loadClientPeriod(cPer);
     const m = (pd ? pd.month[c.id] : cMonth[c.id]) || {}, o = (pd ? pd.ord[c.id] : cOrd[c.id]) || {}, cpo = o.orders && o.spend ? ordSpendOf(o) / o.orders : null;
     const perLbl = { day: 'today', week: 'last 7 days', month: 'this month' }[cPer], perTitle = { day: 'Spent today', week: 'Spent · 7 days', month: 'Spent this month' }[cPer];
@@ -1476,14 +1476,14 @@
       const head = !bTeam && c.team !== lastTeam ? `<div class="bl-team">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</div>` : ''; lastTeam = c.team;
       return `${head}<button type="button" class="crow${bKey(c) === bSel ? ' on' : ''}" role="option" aria-selected="${bKey(c) === bSel}" data-bsel="${esc(bKey(c))}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(c.pageId, 'av')}</span>
-        <span class="cr-n"><b>${esc(c.name)}${c.st.open ? `<span class="cr-badge${c.st.urgent ? ' urgent' : ''}" title="${c.st.open} left to do today">${c.st.open}</span>` : c.st.total ? '<span class="cr-done" title="All done today">✓</span>' : ''}</b><span class="cr-tags">${typeTags(c.type)}<span class="chip who">${esc(c.ownerName)}</span>${!c.hasGroup ? '<span class="chip nogroup">No group</span>' : ''}</span></span>
+        <span class="cr-n"><b>${esc(c.name)}${c.st.open ? `<span class="cr-badge${c.st.urgent ? ' urgent' : ''}" title="${c.st.open} left to do today">${c.st.open}</span>` : c.st.total ? '<span class="cr-done" title="All done today">✓</span>' : ''}</b><span class="cr-tags">${typeTags(c.type)}<span class="cr-owner">${esc(c.ownerName)}</span>${!c.hasGroup ? '<span class="chip nogroup">No group</span>' : ''}</span></span>
         <span class="cr-v"><b class="num">${c.month.spend ? money(c.month.spend) : '–'}</b><span class="hint">${c.month.orders ? `${c.month.orders.toLocaleString('en-US')} orders${c.cpo ? ' · ' + money(c.cpo) : ''}` : 'this month'}</span></span>
       </button>`;
     }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : bF !== 'all' ? 'No client in this view.' : 'No clients yet.'}</div>`;
     $('bUpdated').textContent = 'Updated ' + new Date(bAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     // ---- detail: the picked client, like the Clients page (read-only)
     const c = list.find((x) => bKey(x) === bSel);
-    if (!c) { $('bDetail').innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s work &amp; tasks and the AI plan.</span></div>'; return; }
+    if (!c) { $('bDetail').innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s work &amp; tasks and the AI plan.</span></div>'; return; }
     const tn = c.cpo == null || avg == null ? '' : c.cpo <= avg * 0.8 ? 'good' : c.cpo >= avg * 1.5 ? 'bad' : 'mid';
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const tasks = [...c.tasks].sort((a, b) => a.done - b.done || ({ work: 0, ai: 1, me: 2 }[a.from] - { work: 0, ai: 1, me: 2 }[b.from]));
@@ -1880,11 +1880,9 @@
     const c = d.counts, total = c.done + c.open;
     host.hidden = false;
     host.innerHTML = `<div class="top"><h2>👥 ${d.team ? esc(d.team.name) : 'My team'}</h2><span class="hint">${d.clients} clients · ${d.buyers.length} media buyer${d.buyers.length === 1 ? '' : 's'}${d.teammates.length ? ' · ' + d.teammates.length + ' teammate' + (d.teammates.length === 1 ? '' : 's') : ''}</span></div>
-      <div class="tm-kpis">
-        <div class="tm-k"><span class="lbl">Done today</span><b class="num">${c.done}<small> / ${total}</small></b></div>
-        <div class="tm-k"><span class="lbl">Pending</span><b class="num">${c.open}</b></div>
-        <div class="tm-k ${c.overdue ? 'bad' : ''}"><span class="lbl">Overdue</span><b class="num">${c.overdue}</b></div>
-        <div class="tm-k"><span class="lbl">To media buyers</span><b class="num">${c.buyerDone}<small> / ${c.buyerDone + c.buyerOpen}</small></b><span class="sub">${c.notSent ? `<span class="is-warn">${c.notSent} not sent</span>` : c.sent ? 'all sent ✈' : '—'}</span></div>
+      <div class="tm-kpis tm-kpis-2">
+        <div class="tm-k"><span class="lbl">To media buyers today</span><b class="num">${c.buyerDone}<small> / ${c.buyerDone + c.buyerOpen}</small></b><span class="sub">${c.notSent ? `<span class="is-warn">${c.notSent} not sent</span>` : c.sent ? 'all sent ✈' : '—'}</span></div>
+        <div class="tm-k ${c.overdue ? 'bad' : ''}"><span class="lbl">Overdue (mine)</span><b class="num">${c.overdue}</b><span class="sub">${c.done} of ${total} done today</span></div>
       </div>
       ${d.buyers.length ? `<div class="tm-list">${d.buyers.map((b) => `<div class="tm-row">${mbAvatar(b)}<div class="tm-rt"><b>${esc(b.name)}${b.alias && b.alias !== b.name ? ` <span class="hint">(${esc(b.alias)})</span>` : ''}</b><span class="hint">${b.linked ? '<span class="is-ok">Telegram ✓</span>' : '<span class="is-warn">Not connected</span>'} · ${b.today ? `${b.done} / ${b.today} today${b.late ? ` · <span class="is-danger">${b.late} late</span>` : ''}${b.notSent ? ` · <span class="is-warn">${b.notSent} not sent</span>` : ''}` : 'no task today'}</span></div>${b.kpi != null ? `<span class="kpi-score ${b.kpi >= 100 ? 'ok' : b.kpi >= 60 ? 'mid' : 'bad'}" title="KPI this month">${b.kpi}%</span>` : ''}${me.buyer ? '' : `<button type="button" class="sm" data-mbkpi="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set this media buyer's monthly KPIs">📊 KPIs</button>`}</div>`).join('')}</div>`
         : '<div class="hl-empty">No media buyers yet. Add one from a task\'s <b>Options ▾ → For → ＋ Media buyers…</b> and send them the invite link.</div>'}
@@ -1935,7 +1933,7 @@
     const groups = {}; for (const p of ppl) (groups[p.team || 'No team'] = groups[p.team || 'No team'] || []).push(p);
     const names = [...d.teams.filter((t) => groups[t]), ...Object.keys(groups).filter((t) => !d.teams.includes(t))];
     box.innerHTML = names.map((tn) => { const list = groups[tn], tT = list.reduce((s, p) => s + p.target, 0), tR = list.reduce((s, p) => s + p.reached, 0), tp = tT ? Math.round(tR / tT * 100) : 0;
-      return `<section class="panel tg-team ${tT && tp >= 100 ? 'hit' : ''}"><div class="tg-th"><div><h2>${esc(tn)}</h2><span class="hint">${list.map((p) => esc(p.name)).join(', ')}</span></div><div class="tg-tsum"><b>${tT ? tp + '%' : '–'}</b><span class="hint">${tT ? tR + ' of ' + tT : 'no target tasks'}</span></div></div>${tT ? `<div class="tgt-bar"><i class="${tp >= 100 ? 'hit' : ''}" style="width:${Math.min(100, tp)}%"></i></div>` : ''}
+      return `<section class="panel tg-team ${tT && tp >= 100 ? 'hit' : ''}"><div class="tg-th"><div><h2>${esc(tn)}</h2><span class="hint">${list.map((p) => esc(p.name)).join(', ')}</span></div><div class="tg-tsum"><b>${tT ? tp + '%' : '–'}</b> <span class="hint">${tT ? tR + ' of ' + tT + ' reached' : 'no target tasks'}</span></div></div>${tT ? `<div class="tgt-bar"><i class="${tp >= 100 ? 'hit' : ''}" style="width:${Math.min(100, tp)}%"></i></div>` : ''}
         ${list.map((p) => `<div class="tg-person"><div class="tg-ph"><span class="avatar">${initials(p.name)}</span><b>${esc(p.name)}</b><span class="hint">${p.tasksDone} / ${p.tasksTotal} tasks done${p.target ? ` · ${p.reached} of ${p.target} reached` : ''}</span></div>${p.tasks.length ? `<div class="tg-tasks">${p.tasks.map((t) => { const pc = Math.min(100, Math.round(t.reached / t.target * 100)); return `<div class="tgt-it ${pc >= 100 ? 'hit' : ''}"><div class="tgt-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · every day' : ''}${t.done ? ' · ✓ done' : ''}</span><span class="ttgt-bar"><i style="width:${pc}%"></i></span></div><span class="ttgt-of"><b>${t.reached}</b> / ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pc}%</span></div>`; }).join('')}</div>` : '<div class="hint tg-none">No target tasks this day.</div>'}</div>`).join('')}</section>`; }).join('') || '<div class="empty"><b>No tasks for this day.</b><br>Targets appear here once a team adds a task with a 🎯 target on a client.</div>';
   }
   let tgPeople = null;
@@ -1995,7 +1993,7 @@
     $('aaUpdated').textContent = newest ? 'From Facebook ' + ago(newest) : '';
     // ---- detail
     const a = list.find((x) => x.id === aaSel);
-    if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><div class="cd-empty-ic" aria-hidden="true">👈</div><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
+    if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
     const cur = a.currency && a.currency !== 'USD' ? ' ' + a.currency : '';
     const thr = a.threshold ? Math.min(100, Math.round(a.balance / a.threshold * 100)) : null;
     const days = []; for (let i = 13; i >= 0; i--) days.push(addD(d.today, -i));
@@ -2805,6 +2803,9 @@ Notes:
     rollTo($('dActive'), String(t.active)); $('dActiveSub').textContent = `of ${dData.clients.filter((c) => !c.archived).length} clients`;
     rollTo($('dCpr'), tCpr == null ? '–' : cprMoney(tCpr));
     $('dRes').textContent = t.res ? (t.type === 'result' ? `${Math.round(t.res).toLocaleString('en-US')} results (mixed types)` : resText(t.res, t.type)) : 'Sync from Meta to load results';
+    // empty period: say what to do instead of a row of zeros
+    { const sum = $('dSpend').closest('.summary'); if (sum) { sum.classList.toggle('is-empty', !(t.spend > 0)); let n = $('dEmptyNote'); if (!n) { n = document.createElement('div'); n.id = 'dEmptyNote'; n.className = 'sum-empty'; sum.insertAdjacentElement('afterend', n); }
+      n.hidden = t.spend > 0; n.innerHTML = t.spend > 0 ? '' : (me && me.buyer ? 'Nothing synced for this period yet — ask your PM to tap <b>Sync from Meta</b>.' : 'Nothing synced for this period yet — tap <b>Sync from Meta</b> to pull the spend.'); } }
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';
@@ -3045,7 +3046,8 @@ Notes:
     const all = visibleLives(), list = all.slice(0, lShown);
     const withC = all.filter((l) => l.comments != null);
     const T = all.reduce((a, l) => ({ spend: a.spend + l.spend, comments: a.comments + (l.comments || 0), messages: a.messages + (l.messages || 0), cSpend: a.cSpend + (l.comments != null ? l.spend : 0) }), { spend: 0, comments: 0, messages: 0, cSpend: 0 });
-    rollTo($('lCount'), String(all.length)); $('lCountSub').textContent = `from ${new Set(all.map((l) => l.clientId)).size} client${new Set(all.map((l) => l.clientId)).size === 1 ? '' : 's'}`;
+    rollTo($('lCount'), String(all.length)); $('lCountSub').textContent = all.length ? `from ${new Set(all.map((l) => l.clientId)).size} client${new Set(all.map((l) => l.clientId)).size === 1 ? '' : 's'}` : 'no boosted lives in this period';
+    { const sum = $('lCount').closest('.summary'); if (sum) sum.classList.toggle('is-empty', !all.length); }
     rollTo($('lComments'), num(T.comments)); rollTo($('lCpc'), T.comments ? '$' + (T.cSpend / T.comments).toFixed(2) : '–');
     rollTo($('lMsgs'), num(T.messages)); $('lMsgSub').textContent = T.messages ? `$${(T.cSpend / T.messages).toFixed(2)} per message` : 'from boosts';
     rollTo($('lSpend'), money(T.spend)); $('lSpendSub').textContent = all.length ? `${money(T.spend / all.length)} per live` : '';
@@ -3162,11 +3164,11 @@ Notes:
     const invRow = (v, c) => `<div class="payinv" data-inv="${v.id}">
           <button type="button" class="invno" data-view="${v.id}" title="Open this invoice"><b>${esc(v.number)}</b><span class="hint">${esc(nice(v.date).replace(/ \d{4}$/, ''))} · ${money(v.total)}${v.paidAt ? ' · paid' : v.sentAt ? ' · sent' : ''}</span></button>
           <span class="spacer"></span>
-          <a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
-          <button type="button" class="sm rbtn${c && c.telegram ? ' tg' : ''}" data-send="${v.id}"><span class="plane">${plane}</span> ${v.sentAt ? 'Send again' : 'Send to group'}</button>
-          ${d.tgSent && d.tgSent[v.id] ? `<button type="button" class="sm danger" data-unsend="${v.id}" title="The bot removes this invoice from the Telegram group (possible for 48 hours after sending)">Delete from group</button>` : ''}
+          <div class="inv-acts"><a class="btn sm" href="/api/invoices/${v.id}/pdf" target="_blank" rel="noopener">PDF</a>
+          <button type="button" class="sm rbtn${c && c.telegram ? ' tg' : ''}" data-send="${v.id}" title="${v.sentAt ? 'Send again to the Telegram group' : 'Send to the Telegram group'}"><span class="plane">${plane}</span> ${v.sentAt ? 'Resend' : 'Send'}</button>
+          ${d.tgSent && d.tgSent[v.id] ? `<button type="button" class="sm danger" data-unsend="${v.id}" title="The bot removes this invoice from the Telegram group (possible for 48 hours after sending)">Unsend</button>` : ''}
           <button type="button" class="sm${v.paidAt ? ' paidbtn' : ''}" data-paid="${v.id}" data-on="${v.paidAt ? 1 : 0}">${v.paidAt ? '✓ Paid' : 'Mark paid'}</button>
-          <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div>`;
+          <button type="button" class="sm ghost" data-delinv="${v.id}" aria-label="Delete invoice ${esc(v.number)}">Delete</button></div></div>`;
     // Invoices whose client no longer has a service fee (or was removed): still shown, so they can be deleted or marked paid.
     const svcIds = new Set(d.clients.filter(hasSvc).map((c) => c.id)), loose = {};
     for (const v of d.invoices) if (!svcIds.has(v.clientId)) (loose[v.clientId] = loose[v.clientId] || []).push(v);

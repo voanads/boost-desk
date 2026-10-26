@@ -2781,3 +2781,39 @@ html[data-font=inter] body,html[data-font=inter] button,html[data-font=inter] in
 .num,.val,.summary .val,.mk b,.bk b,.co-kpis b,td.r,.kpi-score,.ctot b{font-variant-numeric:tabular-nums;font-feature-settings:"tnum","cv11"}
 h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .hint,.muted,small{letter-spacing:0}
+
+/* ================= Review fixes (27 Oct 2026) ================= */
+/* 1. phone header: Log out is an icon */
+#logoutBtn{display:inline-flex;align-items:center;gap:6px}
+#logoutBtn .lo-ic{display:none}
+@media (max-width:1099px){#logoutBtn{width:40px;height:40px;padding:0;justify-content:center;border:1px solid var(--line);border-radius:var(--r-lg)}#logoutBtn .lo-t{display:none}#logoutBtn .lo-ic{display:block}}
+/* 2. invoice actions: one row of equal buttons */
+.inv-acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.inv-acts>a,.inv-acts>button{white-space:nowrap}
+@media (max-width:760px){.payinv{flex-direction:column;align-items:stretch;gap:8px}.payinv .spacer{display:none}.inv-acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.inv-acts>a,.inv-acts>button{flex:none;min-height:44px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;font-size:var(--fs-sm)}.inv-acts .plane{display:none}}
+/* 3. Profit header on a phone: book + month on one row, tabs scroll */
+#tab-profit .bhead .bh-r{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#tab-profit .bhead .bh-r>label{margin-left:2px}
+@media (max-width:760px){#tab-profit .bhead .bh-r{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center}#tab-profit .bhead .bh-r #pfBookWrap{display:contents}#tab-profit .bhead .bh-r select{width:100%;min-width:0}#tab-profit .bhead .bh-r #pfNewBtn{grid-column:1/-1}#tab-profit .bhead .bh-r .pf-status{grid-column:1/-1}
+  #tab-profit .pf-seg{width:100%;overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}#tab-profit .pf-seg button{white-space:nowrap;flex:none}}
+/* 4. Target team header: number, then caption */
+.tg-tsum{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+/* 5. Clients Board: owner as quiet text, pill only for "No group" */
+.cr-owner{color:var(--muted);font-size:var(--fs-xs);font-weight:500}
+.cr-tags .chip.nogroup{text-transform:none;letter-spacing:0}
+/* 6. one look for every segment / chip control: pills, soft blue when selected */
+.seg{border:1px solid var(--line);background:var(--surface);border-radius:var(--r-pill);padding:3px;gap:2px}
+.seg button{border-radius:var(--r-pill);padding:6px 12px;font-weight:600;font-size:var(--fs-md);color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-text)}
+.chips button{font-size:var(--fs-md);padding:6px 12px}
+/* 7. empty period: quiet secondary cards + one line that says what to do */
+.summary.is-empty>div:not(.hero) .val{color:var(--muted)}
+.sum-empty{margin:-6px 0 0;padding:10px 14px;border:1.5px dashed var(--line);border-radius:var(--r-md);color:var(--muted);font-size:var(--fs-lg);background:var(--surface)}
+.sum-empty b{color:var(--ink)}
+#tab-dashboard .sum-empty{margin-bottom:var(--s-4)}
+/* 8. PM team panel: two cards */
+.tm-kpis-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* 12. empty states share one style */
+.cd-empty{border:1.5px dashed var(--line);border-radius:var(--r-xl);background:var(--surface);min-height:260px}
+.cd-empty b{font-size:var(--fs-base)}
+@media (max-width:560px){.tm-row{flex-wrap:wrap}.tm-row>button.sm{margin-left:auto}.tm-row .tm-rt{flex-basis:calc(100% - 54px)}.phead-a button{white-space:nowrap;font-size:var(--fs-md);padding-inline:10px}}

@@ -66,7 +66,8 @@ window.BDProfit = (() => {
       svc[key] = svc[key] || { total: 0, count: 0, roles: [0, 0, 0, 0, 0] }; svc[key].total += p; svc[key].count++;
       ROLES.forEach((rl, i) => {
         const amt = p * num(r[i]) / 100; roles[rl] += amt; svc[key].roles[i] += amt;
-        const who = rl === 'company' ? 'Company' : ((t[rl] || '').trim() || 'Unassigned');
+        const name = (t[rl] || '').trim();
+        const who = rl === 'company' || name.toLowerCase() === 'another' ? 'Company' : (name || 'Unassigned'); // “Another” = the company
         ppl[who] = ppl[who] || { total: 0, parts: {} };
         ppl[who].total += amt; ppl[who].parts[rl] = (ppl[who].parts[rl] || 0) + amt;
       });
@@ -78,7 +79,7 @@ window.BDProfit = (() => {
   const inp = (path, val, type = 'text', extra = '') => `<input id="${fid(path)}" data-path="${path}" data-type="${type === 'number' ? 'num' : 'text'}" type="${type}" ${type === 'number' ? 'step="any" inputmode="decimal" class="n"' : ''} value="${esc(val ?? '')}" ${extra}>`;
   const sel = (path, val, opts, label, cls = '') => { const o = opts.includes(val) || !val ? opts : [val].concat(opts); return `<select id="${fid(path)}" data-path="${path}" data-type="text" aria-label="${label}" class="${cls}">${o.map((x) => `<option${x === val ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`; };
   // A person dropdown: the team list, plus the saved name if it isn't on the list any more.
-  const personSel = (path, val, label) => { const v = String(val || '').trim(), opts = v && !team.includes(v) ? [v, ...team] : team; return `<select id="${fid(path)}" data-path="${path}" data-type="text" aria-label="${label}"><option value=""${v ? '' : ' selected'}>—</option>${opts.map((x) => `<option${x === v ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>`; };
+  const personSel = (path, val, label) => { const v = String(val || '').trim(), opts = v && !team.includes(v) ? [v, ...team] : team; return `<select id="${fid(path)}" data-path="${path}" data-type="text" aria-label="${label}"><option value=""${v ? '' : ' selected'}>—</option>${opts.map((x) => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${esc(x)}${x.toLowerCase() === 'another' ? ' (Company)' : ''}</option>`).join('')}</select>`; };
   const rm = (path, label, disabled, title) => `<td class="x"><button type="button" data-remove="${path}" aria-label="Remove ${esc(label)}"${disabled ? ` disabled title="${esc(title)}"` : ' title="Remove row"'}>✕</button></td>`;
   const avatar = (name) => { const s = String(name || '?').trim(); let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)) % 360; const w = s.split(/\s+/).filter(Boolean); const ini = (w.length > 1 ? w[0][0] + w[1][0] : s.slice(0, 2)).toUpperCase(); return `<span class="av" style="--h:${h}" aria-hidden="true">${esc(ini)}</span>`; };
   const stCls = (s) => (s === 'Active' ? 'st-Active' : s === 'Disabled' ? 'st-Disabled' : 'st-Need');
@@ -185,7 +186,7 @@ window.BDProfit = (() => {
     <section class="pf-sheet">
       <div class="pf-title t-green"><span>People · dropdown names</span><span class="t2">${team.length} names · used for Developer, Doer, Spender and Supporter</span></div>
       <div class="pf-chips">${team.map((n, i) => `<span class="pf-chip">${avatar(n)}<span>${esc(n)}</span><button type="button" data-remove="team.${i}" aria-label="Remove ${esc(n)} from the list" title="Remove from the list (deals keep the name)">✕</button></span>`).join('')}</div>
-      <div class="pf-foot" id="pfPeopleAdd"><span class="pf-addp"><input type="text" id="pfNewPerson" placeholder="Add a name" aria-label="New name for the dropdown" maxlength="60"><button class="sm" type="button" id="pfAddPerson">+ Add</button></span><span>${isAdmin ? 'Names show in this order in the dropdowns' : ''}</span></div>
+      <div class="pf-foot" id="pfPeopleAdd"><span class="pf-addp"><input type="text" id="pfNewPerson" placeholder="Add a name" aria-label="New name for the dropdown" maxlength="60"><button class="sm" type="button" id="pfAddPerson">+ Add</button></span><span>“Another” counts as Company${isAdmin ? ' · names show in this order in the dropdowns' : ''}</span></div>
     </section>`;
     updateSplit();
   }

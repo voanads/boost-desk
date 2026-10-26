@@ -2773,3 +2773,5 @@ nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:
 .tm-row button.sm{min-height:32px;padding:0 10px;white-space:nowrap}
 @media (max-width:760px){nav.tabs a.navlink-site{display:none}}
 #mbKpiDlg{max-width:860px}.mbkpi-in{max-width:none}
+.avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.mb-row .avatar,.tm-row .avatar{overflow:hidden}

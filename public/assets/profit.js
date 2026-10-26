@@ -22,7 +22,8 @@ window.BDProfit = (() => {
   const byId = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = (v) => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
-  const money = (n, dec = 2) => { n = num(n); const s = '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }); return n < 0 ? '−' + s : s; };
+  const money = (n, dec = 2) => { n = num(n); n = Math.round(n * 10 ** dec) / 10 ** dec || 0; // no “−$0.00”
+    const s = '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec }); return n < 0 ? '−' + s : s; };
   const pct = (n) => Math.max(0, Math.min(100, n));
   const monthLabel = (id) => { const [y, m] = id.split('-'); return MONTHS_EN[+m - 1] + ' ' + y; };
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -40,7 +41,12 @@ window.BDProfit = (() => {
   }
 
   function blankMonth() { return { updatedOn: '', admin: '', aba: 0, carry: 0, accounts: [], clients: [], transactions: [] }; }
-  function normalize(d) { const b = Object.assign(blankMonth(), clone(d || {})); ['accounts', 'clients', 'transactions'].forEach((k) => { if (!Array.isArray(b[k])) b[k] = []; }); return b; }
+  function normalize(d) {
+    const b = Object.assign(blankMonth(), clone(d || {})); ['accounts', 'clients', 'transactions'].forEach((k) => { if (!Array.isArray(b[k])) b[k] = []; });
+    // The old tracker's second client column (ជំពាក់) is the sheet's boost deposit (លុយភ្ញៀវតំកល់ប៊ូត).
+    b.clients.forEach((c) => { if ((c.deposit === undefined || c.deposit === '') && c.owes !== undefined && c.owes !== '') c.deposit = c.owes; delete c.owes; });
+    return b;
+  }
   function servicesFrom(data) {
     if (data && Array.isArray(data.services)) return data.services.map((s) => ({ name: String(s.name || ''), pct: ROLES.map((_, i) => num((s.pct || [])[i])) }));
     if (data && data.rules && typeof data.rules === 'object') {
@@ -74,13 +80,12 @@ window.BDProfit = (() => {
         ppl[who].total += amt; ppl[who].parts[rl] = (ppl[who].parts[rl] || 0) + amt;
       });
     });
-    // Carry over (money kept for next month) comes out of the profit to split: every share,
-    // Company's too, gets smaller by the same %, so the split still follows the rules.
-    const carry = num(d.carry), net = profit > 0 ? profit - carry : profit, f = profit > 0 ? Math.max(0, net / profit) : 1;
-    const rolesNet = {};
-    ROLES.forEach((rl) => { rolesNet[rl] = roles[rl] * f; });
-    Object.values(ppl).forEach((v) => { v.total *= f; Object.keys(v.parts).forEach((k) => { v.parts[k] *= f; }); });
-    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, carry: profit > 0 ? carry : 0, net, people: ppl, roles, rolesNet, svc };
+    // Same formulas as the Google Sheet (Ad account tab):
+    //   កើនឡើង (increase)              = ABA + to receive − boost deposits − FB debt
+    //   ដកចែកគ្នា (profit to split)     = the profit (ជាក់ស្តែង) of every deal
+    //   នៅសល់សម្រាប់ខែក្រោយ (carry over) = increase − profit to split
+    const increase = num(d.aba) + toReceive - deposit - fbDebt, carry = increase - profit;
+    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, increase, carry, net: profit, people: ppl, roles, rolesNet: roles, svc };
   }
 
   const fid = (path) => 'pf-' + path.replace(/\./g, '-');
@@ -126,7 +131,9 @@ window.BDProfit = (() => {
             <tr><td class="k">ABA <small>cash in bank</small></td><td>${inp('aba', d.aba, 'number', 'aria-label="ABA balance"')}</td></tr>
             <tr><td class="k"><span lang="km">លុយត្រូវទទួលបានថែម</span> <small>to receive</small></td><td class="v n good" id="pfSRecv"></td></tr>
             <tr><td class="k"><span lang="km">លុយភ្ញៀវតម្កល់ប៊ូស</span> <small>boost deposits</small></td><td class="v n blue" id="pfSDep"></td></tr>
-            <tr><td class="k"><span lang="km">នៅសល់សម្រាប់ខែក្រោយ</span> <small>carry over</small></td><td>${inp('carry', d.carry, 'number', 'aria-label="Carry to next month"')}</td></tr>
+            <tr class="pf-calc"><td class="k"><span lang="km">កើនឡើង</span> <small>increase = ABA + to receive − deposits − FB debt</small></td><td class="v n" id="pfSInc"></td></tr>
+            <tr class="pf-calc"><td class="k"><span lang="km">ដកចែកគ្នា</span> <small>profit to split</small></td><td class="v n" id="pfSSplit"></td></tr>
+            <tr class="pf-calc"><td class="k"><span lang="km">នៅសល់សម្រាប់ខែក្រោយ</span> <small>carry over = increase − profit to split</small></td><td class="v n" id="pfSCarry"></td></tr>
           </tbody></table>
         </section>
 
@@ -146,12 +153,13 @@ window.BDProfit = (() => {
     const d = draft, c = calc(d), k = byId('pfStripA'); if (!k) return;
     const usedPct = c.fbThresh ? c.fbDebt / c.fbThresh * 100 : 0;
     k.innerHTML = `
-      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.net)}</span><span class="sub">${c.carry ? `${money(c.profit)} − ${money(c.carry)} carry over · ` : ''}See profit split →</span></button>
+      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.profit)}</span><span class="sub">See profit split →</span></button>
       <div><span class="k"><span class="ic c-blue">B</span>ABA balance</span><span class="v">${money(d.aba)}</span><span class="sub">Cash in bank</span></div>
       <div><span class="k"><span class="ic c-gold">f</span>FB debt</span><span class="v">${money(c.fbDebt)}</span><div class="meter"><i style="width:${pct(usedPct)}%;background:var(--pf-gold)"></i></div><span class="sub">${Math.round(usedPct)}% of ${money(c.fbThresh, 0)} threshold</span></div>
       <div><span class="k"><span class="ic c-green">↓</span>To receive</span><span class="v good">${money(c.toReceive)}</span><span class="sub">From ${c.recvCount} clients</span></div>
       <div><span class="k"><span class="ic c-blue">$</span>Boost deposits</span><span class="v blue">${money(c.deposit)}</span><span class="sub"><span lang="km">លុយភ្ញៀវតម្កល់ប៊ូស</span> · ${c.depCount}</span></div>
-      <div><span class="k"><span class="ic c-purple">→</span>Carry to next month</span><span class="v">${money(d.carry)}</span><span class="sub" lang="km">នៅសល់សម្រាប់ខែក្រោយ</span></div>`;
+      <div><span class="k"><span class="ic c-purple">↑</span>Increase</span><span class="v${c.increase < 0 ? ' bad' : ''}">${money(c.increase)}</span><span class="sub" lang="km">កើនឡើង</span></div>
+      <div><span class="k"><span class="ic c-purple">→</span>Carry to next month</span><span class="v${c.carry < 0 ? ' bad' : ''}">${money(c.carry)}</span><span class="sub" lang="km">នៅសល់សម្រាប់ខែក្រោយ</span></div>`;
     setText('pfAccTitle', `${c.fbCount} active · ${money(c.fbDebt, 0)} of ${money(c.fbThresh, 0)}`);
     setText('pfAccBal', money(c.fbDebt)); setText('pfAccThr', money(c.fbThresh));
     d.accounts.forEach((a, i) => {
@@ -162,7 +170,7 @@ window.BDProfit = (() => {
     });
     setText('pfSumUpd', d.updatedOn ? 'Updated ' + d.updatedOn : '');
     setText('pfSActive', `${money(c.fbDebt)} / ${money(c.fbThresh, 0)}`); setText('pfSDis', `${money(c.disabled)} / ${money(c.disT, 0)}`); setText('pfSNeed', `${money(c.needPay)} / ${money(c.needT, 0)}`);
-    setText('pfSFb', money(c.fbDebt)); setText('pfSRecv', money(c.toReceive)); setText('pfSDep', money(c.deposit));
+    setText('pfSFb', money(c.fbDebt)); setText('pfSRecv', money(c.toReceive)); setText('pfSDep', money(c.deposit)); setText('pfSInc', money(c.increase)); setText('pfSSplit', money(c.profit)); setText('pfSCarry', money(c.carry)); { const e = byId('pfSCarry'); if (e) e.classList.toggle('bad', c.carry < 0); }
     setText('pfCRecv', money(c.toReceive)); setText('pfCDep', money(c.deposit));
     setText('pfCliTitle', `${c.recvCount} to receive · ${c.depCount} deposit`);
   }
@@ -174,9 +182,9 @@ window.BDProfit = (() => {
     <section class="pf-strip" id="pfStripS" aria-label="Split by person"></section>
     <section class="pf-sheet">
       <div class="pf-title t-blue"><span>Transactions</span><span class="t2" id="pfTTitle"></span></div>
-      <div class="pf-scroll"><table style="min-width:1380px"><thead><tr><th>No</th><th>Service</th><th class="n">Amount</th><th class="n">Profit</th><th>Ad account</th>${PEOPLE_ROLES.map((r) => `<th>${ROLE_LABEL[r]}</th>`).join('')}${ROLES.map((r) => `<th class="n shade">${ROLE_LABEL[r]}</th>`).join('')}<th></th></tr></thead><tbody>
-      ${d.transactions.map((t, i) => `<tr><td class="idx">${i + 1}</td><td style="width:130px">${sel(`transactions.${i}.service`, t.service || names[0] || '', names, 'Service')}</td><td style="width:95px">${inp(`transactions.${i}.amount`, t.amount, 'number', 'aria-label="Amount"')}</td><td style="width:95px">${inp(`transactions.${i}.profit`, t.profit, 'number', 'aria-label="Profit"')}</td><td style="width:140px">${inp(`transactions.${i}.account`, t.account, 'text', 'aria-label="Ad account" placeholder="Account"')}</td>${PEOPLE_ROLES.map((r) => `<td style="width:140px">${personSel(`transactions.${i}.${r}`, t[r], ROLE_LABEL[r])}</td>`).join('')}${ROLES.map((r, j) => `<td class="v n${r === 'company' ? '' : ' mut'}" id="pf-ts-${i}-${j}" style="width:90px"></td>`).join('')}${rm(`transactions.${i}`, 'transaction ' + (i + 1))}</tr>`).join('')}
-      <tr class="total"><td class="idx"></td><td>Total</td><td class="n" id="pfTAmt"></td><td class="n" id="pfTPro"></td><td colspan="5"></td>${ROLES.map((r, j) => `<td class="n" id="pf-tt-${j}"></td>`).join('')}<td></td></tr>
+      <div class="pf-scroll"><table style="min-width:1640px"><thead><tr><th>No</th><th title="Service" lang="km">ប្រភេទសេវាកម្ម</th><th class="n" title="Full price" lang="km">តម្លៃពេញ</th><th class="n" title="Actual profit" lang="km">ជាក់ស្តែង</th><th title="Date paid" lang="km">ថ្ងៃបានលុយ</th><th title="Reference" lang="km">យោង</th><th title="Notes / ad account" lang="km">ចំណាំផ្សេងៗ</th>${PEOPLE_ROLES.map((r) => `<th>${ROLE_LABEL[r]}</th>`).join('')}${ROLES.map((r) => `<th class="n shade">${ROLE_LABEL[r]}</th>`).join('')}<th></th></tr></thead><tbody>
+      ${d.transactions.map((t, i) => `<tr><td class="idx">${i + 1}</td><td style="width:130px">${sel(`transactions.${i}.service`, t.service || names[0] || '', names, 'Service')}</td><td style="width:95px">${inp(`transactions.${i}.amount`, t.amount, 'number', 'aria-label="Amount"')}</td><td style="width:95px">${inp(`transactions.${i}.profit`, t.profit, 'number', 'aria-label="Profit"')}</td><td style="width:150px">${inp(`transactions.${i}.paidOn`, t.paidOn, 'date', 'aria-label="Date paid"')}</td><td class="pf-ref" style="width:56px"><input type="checkbox" id="${fid(`transactions.${i}.ref`)}" data-path="transactions.${i}.ref" data-type="bool" aria-label="Reference (Yes)"${t.ref ? ' checked' : ''}></td><td style="width:150px">${inp(`transactions.${i}.account`, t.account, 'text', 'aria-label="Notes" placeholder="Notes"')}</td>${PEOPLE_ROLES.map((r) => `<td style="width:140px">${personSel(`transactions.${i}.${r}`, t[r], ROLE_LABEL[r])}</td>`).join('')}${ROLES.map((r, j) => `<td class="v n${r === 'company' ? '' : ' mut'}" id="pf-ts-${i}-${j}" style="width:90px"></td>`).join('')}${rm(`transactions.${i}`, 'transaction ' + (i + 1))}</tr>`).join('')}
+      <tr class="total"><td class="idx"></td><td>Total</td><td class="n" id="pfTAmt"></td><td class="n" id="pfTPro"></td><td colspan="7"></td>${ROLES.map((r, j) => `<td class="n" id="pf-tt-${j}"></td>`).join('')}<td></td></tr>
       </tbody></table></div>
       <div class="pf-foot"><button class="ghost sm pf-link" type="button" data-add="transactions">+ Add transaction</button><span>Shares come from the split rules below</span></div>
     </section>
@@ -201,7 +209,7 @@ window.BDProfit = (() => {
   function updateSplit() {
     const d = draft, c = calc(d), strip = byId('pfStripS'); if (!strip) return;
     const ppl = Object.entries(c.people).filter(([, v]) => Math.abs(v.total) > 0.004).sort((a, b) => b[1].total - a[1].total);
-    strip.innerHTML = `<div class="hl"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.net)}</span><span class="sub">${c.carry ? `${money(c.profit)} profit − ${money(c.carry)} carry over` : `${d.transactions.length} transactions`}</span></div>` +
+    strip.innerHTML = `<div class="hl"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.profit)}</span><span class="sub">${d.transactions.length} transactions</span></div>` +
       ppl.map(([name, v]) => { const sh = c.net ? v.total / c.net * 100 : 0; return `<div><span class="k">${avatar(name)}${esc(name)}</span><span class="v${v.total < 0 ? ' bad' : ''}">${money(v.total)}</span><div class="meter"><i style="width:${pct(sh)}%;background:${name === 'Company' ? 'var(--pf-fg)' : 'var(--pf-brand)'}"></i></div><span class="sub">${sh.toFixed(1)}% of profit</span></div>`; }).join('');
     const cell = (x, b) => `<td class="v n${x < 0 ? ' bad' : ''}"${b ? ' style="font-weight:700"' : ''}>${Math.abs(x) < 0.004 ? '<span class="mut">$0</span>' : money(x)}</td>`;
     byId('pfByPerson').innerHTML = `<table style="min-width:560px"><thead><tr><th>Person</th><th class="n">Sum</th>${ROLES.map((r) => `<th class="n">${ROLE_LABEL[r]}</th>`).join('')}</tr></thead><tbody>
@@ -213,7 +221,7 @@ window.BDProfit = (() => {
       ${order.map((n) => { const v = c.svc[n]; return `<tr><td class="v">${esc(n)}</td><td class="v n mut">${v.count}</td>${cell(v.total, 1)}${v.roles.map((x) => cell(x)).join('')}</tr>`; }).join('') || '<tr><td class="v mut" colspan="8">No transactions yet</td></tr>'}
       <tr class="total"><td>Sum</td><td class="n">${d.transactions.length}</td><td class="n">${money(c.profit)}</td>${ROLES.map((r) => `<td class="n">${money(c.roles[r])}</td>`).join('')}</tr></tbody></table>`;
     setText('pfTTitle', `${d.transactions.length} deals · profit ${money(c.profit)}`);
-    setText('pfPTitle', c.carry ? `${ppl.length} people · after ${money(c.carry)} carry over` : `${ppl.length} people`);
+    setText('pfPTitle', `${ppl.length} people`);
     d.transactions.forEach((t, i) => { const p = num(t.profit), r = ruleFor(t.service); ROLES.forEach((_, j) => { const e = byId(`pf-ts-${i}-${j}`); if (e) { const x = p * num(r[j]) / 100; e.textContent = Math.abs(x) < 0.004 ? '$0' : money(x); e.classList.toggle('bad', x < 0); } }); });
     setText('pfTAmt', money(d.transactions.reduce((s, t) => s + num(t.amount), 0))); setText('pfTPro', money(c.profit));
     ROLES.forEach((r, j) => setText('pf-tt-' + j, money(c.roles[r])));
@@ -317,7 +325,7 @@ window.BDProfit = (() => {
   function wire() {
     app.addEventListener('input', (e) => {
       const t = e.target;
-      if (t.dataset.path) { setPath(draft, t.dataset.path, t.dataset.type === 'num' ? (t.value === '' ? '' : num(t.value)) : t.value); update(); scheduleSave(); return; }
+      if (t.dataset.path) { setPath(draft, t.dataset.path, t.dataset.type === 'bool' ? t.checked : t.dataset.type === 'num' ? (t.value === '' ? '' : num(t.value)) : t.value); update(); scheduleSave(); return; }
       if (t.dataset.rulePct) { const [i, j] = t.dataset.rulePct.split('|').map(Number); services[i].pct[j] = num(t.value); updateSplit(); scheduleRules(); }
     });
     app.addEventListener('change', async (e) => {
@@ -345,7 +353,7 @@ window.BDProfit = (() => {
       if (b.id === 'pfFillMeta') { fillFromMeta(b); return; }
       if (b.dataset.add) {
         const k = b.dataset.add;
-        const row = k === 'accounts' ? { name: '', platform: 'Facebook', status: 'Active', balance: '', threshold: '' } : k === 'clients' ? { name: '', receive: '', deposit: '' } : { service: (services[0] || {}).name || '', account: '', amount: '', profit: '', developer: '', doer: '', spender: '', supporter: '' };
+        const row = k === 'accounts' ? { name: '', platform: 'Facebook', status: 'Active', balance: '', threshold: '' } : k === 'clients' ? { name: '', receive: '', deposit: '' } : { service: (services[0] || {}).name || '', account: '', amount: '', profit: '', paidOn: '', ref: false, developer: '', doer: '', spender: '', supporter: '' };
         draft[k].push(row); scheduleSave(); render();
         const f = byId(fid(`${k}.${draft[k].length - 1}.${k === 'transactions' ? 'amount' : 'name'}`)); if (f) f.focus(); return;
       }

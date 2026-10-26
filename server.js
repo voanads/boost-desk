@@ -336,9 +336,9 @@ app.use(wrap(async (req, res, next) => {
 // The front door (/) sends each person to their site.
 app.get('/', wrap(async (req, res) => {
   if (req.user.google) return res.redirect('/admin');
-  if ((await db.ownerId()) === req.user.fb_id) return res.redirect('/owner');
-  const r = await roleOf(req.user.fb_id);
-  res.redirect(r === 'pm' ? '/projectmanager' : '/admin');
+  // The front door opens the Project Manager site for everyone with a Facebook login; the owner and
+  // CEO / COO switch to /owner or /admin from the menu or by typing the address.
+  res.redirect('/projectmanager');
 }));
 // /owner: the app owner's site — every page (Work + Admin). Anyone else is sent to their own site.
 app.get(['/owner', '/owner/'], wrap(async (req, res) => {

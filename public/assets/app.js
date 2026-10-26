@@ -3531,10 +3531,10 @@ Thank you for working with Ads Box!`,
       const h = location.hash.slice(1);
       const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
       if (SITE) document.querySelector('.brand').setAttribute('href', ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
-      if (MB_SITE && me.buyer) { // a media buyer inside their PM's account: no sync, no ad accounts, no client settings or delete; a My tasks link
-        document.documentElement.classList.add('asbuyer');
-        $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account";
-        const g = $('dGreet'); if (g) g.textContent = `${me.buyer.name} · ${me.name}'s clients`;
+      if (MB_SITE) { // the media buyer site: no sync, no ad accounts, no Profit, no client settings or delete, no task options; a My tasks link
+        document.documentElement.classList.add('asbuyer'); me.profitRole = null;
+        if (me.buyer) { $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account"; }
+        const g = $('dGreet'); if (g) g.textContent = `${me.buyer ? me.buyer.name : me.name} · ${me.name}'s clients`;
         const acc = document.querySelector('nav.tabs [data-tab=accounts]'); if (acc) acc.hidden = true;
         const mt = document.createElement('a'); mt.href = '/mediabuyer/tasks'; mt.className = 'navlink'; mt.setAttribute('role', 'tab'); mt.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span class="full">My tasks</span><span class="short">Tasks</span>';
         const first = document.querySelector('nav.tabs [data-tab=dashboard]'); if (first) first.insertAdjacentElement('afterend', mt);

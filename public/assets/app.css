@@ -2749,4 +2749,4 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-sm);padding:7px 12px;color:var(--muted);font-weight:600;font-size:var(--fs-xl);text-decoration:none;white-space:nowrap}
 @media (min-width:1100px){nav.tabs a.navlink{padding:9px 10px;font-size:var(--fs-xl);border-radius:var(--r-md);width:100%;box-sizing:border-box}nav.tabs a.navlink:hover{background:var(--bg-2);color:var(--ink)}}
 @media (max-width:760px){nav.tabs a.navlink{flex-direction:column;gap:3px;font-size:var(--fs-2xs);flex:1}nav.tabs a.navlink .full{display:none}nav.tabs a.navlink .short{display:inline}nav.tabs a.navlink .ic{width:22px;height:22px}}
-.asbuyer #kpiMine,.asbuyer #tgMine{display:none!important}
+.asbuyer #kpiMine,.asbuyer #tgMine,.asbuyer #cdTaskMore,.asbuyer #cdTaskOpts,.asbuyer nav.tabs [data-tab=profit],.asbuyer nav.tabs [data-tab=accounts],.asbuyer .syncinfo{display:none!important}

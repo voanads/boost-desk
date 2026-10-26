@@ -336,8 +336,15 @@ app.use(wrap(async (req, res, next) => {
 // The front door (/) sends each person to their site.
 app.get('/', wrap(async (req, res) => {
   if (req.user.google) return res.redirect('/admin');
+  if ((await db.ownerId()) === req.user.fb_id) return res.redirect('/owner');
   const r = await roleOf(req.user.fb_id);
   res.redirect(r === 'pm' ? '/projectmanager' : '/admin');
+}));
+// /owner: the app owner's site — every page (Work + Admin). Anyone else is sent to their own site.
+app.get(['/owner', '/owner/'], wrap(async (req, res) => {
+  if (req.user.google || (await db.ownerId()) !== req.user.fb_id) return res.redirect('/');
+  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="owner">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Owner</title>');
+  res.set('Cache-Control', 'no-cache').send(html);
 }));
 app.get(['/projectmanager', '/projectmanager/'], (req, res) => {
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="pm">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Project Manager</title>');

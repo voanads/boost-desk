@@ -1690,7 +1690,7 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website: <b>CEO</b> and <b>COO</b> use <b>/admin</b> (everything) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · media buyers use <b>/mediabuyer</b> from the Telegram bot. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
+    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · media buyers use <b>/mediabuyer</b> from the Telegram bot. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
       + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
@@ -3521,7 +3521,7 @@ Thank you for working with Ads Box!`,
   }
 
   // ---------- boot ----------
-  const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm' || SITE === 'mb', MB_SITE = SITE === 'mb';
+  const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm' || SITE === 'mb', MB_SITE = SITE === 'mb', OWNER_SITE = SITE === 'owner';
   (async () => {
     try {
       me = await api('/me');
@@ -3548,8 +3548,8 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
-      if (SITE) document.querySelector('.brand').setAttribute('href', ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
+      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = OWNER_SITE ? 'Owner' : ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
+      if (SITE) document.querySelector('.brand').setAttribute('href', OWNER_SITE ? '/owner#main' : ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
       if (MB_SITE) { // the media buyer site: no sync, no ad accounts, no Profit, no client settings or delete, no task options; a My tasks link
         document.documentElement.classList.add('asbuyer'); me.profitRole = null;
         if (me.buyer) { $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account"; }
@@ -3569,7 +3569,7 @@ Thank you for working with Ads Box!`,
         if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); pb.classList.remove('grp-hidden'); } else $('navGrpAdmin').hidden = false;
       }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
-      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE ? 'main' : 'dashboard'));
+      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

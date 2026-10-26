@@ -9,7 +9,7 @@ const cfg = require('./config');
 const KEY = 'mediaBuyers';
 // A signed link that opens the media buyer's own dashboard (valid 60 days; the bot sends a fresh one any time).
 const sign = (id, exp) => crypto.createHmac('sha256', cfg.sessionSecret).update(`mb.${id}.${exp}`).digest('hex').slice(0, 32);
-const dashLink = (b) => { const exp = Date.now() + 60 * 864e5; return `${cfg.baseUrl}/mb/login?b=${b.id}&e=${exp}&s=${sign(b.id, exp)}`; };
+const dashLink = (b) => { const exp = Date.now() + 60 * 864e5; return `${cfg.baseUrl}/mediabuyer/login?b=${b.id}&e=${exp}&s=${sign(b.id, exp)}`; };
 function checkLink(id, exp, sig) {
   if (!/^[a-f0-9]{8}$/.test(String(id)) || !(Number(exp) > Date.now()) || !/^[a-f0-9]{32}$/.test(String(sig))) return false;
   const good = sign(id, Number(exp)); return crypto.timingSafeEqual(Buffer.from(String(sig)), Buffer.from(good));

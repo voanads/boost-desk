@@ -277,9 +277,9 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
+    if (['admin', 'main', 'board', 'adaccts', 'target', 'profit'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
+    if (document.body.dataset.site === 'admin' && me && me.google && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
     ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
@@ -1689,7 +1689,7 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? '<b>CEO</b> (owner) manages everything · <b>COO</b> sees every team, the company dashboard and this Admin page · <b>Project Manager</b> sees their own clients, team and media buyers. Media buyers work from Telegram and their own dashboard.' : 'Only the app owner can change roles or remove people.')
+    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website: <b>CEO</b> and <b>COO</b> use <b>/admin</b> (everything) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · media buyers use <b>/mediabuyer</b> from the Telegram bot. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
       + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
@@ -3501,11 +3501,11 @@ Thank you for working with Ads Box!`,
   }
 
   // ---------- boot ----------
-  const ADMIN_SITE = document.body.dataset.site === 'admin';
+  const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm';
   (async () => {
     try {
       me = await api('/me');
-      if (ADMIN_SITE) { // the admin website: only the Main Dashboard and Admin
+      if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
         document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'target', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
@@ -3528,10 +3528,15 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (me.canAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
-      if (me.canAdmin) $('navGrpAdmin').hidden = false;
-      if (me.profitRole) { document.querySelector('nav.tabs [data-tab=profit]').hidden = false; $('navGrpAdmin').hidden = false; }
-      showTab(['main', 'board', 'adaccts', 'profit', 'target', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : 'Project Manager';
+      if (SITE) document.querySelector('.brand').setAttribute('href', ADMIN_SITE ? '/admin#main' : '/projectmanager#dashboard');
+      // /projectmanager shows only the Work pages, even to the owner; /admin shows everything.
+      const showAdmin = me.canAdmin && !PM_SITE;
+      if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      if (showAdmin) $('navGrpAdmin').hidden = false;
+      if (me.profitRole && !PM_SITE) { document.querySelector('nav.tabs [data-tab=profit]').hidden = false; $('navGrpAdmin').hidden = false; }
+      const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
+      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

@@ -652,7 +652,7 @@
           <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
             <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
         </div>
-        <div class="cd-col">${aiSection(c)}</div>
+        <div class="cd-col">${histSection(c)}</div>
       </div>
     </div>`;
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
@@ -814,7 +814,7 @@
     try { cWb[cid] = await api(`/clients/${cid}/workbook`); } catch (e) { cWb[cid] = { tasks: [], ticks: {}, err: e.message }; }
     if (cid === cSel) { paintWork(); paintAi(); const n = $('cdNotes'); if (n && !n.value && cWb[cid].notes && document.activeElement !== n) n.value = cWb[cid].notes; }
     const w = cWb[cid];
-    if (aiReady !== false && !w.err && !(w.ai && w.ai.day === w.today && w.ai.lang === aiLang)) runClientAi(cid);
+    // (Today's plan from AI is no longer shown on the client; the right column is the done history.)
   }
   // Today's work (from the rules) + tasks (AI plan and your own), all tickable.
   function workSection(c) {
@@ -826,7 +826,7 @@
     const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
-      ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
+      ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" data-ctitle="${esc(x.title)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
       ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) : ''}</span></div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
@@ -836,7 +836,7 @@
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
     const w = cWb[c.id]; if (w && w.tasks) { cWork[c.id] = { openTasks: w.tasks.filter((t) => !t.done).length, ticked: Object.keys(w.ticks || {}).filter((k) => k.startsWith((w.today || '') + ':')).map((k) => k.slice(11)) }; paintBadge(c); }
-    sec.outerHTML = workSection(c); bindWork(c);
+    sec.outerHTML = workSection(c); bindWork(c); paintAi();
   }
   // Refresh one client's badge in the list without redrawing the list.
   function paintBadge(c) {
@@ -869,16 +869,53 @@
   }
   // Repaint only one section, so the form and notes keep what is being typed.
   function paintAi() {
-    const sec = document.querySelector('#cDetail .aisec'), c = clients.find((x) => x.id === cSel);
-    if (sec && c) sec.outerHTML = aiSection(c);
+    const sec = document.querySelector('#cDetail .histsec'), c = clients.find((x) => x.id === cSel);
+    if (sec && c) sec.outerHTML = histSection(c);
   }
+  // ---- done history: what was ticked off in Today's work & tasks, day by day, one month at a time ----
+  const histMonth = {}, histDay = {}; // client id → 'YYYY-MM' shown, and a picked day (or none)
+  function histItems(c) {
+    const w = cWb[c.id] || {}, seen = new Set(), out = [];
+    for (const x of w.log || []) { out.push(x); seen.add(x.id); }
+    for (const t of w.tasks || []) if (t.done && t.doneAt && t.doneDay && !seen.has('t:' + t.id + ':' + t.doneDay)) out.push({ id: 't:' + t.id + ':' + t.doneDay, day: t.doneDay, at: t.doneAt, by: t.doneBy, text: t.text, kind: t.repeat ? 'repeat' : t.from === 'ai' ? 'ai' : 'me' });
+    return out;
+  }
+  function histSection(c) {
+    const w = cWb[c.id] || {}, today = w.today || me.today, ym = histMonth[c.id] || today.slice(0, 7);
+    const all = histItems(c), inMonth = all.filter((x) => x.day.slice(0, 7) === ym), byDay = {};
+    for (const x of inMonth) (byDay[x.day] = byDay[x.day] || []).push(x);
+    const [y, m] = ym.split('-').map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate(), first = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+    const max = Math.max(1, ...Object.values(byDay).map((l) => l.length)), pick = histDay[c.id] && histDay[c.id].slice(0, 7) === ym ? histDay[c.id] : '';
+    const cells = [...Array(first).fill('<span class="hc-pad"></span>'), ...Array.from({ length: dim }, (_, i) => {
+      const d = `${ym}-${String(i + 1).padStart(2, '0')}`, n = (byDay[d] || []).length, lvl = n ? Math.ceil(n / max * 3) : 0;
+      return `<button type="button" class="hc-d l${lvl}${d === today ? ' today' : ''}${d === pick ? ' on' : ''}" data-hday="${d}" ${d > today ? 'disabled' : ''} aria-label="${esc(nice(d))}: ${n} done" aria-pressed="${d === pick}"><span>${i + 1}</span>${n ? `<small>${n}</small>` : ''}</button>`;
+    })].join('');
+    const days = Object.keys(byDay).filter((d) => !pick || d === pick).sort().reverse();
+    const ic = (k) => k === 'repeat' ? '🔁' : k === 'ai' ? '✨' : k === 'me' ? '✍️' : (IC_TODO[k] || '✅');
+    const list = days.map((d) => `<div class="hl-day"><div class="hl-h"><b>${esc(new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}</b><span class="hint">${byDay[d].length} done</span></div>
+      ${byDay[d].sort((a, b) => String(a.at).localeCompare(String(b.at))).map((x) => `<div class="hl-it"><span aria-hidden="true">${ic(x.kind)}</span><span class="hl-t">${esc(x.text)}</span><span class="hint">${x.at ? esc(new Date(x.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : ''}${x.by ? ' · ' + esc(x.by) : ''}</span></div>`).join('')}</div>`).join('');
+    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const activeDays = Object.keys(byDay).length;
+    return `<section class="cd-sec histsec"><div class="cd-sec-h"><h4>📅 Done history</h4><span class="spacer"></span>
+        <div class="hm-nav"><button type="button" class="ghost sm" data-hmon="-1" aria-label="Previous month">‹</button><b>${esc(label)}</b><button type="button" class="ghost sm" data-hmon="1" aria-label="Next month" ${ym >= today.slice(0, 7) ? 'disabled' : ''}>›</button></div></div>
+      <div class="hint">${inMonth.length ? `<b>${inMonth.length}</b> thing${inMonth.length === 1 ? '' : 's'} done on <b>${activeDays}</b> day${activeDays === 1 ? '' : 's'}` : w.today ? 'Nothing ticked off this month yet.' : 'Loading…'}${pick ? ` · showing ${esc(nice(pick).replace(/ \d{4}$/, ''))} <button type="button" class="linkish" data-hday="">show all</button>` : ''}</div>
+      <div class="hcal" aria-label="Days this month"><span class="hc-w">Mo</span><span class="hc-w">Tu</span><span class="hc-w">We</span><span class="hc-w">Th</span><span class="hc-w">Fr</span><span class="hc-w">Sa</span><span class="hc-w">Su</span>${cells}</div>
+      <div class="hlist">${list || (inMonth.length ? '' : '<div class="todo-done">Ticked tasks show up here, day by day.</div>')}</div></section>`;
+  }
+  document.addEventListener('click', (ev) => {
+    const mb = ev.target.closest('#cDetail [data-hmon]'), db_ = ev.target.closest('#cDetail [data-hday]'); if (!mb && !db_) return;
+    const c = clients.find((x) => x.id === cSel); if (!c) return; const today = (cWb[c.id] && cWb[c.id].today) || me.today;
+    if (mb) { const [y, m] = (histMonth[c.id] || today.slice(0, 7)).split('-').map(Number), d = new Date(Date.UTC(y, m - 1 + Number(mb.dataset.hmon), 1)); histMonth[c.id] = d.toISOString().slice(0, 7); histDay[c.id] = ''; }
+    else histDay[c.id] = db_.dataset.hday === histDay[c.id] ? '' : db_.dataset.hday;
+    paintAi();
+  });
   document.addEventListener('click', async (ev) => {
     const a = ev.target.closest('[data-cdai]'); if (a) { runClientAi(Number(a.dataset.cdai), true); return; }
     const l = ev.target.closest('[data-cdlang]'); if (l) { aiLang = l.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} const w = cWb[cSel]; if (w && w.ai && w.ai.lang === aiLang && w.ai.day === w.today) paintAi(); else runClientAi(cSel); return; }
     const c = clients.find((x) => x.id === cSel); if (!c || !ev.target.closest('#cDetail')) return;
     const tk = ev.target.closest('[data-ctick]'), ts = ev.target.closest('[data-ctask]'), td = ev.target.closest('[data-ctdel]'), tr = ev.target.closest('[data-ctrep]');
     try {
-      if (tk) { const on = tk.getAttribute('aria-checked') !== 'true'; tk.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tick`, { method: 'PUT', body: { key: tk.dataset.ctick, done: on } }); paintWork(); if (on) successBadge('Done ✓'); }
+      if (tk) { const on = tk.getAttribute('aria-checked') !== 'true'; tk.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tick`, { method: 'PUT', body: { key: tk.dataset.ctick, title: tk.dataset.ctitle || '', done: on } }); paintWork(); if (on) successBadge('Done ✓'); }
       else if (ts) { const on = ts.getAttribute('aria-checked') !== 'true'; ts.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tasks/${ts.dataset.ctask}`, { method: 'PATCH', body: { done: on } }); paintWork(); }
       else if (tr) { const on = tr.getAttribute('aria-pressed') !== 'true'; cWb[c.id] = await api(`/clients/${c.id}/tasks/${tr.dataset.ctrep}`, { method: 'PATCH', body: { repeat: on } }); paintWork(); toast(on ? 'Repeats every day — it comes back unticked each morning' : 'No longer repeats'); }
       else if (td) { cWb[c.id] = await api(`/clients/${c.id}/tasks/${td.dataset.ctdel}`, { method: 'DELETE' }); paintWork(); }

@@ -253,10 +253,12 @@ async function workbook(owner, clientId) {
     const doneDay = t.done && t.doneAt ? dayOf(t.doneAt) : '';
     return t.repeat && t.done && doneDay < today ? { ...t, done: false, doneAt: null, doneBy: null, doneDay: '' } : { ...t, doneDay };
   });
-  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks, ai: w.ai || null, ticks: w.ticks || {} };
+  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks, ai: w.ai || null, ticks: w.ticks || {}, log: Array.isArray(w.log) ? w.log : [] };
 }
 async function saveWorkbook(owner, clientId, w) {
   w.tasks = (w.tasks || []).slice(-80);
+  // Done history (Today's work & tasks ticked off), kept about 13 months.
+  const keepLog = sync.addDays(sync.todayIn(), -400); w.log = (Array.isArray(w.log) ? w.log : []).filter((x) => x.day >= keepLog).slice(-1500);
   const keep = sync.addDays(sync.todayIn(), -7); for (const k of Object.keys(w.ticks || {})) if (k.slice(0, 10) < keep) delete w.ticks[k];
   await db.setUserSetting(owner, `cwb:${Number(clientId)}`, w);
   return w;

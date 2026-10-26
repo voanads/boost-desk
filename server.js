@@ -1411,7 +1411,11 @@ api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), t = w.tasks.find((x) => x.id === req.params.tid);
   if (!t) return res.status(404).json({ error: 'Task not found.' });
-  if ((req.body || {}).done != null) { t.done = !!req.body.done; t.doneAt = t.done ? new Date().toISOString() : null; t.doneBy = t.done ? req.user.name : null; }
+  if ((req.body || {}).done != null) {
+    t.done = !!req.body.done; t.doneAt = t.done ? new Date().toISOString() : null; t.doneBy = t.done ? req.user.name : null;
+    const day = sync.todayIn(), lid = 't:' + t.id + ':' + day; w.log = (w.log || []).filter((x) => x.id !== lid);
+    if (t.done) w.log.push({ id: lid, day, at: t.doneAt, by: req.user.name, text: t.text, kind: t.repeat ? 'repeat' : t.from === 'ai' ? 'ai' : 'me' });
+  }
   if (typeof (req.body || {}).text === 'string' && req.body.text.trim()) t.text = req.body.text.trim().slice(0, 200);
   if ((req.body || {}).repeat != null) { if (req.body.repeat) t.repeat = true; else delete t.repeat; }
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
@@ -1426,6 +1430,8 @@ api.put('/clients/:id/tick', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const key = sync.todayIn() + ':' + String((req.body || {}).key || '').slice(0, 60);
   const w = await AI().workbook(req.user.fb_id, req.params.id); if ((req.body || {}).done) w.ticks[key] = { at: new Date().toISOString(), by: req.user.name }; else delete w.ticks[key];
+  const lid = 'k:' + key; w.log = (w.log || []).filter((x) => x.id !== lid);
+  if ((req.body || {}).done) w.log.push({ id: lid, day: sync.todayIn(), at: new Date().toISOString(), by: req.user.name, text: String(req.body.title || req.body.key || '').slice(0, 200), kind: String(req.body.key || '').slice(0, 30) });
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
 }));
 api.get('/ai/status', wrap(async (req, res) => { const c = await require('./src/ai').publicConfig(); res.json({ hasKey: c.hasKey }); }));

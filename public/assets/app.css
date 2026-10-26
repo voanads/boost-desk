@@ -2817,3 +2817,23 @@ h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .cd-empty{border:1.5px dashed var(--line);border-radius:var(--r-xl);background:var(--surface);min-height:260px}
 .cd-empty b{font-size:var(--fs-base)}
 @media (max-width:560px){.tm-row{flex-wrap:wrap}.tm-row>button.sm{margin-left:auto}.tm-row .tm-rt{flex-basis:calc(100% - 54px)}.phead-a button{white-space:nowrap;font-size:var(--fs-md);padding-inline:10px}}
+
+/* ================= Frames & sizes: one card system (27 Oct 2026) =================
+   Every panel, stat card and row uses the same frame: 1px --line, radius 12, --shadow-sm, white.
+   Padding: panels 20px (16 on phone), stat cards 16px 18px, rows 10px 12px. Gaps: 16px between panels, 12px between stat cards. */
+.panel,.msec,.ccard,.payrow,.ocard,.mk,.bk,.summary>div,.mb-sec,.company .msec,.tg-team,.team-mine,.mb-mine,.kpi-mine,.tgt-mine{border:1px solid var(--line)!important;border-radius:var(--r-xl)!important;background:var(--surface)!important;box-shadow:var(--shadow-sm)!important}
+.panel,.msec{padding:20px!important;gap:14px}
+.mk,.bk,.summary>div,.tm-k,.mb-st,.co-kpis .mk{padding:16px 18px!important;min-height:92px;justify-content:flex-start}
+.summary>div.hero,.mk.hero,.bk.bk-hero,.cd-stat.hero,#oSum>.ost-main{box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.ocard{border-top:1px solid var(--line)!important}
+.co-row,.tm-row,.mbm-task,.mb-row,.kpi-row,.tgt-it,.task,.todo-it,.hl-row{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.co-row,.tm-row,.mbm-task,.mb-row,.kpi-row{padding:10px 12px}
+.summary,.mkpis,.bkpis,.co-kpis,.tm-kpis,.mb-stats{gap:12px!important}
+.wrap{gap:16px}
+.dgrid,.co-grid,.mbody,.mside{gap:16px}
+.cd-sec{padding-top:16px}
+.bplan{border:1px solid var(--line);border-left:4px solid var(--bp);border-radius:var(--r-xl)}
+.lv{border-radius:var(--r-xl)}
+.msec-h,.cd-sec-h,.hs-head,.top{min-height:28px}
+.panel>.top h2,.msec-h h3,.cd-sec-h h4,.mb-sec-h h2{font-size:var(--fs-h3);font-weight:600;letter-spacing:-.01em}
+@media (max-width:760px){.panel,.msec{padding:16px!important}.mk,.bk,.summary>div,.tm-k,.mb-st{padding:14px 16px!important;min-height:84px}.wrap,.dgrid,.co-grid{gap:12px}}

@@ -2381,3 +2381,8 @@ dialog .csf-bar{position:static}
 @media (max-width:760px){.bp-f2{grid-template-columns:1fr 1fr}}
 .cdetail #cForm .csf-bar{position:sticky;bottom:10px;background:#11142A;color:#fff;padding:10px 12px 10px 16px;border-radius:14px}
 .cdetail #cForm .csf-bar button{flex:0 0 auto}
+
+.trep{opacity:.35;filter:grayscale(1)}
+.trep.on{opacity:1;filter:none}
+.task:hover .trep{opacity:.8}
+.trep-new{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--muted);white-space:nowrap;padding:0 4px;cursor:pointer}

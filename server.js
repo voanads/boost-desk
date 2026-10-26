@@ -313,6 +313,11 @@ async function dayTasks(day) {
     if (w.ai && w.ai.day === day) o.plans++;
     for (const t of w.tasks || []) {
       const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
+      if (t.repeat) { // every day from the day it was added: done only if ticked that day
+        if (t.day > day || day > today) continue;
+        o.tasks.push({ id: t.id, text: t.text, from: 'me', day, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, doneBy: doneDay === day ? t.doneBy || null : null, late: false, repeat: true, client: cName[cid], clientId: Number(cid) });
+        continue;
+      }
       const late = t.day < day && ((!t.done && day === today) || doneDay === day);
       if (t.day !== day && !late) continue;
       o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid) });
@@ -1394,7 +1399,7 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const text = String((req.body || {}).text || '').trim().slice(0, 200); if (!text) return res.status(400).json({ error: 'Type the task.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id);
-  w.tasks.push({ id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name });
+  w.tasks.push({ id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}) });
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
 }));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
@@ -1403,6 +1408,7 @@ api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!t) return res.status(404).json({ error: 'Task not found.' });
   if ((req.body || {}).done != null) { t.done = !!req.body.done; t.doneAt = t.done ? new Date().toISOString() : null; t.doneBy = t.done ? req.user.name : null; }
   if (typeof (req.body || {}).text === 'string' && req.body.text.trim()) t.text = req.body.text.trim().slice(0, 200);
+  if ((req.body || {}).repeat != null) { if (req.body.repeat) t.repeat = true; else delete t.repeat; }
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
 }));
 api.delete('/clients/:id/tasks/:tid', wrap(async (req, res) => {

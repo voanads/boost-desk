@@ -247,7 +247,13 @@ async function dailyPlan(owner, clientId, { lang = 'en', force = false } = {}) {
 async function workbook(owner, clientId) {
   const w = (await db.getUserSetting(owner, `cwb:${Number(clientId)}`, null)) || {};
   const keep = sync.addDays(sync.todayIn(), -30);
-  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks: (w.tasks || []).filter((t) => !t.done || (t.doneAt || '').slice(0, 10) >= keep), ai: w.ai || null, ticks: w.ticks || {} };
+  // Tasks set to repeat every day start unticked again each morning.
+  const today = sync.todayIn(), dayOf = (iso) => { try { return sync.todayIn(undefined, new Date(iso)); } catch (_) { return ''; } };
+  const tasks = (w.tasks || []).filter((t) => t.repeat || !t.done || (t.doneAt || '').slice(0, 10) >= keep).map((t) => {
+    const doneDay = t.done && t.doneAt ? dayOf(t.doneAt) : '';
+    return t.repeat && t.done && doneDay < today ? { ...t, done: false, doneAt: null, doneBy: null, doneDay: '' } : { ...t, doneDay };
+  });
+  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks, ai: w.ai || null, ticks: w.ticks || {} };
 }
 async function saveWorkbook(owner, clientId, w) {
   w.tasks = (w.tasks || []).slice(-80);

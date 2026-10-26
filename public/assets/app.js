@@ -819,16 +819,17 @@
     const w = cWb[c.id] || { tasks: [], ticks: {} }, today = w.today || (cTodo && cTodo.today) || me.today;
     const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id) : [];
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
-    const tasks = (w.tasks || []).slice().sort((a, b) => (a.done - b.done) || (b.day || '').localeCompare(a.day || ''));
+    // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
+    const tasks = (w.tasks || []).filter((t) => t.repeat || !t.done || !t.doneDay || t.doneDay >= today).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
     const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
       ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
-      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'ai' ? 'AI plan' : 'Your task'}${t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) : ''}</span></div><button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
+      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) : ''}</span></div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
-      <form class="ai-ask" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="submit" class="sm">Add</button></form></section>`;
+      <form class="ai-ask" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm">Add</button></form></section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -842,7 +843,7 @@
     if (a.n) row.insertAdjacentHTML('beforeend', `<span class="cr-badge${a.urgent ? ' urgent' : ''}">${a.n}</span>`);
   }
   function bindWork(c) {
-    const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true; try { cWb[c.id] = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text } }); paintWork(); setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0); } catch (e) { toast(e.message); inp.disabled = false; } };
+    const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true; try { cWb[c.id] = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked) } }); paintWork(); setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0); } catch (e) { toast(e.message); inp.disabled = false; } };
     const rb = document.querySelector('#cDetail [data-cdrep]'); if (rb) rb.onclick = () => openReportDlg({ kind: 'client', cid: c.id, from: (cTodo && cTodo.today) || me.today, to: (cTodo && cTodo.today) || me.today, label: nice((cTodo && cTodo.today) || me.today) });
   }
   async function runClientAi(cid, force = false) {
@@ -873,10 +874,11 @@
     const a = ev.target.closest('[data-cdai]'); if (a) { runClientAi(Number(a.dataset.cdai), true); return; }
     const l = ev.target.closest('[data-cdlang]'); if (l) { aiLang = l.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} const w = cWb[cSel]; if (w && w.ai && w.ai.lang === aiLang && w.ai.day === w.today) paintAi(); else runClientAi(cSel); return; }
     const c = clients.find((x) => x.id === cSel); if (!c || !ev.target.closest('#cDetail')) return;
-    const tk = ev.target.closest('[data-ctick]'), ts = ev.target.closest('[data-ctask]'), td = ev.target.closest('[data-ctdel]');
+    const tk = ev.target.closest('[data-ctick]'), ts = ev.target.closest('[data-ctask]'), td = ev.target.closest('[data-ctdel]'), tr = ev.target.closest('[data-ctrep]');
     try {
       if (tk) { const on = tk.getAttribute('aria-checked') !== 'true'; tk.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tick`, { method: 'PUT', body: { key: tk.dataset.ctick, done: on } }); paintWork(); if (on) successBadge('Done ✓'); }
       else if (ts) { const on = ts.getAttribute('aria-checked') !== 'true'; ts.closest('.task').classList.toggle('done', on); cWb[c.id] = await api(`/clients/${c.id}/tasks/${ts.dataset.ctask}`, { method: 'PATCH', body: { done: on } }); paintWork(); }
+      else if (tr) { const on = tr.getAttribute('aria-pressed') !== 'true'; cWb[c.id] = await api(`/clients/${c.id}/tasks/${tr.dataset.ctrep}`, { method: 'PATCH', body: { repeat: on } }); paintWork(); toast(on ? 'Repeats every day — it comes back unticked each morning' : 'No longer repeats'); }
       else if (td) { cWb[c.id] = await api(`/clients/${c.id}/tasks/${td.dataset.ctdel}`, { method: 'DELETE' }); paintWork(); }
     } catch (e) { toast(e.message); paintWork(); }
   });

@@ -2434,3 +2434,19 @@ dialog .csf-bar{position:static}
 .hl-tx b{font-weight:600;font-size:var(--fs-md);overflow-wrap:anywhere}
 .hl-tx .hint{font-size:var(--fs-xs)}
 .hl-empty{border:1.5px dashed var(--line);border-radius:12px;padding:16px;text-align:center;color:var(--muted);font-size:var(--fs-md)}
+
+/* tasks for media buyers */
+.task-new{flex-wrap:wrap}
+.task-new>input{flex:1 1 100%}
+.task-opts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}
+.task-to{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--muted);margin-right:auto}
+.task-to select{min-height:34px;padding:4px 8px;max-width:220px}
+.to-chip{display:inline-block;font-weight:700;color:var(--brand);background:var(--brand-soft);border-radius:999px;padding:0 8px;margin-right:4px}
+.mb-dlg{display:flex;flex-direction:column;gap:12px;max-width:560px}
+.mb-list{display:flex;flex-direction:column;gap:8px}
+.mb-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.mb-n{display:flex;flex-direction:column;flex:1;min-width:0}
+.mb-ok{font-size:var(--fs-sm);color:var(--ok);font-weight:600}
+.mb-wait{font-size:var(--fs-sm);color:var(--warn);font-weight:600}
+.mb-add{display:flex;gap:8px}
+.mb-add input{flex:1}

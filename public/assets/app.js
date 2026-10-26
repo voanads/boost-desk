@@ -827,11 +827,13 @@
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
       ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" data-ctitle="${esc(x.title)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
-      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) : ''}</span></div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
+      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span></div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
-      <form class="ai-ask" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm">Add</button></form></section>`;
+      <form class="ai-ask task-new" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task">
+        <div class="task-opts"><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
+        <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm primary">Add</button></div></form></section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -845,7 +847,17 @@
     if (a.n) row.insertAdjacentHTML('beforeend', `<span class="cr-badge${a.urgent ? ' urgent' : ''}">${a.n}</span>`);
   }
   function bindWork(c) {
-    const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true; try { cWb[c.id] = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked) } }); paintWork(); setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0); } catch (e) { toast(e.message); inp.disabled = false; } };
+    if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; }; }
+    const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => {
+      ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
+      const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);
+      try {
+        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '' } });
+        const { warn, ...wb } = r; cWb[c.id] = wb; paintWork();
+        if (warn) toast('Task added, but not sent: ' + warn); else if (b) successBadge('Sent to ' + b.name + ' on Telegram');
+        setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0);
+      } catch (e) { toast(e.message); inp.disabled = false; }
+    };
     const rb = document.querySelector('#cDetail [data-cdrep]'); if (rb) rb.onclick = () => openReportDlg({ kind: 'client', cid: c.id, from: (cTodo && cTodo.today) || me.today, to: (cTodo && cTodo.today) || me.today, label: nice((cTodo && cTodo.today) || me.today) });
   }
   async function runClientAi(cid, force = false) {
@@ -872,6 +884,36 @@
     const sec = document.querySelector('#cDetail .histsec'), c = clients.find((x) => x.id === cSel);
     if (sec && c) sec.outerHTML = histSection(c);
   }
+  // ---- media buyers: tasks for them go to their Telegram with a Done button ----
+  let mbList = [], mbBot = false, mbLast = '';
+  const mbOptions = () => `<option value="">Me</option>${mbList.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}${b.linked ? '' : ' (not connected)'}</option>`).join('')}<option value="__manage">＋ Media buyers…</option>`;
+  async function loadMb() { try { const r = await api('/media-buyers'); mbList = r.buyers || []; mbBot = !!r.bot; } catch (_) {} const s = $('cdTaskTo'); if (s) { s.innerHTML = mbOptions(); s.value = mbList.some((b) => b.id === mbLast) ? mbLast : ''; } if ($('mbDlg') && $('mbDlg').open) drawMb(); }
+  function drawMb() {
+    $('mbBody').innerHTML = (mbBot ? '' : '<div class="note">The Telegram bot is not set up on the server yet, so media buyers can\'t be messaged.</div>')
+      + (mbList.length ? mbList.map((b) => `<div class="mb-row"><span class="avatar">${esc(initials(b.name))}</span><div class="mb-n"><b>${esc(b.name)}</b>${b.linked ? `<span class="mb-ok">✓ Connected${b.tgName ? ' as ' + esc(b.tgName) : ''}</span>` : `<span class="mb-wait">Not connected yet — send them the invite link</span>`}</div>${b.linked ? '' : `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">Copy invite link</button>`}<button type="button" class="ghost sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}">✕</button></div>`).join('') : '<div class="hint">No media buyers yet.</div>');
+    $('mbBody').querySelectorAll('[data-mbcopy]').forEach((x) => x.onclick = async () => { try { await navigator.clipboard.writeText(x.dataset.mbcopy); toast('Invite link copied — send it to them on Telegram'); } catch (_) { prompt('Copy this link', x.dataset.mbcopy); } });
+    $('mbBody').querySelectorAll('[data-mbdel]').forEach((x) => x.onclick = async () => { if (!confirm('Remove this media buyer? Tasks already given to them stay.')) return; try { await api('/media-buyers/' + x.dataset.mbdel, { method: 'DELETE' }); await loadMb(); drawMb(); } catch (e) { toast(e.message); } });
+  }
+  function openMbDlg() {
+    let d = $('mbDlg');
+    if (!d) {
+      d = document.createElement('dialog'); d.id = 'mbDlg'; d.className = 'dlg';
+      d.innerHTML = `<div class="dlg-in mb-dlg"><div class="dlg-head"><h2>Media buyers</h2><button type="button" class="ghost" id="mbClose" aria-label="Close">✕</button></div>
+        <p class="hint">Tasks you give a media buyer go to their Telegram with a <b>✅ Done</b> button. They don't need a Boost Desk login: add them here, copy their invite link and send it to them. They tap it, then tap <b>Start</b> in Telegram.</p>
+        <div id="mbBody" class="mb-list"></div>
+        <form id="mbForm" class="mb-add"><input type="text" id="mbName" maxlength="60" placeholder="Media buyer's name" aria-label="Media buyer's name" required><button type="submit" class="primary">Add</button></form>
+        <div class="dlg-foot"><span class="hint">Connected status updates within a minute after they tap Start.</span><span class="spacer"></span><button type="button" id="mbRefresh">↻ Refresh</button></div></div>`;
+      document.body.appendChild(d);
+      $('mbClose').onclick = () => d.close();
+      d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); });
+      d.addEventListener('close', () => { const s = $('cdTaskTo'); if (s) { s.innerHTML = mbOptions(); s.value = mbList.some((b) => b.id === mbLast) ? mbLast : ''; } });
+      $('mbRefresh').onclick = () => loadMb();
+      $('mbForm').onsubmit = async (ev) => { ev.preventDefault(); const n = $('mbName').value.trim(); if (!n) return; try { const b = await api('/media-buyers', { method: 'POST', body: { name: n } }); $('mbName').value = ''; await loadMb(); mbLast = b.id; drawMb(); toast('Added — now copy the invite link and send it to ' + b.name); } catch (e) { toast(e.message); } };
+    }
+    drawMb(); if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    loadMb();
+  }
+  loadMb();
   // ---- done history: what was ticked off in Today's work & tasks, day by day, one month at a time ----
   const histMonth = {}, histDay = {}; // client id → 'YYYY-MM' shown, and a picked day (or none)
   function histItems(c) {

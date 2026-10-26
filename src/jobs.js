@@ -138,6 +138,9 @@ function start() {
   cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Database backup', 1440, 'daily at 03:20');
+  // Media buyers get their every-day tasks again each morning at 08:00, with a fresh Done button.
+  H.register('Media buyer tasks', 1440, 'daily at 08:00');
+  cron.schedule('0 8 * * *', () => H.track('Media buyer tasks', () => require('./buyers').morning(log)).then((n) => { if (n) log('media buyer tasks sent:', n); }).catch((e) => log('media buyer tasks failed:', e.message)), opts);
   cron.schedule('20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
 
   H.register('Health check', 5, 'every 5 minutes');

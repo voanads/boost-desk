@@ -1143,7 +1143,7 @@ async function linkCode(fbId) {
 // One refresh at a time, so two requests never handle the same /link message twice.
 let chatsBusy = Promise.resolve();
 // Read new Telegram messages every minute, so /link works without opening the website and nothing expires.
-if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(() => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 60000).unref(); }
+if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(() => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 15000).unref(); } // every 15 s so "Done" taps show quickly
 function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow); chatsBusy = run.catch(() => {}); return run; }
 async function refreshChatsNow() {
   const saved = await db.getSetting('telegramChats', []);
@@ -1208,6 +1208,7 @@ async function refreshChatsNow() {
       telegram.send('✅ Boost Desk system alerts will come to this chat. Send /alerts again from another chat to move them.', al.id).catch(() => {});
     }
   }
+  try { await require('./src/buyers').onTelegram(fresh, AI); } catch (e) { console.error('[telegram] media buyers:', e.message); }
   const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);
   if (fresh.next && fresh.next !== offset) await db.setSetting('telegramOffset', fresh.next); // only after everything above is saved
@@ -1404,9 +1405,22 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const text = String((req.body || {}).text || '').trim().slice(0, 200); if (!text) return res.status(400).json({ error: 'Type the task.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id);
-  w.tasks.push({ id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}) });
-  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
+  const B = require('./src/buyers'), buyer = (req.body || {}).to ? await B.get(req.body.to) : null;
+  if ((req.body || {}).to && !buyer) return res.status(400).json({ error: 'That media buyer was removed.' });
+  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}) };
+  let warn = '';
+  if (buyer) {
+    const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+    try { await B.notify(buyer, { client: c ? c.name : '', text, from: req.user.name, repeat: !!t.repeat, cid: req.params.id, tid: t.id }); t.sentAt = new Date().toISOString(); }
+    catch (e) { warn = e.message; }
+  }
+  w.tasks.push(t);
+  await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w, ...(warn ? { warn } : {}) });
 }));
+// Media buyers (no login needed: they connect Telegram once from an invite link).
+api.get('/media-buyers', wrap(async (req, res) => res.json({ buyers: await require('./src/buyers').all(), bot: telegram.hasBot() })));
+api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name)); } catch (e) { res.status(400).json({ error: e.message }); } }));
+api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), t = w.tasks.find((x) => x.id === req.params.tid);

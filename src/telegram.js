@@ -80,19 +80,24 @@ async function listChats(offset = 0) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   const result = []; let next = offset;
   for (let page = 0; page < 10; page++) {
-    const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?limit=100&offset=${next}&allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post"]')}`);
+    const res = await fetch(`${API}/bot${cfg.telegramToken}/getUpdates?limit=100&offset=${next}&allowed_updates=${encodeURIComponent('["message","my_chat_member","channel_post","callback_query"]')}`);
     const body = await res.json().catch(() => ({}));
     if (!body.ok) throw new Error('Telegram: ' + (body.description || `HTTP ${res.status}`));
     const list = body.result || []; result.push(...list);
     if (list.length) next = list[list.length - 1].update_id + 1;
     if (list.length < 100) break;
   }
-  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [];
+  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], taps = [];
   for (const u of result) {
+    // A button under a bot message was tapped (e.g. a media buyer's "Done").
+    if (u.callback_query) { const q = u.callback_query; taps.push({ qid: q.id, data: q.data || '', chat: String((q.message && q.message.chat && q.message.chat.id) || (q.from && q.from.id) || ''), msgId: q.message && q.message.message_id, text: (q.message && q.message.text) || '', name: [q.from && q.from.first_name, q.from && q.from.last_name].filter(Boolean).join(' ') }); continue; }
     const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
     if (chat && chat.type === 'private') {
       const pt = ((u.message || {}).text || '').trim().match(/^\/alerts(?:@\w+)?\s+([A-Za-z0-9]{6})\b/i);
       if (pt) alerts.push({ id: String(chat.id), code: pt[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
+      // A media buyer opened the bot from their invite link (t.me/<bot>?start=mb_CODE).
+      const st = ((u.message || {}).text || '').trim().match(/^\/start\s+mb_([A-Za-z0-9]{8})\b/);
+      if (st) starts.push({ id: String(chat.id), code: st[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
       continue;
     }
     if (!chat) continue;
@@ -116,7 +121,7 @@ async function listChats(offset = 0) {
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links, moved, alerts, next };
+  return { chats: [...found.values()], links, moved, alerts, starts, taps, next };
 }
 
 let botName = null;
@@ -146,4 +151,22 @@ async function sendAlbum(images, text, chatId) {
   if (text && !fits) await send(text, chatId);
 }
 
-module.exports = { sendAlbum, configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };
+// A message with buttons under it: buttons = [[{ text, data }]].
+async function sendButtons(text, chatId, buttons) {
+  if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
+  const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendMessage`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...dest(chatId), text, disable_web_page_preview: true, reply_markup: { inline_keyboard: buttons.map((row) => row.map((b) => ({ text: b.text, callback_data: b.data }))) } }) })).json().catch(() => ({}));
+  if (!body.ok) throw new Error('Telegram: ' + (body.description || 'send failed'));
+  return body.result && body.result.message_id;
+}
+async function answerTap(qid, text) {
+  if (!cfg.telegramToken || !qid) return;
+  await fetch(`${API}/bot${cfg.telegramToken}/answerCallbackQuery`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ callback_query_id: qid, text: text || '' }) }).catch(() => {});
+}
+// Replace a bot message's text and drop its buttons.
+async function editText(chatId, msgId, text) {
+  if (!cfg.telegramToken || !msgId) return;
+  await fetch(`${API}/bot${cfg.telegramToken}/editMessageText`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ chat_id: String(chatId).split(':')[0], message_id: msgId, text, disable_web_page_preview: true }) }).catch(() => {});
+}
+
+module.exports = { sendButtons, answerTap, editText, sendAlbum, configured, hasBot, send, remove, sendPhoto, sendDocument, listChats, username };

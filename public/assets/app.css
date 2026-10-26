@@ -2703,3 +2703,44 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 .bk.bk-hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
 .bk.bk-hero .lbl,.bk.bk-hero .sub{color:var(--muted)!important;opacity:1!important}
 .bk-ring{background:var(--surface)}
+
+/* ================= Company view (CEO / COO) on the Main Dashboard ================= */
+.company{display:flex;flex-direction:column;gap:var(--s-4)}
+.co-top{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
+.co-nav{display:flex;align-items:center;gap:6px}
+.co-nav b{min-width:150px;text-align:center}
+.co-kpis{display:grid;grid-template-columns:1.3fr repeat(5,minmax(0,1fr));gap:var(--s-3)}
+.co-kpis .mk b small{font-size:var(--fs-md);color:var(--muted);font-weight:600}
+.co-kpis .mk.warn{border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+.co-kpis .num.good,.co-tt .good{color:var(--ok)} .co-kpis .num.mid,.co-tt .mid{color:var(--warn)} .co-kpis .num.bad,.co-tt .bad{color:var(--danger)}
+.co-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-4);align-items:start}
+.co-teams{grid-column:1/-1}
+.co-tt{min-width:760px}
+.co-list{display:flex;flex-direction:column;gap:6px}
+.co-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.co-rt{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25}
+.co-rt b{font-weight:600;overflow-wrap:anywhere}
+.co-rt .hint{font-size:var(--fs-xs)}
+.co-rb{width:110px;height:6px;border-radius:3px;background:var(--bg-2);overflow:hidden;flex:none}
+.co-rb i{display:block;height:100%;background:var(--brand)} .co-rb i.good{background:var(--ok)} .co-rb i.mid{background:var(--warn)} .co-rb i.bad{background:var(--danger)}
+.co-rv{font-weight:700;white-space:nowrap} .co-rv small{font-weight:500;color:var(--muted);font-size:var(--fs-xs)} .co-rv.good{color:var(--ok)} .co-rv.bad{color:var(--danger)}
+.co-row.al{border-left:3px solid var(--warn)} .co-row.al.urgent{border-left-color:var(--danger)}
+.co-dot{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:none} .co-row.al.urgent .co-dot{background:var(--danger)}
+.empty.ok{color:var(--ok);border-style:solid;background:var(--ok-soft);border-color:transparent}
+@media (max-width:1100px){.co-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.co-kpis .mk.hero{grid-column:1/-1}}
+@media (max-width:760px){.co-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.co-grid{grid-template-columns:1fr}.co-rb{width:60px}.mModeSeg{width:100%}#mModeSeg{width:100%;display:grid;grid-template-columns:1fr 1fr}}
+.co-grid>*{min-width:0}
+.co-kpis .mk .sub{white-space:normal;overflow:visible;text-overflow:clip}
+@media (max-width:760px){.co-kpis .mk.hero{grid-column:1/-1}.co-tt{min-width:640px}}
+/* PM: my team panel on the Dashboard */
+.team-mine{gap:12px}
+.tm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.tm-k{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md)}
+.tm-k .lbl{font-size:var(--fs-2xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tm-k b{font-size:1.3rem;font-weight:700} .tm-k b small{font-size:var(--fs-sm);color:var(--muted);font-weight:500}
+.tm-k.bad b{color:var(--danger)} .tm-k .sub{font-size:var(--fs-xs);color:var(--muted)}
+.tm-list{display:flex;flex-direction:column;gap:6px}
+.tm-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md)}
+.tm-rt{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25} .tm-rt .hint{font-size:var(--fs-xs)}
+.tm-mates{display:flex;flex-wrap:wrap;gap:6px}
+@media (max-width:560px){.tm-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}

@@ -293,7 +293,7 @@
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
-    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); }
+    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); loadMyTeam(); }
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -1245,7 +1245,51 @@
   }
   const sugRow = (it, i) => `<div class="todo-it ${esc(it.level || '')}${it.tip ? ' tip' : ''}" style="--i:${Math.min(i, 12)}"><span class="todo-ic" aria-hidden="true">${SUG_IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><span class="sug-who"><span class="mini-av">${esc(String(it.who || '?').split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(it.who || '')}</span></div>`;
   let mPgAll = false, mPerson = null, mView = (() => { try { return localStorage.getItem('mView2') || 'list'; } catch (_) { return 'list'; } })();
-  async function loadMain() {
+  // ---- Company view (CEO / COO): one month of the whole company ----
+  let coMonth = '', coData = null, mMode = localStorage.getItem('bd-main-mode') || 'company';
+  const monLbl = (ym) => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }); };
+  const monAdd = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+  function setMainMode(m) {
+    mMode = m; localStorage.setItem('bd-main-mode', m);
+    document.querySelectorAll('#mModeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
+    $('mCompany').hidden = m !== 'company'; $('mPagesView').hidden = m !== 'pages';
+    $('mHint').textContent = m === 'company' ? 'The whole company in one month — money, clients, every team\'s work, KPIs and what needs attention.' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
+    if (m === 'company') loadCompany(); else loadMainPages();
+  }
+  document.querySelectorAll('#mModeSeg button').forEach((b) => b.onclick = () => setMainMode(b.dataset.m));
+  $('coPrev').onclick = () => { coMonth = monAdd(coMonth, -1); loadCompany(); };
+  $('coNext').onclick = () => { if (coMonth < me.today.slice(0, 7)) { coMonth = monAdd(coMonth, 1); loadCompany(); } };
+  async function loadCompany() {
+    if (!coMonth) coMonth = me.today.slice(0, 7);
+    $('coMonth').textContent = monLbl(coMonth); $('coNext').disabled = coMonth >= me.today.slice(0, 7);
+    if (!coData) $('coKpis').innerHTML = '<div class="mk skel"></div>'.repeat(6);
+    try { coData = await api('/company/summary?month=' + coMonth); renderCompany(); }
+    catch (e) { $('coKpis').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  }
+  function renderCompany() {
+    const d = coData; if (!d || d.month !== coMonth) return;
+    const pc = (v) => (v == null ? '–' : v + '%'), col = (v) => (v == null ? '' : v >= 100 ? 'good' : v >= 60 ? 'mid' : 'bad');
+    $('coSub').textContent = `${nice(d.from)} – ${nice(d.to)} · ${d.people.users} people · ${d.people.teams} teams · ${d.people.buyers} media buyers (${d.people.buyersLinked} on Telegram)`;
+    $('coKpis').innerHTML = `
+      <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
+      <div class="mk"><span class="lbl">Profit</span><b class="num ${d.money.profit.total < 0 ? 'bad' : ''}">${money(d.money.profit.total)}</b><span class="sub">${d.money.profit.books} books · ${d.money.profit.submitted} submitted · company share ${money(d.money.profit.company)}</span></div>
+      <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
+      <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>
+      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.kpis.hit} of ${d.kpis.total} KPIs at 100 %+</span></div>
+      <div class="mk ${d.tasks.overdue ? 'warn' : ''}"><span class="lbl">Today's tasks</span><b class="num">${d.tasks.done}<small> / ${d.tasks.done + d.tasks.open}</small></b><span class="sub">${d.tasks.overdue ? `<span class="is-danger">${d.tasks.overdue} overdue</span>` : 'nothing overdue'} · target ${pc(d.tasks.targetPct)}</span></div>`;
+    $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th>Team</th><th>People</th><th class="r">Clients</th><th class="r">Spend</th><th class="r">Revenue</th><th class="r">Tasks today</th><th class="r">Overdue</th><th class="r">Target</th><th class="r">KPI</th></tr></thead><tbody>${d.teams.map((t) => `<tr>
+      <td><b>${esc(t.name)}</b></td><td class="hint">${t.people.map((p) => esc(p.name)).join(', ') || '—'}${t.buyers ? ` · ${t.buyers} MB` : ''}</td><td class="r num">${t.clients}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.revenue)}</td>
+      <td class="r num">${t.tasks.done} / ${t.tasks.done + t.tasks.open}</td><td class="r num ${t.tasks.overdue ? 'bad' : ''}">${t.tasks.overdue || '–'}</td><td class="r num ${col(t.targetPct)}">${pc(t.targetPct)}</td><td class="r num ${col(t.kpiAvg)}">${pc(t.kpiAvg)}${t.kpis ? `<span class="hint"> · ${t.kpis}</span>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No teams yet — make them in Admin → Teams.</div>';
+    const K = d.kpis.rows; $('coTgHint').textContent = K.length ? `${K.length} KPIs with a target this month` : '';
+    $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small></span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
+    $('coAlerts').innerHTML = d.alerts.length ? `<div class="co-list">${d.alerts.map((a) => `<div class="co-row al ${a.level}"><span class="co-dot"></span><div class="co-rt"><b>${esc(a.text)}</b><span class="hint">${esc(a.client)} · ${esc(a.person)}${a.detail ? ' · ' + esc(a.detail) : ''}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No critical alerts right now.</div>';
+    $('coOverdue').innerHTML = d.overdue.length ? `<div class="co-list">${d.overdue.map((o) => `<div class="co-row"><div class="co-rt"><b>${esc(o.text)}</b><span class="hint">${esc(o.client)} · ${esc(o.person)}${o.to ? ' → ' + esc(o.to) : ''} · since ${esc(nice(o.day).replace(/ \d{4}$/, ''))}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No overdue tasks.</div>';
+    const P = d.money.profit.byBook; $('coProfit').innerHTML = P.length ? `<div class="co-list">${P.sort((a, b) => b.profit - a.profit).map((b) => `<div class="co-row"><div class="co-rt"><b>${esc(b.name)}</b><span class="hint">${b.submitted ? '✓ submitted' : 'not submitted yet'}</span></div><span class="num co-rv ${b.profit < 0 ? 'bad' : ''}">${money(b.profit)}</span></div>`).join('')}</div>` : `<div class="empty">No Profit book has ${monLbl(d.month)} yet.</div>`;
+    $('coNewHint').textContent = `${d.clients.new} added in ${monLbl(d.month)}`;
+    $('coNew').innerHTML = d.clients.newList.length ? `<div class="co-list">${d.clients.newList.map((c) => `<div class="co-row"><div class="co-rt"><b>${esc(c.name)}</b><span class="hint">${esc(c.owner)}</span></div></div>`).join('')}</div>` : '<div class="empty">No new clients this month.</div>';
+  }
+  async function loadMain() { setMainMode(mMode); }
+  async function loadMainPages() {
     if (!dDate) dDate = me.today;
     paintPeriod();
     const [from, to] = dRange();
@@ -1645,7 +1689,7 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? '<b>Owner</b> manages everything · <b>Admin</b> can see this Admin page · <b>Member</b> sees only their own clients.' : 'Only the app owner can change roles or remove people.')
+    $('uHint').innerHTML = (d.canEdit ? '<b>CEO</b> (owner) manages everything · <b>COO</b> sees every team, the company dashboard and this Admin page · <b>Project Manager</b> sees their own clients, team and media buyers. Media buyers work from Telegram and their own dashboard.' : 'Only the app owner can change roles or remove people.')
       + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
@@ -1660,7 +1704,8 @@
       else st = '<span class="ustat ok">Running</span>';
       const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
-      const role = u.role === 'owner' ? '<span class="rolechip owner">Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}"><option value="member" ${u.role === 'member' ? 'selected' : ''}>Member</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select>` : `<span class="rolechip ${u.role}">${u.role === 'admin' ? 'Admin' : 'Member'}</span>`;
+      const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
+      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${['pm', 'coo', 'ceo'].map((k) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
       return `<tr class="utr${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
         <td data-l="Person"><span class="ut-p"><span class="avatar">${initials(u.name)}</span><span class="ut-n"><b>${esc(u.name)}${you ? ' <span class="chip meta">You</span>' : ''}</b><span class="hint">${u.team ? esc(u.team) : 'No team'}</span></span></span></td>
         <td data-l="Role">${role}</td>
@@ -1687,7 +1732,7 @@
   });
   $('uList').addEventListener('change', async (ev) => {
     const r = ev.target.dataset.role;
-    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge(ev.target.value === 'admin' ? 'Now an Admin' : 'Now a Member'); } catch (e) { toast(e.message); } return loadUsers(); }
+    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge({ ceo: 'Now CEO — sees everything', coo: 'Now COO — sees everything', pm: 'Now a Project Manager — own team only' }[ev.target.value] || 'Role saved'); } catch (e) { toast(e.message); } return loadUsers(); }
     const id = ev.target.dataset.auto; if (!id) return;
     try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); } catch (e) { toast(e.message); }
     loadUsers();
@@ -1805,6 +1850,23 @@
       const au = row.querySelector('[data-kauto]'); if (au) au.onclick = async () => { kpis[i].manual = null; await save('Back to auto'); reload(); };
       row.querySelector('[data-kdel]').onclick = async () => { if (!confirm('Remove this KPI?')) return; kpis.splice(i, 1); await save('Removed'); reload(); };
     });
+  }
+  // PM view: my team — media buyers, today's task counts, Telegram status.
+  async function loadMyTeam() {
+    const host = $('teamMine'); if (!host || !me) return;
+    let d; try { d = await api('/team/mine'); } catch (e) { host.hidden = true; return; }
+    const c = d.counts, total = c.done + c.open;
+    host.hidden = false;
+    host.innerHTML = `<div class="top"><h2>👥 ${d.team ? esc(d.team.name) : 'My team'}</h2><span class="hint">${d.clients} clients · ${d.buyers.length} media buyer${d.buyers.length === 1 ? '' : 's'}${d.teammates.length ? ' · ' + d.teammates.length + ' teammate' + (d.teammates.length === 1 ? '' : 's') : ''}</span></div>
+      <div class="tm-kpis">
+        <div class="tm-k"><span class="lbl">Done today</span><b class="num">${c.done}<small> / ${total}</small></b></div>
+        <div class="tm-k"><span class="lbl">Pending</span><b class="num">${c.open}</b></div>
+        <div class="tm-k ${c.overdue ? 'bad' : ''}"><span class="lbl">Overdue</span><b class="num">${c.overdue}</b></div>
+        <div class="tm-k"><span class="lbl">To media buyers</span><b class="num">${c.buyerDone}<small> / ${c.buyerDone + c.buyerOpen}</small></b><span class="sub">${c.notSent ? `<span class="is-warn">${c.notSent} not sent</span>` : c.sent ? 'all sent ✈' : '—'}</span></div>
+      </div>
+      ${d.buyers.length ? `<div class="tm-list">${d.buyers.map((b) => `<div class="tm-row"><span class="avatar">${initials(b.name)}</span><div class="tm-rt"><b>${esc(b.name)}</b><span class="hint">${b.linked ? '<span class="is-ok">Telegram ✓</span>' : '<span class="is-warn">Not connected</span>'} · ${b.today ? `${b.done} / ${b.today} today${b.late ? ` · <span class="is-danger">${b.late} late</span>` : ''}${b.notSent ? ` · <span class="is-warn">${b.notSent} not sent</span>` : ''}` : 'no task today'}</span></div>${b.kpi != null ? `<span class="kpi-score ${b.kpi >= 100 ? 'ok' : b.kpi >= 60 ? 'mid' : 'bad'}" title="KPI this month">${b.kpi}%</span>` : ''}</div>`).join('')}</div>`
+        : '<div class="hl-empty">No media buyers yet. Add one from a task\'s <b>Options ▾ → For → ＋ Media buyers…</b> and send them the invite link.</div>'}
+      ${d.teammates.length ? `<div class="tm-mates">${d.teammates.map((p) => `<span class="pill">${esc(p.name)} · ${p.done}/${p.done + p.open}</span>`).join('')}</div>` : ''}`;
   }
   function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
@@ -2151,7 +2213,7 @@ Notes:
     loadPeriod();
   }
   // The period bar (Dashboard and Orders share one period).
-  const loadPeriod = () => (!$('tab-orders').hidden ? loadOrders() : !$('tab-main').hidden ? loadMain() : loadDash());
+  const loadPeriod = () => (!$('tab-orders').hidden ? loadOrders() : !$('tab-main').hidden ? (mMode === 'pages' ? loadMainPages() : loadMain()) : loadDash());
   function paintPeriod() {
     const pre = currentPreset(), label = periodLabel();
     const atEnd = (dMode === 'day' && dDate >= me.today) || (dMode === 'month' && dDate.slice(0, 7) >= me.today.slice(0, 7)) || (dMode === 'year' && dDate.slice(0, 4) >= me.today.slice(0, 4)) || (dMode === 'range' && dTo >= me.today);

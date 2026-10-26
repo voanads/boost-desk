@@ -2765,3 +2765,7 @@ nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:
 .kpi-chip{font-weight:700;color:var(--ok);background:var(--ok-soft);border-radius:var(--r-pill);padding:0 8px}
 /* /admin on a phone: Main · Board · Target in the bottom bar, the rest under More */
 @media (max-width:760px){.adminsite nav.tabs button[data-tab=main]:not([hidden]),.adminsite nav.tabs button[data-tab=board]:not([hidden]),.adminsite nav.tabs button[data-tab=target]:not([hidden]){display:inline-flex}}
+.mbm-sub{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.mbm-sub b{font-weight:600} .mbm-sub .hint{font-size:var(--fs-xs)}
+.mbm-task.sm{padding:8px 10px} .mbm-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+.mbm-kv{font-weight:700;white-space:nowrap} .mbm-kv small{font-weight:500;color:var(--muted);font-size:var(--fs-xs)}

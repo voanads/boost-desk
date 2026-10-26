@@ -294,7 +294,7 @@
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
-    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); loadMyTeam(); }
+    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); loadMyTeam(); loadMyBuyerTasks(); }
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -1851,6 +1851,22 @@
       const au = row.querySelector('[data-kauto]'); if (au) au.onclick = async () => { kpis[i].manual = null; await save('Back to auto'); reload(); };
       row.querySelector('[data-kdel]').onclick = async () => { if (!confirm('Remove this KPI?')) return; kpis.splice(i, 1); await save('Removed'); reload(); };
     });
+  }
+  // Media buyer site: my own tasks today (tick, type reached), target and KPI — on the Dashboard.
+  async function loadMyBuyerTasks() {
+    const host = $('mbMine'); if (!host || !me || !me.buyer) return;
+    let d; try { d = await api('/mb/me'); } catch (e) { host.hidden = true; return; }
+    const c = d.counts, tg = d.target, box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+    const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    host.hidden = false;
+    host.innerHTML = `<div class="top"><h2>✅ My tasks today <span class="countpill">${c.open}</span></h2><span class="hint">${c.done} done · ${c.open} pending${c.late ? ` · <span class="is-danger">${c.late} overdue</span>` : ''}${d.kpiAvg != null ? ` · KPI ${d.kpiAvg}%` : ''} · <a href="/mediabuyer/tasks">history &amp; KPI →</a></span></div>
+      ${tg.tasks ? `<div class="mbm-tg"><b>🎯 Daily target</b><span class="tgt-bar"><i style="width:${Math.min(100, tg.pct)}%"></i></span><span class="num ${tg.pct >= 100 ? 'is-ok' : ''}">${tg.pct}%</span><span class="hint">${tg.reached} of ${tg.total}</span></div>` : ''}
+      <div class="mbm-list">${d.tasks.length ? d.tasks.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
+        <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-mbtick="${t.clientId}|${t.id}" aria-label="Done">${box}</button>
+        <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.kpiName ? ` · <span class="kpi-chip">KPI · ${esc(t.kpiName)}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}` : ''}</span></div>
+        ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-mbreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit)}</span>` : ''}</div>`).join('') : '<div class="hl-empty">🎉 No tasks for you today. New tasks from your PM arrive here and on Telegram.</div>'}</div>`;
+    host.querySelectorAll('[data-mbtick]').forEach((b) => b.onclick = async () => { const [cid, tid] = b.dataset.mbtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { done } }); if (done) successBadge('Marked done'); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
+    host.querySelectorAll('[data-mbreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.mbreach.split('|'); try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { reached: Number(i.value) || 0 } }); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
   }
   // PM view: my team — media buyers, today's task counts, Telegram status.
   async function loadMyTeam() {

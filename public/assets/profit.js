@@ -6,9 +6,11 @@ window.BDProfit = (() => {
   const ROLE_LABEL = { developer: 'Developer', doer: 'Doer', spender: 'Spender', supporter: 'Supporter', company: 'Company' };
   const DEFAULT_SERVICES = [{ name: 'Buy TH', pct: [7, 8, 25, 10, 50] }, { name: 'Request Up', pct: [7, 8, 25, 10, 50] }, { name: 'Refund', pct: [10, 20, 15, 5, 50] }, { name: 'Reset', pct: [5, 10, 25, 10, 50] }, { name: 'Pay Debt', pct: [15, 5, 25, 5, 50] }, { name: 'VAT + TH', pct: [0, 0, 30, 10, 60] }, { name: 'Another', pct: [0, 0, 30, 10, 60] }, { name: 'TikTok Credit', pct: [7, 8, 25, 10, 50] }];
   const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const ACCESS_INFO = { admin: 'Everything, including split rules and who has access', editor: 'Enters and edits monthly data', viewer: 'Can only look' };
+  const ACCESS_INFO = { admin: 'Own book, can look at everyone’s book, changes split rules, the people list and access', member: 'Own book only: enters and sees just their own months', none: 'Doesn’t see the Profit tab' };
+  const ACCESS_LABEL = { admin: 'Admin', member: 'Own book', none: 'No access' };
 
   let root = null, app = null, statusEl = null, booted = false, pollT = null;
+  let viewBook = '', myId = '', books = [], serviceUse = {}; // whose book is open (admins can open anyone's)
   let months = {}, current = null, draft = null, dirty = false, saveTimer = null, rulesTimer = null, confirmDel = false;
   let page = 'accounts', role = 'viewer', canEdit = false, isAdmin = false, me = null;
   let services = JSON.parse(JSON.stringify(DEFAULT_SERVICES)), accessPeople = [];
@@ -47,7 +49,7 @@ window.BDProfit = (() => {
     }
     return clone(DEFAULT_SERVICES);
   }
-  function usage(name) { let n = 0; const all = Object.assign({}, months); if (current && draft) all[current] = draft; Object.values(all).forEach((m) => (m.transactions || []).forEach((t) => { if (t.service === name) n++; })); return n; }
+  function usage(name) { let n = 0; const all = Object.assign({}, months); if (current && draft) all[current] = draft; Object.values(all).forEach((m) => (m.transactions || []).forEach((t) => { if (t.service === name) n++; })); return Math.max(n, serviceUse[name] || 0); }
 
   function calc(d) {
     const fbActive = d.accounts.filter((a) => a.platform !== 'TikTok' && a.status === 'Active');
@@ -93,9 +95,9 @@ window.BDProfit = (() => {
 
   function topRow() {
     return `<div class="pf-top"><div><span class="pf-eyebrow">${page === 'split' ? 'Profit split' : 'Ad accounts &amp; clients'}</span><h2>${esc(monthLabel(current))}</h2>${draft && draft._by ? `<span class="pf-lastedit">Last edited by <b>${esc(draft._by)}</b> · ${esc(when(draft._at))}</span>` : ''}</div>
-    <div class="pf-confirm">${!canEdit ? '<span class="pf-roleb viewer">View only</span>' : confirmDel ? `<span class="hint">Delete ${esc(monthLabel(current))} for good?</span><button class="sm danger" type="button" id="pfDelYes">Delete</button><button class="sm" type="button" id="pfDelNo">Keep</button>` : '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button>'}</div></div>`;
+    <div class="pf-confirm">${!canEdit ? `<span class="pf-roleb viewer">${esc(bookName())}’s book · view only</span>` : confirmDel ? `<span class="hint">Delete ${esc(monthLabel(current))} for good?</span><button class="sm danger" type="button" id="pfDelYes">Delete</button><button class="sm" type="button" id="pfDelNo">Keep</button>` : '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button>'}</div></div>`;
   }
-  const emptyHTML = () => `<div class="pf-empty"><h3>No months yet</h3><p>Each month keeps its own ad accounts, client balances and transactions.${canEdit ? ' Start one with <b>+ New month</b>.' : ''}</p></div>`;
+  const emptyHTML = () => `<div class="pf-empty"><h3>${canEdit ? 'No months yet' : esc(bookName()) + ' has no months yet'}</h3><p>Each month keeps its own ad accounts, client balances and transactions.${canEdit ? ' Start one with <b>+ New month</b>.' : ''}</p></div>`;
 
   function renderAccounts() {
     const d = draft;
@@ -220,18 +222,18 @@ window.BDProfit = (() => {
 
   // ---- Access (Profit admins) ----
   async function renderAccess() {
-    app.innerHTML = `<div class="pf-top"><div><span class="pf-eyebrow">Profit</span><h2>Who can use Profit</h2><span class="pf-lastedit">Everyone logs in with Boost Desk. Pick what each person can do here.</span></div></div>
+    app.innerHTML = `<div class="pf-top"><div><span class="pf-eyebrow">Profit</span><h2>Who can use Profit</h2><span class="pf-lastedit">Everyone has their own Profit book. Admins can also open anyone’s book.</span></div></div>
       <div class="pf-grid2"><section class="pf-sheet pf-main"><div class="pf-title t-blue"><span>People</span><span class="t2" id="pfAccCount"></span></div><div class="pf-scroll" id="pfAccessTable"><p class="hint" style="padding:0 16px 16px">Loading…</p></div></section>
-      <div class="pf-side"><section class="pf-sheet"><div class="pf-title t-purple"><span>What each role can do</span></div><div class="pf-roles">${['admin', 'editor', 'viewer'].map((r) => `<div><span class="pf-roleb ${r}">${r}</span><span>${ACCESS_INFO[r]}</span></div>`).join('')}<div><span class="pf-roleb">no access</span><span>Doesn't see the Profit tab</span></div></div></section></div></div>`;
+      <div class="pf-side"><section class="pf-sheet"><div class="pf-title t-purple"><span>What each choice means</span></div><div class="pf-roles">${['admin', 'member', 'none'].map((r) => `<div><span class="pf-roleb ${r === 'member' ? 'editor' : r}">${ACCESS_LABEL[r]}</span><span>${ACCESS_INFO[r]}</span></div>`).join('')}</div></section></div></div>`;
     try { accessPeople = (await api('/access')).people || []; drawAccess(); }
     catch (e) { const t = byId('pfAccessTable'); if (t) t.innerHTML = `<p class="bad" style="padding:0 16px 16px">${esc(e.message)}</p>`; }
   }
   function drawAccess() {
     const t = byId('pfAccessTable'); if (!t) return;
-    setText('pfAccCount', `${accessPeople.filter((p) => p.role).length} with access`);
-    t.innerHTML = `<table style="min-width:480px"><thead><tr><th>Name</th><th>Login</th><th style="width:160px">Profit access</th></tr></thead><tbody>
-      ${accessPeople.map((p) => `<tr><td class="v"><span class="who">${avatar(p.name)}${esc(p.name)}</span></td><td class="v mut">${esc(p.kind)}${p.email ? ' · ' + esc(p.email) : ''}</td>
-        <td>${p.owner ? '<span class="pf-roleb admin" style="margin-left:8px">admin · app owner</span>' : `<select data-access="${esc(p.id)}" aria-label="Profit access for ${esc(p.name)}">${[['', 'No access'], ['viewer', 'Viewer'], ['editor', 'Editor'], ['admin', 'Admin']].map(([v, l]) => `<option value="${v}"${p.role === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td></tr>`).join('')}
+    setText('pfAccCount', `${accessPeople.filter((p) => p.access === 'admin').length} admins · ${accessPeople.filter((p) => p.access === 'member').length} with own book`);
+    t.innerHTML = `<table style="min-width:480px"><thead><tr><th>Name</th><th>Login</th><th class="n">Months</th><th style="width:170px">Profit access</th></tr></thead><tbody>
+      ${accessPeople.map((p) => `<tr><td class="v"><span class="who">${avatar(p.name)}${esc(p.name)}</span></td><td class="v mut">${esc(p.kind)}${p.email ? ' · ' + esc(p.email) : ''}</td><td class="v n">${p.months || '—'}</td>
+        <td>${p.owner ? '<span class="pf-roleb admin" style="margin-left:8px">admin · app owner</span>' : `<select data-access="${esc(p.id)}" aria-label="Profit access for ${esc(p.name)}">${['member', 'admin', 'none'].map((v) => `<option value="${v}"${p.access === v ? ' selected' : ''}>${ACCESS_LABEL[v]}</option>`).join('')}</select>`}</td></tr>`).join('')}
     </tbody></table>`;
   }
 
@@ -242,11 +244,17 @@ window.BDProfit = (() => {
     if (page === 'access') { renderAccess(); return; }
     if (!current) { app.innerHTML = emptyHTML(); return; }
     page === 'split' ? renderSplit() : renderAccounts();
-    if (!canEdit) { app.querySelectorAll('[data-path],[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll('[data-add],[data-remove],#pfAddService,#pfFillMeta').forEach((e) => { e.hidden = true; }); }
+    if (!canEdit) { app.querySelectorAll('[data-path]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("[data-add],[data-remove^='accounts.'],[data-remove^='clients.'],[data-remove^='transactions.'],#pfFillMeta").forEach((e) => { e.hidden = true; }); }
     if (!isAdmin && page === 'split') { app.querySelectorAll('[data-rule-name],[data-rule-pct]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("#pfAddService,[data-remove^='services.'],[data-remove^='team.'],#pfPeopleAdd").forEach((e) => { e.hidden = true; }); }
   }
   const update = () => (page === 'split' ? updateSplit() : page === 'accounts' ? updateAccounts() : null);
   function goPage(p) { page = p; confirmDel = false; render(); }
+  const bookName = () => { const b = books.find((x) => x.id === viewBook); return b ? b.name : 'Someone'; };
+  function renderBookSel() {
+    const w = $('#pfBookWrap'); w.hidden = !isAdmin || !books.length; if (w.hidden) return;
+    const others = books.filter((b) => b.id !== myId);
+    $('#pfBookSel').innerHTML = `<option value="${esc(myId)}"${viewBook === myId ? ' selected' : ''}>My book</option>` + others.map((b) => `<option value="${esc(b.id)}"${b.id === viewBook ? ' selected' : ''}>${esc(b.name)}${b.months ? '' : ' (empty)'}</option>`).join('');
+  }
   function renderMonthSel() {
     const ids = Object.keys(months).sort().reverse();
     if (current && !ids.includes(current)) ids.unshift(current);
@@ -273,15 +281,15 @@ window.BDProfit = (() => {
     if (nn === oldName) { input.value = oldName; return; }
     if (!nn) { input.value = oldName; if (msg) msg.textContent = 'A service type needs a name'; return; }
     if (services.some((s, j) => j !== i && s.name.toLowerCase() === nn.toLowerCase())) { input.value = oldName; if (msg) msg.textContent = '“' + nn + '” already exists'; return; }
+    if (dirty) await saveNow();
     services[i].name = nn; if (msg) msg.textContent = 'Applies to every month';
-    draft.transactions.forEach((t) => { if (t.service === oldName) t.service = nn; });
-    if (dirty || draft.transactions.length) await saveNow();
-    for (const [id, m] of Object.entries(months)) {
-      if (id === current) continue;
-      if ((m.transactions || []).some((t) => t.service === oldName)) { const b = normalize(m); b.transactions.forEach((t) => { if (t.service === oldName) t.service = nn; }); months[id] = b; try { await api('/months/' + id, 'PUT', b); } catch (e) { setStatus("Couldn't update " + monthLabel(id)); } }
-    }
+    try { await api('/rename-service', 'POST', { from: oldName, to: nn }); } catch (e) { setStatus("Couldn't rename in every book: " + e.message); }
+    if (serviceUse[oldName]) { serviceUse[nn] = serviceUse[oldName]; delete serviceUse[oldName]; }
+    Object.values(months).forEach((m) => (m.transactions || []).forEach((t) => { if (t.service === oldName) t.service = nn; }));
+    if (draft) draft.transactions.forEach((t) => { if (t.service === oldName) t.service = nn; });
     scheduleRules(); renderSplit();
   }
+
 
   // Ad accounts from Boost Desk's Meta sync → this month's list (balance, threshold, status).
   const META_STATUS = (code) => (code === 1 ? 'Active' : [3, 8, 9].includes(Number(code)) ? 'Need to pay' : code == null ? null : 'Disabled');
@@ -317,7 +325,7 @@ window.BDProfit = (() => {
       if (t.tagName === 'SELECT' && t.dataset.path) { setPath(draft, t.dataset.path, t.value); update(); scheduleSave(); return; }
       if (t.dataset.ruleName !== undefined) { renameService(+t.dataset.ruleName, t); return; }
       if (t.dataset.access !== undefined) {
-        try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { role: t.value }); const p = accessPeople.find((x) => x.id === t.dataset.access); if (p) p.role = t.value; setStatus('Access saved'); setText('pfAccCount', `${accessPeople.filter((p) => p.role).length} with access`); }
+        try { await api('/access/' + encodeURIComponent(t.dataset.access), 'PUT', { access: t.value }); const p = accessPeople.find((x) => x.id === t.dataset.access); if (p) p.access = t.value; setStatus('Access saved'); drawAccess(); refresh(false); }
         catch (err) { setStatus(err.message); }
       }
     });
@@ -359,6 +367,7 @@ window.BDProfit = (() => {
       if (b.id === 'pfCreate') { createMonth(); return; }
       if (b.id === 'pfCancelNew') { render(); }
     });
+    $('#pfBookSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); viewBook = e.target.value; current = null; draft = null; confirmDel = false; if (page === 'access') page = 'accounts'; setStatus(''); refresh(true); });
     $('#pfMonthSel').addEventListener('change', async (e) => { if (dirty) await saveNow(); current = e.target.value; draft = normalize(months[current]); confirmDel = false; render(); });
   }
   function addPerson() {
@@ -401,9 +410,9 @@ window.BDProfit = (() => {
 
   async function refresh(first) {
     let s;
-    try { s = await api('/state'); } catch (e) { if (first) app.innerHTML = `<div class="pf-empty"><h3>Can't open Profit</h3><p>${esc(e.message)}</p></div>`; return; }
-    role = s.role || 'viewer'; canEdit = role === 'admin' || role === 'editor'; isAdmin = role === 'admin';
-    $('#pfNewBtn').hidden = !canEdit; $('#pfAccessTab').hidden = !isAdmin;
+    try { s = await api('/state' + (viewBook && viewBook !== myId ? '?book=' + encodeURIComponent(viewBook) : '')); } catch (e) { if (first) app.innerHTML = `<div class="pf-empty"><h3>Can't open Profit</h3><p>${esc(e.message)}</p></div>`; return; }
+    role = s.role || 'member'; isAdmin = role === 'admin'; serviceUse = s.serviceUse || {}; canEdit = !!s.mine; myId = s.me || myId; viewBook = s.book || myId; books = s.books || [];
+    $('#pfNewBtn').hidden = !canEdit; $('#pfAccessTab').hidden = !isAdmin; renderBookSel();
     const nextServices = s.settings && s.settings.main ? servicesFrom(s.settings.main) : services;
     const main = (s.settings && s.settings.main) || {};
     const nextTeam = Array.isArray(main.team) ? main.team.map((x) => String(x || '').trim()).filter(Boolean) : DEFAULT_TEAM.slice();
@@ -422,8 +431,8 @@ window.BDProfit = (() => {
     if (!booted) {
       booted = true;
       root.innerHTML = `<div class="pf">
-        <div class="bhead"><div><h2>Profit</h2><div class="hint">Monthly ad accounts, client balances and profit split for the whole company.</div></div>
-          <div class="bh-r" id="pfMonthBar"><label for="pfMonthSel" class="hint">Month</label><select id="pfMonthSel" aria-label="Month"></select><button class="sm" id="pfNewBtn" type="button" hidden>+ New month</button><span class="pf-status" id="pfStatus" aria-live="polite"></span></div></div>
+        <div class="bhead"><div><h2>Profit</h2><div class="hint">Your monthly ad accounts, client balances and profit split.</div></div>
+          <div class="bh-r" id="pfMonthBar"><span id="pfBookWrap" hidden><label for="pfBookSel" class="hint">Book</label><select id="pfBookSel" aria-label="Whose Profit book"></select></span><label for="pfMonthSel" class="hint">Month</label><select id="pfMonthSel" aria-label="Month"></select><button class="sm" id="pfNewBtn" type="button" hidden>+ New month</button><span class="pf-status" id="pfStatus" aria-live="polite"></span></div></div>
         <div class="seg pf-seg" role="group" aria-label="Profit pages"><button type="button" data-pfpage="accounts" aria-pressed="true">Ad accounts &amp; clients</button><button type="button" data-pfpage="split" aria-pressed="false">Profit split · <span lang="km">ចំណេញ</span></button><button type="button" data-pfpage="access" aria-pressed="false" id="pfAccessTab" hidden>Access</button></div>
         <div id="pfApp"><div class="pf-empty"><h3>Loading…</h3></div></div></div>`;
       app = byId('pfApp'); statusEl = byId('pfStatus');

@@ -2769,3 +2769,7 @@ nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:
 .mbm-sub b{font-weight:600} .mbm-sub .hint{font-size:var(--fs-xs)}
 .mbm-task.sm{padding:8px 10px} .mbm-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
 .mbm-kv{font-weight:700;white-space:nowrap} .mbm-kv small{font-weight:500;color:var(--muted);font-size:var(--fs-xs)}
+.mbkpi-in{max-width:720px;display:flex;flex-direction:column;gap:10px}
+.tm-row button.sm{min-height:32px;padding:0 10px;white-space:nowrap}
+@media (max-width:760px){nav.tabs a.navlink-site{display:none}}
+#mbKpiDlg{max-width:860px}.mbkpi-in{max-width:none}

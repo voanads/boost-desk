@@ -1884,9 +1884,18 @@
         <div class="tm-k ${c.overdue ? 'bad' : ''}"><span class="lbl">Overdue</span><b class="num">${c.overdue}</b></div>
         <div class="tm-k"><span class="lbl">To media buyers</span><b class="num">${c.buyerDone}<small> / ${c.buyerDone + c.buyerOpen}</small></b><span class="sub">${c.notSent ? `<span class="is-warn">${c.notSent} not sent</span>` : c.sent ? 'all sent ✈' : '—'}</span></div>
       </div>
-      ${d.buyers.length ? `<div class="tm-list">${d.buyers.map((b) => `<div class="tm-row"><span class="avatar">${initials(b.name)}</span><div class="tm-rt"><b>${esc(b.name)}</b><span class="hint">${b.linked ? '<span class="is-ok">Telegram ✓</span>' : '<span class="is-warn">Not connected</span>'} · ${b.today ? `${b.done} / ${b.today} today${b.late ? ` · <span class="is-danger">${b.late} late</span>` : ''}${b.notSent ? ` · <span class="is-warn">${b.notSent} not sent</span>` : ''}` : 'no task today'}</span></div>${b.kpi != null ? `<span class="kpi-score ${b.kpi >= 100 ? 'ok' : b.kpi >= 60 ? 'mid' : 'bad'}" title="KPI this month">${b.kpi}%</span>` : ''}</div>`).join('')}</div>`
+      ${d.buyers.length ? `<div class="tm-list">${d.buyers.map((b) => `<div class="tm-row"><span class="avatar">${initials(b.name)}</span><div class="tm-rt"><b>${esc(b.name)}</b><span class="hint">${b.linked ? '<span class="is-ok">Telegram ✓</span>' : '<span class="is-warn">Not connected</span>'} · ${b.today ? `${b.done} / ${b.today} today${b.late ? ` · <span class="is-danger">${b.late} late</span>` : ''}${b.notSent ? ` · <span class="is-warn">${b.notSent} not sent</span>` : ''}` : 'no task today'}</span></div>${b.kpi != null ? `<span class="kpi-score ${b.kpi >= 100 ? 'ok' : b.kpi >= 60 ? 'mid' : 'bad'}" title="KPI this month">${b.kpi}%</span>` : ''}${me.buyer ? '' : `<button type="button" class="sm" data-mbkpi="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set this media buyer's monthly KPIs">📊 KPIs</button>`}</div>`).join('')}</div>`
         : '<div class="hl-empty">No media buyers yet. Add one from a task\'s <b>Options ▾ → For → ＋ Media buyers…</b> and send them the invite link.</div>'}
       ${d.teammates.length ? `<div class="tm-mates">${d.teammates.map((p) => `<span class="pill">${esc(p.name)} · ${p.done}/${p.done + p.open}</span>`).join('')}</div>` : ''}`;
+    host.querySelectorAll('[data-mbkpi]').forEach((b) => b.onclick = () => openBuyerKpis(b.dataset.mbkpi, b.dataset.mbname));
+  }
+  // KPIs of one media buyer, in a dialog (the same panel the Target page uses). Any PM can set them.
+  function openBuyerKpis(id, name) {
+    let d = $('mbKpiDlg');
+    if (!d) { d = document.createElement('dialog'); d.id = 'mbKpiDlg'; d.className = 'dlg'; d.innerHTML = '<div class="dlg-in mbkpi-in"><div class="dlg-head"><h2 id="mbKpiTitle"></h2><button type="button" class="ghost" id="mbKpiClose" aria-label="Close">✕</button></div><p class="hint">Monthly targets for this media buyer. Results fill in from the daily tasks you link to a KPI (Options ▾ → KPI when adding a task).</p><div id="mbKpiBody"></div></div>'; document.body.appendChild(d); $('mbKpiClose').onclick = () => d.close(); d.addEventListener('close', () => loadMyTeam()); }
+    $('mbKpiTitle').textContent = '📊 ' + name + ' · KPIs';
+    $('mbKpiBody').innerHTML = '<div class="sk"></div>';
+    d.showModal(); kpiPanel('mbKpiBody', 'mb:' + id);
   }
   function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
@@ -3558,6 +3567,12 @@ Thank you for working with Ads Box!`,
       }
       // /projectmanager shows only the Work pages, even to the owner; /admin shows everything.
       const showAdmin = me.canAdmin && !PM_SITE;
+      if (SITE === 'pm' && me.canAdmin) { // CEO / COO / owner on the PM site: links to their other sites
+        const nav = document.querySelector('nav.tabs'), mk = (href, label) => { const a = document.createElement('a'); a.href = href; a.className = 'navlink navlink-site'; a.innerHTML = `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><span class="full">${label}</span><span class="short">${label.split(' ')[0]}</span>`; return a; };
+        const grp = document.createElement('span'); grp.className = 'navgrp'; grp.textContent = 'Sites'; grp.id = 'navGrpSites'; nav.appendChild(grp); grp.hidden = false;
+        if (me.isOwner) nav.appendChild(mk('/owner#main', 'Owner site'));
+        nav.appendChild(mk('/admin#main', 'Admin site'));
+      }
       if (ADMIN_SITE) { // /admin: only the Admin group — Main Dashboard, Clients Board, All ad accounts, Target, Profit, Admin
         ['dashboard', 'clients', 'lives', 'orders', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
         $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');

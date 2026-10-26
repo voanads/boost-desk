@@ -3545,7 +3545,7 @@ Thank you for working with Ads Box!`,
       if (showAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages
         const pb = document.querySelector('nav.tabs [data-tab=profit]'); pb.hidden = false;
-        if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); } else $('navGrpAdmin').hidden = false;
+        if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); pb.classList.remove('grp-hidden'); } else $('navGrpAdmin').hidden = false;
       }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
       showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE ? 'main' : 'dashboard'));

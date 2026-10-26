@@ -2460,7 +2460,16 @@ dialog .csf-bar{position:static}
 .more-sheet button{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);font:inherit;font-weight:600;text-align:left}
 .more-sheet button[aria-current=true]{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
 .more-sheet .ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
-.navgrp{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
-.navgrp::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-left:auto;margin-right:6px;opacity:.6;transition:transform .15s}
-.navgrp.closed::after{transform:rotate(-45deg)}
-@media (min-width:761px){nav.tabs button.grp-hidden{display:none}}
+@media (min-width:1100px){
+  .navgrp:not([hidden]){cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+  .navgrp::after{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-left:auto;margin-right:6px;opacity:.7;transition:transform .15s}
+  .navgrp.closed::after{transform:rotate(-45deg)}
+  nav.tabs button.grp-hidden{display:none}
+}
+/* tablet: the nav is a top row that scrolls inside itself, never the page */
+@media (min-width:761px) and (max-width:1099px){nav.tabs{overflow-x:auto;scrollbar-width:none;max-width:100%;min-width:0}nav.tabs::-webkit-scrollbar{display:none}header.appbar{overflow:hidden}}
+/* scroll strips show there is more: a soft fade at the right edge */
+@media (max-width:760px){.chips{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}}
+.tablewrap td.empty,.tablewrap .empty{white-space:normal}
+/* page titles are h1 (one per page); same look as before */
+.phead-t h1,.ohead h1,.chead2 h1,.top>div>h1,.chead2>div>h1{margin:0;font-size:var(--fs-h1);font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;line-height:1.2}

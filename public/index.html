@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=157">
+<link rel="stylesheet" href="/assets/app.css?v=158">
 <link rel="stylesheet" href="/assets/profit.css?v=1">
 </head>
 <body>
@@ -76,7 +76,7 @@
 
   <!-- MAIN DASHBOARD (admins) -->
   <section id="tab-main" class="wrap" hidden>
-    <div class="ohead"><div><h2>Main Dashboard</h2><div class="hint">Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.</div></div></div>
+    <div class="ohead"><div><h1>Main Dashboard</h1><div class="hint">Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.</div></div></div>
     <div class="note onote" id="mNote" hidden></div>
     <div class="perbar" role="group" aria-label="Period">
       <div class="pb-nav"><button class="navbtn pb-prev" aria-label="Previous period">‹</button><button class="pb-pick" aria-label="Change period" aria-haspopup="dialog"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg><span class="pb-label">…</span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><button class="navbtn pb-next" aria-label="Next period">›</button></div>
@@ -113,7 +113,7 @@
   <!-- CLIENTS BOARD (admins): every client of every team, this month + today's work & tasks -->
   <section id="tab-board" class="wrap" hidden>
     <div class="bhead">
-      <div><h2>Clients Board</h2><div class="hint">Every client of every team — this month's money and today's work &amp; tasks.</div></div>
+      <div><h1>Clients Board</h1><div class="hint">Every client of every team — this month's money and today's work &amp; tasks.</div></div>
       <div class="bh-r"><span class="hint" id="bUpdated"></span><button type="button" class="ghost sm" id="bRefresh">↻ Refresh</button></div>
     </div>
     <div class="bkpis" id="bKpis"></div>
@@ -135,7 +135,7 @@
   <!-- AD ACCOUNTS (admins): every ad account of every person -->
   <section id="tab-adaccts" class="wrap" hidden>
     <div class="bhead">
-      <div><h2>Ad accounts</h2><div class="hint">Every ad account of every team — status, spend, balance and who syncs it.</div></div>
+      <div><h1>Ad accounts</h1><div class="hint">Every ad account of every team — status, spend, balance and who syncs it.</div></div>
       <div class="bh-r"><span class="hint" id="aaUpdated"></span><button type="button" class="ghost sm" id="aaRefresh">↻ Refresh from Facebook</button><button type="button" class="sm primary" id="aaAddBtn" hidden>+ Add ad account</button></div>
     </div>
     <form class="aa-add" id="aaAdd" hidden>
@@ -158,7 +158,7 @@
   <!-- DASHBOARD -->
   <section id="tab-dashboard" class="wrap">
     <div class="phead">
-      <div class="phead-t"><span class="hint" id="dGreet"></span><h2>Dashboard</h2></div>
+      <div class="phead-t"><span class="hint" id="dGreet"></span><h1>Dashboard</h1></div>
       <div class="syncinfo"><span class="dot" aria-hidden="true"></span><div class="syncinfo-t"><div class="status" id="syncStatus"></div><div class="status" id="syncCheck"></div></div></div>
       <div class="phead-a">
       <button id="syncBtn" class="primary syncbtn" title="Pulls the last 30 days from Ads Manager — or the period you're viewing, if it's older">Sync from Meta</button>
@@ -224,7 +224,7 @@
   <!-- CLIENTS -->
   <section id="tab-clients" class="wrap" hidden>
     <div class="chead2">
-      <div><h2>Clients <span class="countpill" id="cCount">0</span></h2><div class="hint">Spend is matched to a client by the Facebook Page each ad promotes.</div></div>
+      <div><h1>Clients <span class="countpill" id="cCount">0</span></h1><div class="hint">Spend is matched to a client by the Facebook Page each ad promotes.</div></div>
       <span class="spacer"></span>
       <input type="search" id="cSearch" placeholder="Search client or Page" aria-label="Search clients">
       <button id="cAutoBtn" title="Send every client's report by itself each day">⏰ Auto report <span class="arstate" id="cAutoState"></span></button>
@@ -284,7 +284,7 @@
   <!-- AD ACCOUNTS -->
   <section id="tab-accounts" class="wrap" hidden>
     <div class="top">
-      <div><h2>Ad accounts</h2><div class="hint" id="acctUpdated">Balances, limits and status from Meta. Ticked accounts are included in Sync.</div></div>
+      <div><h1>Ad accounts</h1><div class="hint" id="acctUpdated">Balances, limits and status from Meta. Ticked accounts are included in Sync.</div></div>
       <span class="spacer"></span>
       <button id="extBtn" class="ghost" title="Meta doesn't share the billing threshold with apps — the Check My Ads extension can push it here">🧩 Threshold extension</button>
       <button id="refreshAccts" class="primary">Refresh from Meta</button>
@@ -312,7 +312,7 @@
   <!-- LIVE VIDEOS -->
   <section id="tab-lives" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Live videos</h2><div class="hint">Every boosted live, ranked by the comments its boost brought in — and how it was boosted, so you can reuse what works.</div></div></div>
+      <div class="chead2"><div><h1>Live videos</h1><div class="hint">Every boosted live, ranked by the comments its boost brought in — and how it was boosted, so you can reuse what works.</div></div></div>
       <div class="chips" id="lChips" role="group" aria-label="Period">
         <button data-p="yesterday">Yesterday</button><button data-p="7">Last 7 days</button><button data-p="30">Last 30 days</button><button data-p="thisMonth">This month</button><button data-p="lastMonth">Last month</button><button data-p="thisYear">This year</button>
       </div>
@@ -345,7 +345,7 @@
   <!-- ORDERS (adsbox.biz) -->
   <section id="tab-orders" class="wrap" hidden>
     <div class="ohead">
-      <div><h2>Orders</h2><div class="hint">What one order costs for each client — boost spend ÷ orders from adsbox.biz.</div></div>
+      <div><h1>Orders</h1><div class="hint">What one order costs for each client — boost spend ÷ orders from adsbox.biz.</div></div>
       <div class="ohead-r">
         <button type="button" id="oSync" class="orefresh" title="Get the latest orders from adsbox.biz"><span class="ic-r" aria-hidden="true">↻</span> <span id="oUpd">Update</span></button>
         <button type="button" id="oCmpBtn" class="ghost sm" title="Compare Boost Desk with adsbox.biz for one day" hidden>Check vs adsbox</button>
@@ -377,7 +377,7 @@
 
   <section id="tab-payments" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Payments</h2><div class="hint">Service fees for each client: the pay date, the price, and an invoice you can send to their Telegram group as a PDF.</div></div></div>
+      <div class="chead2"><div><h1>Payments</h1><div class="hint">Service fees for each client: the pay date, the price, and an invoice you can send to their Telegram group as a PDF.</div></div></div>
       <div class="pnav">
         <button id="payPrev" class="navbtn" aria-label="Previous month">‹</button>
         <span class="plabel" id="payMonth">…</span>
@@ -404,7 +404,7 @@
 
   <section id="tab-admin" class="wrap" hidden>
     <div class="dhead">
-      <div class="chead2"><div><h2>Admin</h2><div class="hint">The people who use Boost Desk and their teams, what needs attention, and the app's settings. Spend per team is on the Main Dashboard.</div></div></div>
+      <div class="chead2"><div><h1>Admin</h1><div class="hint">The people who use Boost Desk and their teams, what needs attention, and the app's settings. Spend per team is on the Main Dashboard.</div></div></div>
       <div class="seg admnav" id="admNav" role="tablist" aria-label="Admin sections">
         <button data-a="users" role="tab">👥 Users <span class="admbadge" id="admUsersN"></span></button><button data-a="health" role="tab">🩺 Health <span class="admbadge" id="admHealthN"></span></button><button data-a="settings" role="tab">⚙ Settings</button>
       </div>
@@ -637,6 +637,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=1"></script>
-<script src="/assets/app.js?v=157"></script>
+<script src="/assets/app.js?v=158"></script>
 </body>
 </html>

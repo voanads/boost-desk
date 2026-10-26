@@ -1,4 +1,4 @@
-# Boost Desk — design system
+# Boost Desk — design system ("Calm console", Oct 2026)
 
 How every page of Boost Desk should look. The values live as CSS variables in
 `public/assets/app.css` (`:root`, and `:root[data-theme=dark]`). Use the
@@ -6,38 +6,46 @@ variable names in CSS, never raw values.
 
 ## Feel
 
-Calm, clear, fast to scan on a phone at the end of a work day. One purple
-brand, white cards on a soft grey ground, status told by colour **and** words.
-Khmer and English sit side by side, so the type must carry Khmer well.
+Calm, clear, fast to scan on a phone at the end of a work day. One
+professional blue, white cards on a soft grey ground, **no gradients, no
+glows, no background lights** — depth comes from a 1 px line and a faint
+shadow. Status told by colour **and** words. Khmer and English sit side by
+side, so the type must carry Khmer well. Inspiration: Linear, Stripe, Vercel.
 
 ## Colour
 
-| Token | Light | Role |
-| --- | --- | --- |
-| `--brand` | `#5B45F0` | The one main action per screen, links, selected text, the brand mark |
-| `--brand-2` | `#8B5CF6` | Second stop of the gradient; "behind plan" state |
-| `--brand-soft` | `#EEEBFF` | Selected chips, soft tags, hover tint |
-| `--grad` | `#8B5CF6 → #5B45F0` | **Hero cards only** (Total spent, Spent this month). Not buttons, not chips |
-| `--bg` / `--bg-2` | `#F4F5F9` / `#EEF0F5` | Page ground / inset areas, inputs, calendar days |
-| `--surface` | `#ffffff` | Cards, sidebar, dialogs |
-| `--line` | `#E1E4EC` | Borders, dividers |
-| `--ink` / `--muted` | `#11142A` / `#565C74` | Text / secondary text and labels |
-| `--ok` + `--ok-soft` | `#12A36B` / `#E3F6EE` | Done, on plan, connected, running |
-| `--warn` + `--warn-soft` | `#C27800` / `#FFF3DC` | Needs attention, ahead of plan, ends today |
-| `--live` (= `--danger`) + `--live-soft` | `#E5484D` / `#FDECEC` | Live videos, over budget, late, delete |
-| `--on-brand` | `#ffffff` | Text on purple or on a solid status colour |
+| Token | Light | Dark | Role |
+| --- | --- | --- | --- |
+| `--brand` | `#2563EB` | `#3B82F6` | Links, selected icons, the blue edge on hero cards, bars |
+| `--brand-fill` | `#2563EB` | `#2563EB` | Solid fills with white text: the one main button, solid badges |
+| `--brand-text` | `#1D4ED8` | `#93C5FD` | Text on `--brand-soft` (selected chips, segments, nav item) |
+| `--brand-soft` | `#EEF4FF` | `#1E2A4A` | Selected chips/segments/nav item, soft tags |
+| `--bg` / `--bg-2` | `#F6F7F9` / `#F1F3F7` | `#0B1220` / `#172033` | Page ground / inset areas, option boxes |
+| `--surface` | `#FFFFFF` | `#111827` | Cards, sidebar, dialogs, inputs |
+| `--line` | `#E5E7EB` | `#1F2937` | Borders, dividers |
+| `--ink` / `--muted` | `#0F172A` / `#5B6B82` | `#F1F5F9` / `#94A3B8` | Text / secondary text and labels |
+| `--ok` + `--ok-soft` | `#047857` / `#ECFDF5` | `#34D399` / `#0F2A22` | Done, on plan, connected, running |
+| `--warn` + `--warn-soft` | `#B45309` / `#FFFBEB` | `#FBBF24` / `#2A2210` | Needs attention, ahead of plan, ends today |
+| `--danger` (= `--live`) + `--danger-soft` | `#B91C1C` / `#FEF2F2` | `#F87171` / `#3A1719` | Live videos, over budget, late, delete |
+| `--on-brand` | `#FFFFFF` | `#FFFFFF` | Text on `--brand-fill` or a solid status colour |
+
+`--grad`, `--grad-hero` and `--ok-grad` still exist for older rules but are
+**solid colours** now. Do not add a gradient.
 
 Rules
-- **One solid purple button per screen** — the main action (Sync from Meta,
-  Save, Send). Everything else is outline, grey or text.
-- Selected chips and segments are **soft purple** (`--brand-soft` background,
-  `--brand` text), never solid, so they don't compete with the main button.
+- **One solid blue button per screen** — the main action (Sync from Meta,
+  Save, Send, Add). Everything else is white with a `--line` border, or text.
+- **Hero number** (Total spent, Spent this month, per order): a white card
+  with a 3 px blue inside edge (`box-shadow: inset 3px 0 0 var(--brand)`)
+  and ink text — never a filled card.
+- Selected chips, segments and the current sidebar item are **soft blue**
+  (`--brand-soft` background, `--brand-text` text), never solid.
 - Status colours always come with a word (On plan, Late, Connected). Never
-  colour alone.
+  colour alone. Every status pill passes 4.5:1 on its soft background.
 - Dark mode redefines every token above, so a new block must use tokens; a
-  raw `#fff` or `#11142A` breaks in dark mode.
-- Text contrast: body ≥ 4.5:1, large numbers ≥ 3:1. `--muted` on `--surface`
-  passes; `--muted` on `--brand-soft` does not — use `--brand` there.
+  raw `#fff` or `#0F172A` breaks in dark mode.
+- Text contrast: body ≥ 4.5:1, large numbers ≥ 3:1. `--muted` passes on
+  `--surface`, `--bg`, `--bg-2` and `--brand-soft`.
 
 ## Typography
 
@@ -62,19 +70,21 @@ Content width: full width of the main column; dialogs max 560 px.
 
 ## Shape and depth
 
-Radius scale (`--r-*`): xs 4 · sm 8 · md 10 · lg 12 · xl 16 · pill 999.
-- Buttons and inputs `--r-md`; cards `--r-xl`; small tags `--r-pill`;
-  avatars 50 %.
-- Shadow: `--shadow` on cards only; dialogs `0 10px 30px rgba(17,20,42,.18)`.
-  Nothing else casts a shadow.
+Radius scale (`--r-*`): xs 4 · sm 6 · md 8 · lg 10 · xl 12 · pill 999.
+- Buttons and inputs `--r-md` (8); cards and dialogs `--r-xl` (12); small
+  tags `--r-pill`; avatars 50 %.
+- Shadow: `--shadow-sm` (1 px, 4 % ink) on cards; `--shadow-md` on
+  dialogs and toasts. Nothing lifts or glows on hover — hover is a tint.
 
 ## Components
 
-- **Button** primary (solid `--brand`, white text), secondary (white,
-  `--line` border), ghost (no border), danger (white, `--danger` text and
-  border). Min height 44 px on phone, 38 px in dense rows. Hover: tint; focus:
-  2 px `--brand` outline; disabled: 50 % opacity.
-- **Chip / segment**: `--bg-2` default, soft purple when selected.
+- **Button** primary (solid `--brand-fill`, white text, hover
+  `--brand-hover`), secondary (`--surface`, `--line` border), ghost (no
+  border, `--muted` text), danger (`--danger` text, `--line` border, hover
+  `--danger-soft`). Min height 44 px on phone, 36 px for small buttons on
+  touch screens. Focus: 2 px `--brand` outline; disabled: 55 % opacity.
+- **Chip / segment**: `--surface` with a `--line` border, soft blue when
+  selected.
 - **Card**: `--surface`, 1 px `--line`, `--r-xl`, title row with a one-line
   hint on the right.
 - **Stat card**: label (2xs uppercase) · number (card size) · sub-line

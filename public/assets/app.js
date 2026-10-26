@@ -52,7 +52,7 @@
   function confetti(anchorEl, n = 26) {
     if (calm || !anchorEl || !document.body.animate) return;
     const r = anchorEl.getBoundingClientRect(), cx = r.left + scrollX + r.width / 2, cy = r.top + scrollY + r.height / 2;
-    const colors = ['#8B5CF6', '#5B45F0', '#34D399', '#F5B041', '#FF6B6E', '#60A5FA'];
+    const colors = ['#2563EB', '#60A5FA', '#34D399', '#FBBF24', '#F87171', '#93C5FD'];
     for (let i = 0; i < n; i++) {
       const c = document.createElement('i'); c.className = 'confetto'; c.style.background = colors[i % colors.length];
       c.style.left = cx + 'px'; c.style.top = cy + 'px'; document.body.appendChild(c);
@@ -178,7 +178,7 @@
     try { localStorage.setItem('bd-theme', t); } catch (e) {}
     const b = $('themeBtn'); if (b) { b.title = 'Theme: ' + THEME_NAME[t]; b.setAttribute('aria-label', 'Theme: ' + THEME_NAME[t]); }
     const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0C0E15' : '#5B45F0');
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0B1220' : '#2563EB');
   }
   if ($('themeBtn')) {
     applyTheme(themePick());
@@ -753,17 +753,18 @@
     if (!hasPostType(c)) return '';
     const open = planOpen[c.id], lines = (c.plan && c.plan.lines) || [];
     if (c.plan && c.plan.hidden && open !== 'edit') return `<section class="bplan bp-hidden"><div class="bp-top"><b>Post boost plan hidden</b><span class="hint">${lines.length ? money(planTotals(c.plan).total) + ' · ' + lines.length + ' post' + (lines.length === 1 ? '' : 's') : 'No plan yet'}</span><button type="button" class="sm" data-bp="show">Show plan</button></div></section>`;
-    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="sm primary" data-bp="new">+ New plan</button></div></section>`;
-    if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
+    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="sm primary" data-bp="new">+ New plan</button></div></section>`;
+    if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
     const t = planTotals(c.plan), [st, cls] = planStatus(c), p = planProg[c.id];
+    if (open === 'send' && planSend.to === 'client' && !c.telegram) planSend.to = 'copy';
     const send = open === 'send' ? `<div class="bp-send"><pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
         <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
           <span class="hint">Send to</span>
-          <label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''} ${c.telegram ? '' : 'disabled'}> Client's group${c.telegram ? ' · ' + esc(c.telegram_title || 'Telegram') : ' <span class="hint">(none yet)</span>'}</label>
+          ${c.telegram ? `<label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''}> Client's group · ${esc(c.telegram_title || 'Telegram')}</label>` : '<span class="hint bp-nogroup">No Telegram group yet — link one in ⚙ Settings to send it there.</span>'}
           ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> My team group</label>` : ''}
           <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> Just copy the text</label>
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
-    return `<section class="bplan ${cls}"><div class="bp-top"><b>🎯 Post boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
+    return `<section class="bplan ${cls}"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
         <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
       <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
@@ -868,11 +869,11 @@
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
-      <form class="ai-ask task-new" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task">
-        <div class="task-opts"><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
+      <form class="ai-ask task-new" id="cdTaskForm"><div class="task-main"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="button" class="sm task-more" id="cdTaskMore" aria-expanded="false" aria-controls="cdTaskOpts" title="Who, KPI, target, every day">Options ▾</button><button type="submit" class="sm primary">Add</button></div>
+        <div class="task-opts" id="cdTaskOpts" hidden><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
         <label class="tkpi-new"><span>KPI</span><select id="cdTaskKpi" aria-label="Count this task toward a KPI"><option value="">—</option></select></label>
         <label class="ttgt-new" title="A number to reach, e.g. 5 posts"><span>🎯</span><input type="number" id="cdTaskTgt" min="0" step="1" inputmode="numeric" placeholder="Target" aria-label="Target number"><input type="text" id="cdTaskUnit" maxlength="20" placeholder="unit" aria-label="Unit, e.g. posts"></label>
-        <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm primary">Add</button></div></form></section>`;
+        <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label></div></form></section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -889,6 +890,7 @@
     document.querySelectorAll('#cDetail [data-ctreach]').forEach((inp) => inp.onchange = async () => { try { cWb[c.id] = await api(`/clients/${c.id}/tasks/${inp.dataset.ctreach}`, { method: 'PATCH', body: { reached: Number(inp.value) || 0 } }); paintWork(); } catch (e) { toast(e.message); } });
     if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; fillTaskKpis(); }; }
     fillTaskKpis();
+    const more = $('cdTaskMore'); if (more) more.onclick = () => { const o = $('cdTaskOpts'), open = o.hidden; o.hidden = !open; more.setAttribute('aria-expanded', String(open)); more.textContent = open ? 'Options ▴' : 'Options ▾'; if (open) { const el = o.querySelector('select,input'); if (el) el.focus(); } };
     const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => {
       ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
       const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);
@@ -984,7 +986,7 @@
     const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
     const monthName = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
     const pickN = pick ? (byDay[pick] || []).length : 0;
-    return `<section class="cd-sec histsec"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4>
+    return `<section class="cd-sec histsec"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4><span class="hint hs-hint">What got ticked, day by day — tap a day to see it.</span>
         <div class="hm-nav"><button type="button" data-hmon="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button><b>${esc(label)}</b><button type="button" data-hmon="1" aria-label="Next month" ${ym >= today.slice(0, 7) ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button></div></div>
       <div class="hs-stats"><div><span>Done</span><b>${inMonth.length}</b><small>this month</small></div><div><span>Active days</span><b>${Object.keys(byDay).length}</b><small>of ${sofar} so far</small></div><div><span>Streak</span><b>${streak}</b><small>day${streak === 1 ? '' : 's'} in a row</small></div></div>
       <div class="hcal-w"><div class="hcal"><span class="hc-w">Mon</span><span class="hc-w">Tue</span><span class="hc-w">Wed</span><span class="hc-w">Thu</span><span class="hc-w">Fri</span><span class="hc-w">Sat</span><span class="hc-w">Sun</span>${cells}</div>

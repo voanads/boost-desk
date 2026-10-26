@@ -1,23 +1,24 @@
 :root{
-  /* Ads Box brand — swap these to rebrand */
-  --brand:#5B45F0; --brand-2:#8B5CF6; --brand-soft:#EEEBFF; --brand-ink:#ffffff;
-  --grad:linear-gradient(135deg,#8B5CF6,#5B45F0); /* fixed in both themes so white text stays readable */
-  --bg:#F4F5F9; --bg-2:#EEF0F5; --surface:#ffffff; --line:#E1E4EC; --ink:#11142A; --muted:#565C74;
-  --accent:#12A36B; --accent-soft:#E3F6EE; --live:#E5484D; --live-soft:#FDECEC;
-  --warn:#C27800; --warn-soft:#FFF3DC; --ok:#12A36B; --fb:#1877f2;
-  --shadow:0 1px 2px rgba(20,24,40,.05),0 4px 14px rgba(20,24,40,.05);
+  /* Ads Box brand — "Calm console", Professional Blue (Oct 2026 redesign). Swap these to rebrand */
+  --brand:#2563EB; --brand-2:#1D4ED8; --brand-soft:#EEF4FF; --brand-ink:#ffffff; --brand-text:#1D4ED8; --brand-hover:#1D4ED8;
+  --brand-fill:#2563EB; /* solid fills (buttons, badges): white text passes in both themes */
+  --grad:var(--brand-fill); /* flat: no gradients anywhere */
+  --bg:#F6F7F9; --bg-2:#F1F3F7; --surface:#ffffff; --line:#E5E7EB; --ink:#0F172A; --muted:#5B6B82;
+  --accent:#047857; --accent-soft:#ECFDF5; --live:#B91C1C; --live-soft:#FEF2F2;
+  --warn:#B45309; --warn-soft:#FFFBEB; --ok:#047857; --fb:#1877f2;
+  --shadow:0 1px 2px rgba(15,23,42,.04);
   --f-ui:"Inter","Kantumruy Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-num:var(--f-ui);
-  --r:16px;
+  --r:12px;
 
   /* ===== Design tokens (Boost Desk design system) — use these, not raw values ===== */
   /* status */
   --danger:var(--live); --danger-soft:var(--live-soft); --ok-soft:var(--accent-soft);
-  --on-brand:#ffffff;   /* text/icons on the purple gradient or a solid status colour */
-  --on-ok:#04130c;      /* text on the green success gradient */
-  --ok-grad:linear-gradient(135deg,#34D399,#10B981);
-  --grad-hero:linear-gradient(135deg,#9B6BFF,#5B45F0 45%,#7C5CFF 70%,#4A36D6);
-  --brand-glow:#A78BFA; --brand-mist:#C4B5FD; --amber:#F59E0B;
+  --on-brand:#ffffff;   /* text/icons on solid brand or a solid status colour */
+  --on-ok:#ffffff;      /* text on solid success */
+  --ok-grad:var(--ok);
+  --grad-hero:var(--surface);
+  --brand-glow:#93C5FD; --brand-mist:#BFDBFE; --amber:#D97706;
   --paper:#ffffff;      /* always-white surfaces: QR, invoice preview, switch knobs */
   --tg-bubble:#1c2733;  /* Telegram message preview */
   /* aliases kept for older rules */
@@ -25,31 +26,31 @@
   /* type scale */
   --fs-2xs:.66rem; --fs-xs:.72rem; --fs-sm:.78rem; --fs-md:.82rem; --fs-lg:.86rem; --fs-xl:.9rem; --fs-2xl:.95rem; --fs-base:1rem;
   --fs-h3:1.1rem; --fs-h2:1.2rem; --fs-h1:1.4rem; --fs-hero:1.6rem;
-  /* radius */
-  --r-xs:4px; --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-pill:999px;
+  /* radius: 6 / 8 / 12 */
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:10px; --r-xl:12px; --r-pill:999px;
   /* spacing (for new work: 4 · 8 · 12 · 16 · 24 · 32) */
   --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:24px; --s-6:32px;
   /* motion */
   --t-fast:.15s; --t-med:.3s; --t-slow:.6s; --ease:cubic-bezier(.2,.8,.2,1);
   /* elevation */
-  --shadow-sm:var(--shadow); --shadow-md:0 6px 18px rgba(20,24,40,.10); --shadow-lg:0 12px 30px rgba(20,24,40,.16);
-  --glow:0 4px 14px color-mix(in srgb,var(--brand) 35%,transparent);
+  --shadow-sm:var(--shadow); --shadow-md:0 4px 12px rgba(15,23,42,.06); --shadow-lg:0 20px 50px rgba(15,23,42,.18);
+  --glow:none;
   /* decorative (confetti, sparks, live thumbnails) */
   --fx-1:#fde68a; --fx-2:#fdba74; --fx-3:#fb923c; --fx-4:#f9a8d4; --fx-5:#f472b6; --fx-6:#a855f7; --fx-7:#22d3ee; --fx-8:#86efac; --fx-9:#6366f1;
 }
 /* Dark theme: follows the device (Auto), or forced with the theme switch (data-theme on <html>). */
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --brand:#8F7BFF; --brand-2:#A78BFA; --brand-soft:#241F45; --brand-ink:#0E0C1D;
-  --bg:#0C0E15; --bg-2:#181B28; --surface:#141722; --line:#262B3C; --ink:#F1F2F8; --muted:#A2A8BE;
-  --accent:#34D399; --accent-soft:#113327; --live:#FF6B6E; --live-soft:#3A1719;
-  --warn:#F5B041; --warn-soft:#3A2A10; --ok:#34D399;
-  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}}
+  --brand:#3B82F6; --brand-2:#60A5FA; --brand-soft:#1E2A4A; --brand-ink:#ffffff; --brand-text:#93C5FD; --brand-hover:#1D4ED8; --brand-fill:#2563EB;
+  --bg:#0B1220; --bg-2:#172033; --surface:#111827; --line:#1F2937; --ink:#F1F5F9; --muted:#94A3B8;
+  --accent:#34D399; --accent-soft:#0F2A22; --live:#F87171; --live-soft:#3A1719;
+  --warn:#FBBF24; --warn-soft:#2A2210; --ok:#34D399; --on-ok:#052e1c;
+  --shadow:0 1px 2px rgba(0,0,0,.35); --shadow-md:0 4px 12px rgba(0,0,0,.35); color-scheme:dark}}
 :root[data-theme=dark]{
-  --brand:#8F7BFF; --brand-2:#A78BFA; --brand-soft:#241F45; --brand-ink:#0E0C1D;
-  --bg:#0C0E15; --bg-2:#181B28; --surface:#141722; --line:#262B3C; --ink:#F1F2F8; --muted:#A2A8BE;
-  --accent:#34D399; --accent-soft:#113327; --live:#FF6B6E; --live-soft:#3A1719;
-  --warn:#F5B041; --warn-soft:#3A2A10; --ok:#34D399;
-  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25); color-scheme:dark}
+  --brand:#3B82F6; --brand-2:#60A5FA; --brand-soft:#1E2A4A; --brand-ink:#ffffff; --brand-text:#93C5FD; --brand-hover:#1D4ED8; --brand-fill:#2563EB;
+  --bg:#0B1220; --bg-2:#172033; --surface:#111827; --line:#1F2937; --ink:#F1F5F9; --muted:#94A3B8;
+  --accent:#34D399; --accent-soft:#0F2A22; --live:#F87171; --live-soft:#3A1719;
+  --warn:#FBBF24; --warn-soft:#2A2210; --ok:#34D399; --on-ok:#052e1c;
+  --shadow:0 1px 2px rgba(0,0,0,.35); --shadow-md:0 4px 12px rgba(0,0,0,.35); color-scheme:dark}
 :root[data-theme=light]{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -2548,3 +2549,157 @@ dialog .csf-bar{position:static}
 .tkpi-new select{min-height:34px;padding:4px 8px;max-width:200px}
 .kpi-chip{display:inline-block;font-weight:700;color:var(--ok);background:var(--ok-soft);border-radius:var(--r-pill);padding:0 8px;margin-right:4px}
 @media (max-width:760px){.kpi-head{display:none}.kpi-row{grid-template-columns:28px minmax(0,1fr) 68px;row-gap:6px}.kpi-tg{grid-column:2/3;justify-content:flex-start}.kpi-res{grid-column:2/3;justify-content:flex-start}.kpi-score{grid-column:3/4;grid-row:1}.kpi-x{grid-column:3/4}}
+
+/* ================= Oct 2026 redesign — "Calm console" (Professional Blue) =================
+   Flat surfaces, one solid blue button per screen, hero numbers on white cards with a blue
+   edge, status told by colour + words. Tokens live in :root; this block retires the old
+   purple gradients, glows and background lights, and applies the shell + component rules. */
+
+/* --- ground: no aurora, no mouse light, no drifting hero --- */
+body::before{display:none!important}
+body{background:var(--bg)!important}
+.summary::after,.panel::after,.ccard::after,.lv::after,.payrow::after{display:none!important}
+.summary>div.hero,.summary>div.hero::after{animation:none!important}
+.summary>div.hero::after{display:none!important}
+.card:hover,.summary>div:hover,.ccard:hover{transform:none!important;box-shadow:var(--shadow-sm)!important}
+.ccard:hover{border-color:var(--line)!important}
+.card::before{display:none!important}
+.card.is-done::before,.card.is-over::before{display:block!important}
+.progress .pbar i{animation:none!important;background-image:none!important}
+.brand:hover .logo{transform:none!important}
+
+/* --- hero numbers: white card, blue edge, ink text (both themes) --- */
+.summary>div.hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.summary>div.hero .lbl,.summary .hero .sub{color:var(--muted)!important}
+.summary .hero .val{font-size:2rem!important;font-weight:600!important}
+.summary>div{box-shadow:var(--shadow-sm)!important}
+.summary>div.hero .ripple{display:none}
+#oSum>.ost-main{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+#oSum>.ost-main .lbl{color:var(--muted)!important}
+.cd-stat.hero,.mk.hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.mk.hero .lbl,.mk.hero .sub{color:var(--muted)!important;opacity:1!important}
+.cd-stat.hero .lbl,.cd-stat.hero .sub,.cd-stat.hero .hint{color:var(--muted)!important}
+.hero .skel-v{background:var(--bg-2)!important}
+
+/* --- buttons: solid brand primary, quiet secondary, no glow, no lift --- */
+button{border-radius:var(--r-md);font-weight:600;color:var(--ink)}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--brand-fill)!important;color:#fff!important;border:none;box-shadow:none!important;font-weight:600}
+button.primary:hover:not(:disabled){background:var(--brand-hover)!important;filter:none;transform:none!important;box-shadow:none!important}
+button.ghost{color:var(--muted)} button.ghost:hover{background:var(--bg-2);color:var(--ink);border-color:transparent}
+button.danger{color:var(--danger);border-color:var(--line)} button.danger:hover{background:var(--danger-soft);border-color:var(--danger)}
+.syncbtn.synced,.dexp-foot .primary.sent-ok{background:var(--ok)!important;box-shadow:none!important;color:#fff!important}
+.okbadge{background:var(--ok)!important;color:#fff!important;box-shadow:var(--shadow-md)!important;border-radius:var(--r-lg)!important}
+.dexp-foot .primary.shine::after{display:none}
+:focus-visible{outline:2px solid var(--brand)!important;outline-offset:2px}
+
+/* --- inputs --- */
+input[type=text],input[type=url],input[type=number],input[type=date],input[type=search],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md)}
+input:focus,select:focus,textarea:focus{border-color:var(--brand)!important;box-shadow:0 0 0 3px var(--brand-soft)!important}
+input[aria-invalid=true]{border-color:var(--danger)!important}
+
+/* --- selected things are soft blue with readable blue text --- */
+.seg button[aria-pressed=true],.chips button[aria-pressed=true],.more-sheet button[aria-current=true],.pchip,.chip.post,.chip.ok,.pill.brand,.rolechip.admin,.to-chip,.cr-plan:not(.bp-run):not(.bp-done):not(.bp-bad):not(.bp-draft),.kpi-chip,.cd.sel,.cm.sel,.pgrid button[aria-pressed=true]{color:var(--brand-text)!important}
+.cd.sel,.cm.sel,.pgrid button[aria-pressed=true]{background:var(--brand-fill)!important;color:#fff!important;box-shadow:none!important}
+.seg{border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--brand-soft);border-radius:var(--r-sm)}
+.chips button[aria-pressed=true]{background:var(--brand-soft);border-color:transparent}
+.chip.meta{background:var(--ok-soft);color:var(--ok)}
+.pill.solid,.rolechip.owner,.lv.top .rank,.teamdot{background:var(--brand-fill)!important;color:#fff!important}
+.avatar,.mc-h .avatar{background:var(--bg-2)!important;color:var(--ink)!important;border:1px solid var(--line)}
+
+/* --- bars and charts: one flat blue --- */
+.bar i,.meter i,.progress .pbar i,.pgbar i{background:var(--brand)!important}
+.bar i.over{background:var(--danger)!important}
+.chart .b{background:var(--brand)!important;border-radius:3px 3px 0 0;opacity:.9}
+.chart .col.today .b{background:var(--warn)!important}
+.sk,.skel-v,.ocard.skel,.mcard.skel{background:var(--bg-2)!important;animation:none!important}
+
+/* --- cards, panels, tables --- */
+.card,.panel,.progress,.ccard,.empty,.mb-row,.hl-empty{border-radius:var(--r-xl)!important;box-shadow:var(--shadow-sm)!important;border-color:var(--line)!important}
+.card,.panel{background:var(--surface)}
+.empty{border:1.5px dashed var(--line)!important;box-shadow:none!important;background:var(--surface)}
+.empty b{display:block;color:var(--ink);margin-bottom:2px}
+th{font-size:var(--fs-2xs);letter-spacing:.06em;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line)}
+td{border-bottom:1px solid var(--line)}
+tbody tr:hover td{background:var(--bg-2)}
+.mtr.on td{background:var(--brand-soft)}
+.dtable tbody tr.drow td:first-child::before{display:none!important}
+.toast{background:var(--ink);color:var(--bg);border-radius:var(--r-md);box-shadow:var(--shadow-md)}
+
+/* --- dialogs --- */
+.dlg>*,.dlg form,.dlg .dlg-in,.dlg .mb-dlg{border-radius:var(--r-xl)}
+dialog::backdrop{background:rgba(15,23,42,.45)}
+
+/* --- shell: page titles with one quiet line under them --- */
+h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
+.chead2 h2,.ohead h2,.bhead h2,#tab-accounts>.top h2{font-size:1.35rem!important;font-weight:600!important}
+.bhead .hint,.ohead .hint,.chead2 .hint{font-size:var(--fs-lg)}
+.navgrp:not([hidden]){color:var(--muted)}
+.navgrp::after{opacity:1!important;width:7px;height:7px}
+@media (min-width:1100px){
+  header.appbar{padding:18px 12px!important;gap:18px!important}
+  nav.tabs button{padding:9px 10px!important;font-size:var(--fs-xl)!important;border-radius:var(--r-md)!important;color:var(--muted)}
+  nav.tabs button:hover{color:var(--ink);background:var(--bg-2)!important}
+  nav.tabs button[aria-selected=true]{color:var(--brand-text)!important;background:var(--brand-soft)!important}
+  .tab-ink{display:none!important}
+  nav.tabs button[aria-selected=true] .ic{transform:none!important}
+  body{padding-right:28px!important}
+}
+/* tablet nav row */
+@media (min-width:761px) and (max-width:1099px){
+  nav.tabs{background:var(--surface);border:1px solid var(--line)}
+  nav.tabs button[aria-selected=true]{background:var(--brand-soft);color:var(--brand-text)}
+}
+/* phone bottom bar */
+@media (max-width:760px){
+  nav.tabs{background:var(--surface);backdrop-filter:none;-webkit-backdrop-filter:none}
+  nav.tabs button[aria-selected=true]{color:var(--brand-text)!important}
+  nav.tabs button{color:var(--muted)}
+}
+
+/* --- review fixes --- */
+/* 1. Admin Users: cards on a phone, no sideways scroll */
+@media (max-width:760px){
+  .utable{min-width:0!important;border:none!important;background:none!important;display:block}
+  .utable thead{display:none}
+  .utable tbody{display:flex;flex-direction:column;gap:10px}
+  .utable tr.utr{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);padding:12px 14px}
+  .utable tr.utr td{display:flex;flex-direction:column;gap:2px;padding:0!important;border:none!important;white-space:normal!important;font-size:var(--fs-md)}
+  .utable tr.utr td::before{content:attr(data-l);font-size:var(--fs-2xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .utable tr.utr td[data-l=Person]{grid-column:1/-1}
+  .utable tr.utr td[data-l=Person]::before{display:none}
+  .utable tr.utr td.ut-a{grid-column:1/-1;flex-direction:row;align-items:center;gap:10px;padding-top:6px!important;border-top:1px solid var(--line)!important}
+  .utable tr.utr td.r{text-align:left}
+  .utable tr.utr-err{display:block;background:var(--danger-soft);border-radius:var(--r-md);padding:8px 12px;margin-top:-6px}
+  .utable tr.utr-err td{display:block;border:none!important;padding:0!important;white-space:normal!important}
+  #uList .tablewrap{overflow:visible}
+}
+/* 3. dark mode: disabled calendar days stay visible */
+.cd:disabled,.cm:disabled{opacity:.45!important}
+/* 7. task form: text + Options + Add on one row, extras below when opened */
+.task-main{display:flex;gap:8px;width:100%}
+.task-main input{flex:1;min-width:0}
+.task-more{white-space:nowrap;color:var(--muted)}
+.task-more[aria-expanded=true]{color:var(--brand-text);background:var(--brand-soft);border-color:transparent}
+.task-opts:not([hidden]){padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--bg-2)}
+/* 8. touch sizes on the Clients page */
+@media (pointer:coarse){button.sm,.sm,.chips button,.seg button,.pchip button,.ut-ib,.navbtn{min-height:36px}}
+@media (max-width:760px){button.primary,.form button,.tools>button,.phead-a button,.csf-bar button,.task-main button,.more-sheet button{min-height:44px}}
+/* 10. Orders on a phone: the sort segment on one line */
+@media (max-width:560px){.otools .seg{width:100%;display:grid;grid-template-columns:repeat(3,1fr)}.otools .seg button{padding:8px 2px;font-size:var(--fs-sm)}}
+/* 11. Done history hint */
+.hs-head{flex-wrap:wrap}
+.hs-head h4{margin-right:0!important}
+.hs-hint{margin-right:auto;font-size:var(--fs-xs)}
+/* 13. sidebar chevron visible */
+.navgrp::after{opacity:1}
+/* phone header: brand + three round buttons + Log out must fit 360 px */
+@media (max-width:760px){header.appbar{overflow:hidden;gap:8px}.who{gap:6px;flex:0 1 auto;min-width:0}#logoutBtn{padding-inline:8px;font-size:var(--fs-md)}.themebtn{width:36px;height:36px;padding:0}}
+/* phone client header: name first, settings button on its own line */
+@media (max-width:760px){.cd-head-row{flex-wrap:wrap;gap:10px}.cd-head-row .cd-title{flex:1 1 100%;min-width:0}.cd-head-row .cd-title h3{overflow-wrap:anywhere}.cd-head-row>button,.cd-head-row>.cd-acts{flex:1 1 auto}}
+.utable tr.utr td{align-items:flex-start}
+/* Target page hero number: same white card with a blue edge as every other hero */
+.bk.bk-hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.bk.bk-hero .lbl,.bk.bk-hero .sub{color:var(--muted)!important;opacity:1!important}
+.bk-ring{background:var(--surface)}

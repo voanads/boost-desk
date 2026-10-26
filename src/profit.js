@@ -58,26 +58,17 @@ async function roleOf(id) {
   return ROLES.includes(r) ? r : null;
 }
 
-// ---- ad accounts for "Fill from Meta": only the ones a Profit admin's Facebook login can open
-// (the app owner and anyone set to admin on the Access page) ----
-async function adminIds() {
-  const ids = new Set(Object.entries(await accessMap()).filter(([, r]) => r === 'admin').map(([id]) => id));
-  const owner = await db.ownerId(); if (owner) ids.add(owner);
-  return [...ids].filter((id) => !id.startsWith('g:')); // Google-only people have no ad accounts
-}
-async function metaAccounts() {
-  const admins = await adminIds();
-  if (!admins.length) return [];
-  const rows = (await q('SELECT owner, id, name, enabled, info, seen_at FROM ad_accounts WHERE owner = ANY($1)', [admins])).rows;
-  const ext = {}; // billing thresholds the admins' browser extension pushed, newest wins
-  for (const r of (await q('SELECT value FROM settings WHERE key = ANY($1)', [admins.map((id) => id + ':extThresholds')])).rows) {
-    for (const [id, e] of Object.entries(r.value || {})) if (e && e.v != null && (!ext[id] || String(e.at || '') > String(ext[id].at || ''))) ext[id] = e;
-  }
+// ---- ad accounts for "Fill from Meta": the ones the logged-in person's own Facebook login can open
+// (the same list as their Ad accounts tab), with the thresholds their browser extension pushed ----
+async function metaAccounts(owner) {
+  if (!owner || String(owner).startsWith('g:')) return []; // Google-only people have no ad accounts
+  const rows = (await q('SELECT owner, id, name, enabled, info, seen_at FROM ad_accounts WHERE owner = $1', [owner])).rows;
+  const ext = (await db.getUserSetting(owner, 'extThresholds', {})) || {};
   const map = new Map();
   for (const r of rows) {
     const i = r.info || {}, a = map.get(r.id) || { id: r.id, name: r.name, statusCode: null, status: '', balance: 0, threshold: null, synced: false, seenAt: null };
     if (!a.seenAt || new Date(r.seen_at) > new Date(a.seenAt)) Object.assign(a, { name: r.name, statusCode: i.statusCode ?? null, status: i.status || '', balance: Number(i.balance) || 0, seenAt: r.seen_at, threshold: i.threshold ?? a.threshold });
-    if (a.threshold == null && ext[r.id]) a.threshold = ext[r.id].v;
+    if (a.threshold == null && ext[r.id] && ext[r.id].v != null) a.threshold = ext[r.id].v;
     if (r.enabled) a.synced = true;
     map.set(r.id, a);
   }
@@ -110,7 +101,7 @@ function router({ sitePeople }) {
     if (!VALID_ID.test(req.params.id)) return res.status(400).json({ error: 'Bad path' });
     await del('months', req.params.id); res.json({ ok: true });
   }));
-  r.get('/meta-accounts', editor, wrap(async (req, res) => res.json({ accounts: await metaAccounts() })));
+  r.get('/meta-accounts', editor, wrap(async (req, res) => res.json({ accounts: await metaAccounts(req.user.fb_id) })));
 
   // Access list: every Boost Desk account plus the Google admin-website people.
   r.get('/access', admin, wrap(async (req, res) => {

@@ -277,7 +277,8 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'adaccts', 'target', 'profit'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
+    if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
+    if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (document.body.dataset.site === 'admin' && me && me.google && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
     ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
@@ -3534,9 +3535,12 @@ Thank you for working with Ads Box!`,
       const showAdmin = me.canAdmin && !PM_SITE;
       if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
-      if (me.profitRole && !PM_SITE) { document.querySelector('nav.tabs [data-tab=profit]').hidden = false; $('navGrpAdmin').hidden = false; }
+      if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages
+        const pb = document.querySelector('nav.tabs [data-tab=profit]'); pb.hidden = false;
+        if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); } else $('navGrpAdmin').hidden = false;
+      }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
-      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE ? 'main' : 'dashboard'));
+      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

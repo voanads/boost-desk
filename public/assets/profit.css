@@ -1,0 +1,127 @@
+/* Profit tab (was the Ads & Profit Tracker). Everything is scoped to #tab-profit and built on the
+   Boost Desk design tokens, so it follows the theme switch and the brand colours. */
+#tab-profit{
+  --pf-sheet:var(--surface); --pf-grid:var(--line); --pf-line:color-mix(in srgb,var(--line) 65%,transparent);
+  --pf-head:var(--bg-2); --pf-fg:var(--ink); --pf-muted:var(--muted); --pf-brand:var(--brand); --pf-brand-soft:var(--brand-soft);
+  --pf-red:var(--live); --pf-green:var(--ok); --pf-orange:var(--warn); --pf-blue:#2F6FEA; --pf-purple:var(--brand-2); --pf-gold:var(--amber);
+  --pf-hover:color-mix(in srgb,var(--bg-2) 70%,transparent); --pf-total:var(--bg-2);
+  --pf-good-soft:var(--accent-soft); --pf-bad-soft:var(--live-soft); --pf-warn-soft:var(--warn-soft);
+  --pf-blue-soft:color-mix(in srgb,#2F6FEA 14%,transparent); --pf-gold-soft:color-mix(in srgb,var(--amber) 16%,transparent);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) #tab-profit{--pf-blue:#86A6FF}}
+:root[data-theme=dark] #tab-profit{--pf-blue:#86A6FF}
+#tab-profit .pf{display:flex;flex-direction:column;gap:16px;min-width:0}
+#tab-profit .bh-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#tab-profit .bh-r select{height:36px;border-radius:var(--r-md);padding:0 10px;background:var(--surface);font-weight:600}
+#tab-profit .pf-status{font-size:var(--fs-sm);color:var(--muted);font-weight:600;min-width:54px}
+#tab-profit .pf-seg{align-self:flex-start;max-width:100%;overflow-x:auto}
+#tab-profit .pf-seg button{white-space:nowrap}
+#tab-profit [hidden]{display:none!important}
+#tab-profit #pfApp{display:flex;flex-direction:column;gap:16px;min-width:0}
+#tab-profit table{min-width:0;width:100%;border-collapse:collapse}
+#tab-profit .n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+#tab-profit .good{color:var(--pf-green)} #tab-profit .bad{color:var(--pf-red)} #tab-profit .warnc{color:var(--pf-orange)} #tab-profit .mut{color:var(--pf-muted)} #tab-profit .blue{color:var(--pf-blue)}
+
+#tab-profit .pf-top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 16px;justify-content:space-between}
+#tab-profit .pf-top h2{margin:0;font-size:var(--fs-h1);font-weight:800;letter-spacing:-.02em}
+#tab-profit .pf-eyebrow{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+#tab-profit .pf-lastedit{font-size:var(--fs-sm);color:var(--muted);font-weight:600}
+#tab-profit .pf-lastedit b{color:var(--ink)}
+#tab-profit .pf-confirm{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#tab-profit .pf-danger{color:var(--live)}
+
+#tab-profit .pf-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+#tab-profit .pf-strip>div,#tab-profit .pf-strip>button{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0;box-shadow:var(--shadow);text-align:left;font:inherit;color:inherit}
+#tab-profit .pf-strip .k{font-size:var(--fs-sm);color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:8px}
+#tab-profit .pf-strip .ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800}
+#tab-profit .ic.c-green{background:var(--pf-good-soft);color:var(--pf-green)} #tab-profit .ic.c-blue{background:var(--pf-blue-soft);color:var(--pf-blue)}
+#tab-profit .ic.c-gold{background:var(--pf-gold-soft);color:var(--pf-gold)} #tab-profit .ic.c-purple{background:var(--brand-soft);color:var(--brand)}
+#tab-profit .pf-strip .v{font-family:var(--f-num);font-size:1.45rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15}
+#tab-profit .pf-strip .sub{font-size:var(--fs-xs);color:var(--muted);font-weight:600}
+#tab-profit .pf-strip .meter{height:4px;border-radius:2px;background:var(--bg-2);overflow:hidden}
+#tab-profit .pf-strip .meter i{display:block;height:100%;border-radius:2px}
+#tab-profit .pf-strip .hl{position:relative;overflow:hidden;background:var(--grad);border:none;color:var(--on-brand);box-shadow:var(--glow)}
+#tab-profit .pf-strip .hl::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 2px,transparent 2px 12px);pointer-events:none}
+#tab-profit .pf-strip .hl .k,#tab-profit .pf-strip .hl .sub{color:rgba(255,255,255,.85)}
+#tab-profit .pf-strip .hl .ic{background:rgba(255,255,255,.2);color:#fff}
+#tab-profit .pf-strip button.hl{cursor:pointer;padding:14px 16px}
+#tab-profit .pf-strip button.hl:hover{filter:brightness(1.06)}
+
+#tab-profit .pf-grid2{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+#tab-profit .pf-grid2>.pf-main{flex:999 1 600px;min-width:0}
+#tab-profit .pf-side{flex:1 1 470px;min-width:0;display:flex;flex-direction:column;gap:16px}
+#tab-profit .pf-grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:16px;align-items:start}
+
+#tab-profit .pf-sheet{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0;box-shadow:var(--shadow)}
+#tab-profit .pf-title{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 16px 12px;font-weight:800;font-size:var(--fs-xl)}
+#tab-profit .pf-title>span:first-child{display:flex;align-items:center;gap:9px}
+#tab-profit .pf-title>span:first-child::before{content:"";width:8px;height:8px;border-radius:3px;background:var(--dot,var(--brand))}
+#tab-profit .pf-title .t2{font-weight:700;font-size:var(--fs-sm);color:var(--muted);font-variant-numeric:tabular-nums}
+#tab-profit .t-red{--dot:var(--pf-red)} #tab-profit .t-blue{--dot:var(--pf-blue)} #tab-profit .t-green{--dot:var(--pf-green)} #tab-profit .t-purple{--dot:var(--brand)} #tab-profit .t-gold{--dot:var(--pf-gold)}
+#tab-profit .pf-scroll{overflow-x:auto}
+#tab-profit .pf-sheet th{background:var(--pf-head);color:var(--muted);font-weight:700;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+#tab-profit .pf-sheet th.n{text-align:right}
+#tab-profit .pf-sheet th.shade{background:var(--pf-total)}
+#tab-profit .pf-sheet td{border-bottom:1px solid var(--pf-line);padding:0;height:36px;vertical-align:middle;font-size:var(--fs-md)}
+#tab-profit .pf-sheet tbody tr:hover td{background:var(--pf-hover)}
+#tab-profit .pf-sheet td.v{padding:0 10px}
+#tab-profit .pf-sheet td.idx{width:36px;text-align:center;color:var(--muted);font-size:var(--fs-xs);font-weight:600}
+#tab-profit .pf-sheet tr.total td{background:var(--pf-total);font-weight:800;padding:0 10px;border-bottom:0;height:38px}
+#tab-profit .pf-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 8px;border-top:1px solid var(--line);font-size:var(--fs-sm);color:var(--muted);flex-wrap:wrap}
+#tab-profit .pf-foot-l{display:flex;gap:4px;flex-wrap:wrap}
+#tab-profit button.pf-link{color:var(--brand);font-weight:600}
+#tab-profit button.pf-link:hover{background:var(--brand-soft)}
+
+#tab-profit .pf-sheet td input,#tab-profit .pf-sheet td select{display:block;width:100%;height:32px;border:1px solid transparent;border-radius:8px;background:transparent;padding:0 9px;min-width:0;outline:none;font-size:var(--fs-md);transition:background .12s,border-color .12s}
+#tab-profit .pf-sheet td select{cursor:pointer;-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 14px) 14px,calc(100% - 10px) 14px;background-size:4px 4px;background-repeat:no-repeat;padding-right:24px}
+#tab-profit .pf-sheet td input.n{text-align:right;font-weight:600;font-family:var(--f-num)}
+#tab-profit .pf-sheet td input:hover,#tab-profit .pf-sheet td select:hover{background-color:var(--brand-soft)}
+#tab-profit .pf-sheet td input:focus,#tab-profit .pf-sheet td select:focus{border-color:var(--brand);background-color:var(--surface);box-shadow:0 0 0 3px var(--brand-soft)}
+#tab-profit .pf-sheet td input::placeholder{color:var(--muted);opacity:.6}
+#tab-profit input[type=number]::-webkit-inner-spin-button,#tab-profit input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#tab-profit input[type=number]{-moz-appearance:textfield}
+#tab-profit .pf-sheet td input:disabled,#tab-profit .pf-sheet td select:disabled{opacity:1;color:var(--ink);-webkit-text-fill-color:var(--ink);cursor:default;background-image:none}
+#tab-profit .pf-sheet td input:disabled:hover,#tab-profit .pf-sheet td select:disabled:hover{background-color:transparent}
+#tab-profit td.x{width:34px;text-align:center}
+#tab-profit td.x button{width:26px;height:26px;padding:0;border:0;background:transparent;border-radius:7px;color:var(--muted);cursor:pointer;opacity:0;box-shadow:none}
+#tab-profit tr:hover td.x button,#tab-profit td.x button:focus-visible{opacity:1}
+#tab-profit td.x button:hover{background:var(--pf-bad-soft);color:var(--pf-red)}
+#tab-profit td.x button:disabled{cursor:not-allowed;opacity:0!important}
+@media (hover:none){#tab-profit td.x button{opacity:.6}}
+#tab-profit .pf-sheet td select.st-Active,#tab-profit .pf-sheet td select.st-Disabled,#tab-profit .pf-sheet td select.st-Need{font-weight:700;font-size:var(--fs-sm);border-radius:999px;height:26px;margin:0 6px;width:calc(100% - 12px)}
+#tab-profit .st-Active{color:var(--pf-green);background-color:var(--pf-good-soft)!important}
+#tab-profit .st-Disabled{color:var(--muted);background-color:var(--bg-2)!important}
+#tab-profit .st-Need{color:var(--pf-orange);background-color:var(--pf-warn-soft)!important}
+#tab-profit .pf-sheet td select.st-Active:disabled{-webkit-text-fill-color:var(--pf-green)} #tab-profit .pf-sheet td select.st-Need:disabled{-webkit-text-fill-color:var(--pf-orange)} #tab-profit .pf-sheet td select.st-Disabled:disabled{-webkit-text-fill-color:var(--muted)}
+
+#tab-profit .namecell{display:flex;align-items:center;gap:2px;padding-left:8px}
+#tab-profit .av{flex:none;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;font-size:10.5px;font-weight:800;color:#fff;background:hsl(var(--h,250) 45% 48%);letter-spacing:-.02em}
+#tab-profit .who{display:flex;align-items:center;gap:10px;font-weight:700}
+#tab-profit .pf-barcell{display:flex;align-items:center;gap:8px;padding:0 10px}
+#tab-profit .mini{flex:1;height:6px;background:var(--bg-2);border-radius:3px;overflow:hidden;min-width:50px}
+#tab-profit .mini i{display:block;height:100%;background:var(--ink);border-radius:3px}
+#tab-profit .mini i.hot{background:var(--pf-orange)}
+#tab-profit .pf-barcell span{width:38px;text-align:right;font-variant-numeric:tabular-nums;font-size:var(--fs-sm);font-weight:700}
+#tab-profit .pf-barcell span.hot{color:var(--pf-orange)}
+
+#tab-profit .pf-sum td.k{padding:0 16px;color:var(--ink);font-weight:600}
+#tab-profit .pf-sum td.k.good{color:var(--pf-green)} #tab-profit .pf-sum td.k.bad{color:var(--pf-red)} #tab-profit .pf-sum td.k.warnc{color:var(--pf-orange)}
+#tab-profit .pf-sum td.k small{color:var(--muted);font-size:var(--fs-xs);font-weight:500}
+#tab-profit .pf-sum td.v{font-weight:800;padding-right:16px}
+#tab-profit .pf-sum td input{font-weight:700}
+#tab-profit .pf-badge{display:inline-block;font-size:var(--fs-2xs);font-weight:800;border-radius:999px;padding:2px 9px;background:var(--bg-2);color:var(--muted);white-space:nowrap}
+#tab-profit .pf-badge.on{background:var(--brand-soft);color:var(--brand)}
+#tab-profit .warn{color:var(--pf-red);font-weight:800}
+#tab-profit .pf-empty{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:56px 20px;text-align:center;box-shadow:var(--shadow)}
+#tab-profit .pf-empty h3{margin:0 0 6px;font-size:var(--fs-h3);font-weight:800}
+#tab-profit .pf-empty p{margin:0 auto;max-width:46ch;color:var(--muted)}
+#tab-profit .pf-newcard{background:var(--surface);border:2px solid var(--brand);border-radius:var(--r);padding:14px 16px;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;box-shadow:var(--shadow)}
+#tab-profit .pf-newcard input{height:34px;border-radius:var(--r-sm);padding:0 8px;background:var(--surface)}
+#tab-profit .pf-newcard p{margin:0;color:var(--muted);flex-basis:100%;font-size:var(--fs-md)}
+#tab-profit .pf-newcard p.bad{color:var(--pf-red)}
+#tab-profit .pf-roleb{display:inline-block;font-size:var(--fs-2xs);font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap;background:var(--bg-2);color:var(--muted)}
+#tab-profit .pf-roleb.admin{background:var(--brand-soft);color:var(--brand)} #tab-profit .pf-roleb.editor{background:var(--pf-good-soft);color:var(--pf-green)}
+#tab-profit .pf-roles{display:flex;flex-direction:column;gap:8px;padding:0 16px 16px;font-size:var(--fs-md);color:var(--muted)}
+#tab-profit .pf-roles div{display:flex;gap:8px;align-items:baseline}
+#tab-profit td select[data-access]{height:32px;border-radius:var(--r-sm);padding:0 8px;margin:0 8px;width:calc(100% - 16px);background:var(--surface);border:1px solid var(--line)}
+@media (max-width:600px){#tab-profit .pf-strip{grid-template-columns:repeat(2,1fr)} #tab-profit .pf-strip .v{font-size:1.15rem} #tab-profit .pf-top h2{font-size:var(--fs-h2)}}

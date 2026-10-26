@@ -20,6 +20,7 @@ const reports = require('./src/reports');
 const pm = require('./src/pm');
 const orders = require('./src/orders');
 const telegram = require('./src/telegram');
+const profit = require('./src/profit');
 const { encrypt } = require('./src/crypto');
 
 const app = express();
@@ -203,7 +204,7 @@ app.use(wrap(async (req, res, next) => {
   }
   // Google-only people see the admin website and its data, nothing else.
   if (user.google) {
-    if (req.path.startsWith('/api/') && !/^\/api\/(me|main\/|admin\/|page-pic\/)/.test(req.path)) return res.status(403).json({ error: 'The admin website only has the Main Dashboard and Admin.' });
+    if (req.path.startsWith('/api/') && !/^\/api\/(me|main\/|admin\/|page-pic\/|profit\/)/.test(req.path)) return res.status(403).json({ error: 'The admin website only has the Main Dashboard and Admin.' });
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/admin')) return res.redirect('/admin');
   }
   req.user = user;
@@ -229,12 +230,16 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
     canAdmin: await canSeeAdmin(req.user.fb_id),
+    profitRole: await profit.roleOf(req.user.fb_id),
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
   });
 }));
+
+// Profit tab (monthly ad accounts, clients and profit split) — its own access list.
+api.use('/profit', profit.router({ sitePeople: async () => (await siteCfg()).people }));
 
 // Auto sync control — only the app owner can see or change it, for every account that logged in.
 const ownerOnly = wrap(async (req, res, next) => {
@@ -1476,7 +1481,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(err.status || 500).json({ error: err.message || 'Something went wrong.' });
 });
 
-db.init().then(() => {
+db.init().then(() => profit.init()).then(() => {
   require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));

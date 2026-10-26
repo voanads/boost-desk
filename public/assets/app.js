@@ -254,11 +254,29 @@
     ink.classList.add('on');
   }
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
+  // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
+  const KEEP = ['dashboard', 'clients', 'lives', 'payments'];
+  function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !KEEP.includes(b.dataset.tab)); }
+  function paintMore() { const m = $('navMore'); if (!m) return; const cur = document.body.dataset.tab; m.setAttribute('aria-selected', String(!KEEP.includes(cur) && moreTabs().some((b) => b.dataset.tab === cur))); }
+  if ($('navMore')) $('navMore').onclick = () => {
+    let d = $('moreDlg');
+    if (!d) { d = document.createElement('dialog'); d.id = 'moreDlg'; d.className = 'dlg'; d.innerHTML = '<div class="dlg-in"><div class="dlg-head"><h2>More</h2><button type="button" class="ghost" id="moreClose" aria-label="Close">✕</button></div><div class="more-sheet" id="moreList"></div></div>'; document.body.appendChild(d); $('moreClose').onclick = () => d.close(); d.addEventListener('click', (ev) => { if (ev.target === d) d.close(); }); }
+    const cur = document.body.dataset.tab;
+    $('moreList').innerHTML = moreTabs().map((b) => `<button type="button" data-go="${b.dataset.tab}" aria-current="${b.dataset.tab === cur}">${b.querySelector('.ic') ? b.querySelector('.ic').outerHTML : ''}${esc(b.querySelector('.full') ? b.querySelector('.full').textContent : b.textContent)}</button>`).join('');
+    $('moreList').querySelectorAll('[data-go]').forEach((x) => x.onclick = () => { d.close(); location.hash = x.dataset.go; showTab(x.dataset.go); });
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  };
+  document.querySelectorAll('nav.tabs .navgrp').forEach((g) => {
+    const key = 'bd-grp-' + g.id, apply = () => { let closed = false; try { closed = localStorage.getItem(key) === '1'; } catch (_) {} g.classList.toggle('closed', closed); let n = g.nextElementSibling; while (n && !n.classList.contains('navgrp')) { if (n.dataset && n.dataset.tab) n.classList.toggle('grp-hidden', closed); n = n.nextElementSibling; } };
+    g.onclick = () => { try { localStorage.setItem(key, g.classList.contains('closed') ? '0' : '1'); } catch (_) {} apply(); };
+    apply();
+  });
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
+    paintMore();
     if (['admin', 'main', 'board', 'adaccts'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit'].includes(name)) name = 'main';

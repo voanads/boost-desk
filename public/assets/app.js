@@ -880,27 +880,34 @@
     for (const t of w.tasks || []) if (t.done && t.doneAt && t.doneDay && !seen.has('t:' + t.id + ':' + t.doneDay)) out.push({ id: 't:' + t.id + ':' + t.doneDay, day: t.doneDay, at: t.doneAt, by: t.doneBy, text: t.text, kind: t.repeat ? 'repeat' : t.from === 'ai' ? 'ai' : 'me' });
     return out;
   }
+  const HK = { report: ['RP', 'Report sent', 'rp'], repeat: ['DY', 'Every-day task', 'dy'], me: ['ME', 'Your task', 'me'], ai: ['AI', 'AI plan task', 'ai'] };
   function histSection(c) {
     const w = cWb[c.id] || {}, today = w.today || me.today, ym = histMonth[c.id] || today.slice(0, 7);
     const all = histItems(c), inMonth = all.filter((x) => x.day.slice(0, 7) === ym), byDay = {};
     for (const x of inMonth) (byDay[x.day] = byDay[x.day] || []).push(x);
     const [y, m] = ym.split('-').map(Number), dim = new Date(Date.UTC(y, m, 0)).getUTCDate(), first = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
-    const max = Math.max(1, ...Object.values(byDay).map((l) => l.length)), pick = histDay[c.id] && histDay[c.id].slice(0, 7) === ym ? histDay[c.id] : '';
-    const cells = [...Array(first).fill('<span class="hc-pad"></span>'), ...Array.from({ length: dim }, (_, i) => {
-      const d = `${ym}-${String(i + 1).padStart(2, '0')}`, n = (byDay[d] || []).length, lvl = n ? Math.ceil(n / max * 3) : 0;
-      return `<button type="button" class="hc-d l${lvl}${d === today ? ' today' : ''}${d === pick ? ' on' : ''}" data-hday="${d}" ${d > today ? 'disabled' : ''} aria-label="${esc(nice(d))}: ${n} done" aria-pressed="${d === pick}"><span>${i + 1}</span>${n ? `<small>${n}</small>` : ''}</button>`;
+    const pick = histDay[c.id] && histDay[c.id].slice(0, 7) === ym ? histDay[c.id] : '';
+    const sofar = ym === today.slice(0, 7) ? Number(today.slice(8, 10)) : ym < today.slice(0, 7) ? dim : 0;
+    // streak: days in a row with something done, up to today (today may still be empty)
+    const doneDays = new Set(all.map((x) => x.day)); let streak = 0, d0 = doneDays.has(today) ? today : addD(today, -1); while (doneDays.has(d0)) { streak++; d0 = addD(d0, -1); }
+    const cells = [...Array(first).fill('<span class="hc-pad" aria-hidden="true"></span>'), ...Array.from({ length: dim }, (_, i) => {
+      const d = `${ym}-${String(i + 1).padStart(2, '0')}`, n = (byDay[d] || []).length;
+      return `<button type="button" class="hc-d${n ? ' has' : ''}${d === today ? ' today' : ''}${d === pick ? ' on' : ''}" data-hday="${d}" ${d > today ? 'disabled' : ''} aria-label="${esc(nice(d))}: ${n} done" aria-pressed="${d === pick}"><span>${i + 1}</span><i aria-hidden="true">${'<b></b>'.repeat(Math.min(n, 4))}</i></button>`;
     })].join('');
     const days = Object.keys(byDay).filter((d) => !pick || d === pick).sort().reverse();
-    const ic = (k) => k === 'repeat' ? '🔁' : k === 'ai' ? '✨' : k === 'me' ? '✍️' : (IC_TODO[k] || '✅');
-    const list = days.map((d) => `<div class="hl-day"><div class="hl-h"><b>${esc(new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}</b><span class="hint">${byDay[d].length} done</span></div>
-      ${byDay[d].sort((a, b) => String(a.at).localeCompare(String(b.at))).map((x) => `<div class="hl-it"><span aria-hidden="true">${ic(x.kind)}</span><span class="hl-t">${esc(x.text)}</span><span class="hint">${x.at ? esc(new Date(x.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : ''}${x.by ? ' · ' + esc(x.by) : ''}</span></div>`).join('')}</div>`).join('');
-    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const activeDays = Object.keys(byDay).length;
-    return `<section class="cd-sec histsec"><div class="cd-sec-h"><h4>📅 Done history</h4><span class="spacer"></span>
-        <div class="hm-nav"><button type="button" class="ghost sm" data-hmon="-1" aria-label="Previous month">‹</button><b>${esc(label)}</b><button type="button" class="ghost sm" data-hmon="1" aria-label="Next month" ${ym >= today.slice(0, 7) ? 'disabled' : ''}>›</button></div></div>
-      <div class="hint">${inMonth.length ? `<b>${inMonth.length}</b> thing${inMonth.length === 1 ? '' : 's'} done on <b>${activeDays}</b> day${activeDays === 1 ? '' : 's'}` : w.today ? 'Nothing ticked off this month yet.' : 'Loading…'}${pick ? ` · showing ${esc(nice(pick).replace(/ \d{4}$/, ''))} <button type="button" class="linkish" data-hday="">show all</button>` : ''}</div>
-      <div class="hcal" aria-label="Days this month"><span class="hc-w">Mo</span><span class="hc-w">Tu</span><span class="hc-w">We</span><span class="hc-w">Th</span><span class="hc-w">Fr</span><span class="hc-w">Sa</span><span class="hc-w">Su</span>${cells}</div>
-      <div class="hlist">${list || (inMonth.length ? '' : '<div class="todo-done">Ticked tasks show up here, day by day.</div>')}</div></section>`;
+    const dTitle = (d) => d === today ? 'Today' : d === addD(today, -1) ? 'Yesterday' : new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    const item = (x) => { const k = HK[x.kind] || ['CK', 'Check', 'ck']; return `<div class="hl-it"><span class="hl-tm">${x.at ? esc(new Date(x.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : ''}</span><span class="hl-tag ${k[2]}" aria-hidden="true">${k[0]}</span><div class="hl-tx"><b>${esc(x.text)}</b><span class="hint">${esc(k[1])}${x.by ? ' · ' + esc(x.by) : ''}</span></div></div>`; };
+    const list = days.map((d) => `<div class="hl-day">${pick ? '' : `<div class="hl-h"><span>${esc(dTitle(d))}</span><i></i><em>${byDay[d].length} done</em></div>`}${byDay[d].slice().sort((a, b) => String(a.at).localeCompare(String(b.at))).map(item).join('')}</div>`).join('');
+    const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const monthName = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
+    const pickN = pick ? (byDay[pick] || []).length : 0;
+    return `<section class="cd-sec histsec"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4>
+        <div class="hm-nav"><button type="button" data-hmon="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button><b>${esc(label)}</b><button type="button" data-hmon="1" aria-label="Next month" ${ym >= today.slice(0, 7) ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button></div></div>
+      <div class="hs-stats"><div><span>Done</span><b>${inMonth.length}</b><small>this month</small></div><div><span>Active days</span><b>${Object.keys(byDay).length}</b><small>of ${sofar} so far</small></div><div><span>Streak</span><b>${streak}</b><small>day${streak === 1 ? '' : 's'} in a row</small></div></div>
+      <div class="hcal-w"><div class="hcal"><span class="hc-w">Mon</span><span class="hc-w">Tue</span><span class="hc-w">Wed</span><span class="hc-w">Thu</span><span class="hc-w">Fri</span><span class="hc-w">Sat</span><span class="hc-w">Sun</span>${cells}</div>
+        <div class="hc-leg"><span><i class="d"></i>1 dot = 1 done</span><span><i class="t"></i>today</span><span class="r">Tap a day to see it</span></div></div>
+      <div class="hlist"><div class="hl-top"><b>${pick ? esc(dTitle(pick)) : esc(monthName)}</b><span class="hint">${pick ? pickN + ' done' : inMonth.length + ' done · newest first'}</span>${pick ? '<button type="button" class="linkish" data-hday="">Whole month</button>' : ''}</div>
+        ${list || `<div class="hl-empty">${pick ? 'Nothing was ticked off on this day.' : w.today ? 'Ticked tasks show up here, day by day.' : 'Loading…'}</div>`}</div></section>`;
   }
   document.addEventListener('click', (ev) => {
     const mb = ev.target.closest('#cDetail [data-hmon]'), db_ = ev.target.closest('#cDetail [data-hday]'); if (!mb && !db_) return;

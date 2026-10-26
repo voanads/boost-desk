@@ -72,7 +72,13 @@ window.BDProfit = (() => {
         ppl[who].total += amt; ppl[who].parts[rl] = (ppl[who].parts[rl] || 0) + amt;
       });
     });
-    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, people: ppl, roles, svc };
+    // Carry over (money kept for next month) comes out of the profit to split: every share,
+    // Company's too, gets smaller by the same %, so the split still follows the rules.
+    const carry = num(d.carry), net = profit > 0 ? profit - carry : profit, f = profit > 0 ? Math.max(0, net / profit) : 1;
+    const rolesNet = {};
+    ROLES.forEach((rl) => { rolesNet[rl] = roles[rl] * f; });
+    Object.values(ppl).forEach((v) => { v.total *= f; Object.keys(v.parts).forEach((k) => { v.parts[k] *= f; }); });
+    return { fbDebt, fbThresh, fbCount: fbActive.length, disabled, disT, needPay, needT, toReceive, deposit, depCount, recvCount, profit, carry: profit > 0 ? carry : 0, net, people: ppl, roles, rolesNet, svc };
   }
 
   const fid = (path) => 'pf-' + path.replace(/\./g, '-');
@@ -138,7 +144,7 @@ window.BDProfit = (() => {
     const d = draft, c = calc(d), k = byId('pfStripA'); if (!k) return;
     const usedPct = c.fbThresh ? c.fbDebt / c.fbThresh * 100 : 0;
     k.innerHTML = `
-      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.profit)}</span><span class="sub">See profit split →</span></button>
+      <button type="button" class="hl" data-page="split"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.net)}</span><span class="sub">${c.carry ? `${money(c.profit)} − ${money(c.carry)} carry over · ` : ''}See profit split →</span></button>
       <div><span class="k"><span class="ic c-blue">B</span>ABA balance</span><span class="v">${money(d.aba)}</span><span class="sub">Cash in bank</span></div>
       <div><span class="k"><span class="ic c-gold">f</span>FB debt</span><span class="v">${money(c.fbDebt)}</span><div class="meter"><i style="width:${pct(usedPct)}%;background:var(--pf-gold)"></i></div><span class="sub">${Math.round(usedPct)}% of ${money(c.fbThresh, 0)} threshold</span></div>
       <div><span class="k"><span class="ic c-green">↓</span>To receive</span><span class="v good">${money(c.toReceive)}</span><span class="sub">From ${c.recvCount} clients</span></div>
@@ -193,19 +199,19 @@ window.BDProfit = (() => {
   function updateSplit() {
     const d = draft, c = calc(d), strip = byId('pfStripS'); if (!strip) return;
     const ppl = Object.entries(c.people).filter(([, v]) => Math.abs(v.total) > 0.004).sort((a, b) => b[1].total - a[1].total);
-    strip.innerHTML = `<div class="hl"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.profit)}</span><span class="sub">${d.transactions.length} transactions</span></div>` +
-      ppl.map(([name, v]) => { const sh = c.profit ? v.total / c.profit * 100 : 0; return `<div><span class="k">${avatar(name)}${esc(name)}</span><span class="v${v.total < 0 ? ' bad' : ''}">${money(v.total)}</span><div class="meter"><i style="width:${pct(sh)}%;background:${name === 'Company' ? 'var(--pf-fg)' : 'var(--pf-brand)'}"></i></div><span class="sub">${sh.toFixed(1)}% of profit</span></div>`; }).join('');
+    strip.innerHTML = `<div class="hl"><span class="k"><span class="ic">÷</span>Profit to split · <span lang="km">ដកចែកគ្នា</span></span><span class="v">${money(c.net)}</span><span class="sub">${c.carry ? `${money(c.profit)} profit − ${money(c.carry)} carry over` : `${d.transactions.length} transactions`}</span></div>` +
+      ppl.map(([name, v]) => { const sh = c.net ? v.total / c.net * 100 : 0; return `<div><span class="k">${avatar(name)}${esc(name)}</span><span class="v${v.total < 0 ? ' bad' : ''}">${money(v.total)}</span><div class="meter"><i style="width:${pct(sh)}%;background:${name === 'Company' ? 'var(--pf-fg)' : 'var(--pf-brand)'}"></i></div><span class="sub">${sh.toFixed(1)}% of profit</span></div>`; }).join('');
     const cell = (x, b) => `<td class="v n${x < 0 ? ' bad' : ''}"${b ? ' style="font-weight:700"' : ''}>${Math.abs(x) < 0.004 ? '<span class="mut">$0</span>' : money(x)}</td>`;
     byId('pfByPerson').innerHTML = `<table style="min-width:560px"><thead><tr><th>Person</th><th class="n">Sum</th>${ROLES.map((r) => `<th class="n">${ROLE_LABEL[r]}</th>`).join('')}</tr></thead><tbody>
       ${ppl.map(([name, v]) => `<tr><td class="v"><span class="who">${avatar(name)}${esc(name)}</span></td>${cell(v.total, 1)}${ROLES.map((r) => cell(v.parts[r] || 0)).join('')}</tr>`).join('') || '<tr><td class="v mut" colspan="7">No transactions yet</td></tr>'}
-      <tr class="total"><td>Sum</td><td class="n">${money(c.profit)}</td>${ROLES.map((r) => `<td class="n">${money(c.roles[r])}</td>`).join('')}</tr></tbody></table>`;
+      <tr class="total"><td>Sum</td><td class="n">${money(c.net)}</td>${ROLES.map((r) => `<td class="n">${money(c.rolesNet[r])}</td>`).join('')}</tr></tbody></table>`;
     const svc = Object.entries(c.svc);
     const order = services.map((s) => s.name).filter((n) => c.svc[n]).concat(svc.map(([n]) => n).filter((n) => !services.some((s) => s.name === n)));
     byId('pfByService').innerHTML = `<table style="min-width:560px"><thead><tr><th>Service</th><th class="n">Deals</th><th class="n">Sum</th>${ROLES.map((r) => `<th class="n">${ROLE_LABEL[r]}</th>`).join('')}</tr></thead><tbody>
       ${order.map((n) => { const v = c.svc[n]; return `<tr><td class="v">${esc(n)}</td><td class="v n mut">${v.count}</td>${cell(v.total, 1)}${v.roles.map((x) => cell(x)).join('')}</tr>`; }).join('') || '<tr><td class="v mut" colspan="8">No transactions yet</td></tr>'}
       <tr class="total"><td>Sum</td><td class="n">${d.transactions.length}</td><td class="n">${money(c.profit)}</td>${ROLES.map((r) => `<td class="n">${money(c.roles[r])}</td>`).join('')}</tr></tbody></table>`;
     setText('pfTTitle', `${d.transactions.length} deals · profit ${money(c.profit)}`);
-    setText('pfPTitle', `${ppl.length} people`);
+    setText('pfPTitle', c.carry ? `${ppl.length} people · after ${money(c.carry)} carry over` : `${ppl.length} people`);
     d.transactions.forEach((t, i) => { const p = num(t.profit), r = ruleFor(t.service); ROLES.forEach((_, j) => { const e = byId(`pf-ts-${i}-${j}`); if (e) { const x = p * num(r[j]) / 100; e.textContent = Math.abs(x) < 0.004 ? '$0' : money(x); e.classList.toggle('bad', x < 0); } }); });
     setText('pfTAmt', money(d.transactions.reduce((s, t) => s + num(t.amount), 0))); setText('pfTPro', money(c.profit));
     ROLES.forEach((r, j) => setText('pf-tt-' + j, money(c.roles[r])));

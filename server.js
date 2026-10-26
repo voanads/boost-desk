@@ -304,6 +304,8 @@ api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
 }));
 // Main Dashboard: everyone's client tasks for one day (AI daily plan tasks + their own), read-only for the COO.
 // Includes tasks left open from earlier days (only when looking at today) and earlier tasks finished on this day.
+// A task's target for one day: { target, unit, reached } (reached is typed by the person; per day for every-day tasks).
+const tgt = (t, day) => (Number(t.target) > 0 ? { target: Number(t.target), unit: String(t.unit || ''), reached: Number((t.hit || {})[day]) || 0 } : {});
 async function dayTasks(day) {
   const today = sync.todayIn();
   const users = await db.allUsers(), out = {};
@@ -320,12 +322,12 @@ async function dayTasks(day) {
       const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
       if (t.repeat) { // every day from the day it was added: done only if ticked that day
         if (t.day > day || day > today) continue;
-        o.tasks.push({ id: t.id, text: t.text, from: 'me', day, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, doneBy: doneDay === day ? t.doneBy || null : null, late: false, repeat: true, client: cName[cid], clientId: Number(cid) });
+        o.tasks.push({ id: t.id, text: t.text, from: 'me', day, done: doneDay === day, doneAt: doneDay === day ? t.doneAt : null, doneBy: doneDay === day ? t.doneBy || null : null, late: false, repeat: true, client: cName[cid], clientId: Number(cid), ...tgt(t, day) });
         continue;
       }
       const late = t.day < day && ((!t.done && day === today) || doneDay === day);
       if (t.day !== day && !late) continue;
-      o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid) });
+      o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid), ...tgt(t, t.day) });
     }
   }
   // Today's work (the same rule-based list each person sees in Clients: send report, unpaid, quiet client…), ticked or not.
@@ -1381,6 +1383,28 @@ api.post('/ai/client/:id', wrap(async (req, res) => {
 const AI = () => require('./src/ai');
 const ownClient = async (req) => (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
 // Open tasks and today's ticks for every client (for the badges in the Clients list).
+// My target tasks for a day: every task of mine with a target, with what I reached.
+api.get('/targets/mine', wrap(async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : sync.todayIn(), out = [];
+  for (const c of await db.listClients(req.user.fb_id)) {
+    if (c.archived) continue;
+    const w = (await db.getUserSetting(req.user.fb_id, `cwb:${c.id}`, null)) || {};
+    for (const t of w.tasks || []) {
+      if (!(Number(t.target) > 0)) continue;
+      if (t.repeat ? t.day > day : t.day !== day) continue;
+      out.push({ id: t.id, clientId: c.id, client: c.name, text: t.text, repeat: !!t.repeat, done: !!t.done, ...tgt(t, t.repeat ? day : t.day) });
+    }
+  }
+  res.json({ day, today: sync.todayIn(), tasks: out });
+}));
+// Admin: every team's target tasks for a day, with totals.
+api.get('/admin/targets', adminOnly, wrap(async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
+  const { users } = await dayTasks(day), teams = await getTeams(), teamOf = {};
+  for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const people = Object.entries(users).map(([id, u]) => { const tasks = u.tasks.filter((t) => t.target > 0); return { id, name: u.name, team: teamOf[id] || '', tasks, target: tasks.reduce((s, t) => s + t.target, 0), reached: tasks.reduce((s, t) => s + Math.min(t.reached, t.target), 0), tasksTotal: u.tasks.filter((t) => t.from !== 'work').length, tasksDone: u.tasks.filter((t) => t.from !== 'work' && t.done).length }; });
+  res.json({ day, today: sync.todayIn(), teams: teams.map((t) => t.name), people });
+}));
 api.get('/clients-work', wrap(async (req, res) => {
   const today = sync.todayIn(), out = {};
   for (const c of await db.listClients(req.user.fb_id)) {
@@ -1407,7 +1431,8 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   const w = await AI().workbook(req.user.fb_id, req.params.id);
   const B = require('./src/buyers'), buyer = (req.body || {}).to ? await B.get(req.body.to) : null;
   if ((req.body || {}).to && !buyer) return res.status(400).json({ error: 'That media buyer was removed.' });
-  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}) };
+  const tg = Math.min(1e6, Math.max(0, Number((req.body || {}).target) || 0));
+  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}), ...(tg ? { target: tg, unit: String((req.body || {}).unit || '').trim().slice(0, 20), hit: {} } : {}) };
   let warn = '';
   if (buyer) {
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
@@ -1432,6 +1457,9 @@ api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   }
   if (typeof (req.body || {}).text === 'string' && req.body.text.trim()) t.text = req.body.text.trim().slice(0, 200);
   if ((req.body || {}).repeat != null) { if (req.body.repeat) t.repeat = true; else delete t.repeat; }
+  if ((req.body || {}).target != null) { const tg = Math.min(1e6, Math.max(0, Number(req.body.target) || 0)); if (tg) { t.target = tg; t.hit = t.hit || {}; } else { delete t.target; delete t.unit; delete t.hit; } }
+  if (typeof (req.body || {}).unit === 'string' && t.target) t.unit = req.body.unit.trim().slice(0, 20);
+  if ((req.body || {}).reached != null && t.target) { t.hit = t.hit || {}; const k = t.repeat ? sync.todayIn() : t.day; t.hit[k] = Math.min(1e7, Math.max(0, Number(req.body.reached) || 0)); }
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w });
 }));
 api.delete('/clients/:id/tasks/:tid', wrap(async (req, res) => {

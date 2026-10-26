@@ -277,10 +277,10 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'adaccts'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
+    if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && !(me && me.canAdmin)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'profit', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); }
@@ -292,6 +292,8 @@
     if (name === 'main') loadMain();
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
+    if (name === 'target') loadTargets();
+    if (name === 'dashboard') loadMyTargets();
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -862,12 +864,13 @@
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
       ...todo.map((x) => `<div class="task ${tick(x.kind) ? 'done' : ''} ${esc(x.level || '')}"><button type="button" class="tcheck" role="checkbox" aria-checked="${tick(x.kind)}" data-ctick="${esc(x.kind)}" data-ctitle="${esc(x.title)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${IC_TODO[x.kind] || '•'}</span><div class="todo-t"><b>${esc(x.title)}</b><span class="hint">${esc(x.detail || '')}</span>${x.action === 'report' && !tick(x.kind) ? `<button type="button" class="sm primary task-act" data-cdrep="${c.id}">ផ្ញើរបាយការណ៍</button>` : ''}</div></div>`),
-      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span></div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
+      ...tasks.map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span>${Number(t.target) > 0 ? (() => { const k = t.repeat ? today : t.day, r = Number((t.hit || {})[k]) || 0, pct = Math.min(100, Math.round(r / t.target * 100)); return `<div class="ttgt ${pct >= 100 ? 'hit' : ''}"><span class="ttgt-bar"><i style="width:${pct}%"></i></span><label class="ttgt-in"><span class="vh">Reached</span><input type="number" min="0" step="1" inputmode="numeric" value="${r || ''}" placeholder="0" data-ctreach="${esc(t.id)}" aria-label="Reached"></label><span class="ttgt-of">/ ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pct}%</span></div>`; })() : ''}</div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
       <form class="ai-ask task-new" id="cdTaskForm"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task">
         <div class="task-opts"><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
+        <label class="ttgt-new" title="A number to reach, e.g. 5 posts"><span>🎯</span><input type="number" id="cdTaskTgt" min="0" step="1" inputmode="numeric" placeholder="Target" aria-label="Target number"><input type="text" id="cdTaskUnit" maxlength="20" placeholder="unit" aria-label="Unit, e.g. posts"></label>
         <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label><button type="submit" class="sm primary">Add</button></div></form></section>`;
   }
   function paintWork() {
@@ -882,12 +885,13 @@
     if (a.n) row.insertAdjacentHTML('beforeend', `<span class="cr-badge${a.urgent ? ' urgent' : ''}">${a.n}</span>`);
   }
   function bindWork(c) {
+    document.querySelectorAll('#cDetail [data-ctreach]').forEach((inp) => inp.onchange = async () => { try { cWb[c.id] = await api(`/clients/${c.id}/tasks/${inp.dataset.ctreach}`, { method: 'PATCH', body: { reached: Number(inp.value) || 0 } }); paintWork(); } catch (e) { toast(e.message); } });
     if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; }; }
     const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => {
       ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
       const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);
       try {
-        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '' } });
+        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '', target: $('cdTaskTgt') ? Number($('cdTaskTgt').value) || 0 : 0, unit: $('cdTaskUnit') ? $('cdTaskUnit').value : '' } });
         const { warn, ...wb } = r; cWb[c.id] = wb; paintWork();
         if (warn) toast('Task added, but not sent: ' + warn); else if (b) successBadge('Sent to ' + b.name + ' on Telegram');
         setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0);
@@ -1759,6 +1763,39 @@
 
   // ---------- Ad accounts (admins): every ad account of every team, like the Clients Board ----------
   let aaData = null, aaF = 'all', aaSortK = 'today', aaTeam = '', aaSel = null, aaPicked = false;
+  // ---------- Target: my target tasks today (Dashboard panel) ----------
+  async function loadMyTargets() {
+    const p = $('tgMine'); if (!p) return;
+    let d; try { d = await api('/targets/mine'); } catch (_) { return; }
+    const tasks = d.tasks || []; p.hidden = !tasks.length; if (!tasks.length) return;
+    const T = tasks.reduce((s, t) => s + t.target, 0), R = tasks.reduce((s, t) => s + Math.min(t.reached, t.target), 0), pct = T ? Math.round(R / T * 100) : 0;
+    $('tgMineSum').textContent = `${pct}%`; $('tgMineSum').classList.toggle('done', pct >= 100);
+    $('tgMineBar').style.width = Math.min(100, pct) + '%'; $('tgMineBar').classList.toggle('hit', pct >= 100);
+    $('tgMineHint').textContent = `${R} of ${T} reached across ${tasks.length} task${tasks.length === 1 ? '' : 's'} · type what you reached`;
+    $('tgMineList').innerHTML = tasks.map((t) => { const pc = Math.min(100, Math.round(t.reached / t.target * 100)); return `<div class="tgt-it ${pc >= 100 ? 'hit' : ''}"><div class="tgt-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · every day' : ''}</span><span class="ttgt-bar"><i style="width:${pc}%"></i></span></div><label class="ttgt-in"><span class="vh">Reached</span><input type="number" min="0" step="1" inputmode="numeric" value="${t.reached || ''}" placeholder="0" data-tgreach="${t.clientId}|${esc(t.id)}"></label><span class="ttgt-of">/ ${t.target}${t.unit ? ' ' + esc(t.unit) : ''}</span></div>`; }).join('');
+    $('tgMineList').querySelectorAll('[data-tgreach]').forEach((inp) => inp.onchange = async () => { const [cid, tid] = inp.dataset.tgreach.split('|'); try { const w = await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { reached: Number(inp.value) || 0 } }); cWb[Number(cid)] = w; loadMyTargets(); } catch (e) { toast(e.message); } });
+  }
+  // ---------- Target (admin): every team's target tasks for a day ----------
+  let tgDay = '';
+  async function loadTargets() {
+    const box = $('tgTeams'); if (!tgDay) tgDay = (me && me.today) || iso(new Date());
+    $('tgDay').textContent = nice(tgDay); $('tgNext').disabled = tgDay >= ((me && me.today) || iso(new Date()));
+    box.innerHTML = '<div class="empty">Loading…</div>';
+    let d; try { d = await api(`/admin/targets?day=${tgDay}`); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+    const ppl = d.people.filter((p) => p.tasks.length || p.tasksTotal), T = ppl.reduce((s, p) => s + p.target, 0), R = ppl.reduce((s, p) => s + p.reached, 0), pct = T ? Math.round(R / T * 100) : 0;
+    const hitN = ppl.filter((p) => p.target && p.reached >= p.target).length, withT = ppl.filter((p) => p.target).length;
+    $('tgKpis').innerHTML = `
+      <div class="bk bk-hero"><span class="lbl">Reached · ${esc(nice(tgDay).replace(/ \d{4}$/, ''))}</span><b class="num">${pct}%</b><span class="sub">${R} of ${T} across every team</span></div>
+      <div class="bk"><span class="lbl">Teams on target</span><b class="num">${hitN} / ${withT}</b><span class="sub">${withT ? (withT - hitN) + ' still below' : 'no targets set for this day'}</span></div>
+      <div class="bk"><span class="lbl">Target tasks</span><b class="num">${ppl.reduce((s, p) => s + p.tasks.length, 0)}</b><span class="sub">${ppl.reduce((s, p) => s + p.tasks.filter((t) => t.reached >= t.target).length, 0)} reached in full</span></div>
+      <div class="bk"><span class="lbl">All tasks done</span><b class="num">${ppl.reduce((s, p) => s + p.tasksDone, 0)} / ${ppl.reduce((s, p) => s + p.tasksTotal, 0)}</b><span class="sub">ticked tasks, with or without a target</span></div>`;
+    const groups = {}; for (const p of ppl) (groups[p.team || 'No team'] = groups[p.team || 'No team'] || []).push(p);
+    const names = [...d.teams.filter((t) => groups[t]), ...Object.keys(groups).filter((t) => !d.teams.includes(t))];
+    box.innerHTML = names.map((tn) => { const list = groups[tn], tT = list.reduce((s, p) => s + p.target, 0), tR = list.reduce((s, p) => s + p.reached, 0), tp = tT ? Math.round(tR / tT * 100) : 0;
+      return `<section class="panel tg-team ${tT && tp >= 100 ? 'hit' : ''}"><div class="tg-th"><div><h2>${esc(tn)}</h2><span class="hint">${list.map((p) => esc(p.name)).join(', ')}</span></div><div class="tg-tsum"><b>${tT ? tp + '%' : '–'}</b><span class="hint">${tT ? tR + ' of ' + tT : 'no target tasks'}</span></div></div>${tT ? `<div class="tgt-bar"><i class="${tp >= 100 ? 'hit' : ''}" style="width:${Math.min(100, tp)}%"></i></div>` : ''}
+        ${list.map((p) => `<div class="tg-person"><div class="tg-ph"><span class="avatar">${initials(p.name)}</span><b>${esc(p.name)}</b><span class="hint">${p.tasksDone} / ${p.tasksTotal} tasks done${p.target ? ` · ${p.reached} of ${p.target} reached` : ''}</span></div>${p.tasks.length ? `<div class="tg-tasks">${p.tasks.map((t) => { const pc = Math.min(100, Math.round(t.reached / t.target * 100)); return `<div class="tgt-it ${pc >= 100 ? 'hit' : ''}"><div class="tgt-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · every day' : ''}${t.done ? ' · ✓ done' : ''}</span><span class="ttgt-bar"><i style="width:${pc}%"></i></span></div><span class="ttgt-of"><b>${t.reached}</b> / ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pc}%</span></div>`; }).join('')}</div>` : '<div class="hint tg-none">No target tasks this day.</div>'}</div>`).join('')}</section>`; }).join('') || '<div class="empty"><b>No tasks for this day.</b><br>Targets appear here once a team adds a task with a 🎯 target on a client.</div>';
+  }
+  if ($('tgPrev')) { $('tgPrev').onclick = () => { tgDay = addD(tgDay || me.today, -1); loadTargets(); }; $('tgNext').onclick = () => { tgDay = addD(tgDay || me.today, 1); loadTargets(); }; $('tgToday').onclick = () => { tgDay = me.today; loadTargets(); }; }
   async function loadAdAccounts() {
     if (!aaData) { $('aaList').innerHTML = '<div class="crow skel-card"></div>'.repeat(6); $('aaDetail').innerHTML = '<div class="cd-empty"><div class="muted">Loading…</div></div>'; }
     try { aaData = await api('/admin/ad-accounts'); } catch (e) { if (!aaData) $('aaDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; return; }
@@ -3352,7 +3389,7 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE) { // the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'target', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -3361,7 +3398,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'profit'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts', 'profit', 'target'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -3373,10 +3410,10 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      if (me.canAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      if (me.canAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (me.canAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { document.querySelector('nav.tabs [data-tab=profit]').hidden = false; $('navGrpAdmin').hidden = false; }
-      showTab(['main', 'board', 'adaccts', 'profit', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
+      showTab(['main', 'board', 'adaccts', 'profit', 'target', 'clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'admin'].includes(h) ? h : 'dashboard');
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

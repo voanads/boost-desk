@@ -2477,3 +2477,36 @@ dialog .csf-bar{position:static}
 .cd-per{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
 .cd-per .seg{border-radius:var(--r-md)}
 .cd-per .seg button{padding:6px 12px}
+
+/* Target: tasks with a number to reach */
+.ttgt-new{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-sm);color:var(--muted)}
+.ttgt-new input[type=number]{width:72px;min-height:34px;padding:4px 8px}
+.ttgt-new input[type=text]{width:70px;min-height:34px;padding:4px 8px}
+.ttgt{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:var(--fs-sm);color:var(--muted)}
+.ttgt-bar{display:block;flex:1;min-width:60px;height:6px;border-radius:3px;background:var(--bg-2);overflow:hidden}
+.ttgt-bar i{display:block;height:100%;border-radius:3px;background:var(--brand);transition:width .2s}
+.ttgt.hit .ttgt-bar i,.tgt-it.hit .ttgt-bar i{background:var(--ok)}
+.ttgt-in input{width:64px;min-height:32px;padding:4px 8px;text-align:right}
+.ttgt-of{white-space:nowrap}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.tgt-mine{margin:0}
+.tgt-bar{height:10px;border-radius:5px;background:var(--bg-2);overflow:hidden;margin:4px 0 10px}
+.tgt-bar i{display:block;height:100%;border-radius:5px;background:var(--brand);transition:width .3s}
+.tgt-bar i.hit{background:var(--ok)}
+.tgt-list,.tg-tasks{display:flex;flex-direction:column;gap:6px}
+.tgt-it{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-lg)}
+.tgt-it.hit{border-color:color-mix(in srgb,var(--ok) 40%,var(--line));background:color-mix(in srgb,var(--ok-soft) 50%,var(--surface))}
+.tgt-t{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.tgt-t b{font-size:var(--fs-md);overflow-wrap:anywhere}
+.tgt-t .ttgt-bar{margin-top:2px}
+.tg-nav{display:flex;align-items:center;gap:6px}
+.tg-nav b{min-width:150px;text-align:center}
+.tg-team{margin-bottom:var(--s-3)}
+.tg-team.hit{border-color:color-mix(in srgb,var(--ok) 45%,var(--line))}
+.tg-th{display:flex;align-items:flex-start;gap:12px;justify-content:space-between}
+.tg-th h2{margin:0}
+.tg-tsum{text-align:right}
+.tg-tsum b{font-size:1.4rem;font-weight:800}
+.tg-person{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.tg-ph{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tg-none{padding:2px 0 4px}

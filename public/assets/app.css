@@ -2699,3 +2699,7 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 /* phone client header: name first, settings button on its own line */
 @media (max-width:760px){.cd-head-row{flex-wrap:wrap;gap:10px}.cd-head-row .cd-title{flex:1 1 100%;min-width:0}.cd-head-row .cd-title h3{overflow-wrap:anywhere}.cd-head-row>button,.cd-head-row>.cd-acts{flex:1 1 auto}}
 .utable tr.utr td{align-items:flex-start}
+/* Target page hero number: same white card with a blue edge as every other hero */
+.bk.bk-hero{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.bk.bk-hero .lbl,.bk.bk-hero .sub{color:var(--muted)!important;opacity:1!important}
+.bk-ring{background:var(--surface)}

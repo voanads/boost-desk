@@ -74,7 +74,7 @@
   async function api(path, opts = {}) {
     const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
     const body = await res.json().catch(() => ({}));
-    if (res.status === 401 && body.needsLogin) { location.href = (document.body.dataset.site === 'admin' ? '/admin/login' : '/login') + '?error=' + encodeURIComponent(body.error || 'Please log in again.'); throw new Error(body.error); }
+    if (res.status === 401 && body.needsLogin) { location.href = document.body.dataset.site === 'mb' ? '/mediabuyer' : (document.body.dataset.site === 'admin' ? '/admin/login' : '/login') + '?error=' + encodeURIComponent(body.error || 'Please log in again.'); throw new Error(body.error); }
     if (!res.ok) throw new Error(body.error || 'Request failed (' + res.status + ')');
     return body;
   }
@@ -2162,7 +2162,7 @@ Notes:
     try { await api('/admin/invoice-qr', { method: 'PUT', body: { qr: data } }); successBadge('QR changed for everyone'); loadSettings(); } catch (e) { toast(e.message); }
   });
 
-  $('logoutBtn').onclick = async () => { await fetch('/auth/logout', { method: 'POST' }); location.href = document.body.dataset.site === 'admin' ? '/admin/login' : '/login'; };
+  $('logoutBtn').onclick = async () => { if (document.body.dataset.site === 'mb') { await fetch('/mb/logout', { method: 'POST' }); location.href = '/mediabuyer'; return; } await fetch('/auth/logout', { method: 'POST' }); location.href = document.body.dataset.site === 'admin' ? '/admin/login' : '/login'; };
 
   // While the Dashboard shows a period that includes today, pull fresh numbers every 2 minutes (picks up auto sync).
   setInterval(() => {
@@ -3502,7 +3502,7 @@ Thank you for working with Ads Box!`,
   }
 
   // ---------- boot ----------
-  const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm';
+  const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm' || SITE === 'mb', MB_SITE = SITE === 'mb';
   (async () => {
     try {
       me = await api('/me');
@@ -3524,13 +3524,21 @@ Thank you for working with Ads Box!`,
       loadChats(); loadCheck();
       date = me.today || date;
       $('whoName').textContent = me.name;
-      $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+      $('whoAvatar').textContent = ((me.buyer && me.buyer.name) || me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1);
-      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : 'Project Manager';
-      if (SITE) document.querySelector('.brand').setAttribute('href', ADMIN_SITE ? '/admin#main' : '/projectmanager#dashboard');
+      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
+      if (SITE) document.querySelector('.brand').setAttribute('href', ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
+      if (MB_SITE && me.buyer) { // a media buyer inside their PM's account: no sync, no ad accounts, no client settings or delete; a My tasks link
+        document.documentElement.classList.add('asbuyer');
+        $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account";
+        const g = $('dGreet'); if (g) g.textContent = `${me.buyer.name} · ${me.name}'s clients`;
+        const acc = document.querySelector('nav.tabs [data-tab=accounts]'); if (acc) acc.hidden = true;
+        const mt = document.createElement('a'); mt.href = '/mediabuyer/tasks'; mt.className = 'navlink'; mt.setAttribute('role', 'tab'); mt.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span class="full">My tasks</span><span class="short">Tasks</span>';
+        const first = document.querySelector('nav.tabs [data-tab=dashboard]'); if (first) first.insertAdjacentElement('afterend', mt);
+      }
       // /projectmanager shows only the Work pages, even to the owner; /admin shows everything.
       const showAdmin = me.canAdmin && !PM_SITE;
       if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });

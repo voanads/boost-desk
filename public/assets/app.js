@@ -1902,7 +1902,7 @@
   async function loadMyTasks() {
     const host = $('tasksMine'); if (!host || !me || me.buyer) return;
     let d; try { d = await api('/tasks/mine'); } catch (e) { host.hidden = true; return; }
-    const all = d.tasks, open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late);
+    const all = d.tasks.filter((t) => t.from !== 'work' && t.from !== 'ai'), open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late); // only tasks people created — not the automatic suggestions
     const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
     const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });

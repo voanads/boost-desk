@@ -1577,6 +1577,12 @@ api.get('/targets/mine', wrap(async (req, res) => {
   }
   res.json({ day, today: sync.todayIn(), tasks: out });
 }));
+// My tasks today (every client): the same list each client page shows, in one place.
+api.get('/tasks/mine', wrap(async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
+  const dt = await dayTasks(day), mine = (dt.users[req.user.fb_id] || { tasks: [] }).tasks;
+  res.json({ day, today: dt.today, tasks: mine });
+}));
 // PM dashboard: my team — media buyers I work with, today's tasks (done / open / overdue), what was sent to Telegram.
 api.get('/team/mine', wrap(async (req, res) => {
   const today = sync.todayIn(), me = req.user.fb_id;

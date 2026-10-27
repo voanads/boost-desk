@@ -294,7 +294,7 @@
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
-    if (name === 'dashboard') { loadMyTargets(); loadMyKpis(); loadMyTeam(); loadMyBuyerTasks(); }
+    if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -1896,6 +1896,35 @@
     $('mbKpiTitle').textContent = '📊 ' + name + ' · KPIs';
     $('mbKpiBody').innerHTML = '<div class="sk"></div>';
     d.showModal(); kpiPanel('mbKpiBody', 'mb:' + id);
+  }
+  // Dashboard: my tasks today across every client — tick, type reached, see what went to media buyers.
+  let tmFilter = 'open';
+  async function loadMyTasks() {
+    const host = $('tasksMine'); if (!host || !me || me.buyer) return;
+    let d; try { d = await api('/tasks/mine'); } catch (e) { host.hidden = true; return; }
+    const all = d.tasks, open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late);
+    const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
+    const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+    const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const byClient = {}; for (const t of list) (byClient[t.client] = byClient[t.client] || []).push(t);
+    host.hidden = false;
+    host.innerHTML = `<div class="top"><h2>✅ My tasks today <span class="countpill">${open.length}</span></h2><span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
+      <div class="seg tm-seg" role="group" aria-label="Show"><button type="button" data-tmf="open" aria-pressed="${tmFilter === 'open'}">Open</button><button type="button" data-tmf="done" aria-pressed="${tmFilter === 'done'}">Done</button><button type="button" data-tmf="all" aria-pressed="${tmFilter === 'all'}">All</button></div></div>
+      ${list.length ? Object.entries(byClient).map(([cn, ts]) => `<div class="tmg"><div class="tmg-h"><b>${esc(cn)}</b><span class="hint">${ts.filter((t) => t.done).length} / ${ts.length}</span><button type="button" class="ghost sm" data-tmgo="${ts[0].clientId}">Open client →</button></div>
+        ${ts.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
+          <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-tmtick="${t.clientId}|${t.id}|${t.from === 'work' ? 'w:' + t.kind : 't'}" data-title="${esc(t.text)}" aria-label="Done">${box}</button>
+          <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'work' ? esc(t.detail || 'Today\'s work') : t.from === 'ai' ? 'AI plan' : t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span>` : 'My task'}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}${t.doneBy && t.doneBy !== me.name ? ' by ' + esc(t.doneBy) : ''}` : ''}</span></div>
+          ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-tmreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit || '')}</span>` : ''}</div>`).join('')}</div>`).join('')
+      : `<div class="hl-empty">${tmFilter === 'open' ? '🎉 Nothing open today. Add tasks on a client page.' : 'Nothing here yet.'}</div>`}`;
+    host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(); });
+    host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
+    host.querySelectorAll('[data-tmtick]').forEach((b) => b.onclick = async () => {
+      const [cid, tid, kind] = b.dataset.tmtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
+      try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
+      catch (e) { toast(e.message); }
+      loadMyTasks(); loadMyTargets();
+    });
+    host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(); loadMyTargets(); });
   }
   function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.

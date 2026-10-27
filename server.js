@@ -199,7 +199,8 @@ app.get(['/mediabuyer/login', '/mb/login'], wrap(async (req, res) => {
   const { b, e, s: sig } = req.query;
   if (!MB().checkLink(b, e, sig) || !(await MB().get(b))) return res.status(400).send('<meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>This link is old or wrong</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> to get a new one.</p>');
   req.session.mb = String(b); req.session.mbAt = Date.now();
-  res.redirect('/mediabuyer#dashboard');
+  const cid = String(req.query.c || ''); // from a task message: open that client's page
+  res.redirect(/^\d{1,10}$/.test(cid) ? '/mediabuyer#client:' + cid : '/mediabuyer#dashboard');
 }));
 const MB_LOGIN_PAGE = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer site</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>';
 app.get(['/mediabuyer', '/mediabuyer/'], wrap(async (req, res) => {

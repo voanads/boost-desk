@@ -3598,7 +3598,7 @@ Thank you for working with Ads Box!`,
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
-      const h = location.hash.slice(1);
+      const h = location.hash.slice(1), cm = h.match(/^client:(\d+)$/);
       const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = OWNER_SITE ? 'Owner' : ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
       if (SITE) document.querySelector('.brand').setAttribute('href', OWNER_SITE ? '/owner#main' : ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
       if (MB_SITE) { // the media buyer site: no sync, no ad accounts, no Profit, no client settings or delete, no task options; a My tasks link
@@ -3626,7 +3626,8 @@ Thank you for working with Ads Box!`,
         if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); pb.classList.remove('grp-hidden'); } else $('navGrpAdmin').hidden = false;
       }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
-      showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
+      if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
+      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

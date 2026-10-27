@@ -9,7 +9,7 @@ const cfg = require('./config');
 const KEY = 'mediaBuyers';
 // A signed link that opens the media buyer's own dashboard (valid 60 days; the bot sends a fresh one any time).
 const sign = (id, exp) => crypto.createHmac('sha256', cfg.sessionSecret).update(`mb.${id}.${exp}`).digest('hex').slice(0, 32);
-const dashLink = (b) => { const exp = Date.now() + 60 * 864e5; return `${cfg.baseUrl}/mediabuyer/login?b=${b.id}&e=${exp}&s=${sign(b.id, exp)}`; };
+const dashLink = (b, cid) => { const exp = Date.now() + 60 * 864e5; return `${cfg.baseUrl}/mediabuyer/login?b=${b.id}&e=${exp}&s=${sign(b.id, exp)}${cid ? '&c=' + encodeURIComponent(cid) : ''}`; };
 function checkLink(id, exp, sig) {
   if (!/^[a-f0-9]{8}$/.test(String(id)) || !(Number(exp) > Date.now()) || !/^[a-f0-9]{32}$/.test(String(sig))) return false;
   const good = sign(id, Number(exp)); return crypto.timingSafeEqual(Buffer.from(String(sig)), Buffer.from(good));
@@ -33,7 +33,7 @@ async function get(id) { return (await list()).find((b) => b.id === String(id)) 
 async function notify(buyer, { client, text, from, repeat, cid, tid }) {
   if (!buyer || !buyer.chat) throw new Error(`${buyer ? buyer.name : 'The media buyer'} hasn't connected Telegram yet.`);
   const msg = `📋 New task${from ? ' from ' + from : ''}\n👤 ${client}\n\n${text}${repeat ? '\n\n🔁 Every day' : ''}`;
-  return telegram.sendButtons(msg, buyer.chat, [[{ text: '📋 My tasks', url: dashLink(buyer) + '#dashboard' }]]);
+  return telegram.sendButtons(msg, buyer.chat, [[{ text: '📋 My tasks', url: dashLink(buyer, cid) }]]);
 }
 
 // Called with each batch of Telegram updates: invite links opened, and "Done" buttons tapped.

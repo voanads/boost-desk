@@ -870,11 +870,9 @@
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span></div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
-      <form class="ai-ask task-new" id="cdTaskForm"><div class="task-main"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="button" class="sm task-more" id="cdTaskMore" aria-expanded="false" aria-controls="cdTaskOpts" title="Who, KPI, target, every day">Options ▾</button><button type="submit" class="sm primary">Add</button></div>
+      <form class="ai-ask task-new" id="cdTaskForm"><div class="task-main"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="button" class="sm task-more" id="cdTaskMore" aria-expanded="false" aria-controls="cdTaskOpts" title="Give this task to a media buyer">Media buyer ▾</button><button type="submit" class="sm primary">Add</button></div>
         <div class="task-opts" id="cdTaskOpts" hidden><label class="task-to"><span>For</span><select id="cdTaskTo" aria-label="Who does this task">${mbOptions()}</select></label>
-        <label class="tkpi-new"><span>KPI</span><select id="cdTaskKpi" aria-label="Count this task toward a KPI"><option value="">—</option></select></label>
-        <label class="ttgt-new" title="A number to reach, e.g. 5 posts"><span>🎯</span><input type="number" id="cdTaskTgt" min="0" step="1" inputmode="numeric" placeholder="Target" aria-label="Target number"><input type="text" id="cdTaskUnit" maxlength="20" placeholder="unit" aria-label="Unit, e.g. posts"></label>
-        <label class="trep-new" title="The task comes back unticked every morning"><input type="checkbox" id="cdTaskRep"> 🔁 Every day</label></div></form></section>`;
+        </div></form></section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -891,7 +889,7 @@
     document.querySelectorAll('#cDetail [data-ctreach]').forEach((inp) => inp.onchange = async () => { try { cWb[c.id] = await api(`/clients/${c.id}/tasks/${inp.dataset.ctreach}`, { method: 'PATCH', body: { reached: Number(inp.value) || 0 } }); paintWork(); } catch (e) { toast(e.message); } });
     if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; fillTaskKpis(); }; }
     fillTaskKpis();
-    const more = $('cdTaskMore'); if (more) more.onclick = () => { const o = $('cdTaskOpts'), open = o.hidden; o.hidden = !open; more.setAttribute('aria-expanded', String(open)); more.textContent = open ? 'Options ▴' : 'Options ▾'; if (open) { const el = o.querySelector('select,input'); if (el) el.focus(); } };
+    const more = $('cdTaskMore'); if (more) more.onclick = () => { const o = $('cdTaskOpts'), open = o.hidden; o.hidden = !open; more.setAttribute('aria-expanded', String(open)); more.textContent = open ? 'Media buyer ▴' : 'Media buyer ▾'; if (open) { const el = o.querySelector('select,input'); if (el) el.focus(); } };
     const f = $('cdTaskForm'); if (f) f.onsubmit = async (ev) => {
       ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
       const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);

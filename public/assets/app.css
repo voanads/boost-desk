@@ -2837,3 +2837,10 @@ h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .msec-h,.cd-sec-h,.hs-head,.top{min-height:28px}
 .panel>.top h2,.msec-h h3,.cd-sec-h h4,.mb-sec-h h2{font-size:var(--fs-h3);font-weight:600;letter-spacing:-.01em}
 @media (max-width:760px){.panel,.msec{padding:16px!important}.mk,.bk,.summary>div,.tm-k,.mb-st{padding:14px 16px!important;min-height:84px}.wrap,.dgrid,.co-grid{gap:12px}}
+/* Dashboard: my tasks today */
+.tasks-mine .top{flex-wrap:wrap}
+.tm-seg{margin-left:auto}
+.tmg{display:flex;flex-direction:column;gap:6px}
+.tmg+.tmg{margin-top:6px}
+.tmg-h{display:flex;align-items:center;gap:8px;padding:4px 2px 0}
+.tmg-h b{font-weight:600} .tmg-h .hint{font-size:var(--fs-xs)} .tmg-h button{margin-left:auto}

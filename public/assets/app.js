@@ -863,7 +863,8 @@
     const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id && !cleared.has(x.kind + '|' + x.title)) : [];
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
     // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
-    const tasks = (w.tasks || []).filter((t) => t.repeat || !t.done || !t.doneDay || t.doneDay >= today).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
+    const upcoming = (w.tasks || []).filter((t) => !t.done && (t.day || '') > today).sort((a, b) => (a.day || '').localeCompare(b.day || ''));
+    const tasks = (w.tasks || []).filter((t) => (t.day || '') <= today && (t.repeat || !t.done || !t.doneDay || t.doneDay >= today)).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
     const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const rows = [
@@ -872,8 +873,10 @@
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Today's work & tasks</h4><span class="countpill">${open}</span>${histOff() ? '<span class="spacer"></span><button type="button" class="ghost sm hist-show" data-histshow>Show history</button>' : ''}</div>
       <div class="cd-todo">${rows.join('') || '<div class="todo-done">🎉 Nothing to do for this client today.</div>'}</div>
+      ${upcoming.length ? `<div class="upcoming"><div class="up-h"><b>📅 Planned</b><span class="hint">${upcoming.length} task${upcoming.length === 1 ? '' : 's'} for later days</span></div>${upcoming.map((t) => `<div class="task up"><span class="up-day">${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}</span> · sent that morning` : 'Your task'}</span></div><button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Remove">✕</button></div>`).join('')}</div>` : ''}
       <form class="ai-ask task-new" id="cdTaskForm"><div class="task-main"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="button" class="sm task-more" id="cdTaskMore" aria-expanded="false" aria-controls="cdTaskOpts" title="Give this task to a media buyer">Media buyer ▾</button><button type="submit" class="sm primary">Add</button></div>
-        <div class="task-opts" id="cdTaskOpts" hidden><select id="cdTaskTo" aria-label="Who does this task" hidden>${mbOptions()}</select><div class="mb-pick" role="group" aria-label="Who does this task">${mbChips()}</div></div></form></section>`;
+        <div class="task-opts" id="cdTaskOpts" hidden><select id="cdTaskTo" aria-label="Who does this task" hidden>${mbOptions()}</select><div class="mb-pick" role="group" aria-label="Who does this task">${mbChips()}</div>
+          <div class="mb-pick day-pick" role="group" aria-label="Which day"><span class="hint">Day</span><button type="button" data-daypick="" aria-pressed="${!taskDay}">Today</button><button type="button" data-daypick="${esc(addDaysIso(today, 1))}" aria-pressed="${taskDay === addDaysIso(today, 1)}">Tomorrow</button><label class="day-other"><input type="date" id="cdTaskDay" min="${esc(addDaysIso(today, 1))}" max="${esc(addDaysIso(today, 60))}" value="${esc(taskDay && taskDay !== addDaysIso(today, 1) ? taskDay : '')}" aria-label="Another day"></label></div></div></form></section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -899,6 +902,11 @@
     if ($('cdTaskTo')) { $('cdTaskTo').value = mbLast; $('cdTaskTo').onchange = () => { if ($('cdTaskTo').value === '__manage') { $('cdTaskTo').value = mbLast; openMbDlg(); } else mbLast = $('cdTaskTo').value; fillTaskKpis(); }; }
     fillTaskKpis();
     const more = $('cdTaskMore'); if (more) { more.textContent = mbLabel() + ' ▾'; more.classList.toggle('on', !!mbLast); more.onclick = () => { const o = $('cdTaskOpts'), open = o.hidden; o.hidden = !open; more.setAttribute('aria-expanded', String(open)); more.textContent = mbLabel() + (open ? ' ▴' : ' ▾'); }; }
+    const dayLabel = () => (!taskDay ? '' : taskDay === addDaysIso(today0(), 1) ? ' · Tomorrow' : ' · ' + nice(taskDay).replace(/ \d{4}$/, ''));
+    const paintDay = () => { document.querySelectorAll('#cdTaskOpts [data-daypick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.daypick === taskDay))); if (more) { more.textContent = mbLabel() + dayLabel() + ' ▾'; more.classList.toggle('on', !!mbLast || !!taskDay); } };
+    document.querySelectorAll('#cdTaskOpts [data-daypick]').forEach((b) => b.onclick = () => { taskDay = b.dataset.daypick; const di = $('cdTaskDay'); if (di) di.value = ''; paintDay(); });
+    if ($('cdTaskDay')) $('cdTaskDay').onchange = () => { taskDay = $('cdTaskDay').value || ''; paintDay(); };
+    paintDay();
     document.querySelectorAll('#cdTaskOpts [data-mbpick]').forEach((b) => b.onclick = () => {
       const v = b.dataset.mbpick; if (v === '__manage') return openMbDlg();
       mbLast = v; if ($('cdTaskTo')) $('cdTaskTo').value = v;
@@ -910,9 +918,10 @@
       ev.preventDefault(); const inp = f.querySelector('input'), text = inp.value.trim(); if (!text) return; inp.disabled = true;
       const to = $('cdTaskTo') ? $('cdTaskTo').value : '', b = mbList.find((x) => x.id === to);
       try {
-        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '', target: $('cdTaskTgt') ? Number($('cdTaskTgt').value) || 0 : 0, unit: $('cdTaskUnit') ? $('cdTaskUnit').value : '', kpi: $('cdTaskKpi') ? $('cdTaskKpi').value : '' } });
+        const r = await api(`/clients/${c.id}/tasks`, { method: 'POST', body: { text, day: taskDay || '', repeat: !!($('cdTaskRep') && $('cdTaskRep').checked), to: b ? b.id : '', target: $('cdTaskTgt') ? Number($('cdTaskTgt').value) || 0 : 0, unit: $('cdTaskUnit') ? $('cdTaskUnit').value : '', kpi: $('cdTaskKpi') ? $('cdTaskKpi').value : '' } });
         const { warn, ...wb } = r; cWb[c.id] = wb; paintWork();
-        if (warn) toast('Task added, but not sent: ' + warn); else if (b) successBadge('Sent to ' + b.name + ' on Telegram');
+        if (warn) toast('Task added, but not sent: ' + warn); else if (taskDay) successBadge('Planned for ' + nice(taskDay).replace(/ \d{4}$/, '') + (b ? ' — ' + b.name + ' gets it that morning' : '')); else if (b) successBadge('Sent to ' + b.name + ' on Telegram');
+        taskDay = '';
         setTimeout(() => $('cdTaskForm') && $('cdTaskForm').querySelector('input').focus(), 0);
       } catch (e) { toast(e.message); inp.disabled = false; }
     };
@@ -943,7 +952,9 @@
     if (sec && c) sec.outerHTML = histSection(c);
   }
   // ---- media buyers: tasks for them go to their Telegram with a Done button ----
-  let mbList = [], mbBot = false, mbLast = '';
+  let mbList = [], mbBot = false, mbLast = '', taskDay = '';
+  const today0 = () => (me && me.today) || new Date().toISOString().slice(0, 10);
+  const addDaysIso = (d, n) => { const x = parse(d); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   const mbChips = () => `<button type="button" data-mbpick="" aria-pressed="${!mbLast}">Me</button>${mbList.map((b) => `<button type="button" data-mbpick="${esc(b.id)}" aria-pressed="${mbLast === b.id}" title="${b.linked ? 'Connected on Telegram' : 'Not connected yet'}">${b.photo ? `<img src="/mb-pic/${esc(b.id)}" alt="">` : ''}${esc(b.name)}${b.linked ? '' : ' <small>(not connected)</small>'}</button>`).join('')}<button type="button" class="mb-pick-manage" data-mbpick="__manage">＋ Manage</button>`;
   const mbLabel = () => { const b = mbList.find((x) => x.id === mbLast); return b ? b.name : 'Media buyer'; };
   const mbOptions = () => `<option value="">Me</option>${mbList.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}${b.linked ? '' : ' (not connected)'}</option>`).join('')}<option value="__manage">＋ Media buyers…</option>`;

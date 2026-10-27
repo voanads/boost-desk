@@ -96,11 +96,15 @@ async function morning(log = () => {}) {
   let n = 0;
   for (const r of rows) {
     const cid = r.key.split(':')[2]; if (!names[cid]) continue;
+    const today = sync.todayIn(); let changed = false;
     for (const t of (r.value || {}).tasks || []) {
-      if (!t.repeat || !t.to) continue;
+      if (!t.to) continue;
+      const planned = !t.repeat && t.day === today && !t.sentAt && !t.done; // a task planned for today
+      if (!t.repeat && !planned) continue;
       const b = buyers.find((x) => x.id === t.to.id); if (!b || !b.chat) continue;
-      try { await notify(b, { client: names[cid], text: t.text, from: t.by, repeat: true, cid, tid: t.id }); n++; } catch (e) { log('media buyer task failed:', e.message); }
+      try { await notify(b, { client: names[cid], text: t.text, from: t.by, repeat: !!t.repeat, cid, tid: t.id }); n++; if (planned) { t.sentAt = new Date().toISOString(); changed = true; } } catch (e) { log('media buyer task failed:', e.message); }
     }
+    if (changed) await db.setSetting(r.key, r.value);
   }
   return n;
 }

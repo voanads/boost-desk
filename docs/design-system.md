@@ -2,26 +2,27 @@
 
 All styles live in `public/assets/app.css`. The tokens are at the top of the file (`:root`), and dark mode redefines the colour tokens.
 **Use tokens and the shared components below. Don't add raw hex colours, px radii or rem font sizes.**
+The look and the rules behind it ("Calm console": one blue, flat, no gradients) are in [`DESIGN.md`](../DESIGN.md); this file lists the tokens and class names.
 
 ## Tokens
 
 | Group | Tokens | Notes |
 |---|---|---|
-| Brand | `--brand` `--brand-2` `--brand-soft` `--grad` `--grad-hero` `--brand-glow` `--brand-mist` | `--grad` is the purple gradient used on primary buttons and the hero tile |
+| Brand | `--brand` `--brand-2` `--brand-fill` `--brand-hover` `--brand-text` `--brand-soft` `--brand-glow` `--brand-mist` | `--brand-fill` = solid fills (the one primary button, solid badges); `--brand-text` on `--brand-soft` for selected chips and nav. `--grad`, `--grad-hero`, `--ok-grad` are older names that are now **flat** colours — no gradients |
 | Surfaces | `--bg` `--bg-2` `--surface` `--line` `--paper` | `--paper` is always white (QR, invoice preview, switch knobs) |
-| Text | `--ink` `--muted` `--on-brand` `--on-ok` | `--on-brand` = text on the gradient or a solid status colour |
-| Status | `--ok` `--ok-soft` `--ok-grad` · `--warn` `--warn-soft` · `--danger` `--danger-soft` · `--amber` | `--live` / `--accent` are the older names for danger / ok |
-| Type | `--fs-2xs` .66 · `--fs-xs` .72 · `--fs-sm` .78 · `--fs-md` .82 · `--fs-lg` .86 · `--fs-xl` .9 · `--fs-2xl` .95 · `--fs-base` 1 · `--fs-h3` 1.1 · `--fs-h2` 1.2 · `--fs-h1` 1.4 · `--fs-hero` 1.6 (rem) | Font: Kantumruy Pro (`--f-ui`, `--f-num`) |
-| Radius | `--r-xs` 4 · `--r-sm` 8 · `--r-md` 10 · `--r-lg` 12 · `--r-xl` 16 · `--r-pill` (px) | `--r` = 12px, the panel radius |
+| Text | `--ink` `--muted` `--on-brand` `--on-ok` | `--on-brand` = text on `--brand-fill` or a solid status colour |
+| Status | `--ok` `--ok-soft` · `--warn` `--warn-soft` · `--danger` `--danger-soft` · `--amber` | `--live` / `--accent` are the older names for danger / ok |
+| Type | `--fs-2xs` .72 · `--fs-xs` .76 · `--fs-sm` .8 · `--fs-md` .84 · `--fs-lg` .875 · `--fs-xl` .9 · `--fs-2xl` .95 · `--fs-base` 1 · `--fs-h3` 1.1 · `--fs-h2` 1.2 · `--fs-h1` 1.4 · `--fs-hero` 1.6 (rem) | Font: Inter, with Kantumruy Pro for Khmer (`--f-ui`, `--f-num`); the Aa picker can switch it |
+| Radius | `--r-xs` 4 · `--r-sm` 6 · `--r-md` 8 · `--r-lg` 10 · `--r-xl` 12 · `--r-pill` 999 (px) | `--r` = 12px, the older panel radius (same as `--r-xl`) |
 | Spacing | `--s-1` 4 · `--s-2` 8 · `--s-3` 12 · `--s-4` 16 · `--s-5` 24 · `--s-6` 32 (px) | For new work |
-| Elevation | `--shadow-sm` `--shadow-md` `--shadow-lg` `--glow` | `--glow` = purple button glow |
+| Elevation | `--shadow-sm` `--shadow-md` `--shadow-lg` | `--glow` is `none` now; don't use it |
 | Motion | `--t-fast` .15s · `--t-med` .3s · `--t-slow` .6s · `--ease` | Everything respects `prefers-reduced-motion` |
 | Decorative | `--fx-1` … `--fx-9` | Confetti, sparks and live thumbnails only |
 
 ## Components
 
 ### Button
-`<button>`, with `.primary` (gradient, one per screen area), `.ghost` (text only), `.danger` (red outline) and `.sm` (small).
+`<button>`, with `.primary` (solid `--brand-fill`, one per screen), `.ghost` (text only), `.danger` (red outline) and `.sm` (small).
 States: hover, `:disabled`, `.busy` (spinner). Icon-only buttons need `aria-label`.
 
 ### Card — `.card`
@@ -37,7 +38,7 @@ A small status label. Variants: `.ok` `.warn` `.bad` `.brand` `.solid`, and the 
 ### Others
 - `.chips`: period filter, using `aria-pressed`.
 - `.seg`: segmented control.
-- `.summary`: stat tiles, with the first tile as `.hero`.
+- `.summary`: stat tiles, with the first tile as `.hero` (white card, 3px `--brand` inside edge).
 - `.panel`: page section.
 - `.switch`: toggle.
 - `dialog.dlg`: dialog.
@@ -45,7 +46,7 @@ A small status label. Variants: `.ok` `.warn` `.bad` `.brand` `.solid`, and the 
 
 ### Patterns
 - **List + detail** (`.cwrap` → `.clist` of `.crow` + `.cdetail`): the Clients tab. Desktop: sticky list on the left, detail on the right, first item open. Phones (≤900px): the list, then the detail full width with **← All clients**. Rows use `role="option"` / `aria-selected`.
-- **Detail panel** (`.cd-in`): header (`.cr-av` initial, name, tags) → stat tiles (`.cd-stats`, first one `.hero` with `--grad`) → sections (`.cd-sec`, top border, `h4` title + `countpill`). The client edit form is moved into the last section instead of opening a dialog; the dialog is still used for **+ Add client**.
+- **Detail panel** (`.cd-in`): header (`.cr-av` initial, name, tags) → stat tiles (`.cd-stats`, first one `.hero`, white with the blue inside edge) → sections (`.cd-sec`, top border, `h4` title + `countpill`). The client edit form is moved into the last section instead of opening a dialog; the dialog is still used for **+ Add client**.
 - **AI section** (`.aisec` / `.aibox`): soft brand gradient + brand border, EN / ខ្មែរ segmented control, **↻ New**, loading dots (`.ai-dot`), answer rendered with light Markdown (`.ai-text`: `h4`, lists, bold). Only the AI section repaints when the answer arrives, so the form keeps what is being typed.
 
 ## Rules

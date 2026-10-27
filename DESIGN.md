@@ -2,7 +2,9 @@
 
 How every page of Boost Desk should look. The values live as CSS variables in
 `public/assets/app.css` (`:root`, and `:root[data-theme=dark]`). Use the
-variable names in CSS, never raw values.
+variable names in CSS, never raw values. If this file and `app.css` disagree,
+`app.css` is right — fix this file. `docs/design-system.md` lists the class
+names of the shared components.
 
 ## Feel
 
@@ -52,7 +54,7 @@ Rules
 - Family: `--f-ui` — **Inter** by default, with Kantumruy Pro for Khmer;
   the Aa picker lets a person switch (System, Noto Sans, Lexend, Plus
   Jakarta, Onest). Numbers use `--f-num` (same family, `tabular-nums`).
-- Scale (rem, from `--fs-*`): 2xs .66 · xs .72 · sm .78 · md .82 · lg .86 ·
+- Scale (rem, from `--fs-*`): 2xs .72 · xs .76 · sm .8 · md .84 · lg .875 ·
   xl .9 · 2xl .95 · base 1 · h3 1.1 · h2 1.2 · h1 1.4 · hero 1.6. The Aa
   picker's text size (S/M/L/XL) scales the root, so sizes stay in rem.
 - Weights: 400 body, 500 labels, 600 names and buttons, 700 headings and
@@ -64,7 +66,8 @@ Rules
 
 ## Spacing
 
-4-px grid: 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 28. Cards pad
+4-px grid: 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 28. For new work use
+the `--s-*` tokens: 1 = 4 · 2 = 8 · 3 = 12 · 4 = 16 · 5 = 24 · 6 = 32. Cards pad
 16–20 px, rows 8–12 px, page gutter 24 px (14 px on phone). Grid gaps 8–14 px.
 Content width: full width of the main column; dialogs max 560 px.
 
@@ -88,7 +91,8 @@ Radius scale (`--r-*`): xs 4 · sm 6 · md 8 · lg 10 · xl 12 · pill 999.
 - **Card**: `--surface`, 1 px `--line`, `--r-xl`, title row with a one-line
   hint on the right.
 - **Stat card**: label (2xs uppercase) · number (card size) · sub-line
-  (muted). Hero card takes the gradient.
+  (muted). The first tile is the hero: a white card with the 3 px blue
+  inside edge (see Colour rules), never filled.
 - **Table / list row**: 8–12 px padding, `--line` dividers, numbers right
   aligned and tabular.
 - **Status pill**: soft background + matching text + the word.

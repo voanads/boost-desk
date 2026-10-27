@@ -33,7 +33,7 @@ async function get(id) { return (await list()).find((b) => b.id === String(id)) 
 async function notify(buyer, { client, text, from, repeat, cid, tid }) {
   if (!buyer || !buyer.chat) throw new Error(`${buyer ? buyer.name : 'The media buyer'} hasn't connected Telegram yet.`);
   const msg = `📋 New task${from ? ' from ' + from : ''}\n👤 ${client}\n\n${text}${repeat ? '\n\n🔁 Every day' : ''}`;
-  return telegram.sendButtons(msg, buyer.chat, [[{ text: '✅ Done', data: `td:${cid}:${tid}` }, { text: '📊 My dashboard', url: dashLink(buyer) }]]);
+  return telegram.sendButtons(msg, buyer.chat, [[{ text: '📋 My tasks', url: dashLink(buyer) + '#dashboard' }]]);
 }
 
 // Called with each batch of Telegram updates: invite links opened, and "Done" buttons tapped.
@@ -44,13 +44,13 @@ async function onTelegram(fresh, AI) {
       const b = cur.find((x) => x.code === s.code); if (!b) continue;
       if (b.chat !== s.id) { b.chat = s.id; changed = true; }
       if (await syncProfile(b, s.name)) changed = true;
-      telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap ✅ Done under a task when it's finished.\n\nYour site shows your PM's clients, reports and invoices; My tasks shows today's tasks, your target and KPI — send /dashboard any time to get the link again.`, s.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
+      telegram.sendButtons(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here. Tap 📋 My tasks under a task to open your tasks page and tick them off there — send /dashboard any time to get the link again.`, s.id, [[{ text: '📋 My tasks', url: dashLink(b) + '#dashboard' }]]).catch(() => telegram.send(`✅ Hi ${b.name}! Boost Desk tasks from your PM will come here.`, s.id).catch(() => {}));
     }
     if (changed) await save(cur);
   }
   for (const c of fresh.cmds || []) {
     const b = (await list()).find((x) => x.chat === c.id); if (!b) continue;
-    telegram.sendButtons(`📊 ${b.name}, here is your dashboard — today's tasks, target, KPI and history.`, c.id, [[{ text: '📊 Open my dashboard', url: dashLink(b) }]]).catch(() => {});
+    telegram.sendButtons(`📋 ${b.name}, here are your tasks for today.`, c.id, [[{ text: '📋 My tasks', url: dashLink(b) + '#dashboard' }]]).catch(() => {});
   }
   for (const t of fresh.taps || []) {
     const m = String(t.data).match(/^td:(\d+):([a-f0-9]{6,20})$/); if (!m) { telegram.answerTap(t.qid); continue; }

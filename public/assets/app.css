@@ -2860,3 +2860,10 @@ html.hist-off .cd-cols{grid-template-columns:minmax(0,1fr)}
 html.hist-off .histsec{display:none!important}
 html.hist-off .cd-cols>.cd-col:has(.histsec){display:none}
 .hist-show{align-self:flex-start}
+/* planned tasks (later days) */
+.day-pick{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);align-items:center}
+.day-pick>.hint{font-size:var(--fs-xs);margin-right:2px}
+.day-other input{min-height:36px;border:1px solid var(--line);border-radius:var(--r-pill);padding:0 10px;font:inherit;font-size:var(--fs-md);color:var(--muted);background:var(--surface)}
+.upcoming{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.up-h{display:flex;align-items:baseline;gap:8px;padding:2px 2px 0} .up-h .hint{font-size:var(--fs-xs)}
+.task.up{opacity:.85} .up-day{font-size:var(--fs-xs);font-weight:700;color:var(--brand-text);background:var(--brand-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;flex:none}

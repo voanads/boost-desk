@@ -1634,9 +1634,10 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   const B = require('./src/buyers'), buyer = (req.body || {}).to ? await B.get(req.body.to) : null;
   if ((req.body || {}).to && !buyer) return res.status(400).json({ error: 'That media buyer was removed.' });
   const tg = Math.min(1e6, Math.max(0, Number((req.body || {}).target) || 0));
-  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day: sync.todayIn(), done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}), ...(tg ? { target: tg, unit: String((req.body || {}).unit || '').trim().slice(0, 20), hit: {} } : {}), ...(/^[a-f0-9]{8}$/.test(String((req.body || {}).kpi || '')) ? { kpi: req.body.kpi } : {}) };
+  const today = sync.todayIn(), askDay = String((req.body || {}).day || ''), day = isDay(askDay) && askDay > today && askDay <= sync.addDays(today, 60) ? askDay : today; // a task can be planned for a later day
+  const t = { id: require('crypto').randomBytes(5).toString('hex'), text, from: 'me', day, done: false, by: req.user.name, ...((req.body || {}).repeat ? { repeat: true } : {}), ...(buyer ? { to: { id: buyer.id, name: buyer.name } } : {}), ...(tg ? { target: tg, unit: String((req.body || {}).unit || '').trim().slice(0, 20), hit: {} } : {}), ...(/^[a-f0-9]{8}$/.test(String((req.body || {}).kpi || '')) ? { kpi: req.body.kpi } : {}) };
   let warn = '';
-  if (buyer) {
+  if (buyer && day === today) { // a later day: the bot sends it that morning
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
     try { await B.notify(buyer, { client: c ? c.name : '', text, from: req.user.name, repeat: !!t.repeat, cid: req.params.id, tid: t.id }); t.sentAt = new Date().toISOString(); }
     catch (e) { warn = e.message; }

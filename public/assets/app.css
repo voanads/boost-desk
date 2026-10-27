@@ -2853,7 +2853,10 @@ h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .mb-pick .mb-pick-manage{border-style:dashed}
 .task-more.on{color:var(--brand-text);background:var(--brand-soft);border-color:transparent}
 
-/* Done history hidden (27 Oct 2026, per Voan); tasks take the full width */
-.histsec{display:none!important}
-.cd-cols{grid-template-columns:minmax(0,1fr)}
-.cd-cols>.cd-col:has(.histsec){display:none}
+/* Done history: a Hide / Show button on the panel; remembered on this device */
+.hs-toggle{margin-left:6px}
+.histsec.folded>*:not(.hs-head){display:none}
+html.hist-off .cd-cols{grid-template-columns:minmax(0,1fr)}
+html.hist-off .histsec{display:none!important}
+html.hist-off .cd-cols>.cd-col:has(.histsec){display:none}
+.hist-show{align-self:flex-start}

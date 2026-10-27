@@ -1275,16 +1275,7 @@ api.post('/accounts/refresh', wrap(async (req, res) => {
   // Pull today's spend for the ticked accounts (updates Home too); unticked ones get a quick total.
   const r = await sync.exclusive(me, () => sync.syncDay(sync.todayIn(), req.user));
   if (r === null) return res.status(409).json({ error: 'A sync is running right now. Try again in a moment.' });
-  const enabled = new Set(await db.enabledAccountIds(me));
-  const list = (await db.listAccounts(me)).map((row) => ({ ...(row.info || {}), id: row.id, name: row.name }));
-  const token = await sync.tokenFor(req.user);
-  const day = sync.todayIn();
-  for (const a of list) {
-    if (enabled.has(a.id)) continue;
-    try { a.todaySpend = await meta.accountSpend(token, a.id, day); a.todayAt = new Date().toISOString(); } catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
-  }
-  await db.saveAccounts(me, list.filter((a) => !enabled.has(a.id)));
-  res.json(await accountsWithToday(me));
+  res.json(await accountsWithToday(me)); // syncDay already refreshed the unticked accounts' totals
 }));
 api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); }));
 

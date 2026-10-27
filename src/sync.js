@@ -312,7 +312,21 @@ async function syncDay(day, user) {
   let rows = items;
   if (failed.size) { const prev = (await db.getRaw(user.fb_id, day)) || []; rows = rows.concat(prev.filter((r) => failed.has(r.account))); }
   await db.putRaw(user.fb_id, day, rows);
-  return applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
+  const out = await applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
+  // Unticked ad accounts: their numbers stay live too (a quick total per account; the tick only decides what Sync counts).
+  if (day === todayIn()) { try { await untickedToday(user, day); } catch (e) { console.error('[sync] unticked accounts:', e.message); } }
+  return out;
+}
+async function untickedToday(user, day) {
+  const owner = user.fb_id, enabled = new Set(await db.enabledAccountIds(owner));
+  const list = (await db.listAccounts(owner)).filter((a) => !enabled.has(a.id)).map((row) => ({ ...(row.info || {}), id: row.id, name: row.name }));
+  if (!list.length) return;
+  const token = await tokenFor(user);
+  for (const a of list) {
+    try { a.todaySpend = await meta.accountSpend(token, a.id, day); a.todayAt = new Date().toISOString(); delete a.todayError; }
+    catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
+  }
+  await db.saveAccounts(owner, list);
 }
 
 // One sync at a time per admin — the Sync button and background syncs share this.

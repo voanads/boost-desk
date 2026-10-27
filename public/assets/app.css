@@ -2852,3 +2852,8 @@ h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .mb-pick button small{font-weight:500;color:var(--muted)}
 .mb-pick .mb-pick-manage{border-style:dashed}
 .task-more.on{color:var(--brand-text);background:var(--brand-soft);border-color:transparent}
+
+/* Done history hidden (27 Oct 2026, per Voan); tasks take the full width */
+.histsec{display:none!important}
+.cd-cols{grid-template-columns:minmax(0,1fr)}
+.cd-cols>.cd-col:has(.histsec){display:none}

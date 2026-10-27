@@ -858,7 +858,9 @@
   // Today's work (from the rules) + tasks (AI plan and your own), all tickable.
   function workSection(c) {
     const w = cWb[c.id] || { tasks: [], ticks: {} }, today = w.today || (cTodo && cTodo.today) || me.today;
-    const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id) : [];
+    // A suggestion ticked on an earlier day stays cleared while it says the same thing (same kind + title).
+    const cleared = new Set((w.log || []).filter((x) => String(x.id || '').startsWith('k:') && x.day < today).map((x) => x.kind + '|' + x.text));
+    const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id && !cleared.has(x.kind + '|' + x.title)) : [];
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
     // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
     const tasks = (w.tasks || []).filter((t) => t.repeat || !t.done || !t.doneDay || t.doneDay >= today).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));

@@ -2844,3 +2844,11 @@ h1,h2,h3,.summary .val,.mk b,.bk b{letter-spacing:-.01em}
 .tmg+.tmg{margin-top:6px}
 .tmg-h{display:flex;align-items:center;gap:8px;padding:4px 2px 0}
 .tmg-h b{font-weight:600} .tmg-h .hint{font-size:var(--fs-xs)} .tmg-h button{margin-left:auto}
+/* task form: pick the media buyer as chips */
+.mb-pick{display:flex;flex-wrap:wrap;gap:6px}
+.mb-pick button{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--surface);color:var(--muted);font-weight:600;font-size:var(--fs-md)}
+.mb-pick button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-text);border-color:transparent}
+.mb-pick button img{width:20px;height:20px;border-radius:50%;object-fit:cover}
+.mb-pick button small{font-weight:500;color:var(--muted)}
+.mb-pick .mb-pick-manage{border-style:dashed}
+.task-more.on{color:var(--brand-text);background:var(--brand-soft);border-color:transparent}

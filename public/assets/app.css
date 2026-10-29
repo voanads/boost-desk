@@ -2867,3 +2867,10 @@ html.hist-off .cd-cols>.cd-col:has(.histsec){display:none}
 .upcoming{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .up-h{display:flex;align-items:baseline;gap:8px;padding:2px 2px 0} .up-h .hint{font-size:var(--fs-xs)}
 .task.up{opacity:.85} .up-day{font-size:var(--fs-xs);font-weight:700;color:var(--brand-text);background:var(--brand-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;flex:none}
+/* ===== PM site per the "Boost Desk Dashboard" canvas (29 Oct 2026) ===== */
+@media (min-width:1100px){.dgrid{grid-template-columns:minmax(0,1fr) 360px}.dside{position:sticky;top:20px;order:0}}
+@media (min-width:1100px) and (max-width:1400px){.dgrid{grid-template-columns:minmax(0,1fr) 320px}}
+.dside .panel{padding:16px!important}
+.dside .todo .top h2{font-size:1.05rem}
+.cr-status{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
+.cr-status:empty{display:none}

@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=192">
+<link rel="stylesheet" href="/assets/app.css?v=193">
 <link rel="stylesheet" href="/assets/profit.css?v=180">
 </head>
 <body>
@@ -209,11 +209,6 @@
     </div>
     <div class="dgrid">
       <div class="dmain">
-    <div class="panel mb-mine" id="mbMine" hidden></div>
-    <div class="panel team-mine" id="teamMine" hidden></div>
-    <div class="panel tasks-mine" id="tasksMine" hidden></div>
-    <div class="panel kpi-mine" id="kpiMine" hidden></div>
-    <div class="panel tgt-mine" id="tgMine" hidden><div class="top"><h2>🎯 Target today <span class="countpill" id="tgMineSum"></span></h2><span class="hint" id="tgMineHint">Type what you reached on each task</span></div><div class="tgt-bar"><i id="tgMineBar"></i></div><div class="tgt-list" id="tgMineList"></div></div>
     <div class="panel" id="dChartPanel">
       <div class="top"><h2 id="dChartTitle">Spend per day</h2><span class="hint" id="dChartHint">Tap a bar to see that day</span></div>
       <div class="chart" id="dChart"></div>
@@ -245,6 +240,11 @@
     </div>
       </div>
       <aside class="dside">
+    <div class="panel tgt-mine" id="tgMine" hidden><div class="top"><h2>🎯 Target today <span class="countpill" id="tgMineSum"></span></h2><span class="hint" id="tgMineHint">Type what you reached on each task</span></div><div class="tgt-bar"><i id="tgMineBar"></i></div><div class="tgt-list" id="tgMineList"></div></div>
+    <div class="panel mb-mine" id="mbMine" hidden></div>
+    <div class="panel team-mine" id="teamMine" hidden></div>
+    <div class="panel tasks-mine" id="tasksMine" hidden></div>
+    <div class="panel kpi-mine" id="kpiMine" hidden></div>
     <div class="panel todo" id="todoPanel" hidden>
       <div class="top"><h2>ការងារថ្ងៃនេះ <span class="countpill" id="todoCount"></span></h2><button type="button" class="ghost sm" id="todoToggle" aria-expanded="true">លាក់</button></div>
       <div class="todolist" id="todoList"></div>
@@ -669,6 +669,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=180"></script>
-<script src="/assets/app.js?v=192"></script>
+<script src="/assets/app.js?v=193"></script>
 </body>
 </html>

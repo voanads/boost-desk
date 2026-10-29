@@ -94,7 +94,19 @@ const services = {}; // name → { ok, ms, at, error }
 function noteService(name, ok, ms, error) { services[name] = { ok: !!ok, ms: Math.round(ms || 0), at: new Date().toISOString(), error: error ? String(error).slice(0, 200) : '' }; }
 
 // ---------- snapshot ----------
-const MEM_LIMIT_MB = Number(process.env.MEMORY_LIMIT_MB) || 512;
+// The container's real memory limit (cgroup), else MEMORY_LIMIT_MB, else 512 MB — so the alert measures against what Railway actually allows.
+function cgroupLimitMb() {
+  try {
+    const fs = require('fs');
+    for (const f of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) {
+      if (!fs.existsSync(f)) continue;
+      const v = fs.readFileSync(f, 'utf8').trim(); if (v === 'max') return 0;
+      const n = Number(v); if (n > 0 && n < 2 ** 50) return Math.round(n / 1048576);
+    }
+  } catch (_) {}
+  return 0;
+}
+const MEM_LIMIT_MB = Number(process.env.MEMORY_LIMIT_MB) || cgroupLimitMb() || 512;
 async function snapshot(db) {
   const mem = process.memoryUsage();
   let dbInfo = { ok: false, ms: 0, sizeMb: 0, tables: [], error: '' };

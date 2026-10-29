@@ -2874,3 +2874,31 @@ html.hist-off .cd-cols>.cd-col:has(.histsec){display:none}
 .dside .todo .top h2{font-size:1.05rem}
 .cr-status{display:block;font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
 .cr-status:empty{display:none}
+
+/* ---- All canvas layouts (Boost Desk Dashboard design) ---- */
+/* Clients page: AI advice + Spend by Page */
+.aisec .ai-lang button{padding:4px 10px;font-size:var(--fs-sm)}
+.aisec .ai-text{font-size:var(--fs-base);line-height:1.5} .aisec .ai-text p{margin:0 0 6px} .aisec .ai-text ul,.aisec .ai-text ol{margin:0 0 6px;padding-left:18px}
+.aisec .ai-ask{display:flex;gap:6px;margin-top:4px} .aisec .ai-ask input{flex:1;min-width:0}
+.cd-pages{display:flex;flex-direction:column;gap:8px}
+.cd-page{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface)}
+.cd-page-n{display:flex;flex-direction:column;gap:3px;min-width:0} .cd-page-n b{display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-page-n .pgbar{height:5px;border-radius:3px;background:var(--bg-2);overflow:hidden;margin-top:2px} .cd-page-n .pgbar i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.cd-page-v{font-size:var(--fs-xl)} .cd-page-rep{white-space:nowrap}
+@media (max-width:560px){.cd-page{grid-template-columns:minmax(0,1fr) auto}.cd-page-rep{grid-column:1/-1;justify-self:start}}
+/* Admin: people as cards, teams with roles */
+.ucard{border:1px solid var(--line);border-radius:var(--r-xl);background:var(--surface);display:flex;flex-direction:column;padding:14px;gap:10px}
+.ucard .uc-top .rolesel,.ucard .uc-top .rolechip{flex:none;max-width:46%}
+.uc-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--fs-sm);color:var(--muted)} .uc-meta .ustat{font-weight:600}
+.uc-acts{border-top:1px dashed var(--line);padding-top:10px} .uc-acts .switch{margin:0}
+.tc-row{display:flex;align-items:center;gap:6px;font-size:var(--fs-md)} .tc-row.mb{padding-left:12px}
+.tc-members{flex-direction:column;gap:4px;align-items:flex-start}
+/* Live videos filters as chips */
+.lv-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#lSortSeg button{padding:5px 11px;font-size:var(--fs-md)}
+/* Media buyer site: tasks panel first, no chart (canvas BuyerDashboard) */
+body[data-site=mb] #mbMine{margin-bottom:14px}
+html.asbuyer body[data-site=mb] #dChartPanel{display:none}
+.mbm-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:10px;margin-top:8px}
+a.btnlink{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:var(--r-md);padding:6px 12px;text-decoration:none;color:var(--brand-text);font-weight:600;font-size:var(--fs-md);background:var(--surface)}
+a.btnlink:hover{background:var(--brand-soft);border-color:transparent}

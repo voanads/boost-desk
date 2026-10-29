@@ -661,6 +661,45 @@
   let cSetOpen = false; // the settings form stays hidden until ⚙ is tapped
   const cWb = {}; // per client: { notes, tasks, ai, ticks, today } from /clients/:id/workbook
   const IC_TODO = { plan: '🎯', report: '📨', nogroup: '✈️', invoice: '🧾', unpaid: '⏳', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+  // ---- Clients page: ✨ AI advice and Spend by Page for the shown period (per the design canvas) ----
+  const cdRange = () => { if (cPer === 'month') return monthRange(); const pd = cPerData[cPer]; return pd ? [pd.from, pd.to] : null; };
+  const cdPerLabel = () => { const r = cdRange(); if (!r) return ''; return r[0] === r[1] ? nice(r[0]) : `${shortD(r[0])} – ${shortD(r[1])} ${r[1].slice(0, 4)}`; };
+  const cdAi = {}, cdPg = {}; // AI answers / Page spend keyed by client + period + language
+  const cdAiKey = (cid) => { const r = cdRange(); return r ? `${cid}|${r[0]}|${r[1]}|${aiLang}` : null; };
+  function cdAiSection(c) {
+    const k = cdAiKey(c.id), st = k ? cdAi[k] : null;
+    const lang = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-cdlang="en" aria-pressed="${aiLang === 'en'}">English</button><button type="button" data-cdlang="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button></div>`;
+    const body = !st ? `<div class="hint">${aiReady === false ? (me && me.isOwner ? 'Add a Gemini or Claude key in <b>Admin → Settings → AI advice</b> to get advice here.' : 'AI advice is not set up yet — ask the app owner.') : 'What to change for this client, from its spend, lives, posts and orders in this period.'}</div>`
+      : st.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading this client\'s numbers…</div>'
+      : st.err ? `<div class="note">${esc(st.err)}</div>` : `<div class="ai-text">${mdLite(st.text)}</div>`;
+    return `<section class="cd-sec aisec" id="cdAiSec"><div class="cd-sec-h"><h4>✨ AI advice</h4><span class="hint">${esc(cdPerLabel())}${st && st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span>${lang}<button type="button" class="${st ? 'ghost ' : ''}sm" id="cdAiGo" ${st && st.loading ? 'disabled' : ''}>${st ? '↻ New answer' : '✨ Get advice'}</button></div>${body}
+      ${st && !st.loading && !st.err ? `<form class="ai-ask" id="cdAiAsk"><input type="text" maxlength="300" placeholder="Ask about this client… e.g. Which live time works best?" aria-label="Ask about this client"><button type="submit" class="sm">Ask</button></form>` : ''}</section>`;
+  }
+  async function cdRunAi(cid, { fresh = false, question = '' } = {}) {
+    const r = cdRange(); if (!r) return; const k = cdAiKey(cid);
+    if (aiReady === false) return toast(me && me.isOwner ? 'Add a Claude or Gemini key in Admin → Settings → AI advice first.' : 'AI advice is not set up yet — ask the app owner.');
+    cdAi[k] = { loading: true }; renderClientDetail();
+    try { const x = await api(`/ai/client/${cid}`, { method: 'POST', body: { from: r[0], to: r[1], lang: aiLang, fresh, question } }); cdAi[k] = { text: x.text, cached: x.cached }; }
+    catch (e) { cdAi[k] = { err: e.message }; }
+    renderClientDetail();
+  }
+  function cdPagesSection(c) {
+    const r = cdRange(); if (!r) return '';
+    const k = `${r[0]}|${r[1]}`;
+    if (!cdPg[k]) { cdPg[k] = { loading: true }; api(`/dashboard/pages?from=${r[0]}&to=${r[1]}`).then((d) => { cdPg[k] = { data: d || {} }; renderClientDetail(); }).catch(() => { cdPg[k] = { data: {} }; }); return ''; }
+    const l = ((cdPg[k].data || {})[c.id] || []).filter((p) => p.spend > 0.0049).sort((a, b) => b.spend - a.spend);
+    if (!l.length) return '';
+    const tot = l.reduce((a, p) => a + p.spend, 0) || 1;
+    return `<section class="cd-sec pgsec"><div class="cd-sec-h"><h4>Spend by Page</h4><span class="hint">${esc(cdPerLabel())}${l.length > 1 ? ' · a report for one Page leaves the others out' : ''}</span></div>
+      <div class="cd-pages">${l.map((p) => `<div class="cd-page"><div class="cd-page-n"><b>${pageLabel(p)}</b><span class="hint">${[p.live > 0 ? 'Live ' + money(p.live) : '', p.post > 0 ? 'Post ' + money(p.post) : ''].filter(Boolean).join(' · ')}${l.length > 1 ? ` · ${Math.round(p.spend / tot * 100)}%` : ''}</span><div class="pgbar"><i style="width:${Math.max(2, p.spend / tot * 100).toFixed(1)}%"></i></div></div>
+        <b class="num cd-page-v">${money(p.spend)}</b>${c.archived ? '' : `<button type="button" class="sm cd-page-rep" data-cdrep="${esc(p.page)}" title="Send this Page's report to the client's Telegram group">Report → client group</button>`}</div>`).join('')}</div></section>`;
+  }
+  function cdSendPage(c, page) {
+    const r = cdRange(); if (!r) return;
+    const k = `${r[0]}|${r[1]}`, l = ((cdPg[k] && cdPg[k].data || {})[c.id] || []).filter((p) => p.spend > 0.0049);
+    const skip = []; for (const p of l) if (p.page !== page) { if (p.pageId) skip.push(p.pageId); skip.push(p.page); }
+    openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel(), only: '', parts: null, skip: skip.length ? skip : null });
+  }
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
@@ -688,6 +727,8 @@
         <div class="cd-col">${workSection(c)}
           <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
             <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
+          ${cdAiSection(c)}
+          ${cdPagesSection(c)}
         </div>
         <div class="cd-col">${histSection(c)}</div>
       </div>
@@ -695,6 +736,10 @@
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
+    const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
+    box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });
+    const aiAsk = $('cdAiAsk'); if (aiAsk) aiAsk.onsubmit = (ev) => { ev.preventDefault(); const q = aiAsk.querySelector('input').value.trim(); if (q) cdRunAi(c.id, { question: q }); };
+    box.querySelectorAll('[data-cdrep]').forEach((b) => b.onclick = () => cdSendPage(c, b.dataset.cdrep));
     $('cdBack').onclick = () => { $('cWrap').classList.remove('show-detail'); window.scrollTo({ top: $('tab-clients').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); };
     let nt; $('cdNotes').oninput = () => { $('cdNotesSt').textContent = 'Saving…'; clearTimeout(nt); nt = setTimeout(async () => { try { const r = await api(`/clients/${c.id}/notes`, { method: 'PUT', body: { notes: $('cdNotes').value } }); if (cWb[c.id]) { cWb[c.id].notes = $('cdNotes').value; cWb[c.id].notesAt = r.notesAt; } if ($('cdNotesSt')) $('cdNotesSt').textContent = 'Saved'; } catch (e) { if ($('cdNotesSt')) $('cdNotesSt').textContent = e.message; } }, 700); };
     if (!keepForm || cEdit !== c) openClientDlg(c, null, { inline: true }); else $('cdForm').appendChild(cFormEl);
@@ -1735,20 +1780,18 @@
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
       const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
       const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${['pm', 'coo', 'ceo'].map((k) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
-      return `<tr class="utr${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
-        <td data-l="Person"><span class="ut-p"><span class="avatar">${initials(u.name)}</span><span class="ut-n"><b>${esc(u.name)}${you ? ' <span class="chip meta">You</span>' : ''}</b><span class="hint">${u.team ? esc(u.team) : 'No team'}</span></span></span></td>
-        <td data-l="Role">${role}</td>
-        <td class="r num" data-l="Ad accounts">${u.accounts}</td>
-        <td class="r num" data-l="Clients">${u.clients}</td>
-        <td data-l="Sync"><span class="ut-s">${st}<span class="hint" title="${last}">${u.lastSeen ? 'active ' + ago(u.lastSeen) : '—'}</span></span></td>
-        <td data-l="Facebook login"><span class="${u.expired ? 'over' : left !== null && left < 7 ? 'warnt' : ''}">${u.expired ? 'Expired' : left !== null ? `${left} day${left === 1 ? '' : 's'} left` : '—'}</span></td>
-        <td data-l="Auto report">${u.autoReport && u.autoReport.on ? '⏰ ' + esc(u.autoReport.time) : '<span class="hint">Off</span>'}</td>
-        <td class="ut-a">${d.canEdit ? `<label class="switch" title="Auto sync"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''} aria-label="Auto sync for ${esc(u.name)}"><span></span></label>` : ''}
-          ${d.canEdit ? `<button class="sm ut-ib" data-run="${esc(u.id)}" title="Sync now" aria-label="Sync ${esc(u.name)} now" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻</button>` : ''}
-          ${edit && !you ? `<button class="sm danger ut-ib" data-remove="${esc(u.id)}" data-name="${esc(u.name)}" title="Remove" aria-label="Remove ${esc(u.name)}">✕</button>` : ''}</td>
-      </tr>${lr && lr.error ? `<tr class="utr-err"><td colspan="8"><span class="over">${last}</span></td></tr>` : ''}`;
+      const login = u.expired ? '<span class="ustat bad">Login expired</span>' : left !== null ? (left < 7 ? `<span class="ustat bad">Login expires in ${left} day${left === 1 ? '' : 's'}</span>` : `<span>Login ok for ${left} days</span>`) : '<span>Login —</span>';
+      const sub = [u.team ? esc(u.team) : 'No team', `${u.clients} client${u.clients === 1 ? '' : 's'}`, `${u.accounts} ad account${u.accounts === 1 ? '' : 's'}`].join(' · ');
+      return `<article class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
+        <div class="uc-top"><span class="avatar">${initials(u.name)}</span><span class="uc-n"><b>${esc(u.name)}${you ? ' <small class="hint">· you</small>' : ''}</b><span class="hint">${sub}</span></span>${role}</div>
+        <div class="uc-meta">${login}<span title="${last}">${st}${u.lastSeen ? ` <span class="hint">· active ${ago(u.lastSeen)}</span>` : ''}</span><span>${u.autoReport && u.autoReport.on ? '⏰ Report ' + esc(u.autoReport.time) : '<span class="hint">Report off</span>'}</span></div>
+        ${lr && lr.error ? `<div class="uc-last"><span class="over">${last}</span></div>` : ''}
+        ${d.canEdit ? `<div class="uc-acts"><label class="switch" title="Auto sync"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''} aria-label="Auto sync for ${esc(u.name)}"><span></span></label><span class="hint">Auto sync</span><span class="spacer"></span>
+          <button class="sm" data-run="${esc(u.id)}" title="Sync now" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻ Run now</button>
+          ${edit && !you ? `<button class="sm danger-t" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>` : ''}</div>` : ''}
+      </article>`;
     }).join('');
-    $('uList').innerHTML = rows ? `<div class="tablewrap"><table class="utable"><thead><tr><th>Person</th><th>Role</th><th class="r">Accounts</th><th class="r">Clients</th><th>Sync</th><th>Login</th><th>Report</th><th class="r">${d.canEdit ? 'Auto sync' : ''}</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">No one matches.</div>';
+    $('uList').innerHTML = rows || '<div class="empty">No one matches.</div>';
     const b = Object.entries(d.blocked || {});
     $('blockedBox').hidden = !b.length;
     $('blockedBody').innerHTML = b.map(([id, x]) => `<tr><td>${esc(x.name || id)}<div class="hint">Facebook ID ${esc(id)} · removed ${esc(ago(x.at))}</div></td><td class="acts"><button data-restore="${esc(id)}">Restore access</button></td></tr>`).join('');
@@ -1895,7 +1938,7 @@
       <div class="mbm-list">${d.tasks.length ? d.tasks.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-mbtick="${t.clientId}|${t.id}" aria-label="Done">${box}</button>
         <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.kpiName ? ` · <span class="kpi-chip">KPI · ${esc(t.kpiName)}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}` : ''}</span></div>
-        ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-mbreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit)}</span>` : ''}</div>`).join('') : '<div class="hl-empty">🎉 No tasks for you today. New tasks from your PM arrive here and on Telegram.</div>'}</div>${kpiHtml}${histHtml}`;
+        ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-mbreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit)}</span>` : ''}</div>`).join('') : '<div class="hl-empty">🎉 No tasks for you today. New tasks from your PM arrive here and on Telegram.</div>'}</div>${MB_SITE ? `<div class="mbm-foot"><a class="sm btnlink" href="/mediabuyer/tasks">My KPI &amp; history →</a>${d.kpiAvg != null ? `<span class="hint">KPI this month <span class="kpi-score ${sc(d.kpiAvg)}">${d.kpiAvg}%</span></span>` : ''}</div>` : kpiHtml + histHtml}`;
     if (first && location.hash === '#dashboard') setTimeout(() => host.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); // opened from the Telegram button: land on the tasks
     host.querySelectorAll('[data-mbtick]').forEach((b) => b.onclick = async () => { const [cid, tid] = b.dataset.mbtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { done } }); if (done) successBadge('Marked done'); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
     host.querySelectorAll('[data-mbreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.mbreach.split('|'); try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { reached: Number(i.value) || 0 } }); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
@@ -3068,6 +3111,14 @@ Notes:
   document.querySelectorAll('#lChips button').forEach((b) => b.onclick = () => { lPreset = b.dataset.p; lShown = 20; loadLives(); });
   $('lSort').onchange = () => { lShown = 20; renderLives(); fetchSetups(); };
   $('lClient').onchange = () => { lShown = 20; renderLives(); fetchSetups(); };
+  // Chips mirror the (hidden) selects, per the design canvas.
+  $('lSortSeg').querySelectorAll('button').forEach((b) => b.onclick = () => { $('lSort').value = b.dataset.k; $('lSortSeg').querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); $('lSort').onchange(); });
+  function renderLiveClientChips() {
+    const cur = $('lClient').value, opts = [...$('lClient').options];
+    $('lClientSeg').innerHTML = opts.length > 9 ? '' : opts.map((o) => `<button type="button" class="chip-btn" data-cid="${esc(o.value)}" aria-pressed="${o.value === cur}">${esc(o.textContent)}</button>`).join('');
+    $('lClient').hidden = opts.length <= 9;
+    $('lClientSeg').querySelectorAll('button').forEach((b) => b.onclick = () => { $('lClient').value = b.dataset.cid; renderLiveClientChips(); $('lClient').onchange(); });
+  }
   $('lMore').onclick = () => { lShown += 20; lEnter = true; renderLives(); fetchSetups(); };
   async function loadLives() {
     document.querySelectorAll('#lChips button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === lPreset)));
@@ -3078,6 +3129,7 @@ Notes:
       const cl = [...new Map(lData.lives.map((l) => [l.clientId, l.client])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
       const cur = $('lClient').value;
       $('lClient').innerHTML = '<option value="">All clients</option>' + cl.map(([id, n]) => `<option value="${id}"${String(id) === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
+      renderLiveClientChips();
       lEnter = true; renderLives(); fetchSetups();
     } catch (e) { $('lList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; }
   }
@@ -3561,10 +3613,12 @@ Thank you for working with Ads Box!`,
     $('teamNewForm').hidden = !canEdit;
     $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Main Dashboard then shows spend, orders and suggestions per team. Each person can be in one team.' : 'Teams set up by the app owner.';
     const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
+    const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager' };
+    const memberRows = (t) => t.members.map((m) => { const u = users.find((x) => x.id === m) || {}; return `<div class="tc-row"><span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span><span class="hint">· ${RN[u.role] || 'Project Manager'}</span></div>${(u.buyers || []).map((b) => `<div class="tc-row mb"><span>${esc(b)}</span><span class="hint">· media buyer</span></div>`).join('')}`; }).join('');
     const inTeam = new Set(teams.flatMap((t) => t.members));
     $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">
       <div class="tc-head"><b class="tc-name">${esc(t.name)}</b><span class="hint">${t.members.length} ${t.members.length === 1 ? 'person' : 'people'}</span><span class="spacer"></span>${canEdit ? '<button class="ghost" data-rename>Rename</button><button class="ghost danger-t" data-deleteteam>Delete</button>' : ''}</div>
-      <div class="tc-members">${t.members.map((m) => `<span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span>`).join('') || '<span class="hint">No one yet</span>'}</div>
+      <div class="tc-members">${memberRows(t) || '<span class="hint">No one yet</span>'}</div>
       ${canEdit ? (() => { const free = users.filter((u) => !t.members.includes(u.id) && !inTeam.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)), taken = users.filter((u) => !t.members.includes(u.id) && inTeam.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)); const o = (u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`; return `<select data-addmember aria-label="Add a person to ${esc(t.name)}"><option value="">+ Add person…</option>${free.length ? `<optgroup label="Not in a team yet">${free.map(o).join('')}</optgroup>` : ''}${taken.length ? `<optgroup label="Move from another team">${taken.map(o).join('')}</optgroup>` : ''}</select>`; })() : ''}
     </div>`).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
     document.querySelectorAll('#teamGrid .teamcard').forEach((card) => {
@@ -3593,6 +3647,7 @@ Thank you for working with Ads Box!`,
 
   // ---------- boot ----------
   const SITE = document.body.dataset.site || '', ADMIN_SITE = SITE === 'admin', PM_SITE = SITE === 'pm' || SITE === 'mb', MB_SITE = SITE === 'mb', OWNER_SITE = SITE === 'owner';
+  if (MB_SITE) { const sm = document.querySelector('#tab-dashboard .summary'), mm = $('mbMine'); if (sm && mm) sm.before(mm); } // per the design canvas: a media buyer's tasks come first
   (async () => {
     try {
       me = await api('/me');

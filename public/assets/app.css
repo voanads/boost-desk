@@ -2915,3 +2915,4 @@ html.asbuyer body[data-site=mb] .dside{display:none}
 .mt-add{display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,2fr) auto auto auto;gap:8px;align-items:center}
 .mt-add input,.mt-add select{min-height:40px}
 @media (max-width:760px){.mt-add{grid-template-columns:1fr 1fr}.mt-add input{grid-column:1/-1}}
+.mt-pick{display:flex;align-items:center;gap:8px} .mt-pick select{min-height:40px;min-width:200px}

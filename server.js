@@ -360,6 +360,16 @@ app.get(['/admin', '/admin/'], wrap(async (req, res) => {
 
 // ---------- API ----------
 const api = express.Router();
+// Admins (CEO / COO / owner) can see and add tasks for any person: ?as=<fbId> on these routes acts on that person's clients and tasks (ticks are signed with the admin's name).
+const AS_ROUTES = /^\/(tasks\/mine|clients(\/\d+\/(tasks(\/[^/]+)?|tick))?)$/;
+api.use(wrap(async (req, res, next) => {
+  const as = String(req.query.as || (req.body && req.body.as) || '').trim();
+  if (!as || !AS_ROUTES.test(req.path) || req.user.buyer) return next();
+  if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only admins can act for another person.' });
+  const u = (await db.allUsers()).find((x) => x.fb_id === as); if (!u) return res.status(404).json({ error: 'Person not found.' });
+  req.user = { ...req.user, fb_id: u.fb_id, actingFor: u.name };
+  next();
+}));
 
 api.get('/me', wrap(async (req, res) => {
   res.json({
@@ -1559,7 +1569,8 @@ api.put('/kpis', wrap(async (req, res) => {
 // People whose KPIs an admin can open: every user and every media buyer.
 api.get('/kpis/people', adminOnly, wrap(async (req, res) => {
   const users = (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name, kind: 'PM' }));
-  const buyers = (await require('./src/buyers').all()).map((b) => ({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer' }));
+  const byName = Object.fromEntries(users.map((u) => [u.name, u.id]));
+  const buyers = (await require('./src/buyers').all()).map((b) => ({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', pm: b.addedById || byName[b.addedBy] || null }));
   res.json({ people: [...users, ...buyers] });
 }));
 // My target tasks for a day: every task of mine with a target, with what I reached.

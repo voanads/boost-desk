@@ -1974,14 +1974,17 @@
   let tmFilter = 'open';
   async function loadMyTasks(hostId = 'tasksMine') {
     const host = $(hostId); if (!host || !me || me.buyer) return;
-    let d; try { d = await api('/tasks/mine'); } catch (e) { host.hidden = true; return; }
+    const as = hostId === 'mtTasks' ? mtAs : null, asQ = as ? `?as=${encodeURIComponent(as.buyer ? as.pm : as.id)}` : '';
+    if (as && as.buyer && !as.pm) { host.hidden = false; host.innerHTML = `<div class="top"><h2>✅ ${esc(as.name)}'s tasks today</h2></div><div class="hl-empty">This media buyer has no PM yet, so there is nowhere to add tasks.</div>`; return; }
+    let d; try { d = await api('/tasks/mine' + asQ); } catch (e) { host.hidden = true; return; }
+    if (as && as.buyer) d.tasks = d.tasks.filter((t) => t.to && t.to.id === as.id.slice(3));
     const all = d.tasks.filter((t) => t.from !== 'work' && t.from !== 'ai'), open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late); // only tasks people created — not the automatic suggestions
     const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
     const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const byClient = {}; for (const t of list) (byClient[t.client] = byClient[t.client] || []).push(t);
     host.hidden = false;
-    host.innerHTML = `<div class="top"><h2>✅ My tasks today <span class="countpill">${open.length}</span></h2><span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
+    host.innerHTML = `<div class="top"><h2>✅ ${as ? esc(as.name) + "'s tasks today" : 'My tasks today'} <span class="countpill">${open.length}</span></h2><span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
       <div class="seg tm-seg" role="group" aria-label="Show"><button type="button" data-tmf="open" aria-pressed="${tmFilter === 'open'}">Open</button><button type="button" data-tmf="done" aria-pressed="${tmFilter === 'done'}">Done</button><button type="button" data-tmf="all" aria-pressed="${tmFilter === 'all'}">All</button></div></div>
       ${list.length ? Object.entries(byClient).map(([cn, ts]) => `<div class="tmg"><div class="tmg-h"><b>${esc(cn)}</b><span class="hint">${ts.filter((t) => t.done).length} / ${ts.length}</span><button type="button" class="ghost sm" data-tmgo="${ts[0].clientId}">Open client →</button></div>
         ${ts.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
@@ -1993,33 +1996,48 @@
     host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
     host.querySelectorAll('[data-tmtick]').forEach((b) => b.onclick = async () => {
       const [cid, tid, kind] = b.dataset.tmtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
-      try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
+      try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick${asQ}`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
       catch (e) { toast(e.message); }
       loadMyTasks(hostId); loadMyTargets();
     });
-    host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(hostId); loadMyTargets(); });
+    host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(hostId); loadMyTargets(); });
+    if (as) host.querySelectorAll('[data-tmgo]').forEach((b) => b.remove()); // another person's clients aren't on this site
   }
   // ---------- My Task page: today's tasks + this month's KPIs, on every site ----------
   const sc3 = (v) => (v >= 100 ? 'ok' : v >= 60 ? 'mid' : 'bad');
-  function loadMyTaskPage() {
+  let mtAs = null, mtPeople = null; // admin: whose tasks and KPIs the My Task page shows (null = mine)
+  const mtAdminPick = () => !!(me && me.canAdmin && !me.buyer && !PM_SITE);
+  async function loadMyTaskPage() {
     if (!me) return;
-    $('mtWho').textContent = me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    if (mtAdminPick() && !mtPeople) { try { mtPeople = (await api('/kpis/people')).people; } catch (_) { mtPeople = []; } }
+    const pk = $('mtPick');
+    if (mtAdminPick() && mtPeople) {
+      pk.hidden = false;
+      const others = mtPeople.filter((p) => p.id !== me.id);
+      pk.innerHTML = `<label class="hint" for="mtPerson">Show</label><select id="mtPerson" aria-label="Person"><option value="">Me · ${esc(me.name)}</option>${others.some((p) => p.kind === 'PM') ? `<optgroup label="People">${others.filter((p) => p.kind === 'PM').map((p) => `<option value="${esc(p.id)}" ${mtAs && mtAs.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>` : ''}${others.some((p) => p.kind !== 'PM') ? `<optgroup label="Media buyers">${others.filter((p) => p.kind !== 'PM').map((p) => `<option value="${esc(p.id)}" ${mtAs && mtAs.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>` : ''}</select>`;
+      $('mtPerson').onchange = () => { const p = mtPeople.find((x) => x.id === $('mtPerson').value); mtAs = p ? { id: p.id, name: p.name, buyer: p.kind !== 'PM', pm: p.pm || null } : null; mtClients = null; loadMyTaskPage(); };
+    } else pk.hidden = true;
+    $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     renderMyTaskAdd();
     if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
     else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
   }
   // Add a task from the My Task page: pick the client, type the task, (PM) who does it, today or tomorrow.
-  let mtBuyers = null;
+  let mtBuyers = null, mtClients = null;
   async function renderMyTaskAdd() {
     const host = $('mtAdd'); if (!host) return;
-    const list = (clients || []).filter((c) => !c.archived).sort((a, b) => a.name.localeCompare(b.name));
+    const owner = mtAs ? (mtAs.buyer ? mtAs.pm : mtAs.id) : null, asQ = owner ? `?as=${encodeURIComponent(owner)}` : '';
+    if (mtAs && mtAs.buyer && !owner) { host.innerHTML = '<div class="hint">This media buyer has no PM yet — tasks are added through a PM.</div>'; return; }
+    if (owner && !mtClients) { try { mtClients = await api('/clients' + asQ); } catch (_) { mtClients = []; } }
+    const list = (owner ? mtClients : clients || []).filter((c) => !c.archived).sort((a, b) => a.name.localeCompare(b.name));
     if (!me.buyer && mtBuyers === null) { try { mtBuyers = (await api('/media-buyers')).buyers || []; } catch (_) { mtBuyers = []; } }
-    const mine = (mtBuyers || []).filter((b) => !b.addedById || b.addedById === me.id || b.addedBy === me.name);
+    const forId = owner || me.id, forName = mtAs && !mtAs.buyer ? mtAs.name : me.name;
+    const mine = mtAs && mtAs.buyer ? (mtBuyers || []).filter((b) => 'mb:' + b.id === mtAs.id) : (mtBuyers || []).filter((b) => !b.addedById || b.addedById === forId || b.addedBy === forName);
     const t = (me && me.today) || iso(new Date()), tm = addDaysIso(t, 1);
     host.innerHTML = `<form class="mt-add" id="mtAddForm">
       <select id="mtClient" aria-label="Client" required><option value="">Client…</option>${list.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
       <input type="text" id="mtText" maxlength="200" placeholder="+ Add a task for today" aria-label="Task" required>
-      ${me.buyer ? '' : `<select id="mtTo" aria-label="Who does it"><option value="">Me</option>${mine.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>`}
+      ${me.buyer ? '' : `<select id="mtTo" aria-label="Who does it">${mtAs && mtAs.buyer ? '' : `<option value="">${mtAs ? esc(mtAs.name) : 'Me'}</option>`}${mine.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>`}
       <select id="mtDay" aria-label="Day"><option value="">Today</option><option value="${tm}">Tomorrow</option></select>
       <button type="submit" class="primary">Add</button></form>`;
     if (!list.length) host.innerHTML = '<div class="hint">Add a client first — tasks belong to a client.</div>';
@@ -2029,7 +2047,7 @@
       if (!cid) return toast('Pick the client.'); if (!text) return $('mtText').focus();
       const body = { text }; if ($('mtTo') && $('mtTo').value) body.to = $('mtTo').value; if ($('mtDay').value) body.day = $('mtDay').value;
       f.querySelector('button').disabled = true;
-      try { await api(`/clients/${cid}/tasks`, { method: 'POST', body }); delete cWb[Number(cid)]; $('mtText').value = ''; successBadge(body.day ? 'Added for tomorrow' : 'Task added'); }
+      try { await api(`/clients/${cid}/tasks${asQ}`, { method: 'POST', body }); delete cWb[Number(cid)]; $('mtText').value = ''; successBadge(body.day ? 'Added for tomorrow' : 'Task added'); }
       catch (e) { toast(e.message); }
       f.querySelector('button').disabled = false;
       if (me.buyer) loadMyBuyerTasks('mtTasks'); else { loadMyTasks('mtTasks'); loadMyTargets(); }
@@ -2037,7 +2055,7 @@
   }
   function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
-    if (!me.buyer) { host.innerHTML = '<div class="top"><h2>📊 Monthly KPI</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>'; kpiPanel('mtKpiBody', me.id); return; }
+    if (!me.buyer) { host.innerHTML = `<div class="top"><h2>📊 Monthly KPI${mtAs ? ' · ' + esc(mtAs.name) : ''}</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>`; kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); return; }
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.tasks} task${k.tasks === 1 ? '' : 's'} linked${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
   }

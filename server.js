@@ -418,7 +418,11 @@ api.put('/admin/viewers/:id', ownerOnly, wrap(async (req, res) => {
 const getTeams = () => db.getSetting('teams', []);
 const saveTeams = (t) => db.setSetting('teams', t);
 api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
-  res.json({ teams: await getTeams(), users: (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name })), canEdit: (await db.ownerId()) === req.user.fb_id });
+  const owner = await db.ownerId(), bl = await MB().all(), byName = {};
+  const users = await db.allUsers(); for (const u of users) byName[u.name] = u.fb_id;
+  const mbs = bl.map((b) => ({ name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!b.chat }));
+  const roles = await roleMap(), av = await adminViewers();
+  res.json({ teams: await getTeams(), users: users.map((u) => ({ id: u.fb_id, name: u.name, role: u.fb_id === owner ? 'owner' : ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm', buyers: mbs.filter((m) => m.pm === u.fb_id).map((m) => m.name) })), canEdit: owner === req.user.fb_id });
 }));
 api.post('/admin/teams', ownerOnly, wrap(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 60);

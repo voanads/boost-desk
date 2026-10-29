@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=194">
+<link rel="stylesheet" href="/assets/app.css?v=195">
 <link rel="stylesheet" href="/assets/profit.css?v=180">
 </head>
 <body>
@@ -27,6 +27,7 @@
     <nav class="tabs" role="tablist">
       <span class="navgrp" id="navGrpWork">Work</span>
       <button role="tab" data-tab="dashboard" aria-selected="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg><span class="full">Dashboard</span><span class="short">Dashboard</span></button>
+      <button role="tab" data-tab="mytasks" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="17" rx="2.5"/><path d="m8 12.5 2.5 2.5L16 9.5"/></svg><span class="full">My Task</span><span class="short">My Task</span></button>
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
       <button role="tab" data-tab="orders" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5"/><path d="M12 12v9"/></svg><span class="full">Orders</span><span class="short">Orders</span></button>
@@ -250,6 +251,15 @@
       <div class="todolist" id="todoList"></div>
     </div>
       </aside>
+    </div>
+  </section>
+
+  <!-- MY TASK -->
+  <section id="tab-mytasks" class="wrap" hidden>
+    <div class="ohead"><div><h1>My Task</h1><div class="hint">Your tasks for today and your KPIs for this month — <span id="mtWho"></span></div></div></div>
+    <div class="mt-grid">
+      <div class="panel tasks-mine mt-tasks" id="mtTasks"><div class="sk"></div><div class="sk"></div></div>
+      <div class="panel kpi-mine mt-kpi" id="mtKpi"></div>
     </div>
   </section>
 
@@ -671,6 +681,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=180"></script>
-<script src="/assets/app.js?v=194"></script>
+<script src="/assets/app.js?v=195"></script>
 </body>
 </html>

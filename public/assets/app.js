@@ -280,8 +280,8 @@
     if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target', 'mytasks'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); }
@@ -295,6 +295,7 @@
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
     if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
+    if (name === 'mytasks') loadMyTaskPage();
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -1924,8 +1925,8 @@
     });
   }
   // Media buyer site: my own tasks today (tick, type reached), target and KPI — on the Dashboard.
-  async function loadMyBuyerTasks() {
-    const host = $('mbMine'); if (!host || !me || !me.buyer) return;
+  async function loadMyBuyerTasks(hostId = 'mbMine') {
+    const host = $(hostId); if (!host || !me || !me.buyer) return;
     let d; try { d = await api('/mb/me'); } catch (e) { host.hidden = true; return; }
     const c = d.counts, tg = d.target, box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -1939,9 +1940,9 @@
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-mbtick="${t.clientId}|${t.id}" aria-label="Done">${box}</button>
         <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${esc(t.client)}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.kpiName ? ` · <span class="kpi-chip">KPI · ${esc(t.kpiName)}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}` : ''}</span></div>
         ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-mbreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit)}</span>` : ''}</div>`).join('') : '<div class="hl-empty">🎉 No tasks for you today. New tasks from your PM arrive here and on Telegram.</div>'}</div>${MB_SITE ? `<div class="mbm-foot"><a class="sm btnlink" href="/mediabuyer/tasks">My KPI &amp; history →</a>${d.kpiAvg != null ? `<span class="hint">KPI this month <span class="kpi-score ${sc(d.kpiAvg)}">${d.kpiAvg}%</span></span>` : ''}</div>` : kpiHtml + histHtml}`;
-    if (first && location.hash === '#dashboard') setTimeout(() => host.scrollIntoView({ block: 'start', behavior: 'smooth' }), 150); // opened from the Telegram button: land on the tasks
-    host.querySelectorAll('[data-mbtick]').forEach((b) => b.onclick = async () => { const [cid, tid] = b.dataset.mbtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { done } }); if (done) successBadge('Marked done'); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
-    host.querySelectorAll('[data-mbreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.mbreach.split('|'); try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { reached: Number(i.value) || 0 } }); } catch (e) { toast(e.message); } loadMyBuyerTasks(); });
+    host.querySelectorAll('[data-mbtick]').forEach((b) => b.onclick = async () => { const [cid, tid] = b.dataset.mbtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { done } }); if (done) successBadge('Marked done'); } catch (e) { toast(e.message); } loadMyBuyerTasks(hostId); });
+    host.querySelectorAll('[data-mbreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.mbreach.split('|'); try { await api(`/mb/tasks/${cid}/${tid}`, { method: 'POST', body: { reached: Number(i.value) || 0 } }); } catch (e) { toast(e.message); } loadMyBuyerTasks(hostId); });
+    if (hostId === 'mtTasks') loadMyKpiPage(d);
   }
   const mbAvatar = (b) => (b.photo ? `<span class="avatar"><img src="/mb-pic/${esc(b.id)}" alt="" loading="lazy"></span>` : `<span class="avatar">${initials(b.name)}</span>`);
   // PM view: my team — media buyers, today's task counts, Telegram status.
@@ -1971,8 +1972,8 @@
   }
   // Dashboard: my tasks today across every client — tick, type reached, see what went to media buyers.
   let tmFilter = 'open';
-  async function loadMyTasks() {
-    const host = $('tasksMine'); if (!host || !me || me.buyer) return;
+  async function loadMyTasks(hostId = 'tasksMine') {
+    const host = $(hostId); if (!host || !me || me.buyer) return;
     let d; try { d = await api('/tasks/mine'); } catch (e) { host.hidden = true; return; }
     const all = d.tasks.filter((t) => t.from !== 'work' && t.from !== 'ai'), open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late); // only tasks people created — not the automatic suggestions
     const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
@@ -1988,15 +1989,29 @@
           <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'work' ? esc(t.detail || 'Today\'s work') : t.from === 'ai' ? 'AI plan' : t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span>` : 'My task'}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}${t.doneBy && t.doneBy !== me.name ? ' by ' + esc(t.doneBy) : ''}` : ''}</span></div>
           ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-tmreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit || '')}</span>` : ''}</div>`).join('')}</div>`).join('')
       : `<div class="hl-empty">${tmFilter === 'open' ? '🎉 Nothing open today. Add tasks on a client page.' : 'Nothing here yet.'}</div>`}`;
-    host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(); });
+    host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(hostId); });
     host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
     host.querySelectorAll('[data-tmtick]').forEach((b) => b.onclick = async () => {
       const [cid, tid, kind] = b.dataset.tmtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
       try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
       catch (e) { toast(e.message); }
-      loadMyTasks(); loadMyTargets();
+      loadMyTasks(hostId); loadMyTargets();
     });
-    host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(); loadMyTargets(); });
+    host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(hostId); loadMyTargets(); });
+  }
+  // ---------- My Task page: today's tasks + this month's KPIs, on every site ----------
+  const sc3 = (v) => (v >= 100 ? 'ok' : v >= 60 ? 'mid' : 'bad');
+  function loadMyTaskPage() {
+    if (!me) return;
+    $('mtWho').textContent = me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
+    else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
+  }
+  function loadMyKpiPage(d) {
+    const host = $('mtKpi'); if (!host) return;
+    if (!me.buyer) { host.innerHTML = '<div class="top"><h2>📊 Monthly KPI</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>'; kpiPanel('mtKpiBody', me.id); return; }
+    host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
+      ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.tasks} task${k.tasks === 1 ? '' : 's'} linked${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
   }
   function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
@@ -3693,6 +3708,7 @@ Thank you for working with Ads Box!`,
       if (ADMIN_SITE) { // /admin: only the Admin group — Main Dashboard, Clients Board, All ad accounts, Target, Profit, Admin
         ['dashboard', 'clients', 'lives', 'orders', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
         $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');
+        const mt = document.querySelector('nav.tabs [data-tab=mytasks]'), tg = document.querySelector('nav.tabs [data-tab=target]'); if (mt && tg) tg.insertAdjacentElement('afterend', mt); // My Task sits with the Admin pages here
       }
       if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
@@ -3702,7 +3718,7 @@ Thank you for working with Ads Box!`,
       }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
-      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
+      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

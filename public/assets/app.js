@@ -2004,8 +2004,36 @@
   function loadMyTaskPage() {
     if (!me) return;
     $('mtWho').textContent = me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    renderMyTaskAdd();
     if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
     else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
+  }
+  // Add a task from the My Task page: pick the client, type the task, (PM) who does it, today or tomorrow.
+  let mtBuyers = null;
+  async function renderMyTaskAdd() {
+    const host = $('mtAdd'); if (!host) return;
+    const list = (clients || []).filter((c) => !c.archived).sort((a, b) => a.name.localeCompare(b.name));
+    if (!me.buyer && mtBuyers === null) { try { mtBuyers = (await api('/media-buyers')).buyers || []; } catch (_) { mtBuyers = []; } }
+    const mine = (mtBuyers || []).filter((b) => !b.addedById || b.addedById === me.id || b.addedBy === me.name);
+    const t = (me && me.today) || iso(new Date()), tm = addDaysIso(t, 1);
+    host.innerHTML = `<form class="mt-add" id="mtAddForm">
+      <select id="mtClient" aria-label="Client" required><option value="">Client…</option>${list.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+      <input type="text" id="mtText" maxlength="200" placeholder="+ Add a task for today" aria-label="Task" required>
+      ${me.buyer ? '' : `<select id="mtTo" aria-label="Who does it"><option value="">Me</option>${mine.map((b) => `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('')}</select>`}
+      <select id="mtDay" aria-label="Day"><option value="">Today</option><option value="${tm}">Tomorrow</option></select>
+      <button type="submit" class="primary">Add</button></form>`;
+    if (!list.length) host.innerHTML = '<div class="hint">Add a client first — tasks belong to a client.</div>';
+    const f = $('mtAddForm'); if (!f) return;
+    f.onsubmit = async (ev) => {
+      ev.preventDefault(); const cid = $('mtClient').value, text = $('mtText').value.trim();
+      if (!cid) return toast('Pick the client.'); if (!text) return $('mtText').focus();
+      const body = { text }; if ($('mtTo') && $('mtTo').value) body.to = $('mtTo').value; if ($('mtDay').value) body.day = $('mtDay').value;
+      f.querySelector('button').disabled = true;
+      try { await api(`/clients/${cid}/tasks`, { method: 'POST', body }); delete cWb[Number(cid)]; $('mtText').value = ''; successBadge(body.day ? 'Added for tomorrow' : 'Task added'); }
+      catch (e) { toast(e.message); }
+      f.querySelector('button').disabled = false;
+      if (me.buyer) loadMyBuyerTasks('mtTasks'); else { loadMyTasks('mtTasks'); loadMyTargets(); }
+    };
   }
   function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;

@@ -2910,3 +2910,8 @@ a.btnlink:hover{background:var(--brand-soft);border-color:transparent}
 .adminsite [data-tmgo]{display:none}
 html.asbuyer body[data-site=mb] .dgrid{grid-template-columns:minmax(0,1fr)}
 html.asbuyer body[data-site=mb] .dside{display:none}
+.mt-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mt-addp{padding:12px 14px}
+.mt-add{display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,2fr) auto auto auto;gap:8px;align-items:center}
+.mt-add input,.mt-add select{min-height:40px}
+@media (max-width:760px){.mt-add{grid-template-columns:1fr 1fr}.mt-add input{grid-column:1/-1}}

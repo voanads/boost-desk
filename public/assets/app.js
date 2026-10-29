@@ -1904,6 +1904,7 @@
   // PM view: my team — media buyers, today's task counts, Telegram status.
   async function loadMyTeam() {
     const host = $('teamMine'); if (!host || !me) return;
+    if (document.body.dataset.site === 'pm' || document.body.dataset.site === 'mb') { host.hidden = true; return; } // team panel only on the owner / admin sites
     let d; try { d = await api('/team/mine'); } catch (e) { host.hidden = true; return; }
     const c = d.counts, total = c.done + c.open;
     host.hidden = false;

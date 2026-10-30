@@ -1622,7 +1622,8 @@ async function menuPerson(req, raw) {
     if (as.startsWith('mb:')) { const b = await MB().get(as.slice(3)); return b ? { person: b.id, role: 'mb', name: b.name } : null; }
     const u = (await db.allUsers()).find((x) => x.fb_id === as); return u ? { person: u.fb_id, role: 'pm', name: u.name } : null;
   }
-  return { person: req.user.fb_id, role: 'pm', name: req.user.name };
+  // A Facebook login working on the /mediabuyer site (a media buyer who logs in with Facebook) gets the media buyer menu.
+  return { person: req.user.fb_id, role: String(req.query.role || (req.body || {}).role || '') === 'mb' ? 'mb' : 'pm', name: req.user.name };
 }
 api.get('/menu', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

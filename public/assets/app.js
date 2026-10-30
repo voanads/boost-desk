@@ -2025,7 +2025,7 @@
     loadMtMenu(); loadMyKpiPage(); loadMtCal();
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
-  const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : MB_SITE ? 'role=mb' : '');
   async function loadMtMenu() {
     const host = $('mtMenu'); if (!host || !me) return;
     const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
@@ -2044,7 +2044,7 @@
     $('mtOwnForm').onsubmit = async (ev) => {
       ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus();
       const b = $('mtOwnForm').querySelector('button'); b.disabled = true;
-      try { await api('/menu/own', { method: 'POST', body: { text, once: $('mtOwnWhen').value === 'once', day: d.day, as: mtAs ? mtAs.id : undefined } }); successBadge('Added to your menu'); }
+      try { await api('/menu/own', { method: 'POST', body: { text, once: $('mtOwnWhen').value === 'once', day: d.day, as: mtAs ? mtAs.id : undefined, role: !mtAs && MB_SITE ? 'mb' : undefined } }); successBadge('Added to your menu'); }
       catch (e) { toast(e.message); }
       b.disabled = false; loadMtMenu(); loadMtCal(); refreshMtPeople();
     };
@@ -2055,7 +2055,7 @@
     });
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = async () => {
       const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
-      try { await api('/menu/tick', { method: 'POST', body: { id: b.dataset.mtmenu, done, day: d.day, as: mtAs ? mtAs.id : undefined } }); if (done) successBadge('Done ✓'); } catch (e) { toast(e.message); }
+      try { await api('/menu/tick', { method: 'POST', body: { id: b.dataset.mtmenu, done, day: d.day, as: mtAs ? mtAs.id : undefined, role: !mtAs && MB_SITE ? 'mb' : undefined } }); if (done) successBadge('Done ✓'); } catch (e) { toast(e.message); }
       loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage();
     });
     const bt = $('mtMenuToday'); if (bt) bt.onclick = () => { mtDay = null; loadMtMenu(); loadMtCal(); };

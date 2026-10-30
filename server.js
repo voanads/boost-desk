@@ -1587,12 +1587,12 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
     const ts = ((dt.users[u.fb_id] || {}).tasks || []).filter((t) => t.from !== 'work' && t.from !== 'ai');
     const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
     const mn = await MENU().dayOf(u.fb_id, 'pm', today);
-    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
+    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
   }
   for (const b of bl) {
     const pm = b.addedById || byName[b.addedBy] || null, ts = pm ? ((dt.users[pm] || {}).tasks || []).filter((t) => t.to && t.to.id === b.id) : [];
     const mn = await MENU().dayOf(b.id, 'mb', today);
-    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
+    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
   res.json({ today, month: ym, people });
 }));
@@ -1637,14 +1637,37 @@ api.post('/menu/tick', wrap(async (req, res) => {
   await MENU().tick(who.person, day, b.id, !!b.done, req.user.buyer ? req.user.buyer.name : req.user.name);
   res.json(await MENU().dayOf(who.person, who.role, day));
 }));
-api.post('/menu/own', wrap(async (req, res) => {
+api.post('/menu/item', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = b.once ? (isDay(b.day) ? b.day : sync.todayIn()) : null;
-  try { res.json({ item: await MENU().addOwn(who.person, b.text, day), ...(await MENU().dayOf(who.person, who.role, day || sync.todayIn())) }); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { await MENU().addItem(who.person, who.role, b.text, day); res.json(await MENU().dayOf(who.person, who.role, day || sync.todayIn())); } catch (e) { res.status(400).json({ error: e.message }); }
 }));
-api.delete('/menu/own/:id', wrap(async (req, res) => {
+api.put('/menu/item/:id', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  try { res.json({ item: await MENU().editItem(who.person, who.role, req.params.id, b.text) }); } catch (e) { res.status(400).json({ error: e.message }); }
+}));
+api.delete('/menu/item/:id', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
-  await MENU().removeOwn(who.person, req.params.id); res.json({ ok: true });
+  await MENU().removeItem(who.person, who.role, req.params.id); res.json({ ok: true });
+}));
+api.post('/menu/reset', wrap(async (req, res) => {
+  const who = await menuPerson(req, (req.body || {}).as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  await MENU().resetList(who.person, who.role); res.json(await MENU().dayOf(who.person, who.role, sync.todayIn()));
+}));
+// Morning: submit the plan (freezes today's list). Evening: submit the result (closes the day). Reopen undoes the result.
+api.post('/menu/plan', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
+  try { await MENU().submitPlan(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name); res.json(await MENU().dayOf(who.person, who.role, day)); } catch (e) { res.status(400).json({ error: e.message }); }
+}));
+api.post('/menu/result', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
+  await MENU().submitResult(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name, b.note); res.json(await MENU().dayOf(who.person, who.role, day));
+}));
+api.post('/menu/reopen', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = isDay(b.day) ? b.day : sync.todayIn(); await MENU().reopen(who.person, day); res.json(await MENU().dayOf(who.person, who.role, day));
 }));
 api.get('/menu/month', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

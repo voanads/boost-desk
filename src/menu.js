@@ -106,7 +106,7 @@ async function submitResult(person, role, day, by, note) {
 }
 async function reopen(person, day) { const st = await stateOf(person, day); delete st.result; await db.setSetting(dayKey(person, day), st); return st; }
 // The day's items: the plan snapshot when one was submitted, else the live list.
-const dayItems = (st, items, day, role) => (st.plan && Array.isArray(st.plan.items) && (!st.plan.role || !role || st.plan.role === role) ? st.plan.items : itemsOn(items, day));
+const dayItems = (st, items, day, role, wholeMonth = false) => (st.plan && Array.isArray(st.plan.items) && (!st.plan.role || !role || st.plan.role === role) ? st.plan.items : wholeMonth ? items.filter((x) => (x.day ? x.day === day : true)).map((x) => ({ id: x.id, text: x.text, once: !!x.day })) : itemsOn(items, day));
 
 async function dayOf(person, role, day) {
   const [items, t, st] = await Promise.all([listOf(person, role), ticksOf(person, day), stateOf(person, day)]);
@@ -131,14 +131,14 @@ async function monthOf(person, role, month) {
 }
 // For KPIs: per item, how many days it was due and ticked this month.
 async function monthStats(person, role, month) {
-  const today = sync.todayIn(), items = await listOf(person, role), since = (await all()).since;
+  const today = sync.todayIn(), items = await listOf(person, role);
   const q = async (prefix) => Object.fromEntries((await db.pool.query('SELECT key, value FROM settings WHERE key LIKE $1', [`${prefix}:${person}:${month}-%`])).rows.map((r) => [r.key.split(':').pop(), r.value || {}]));
   const [ticks, states] = await Promise.all([q('menuTicks'), q('menuDay')]);
   const [y, m] = month.split('-').map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), agg = {};
   for (let d = 1; d <= last; d++) {
     const day = `${month}-${String(d).padStart(2, '0')}`, t = ticks[day] || {}, st = states[day] || {};
-    if (day > today || (day < since && !Object.keys(t).length && !st.plan)) continue;
-    for (const i of dayItems(st, items, day, role)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, due: 0, done: 0 }; a.due++; if (t[i.id]) a.done++; }
+    if (day > today) continue; // KPIs count the whole month so far: every day from the 1st, ticked or not
+    for (const i of dayItems(st, items, day, role, true)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, due: 0, done: 0 }; a.due++; if (t[i.id]) a.done++; }
   }
   return Object.values(agg);
 }

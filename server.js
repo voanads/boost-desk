@@ -1703,7 +1703,21 @@ async function menuAlert(req, who, d, kind) {
   const dayLbl = new Date(d.day + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   let text;
   if (kind === 'plan') text = `📋 ផែនការថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when}\n\n${d.items.map((x, i) => `${i + 1}. ${x.text}`).join('\n')}`;
-  else text = `✅ លទ្ធផលថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when} · ${d.done} / ${d.total} (${d.pct}%)\n\n${d.items.map((x) => `${x.done ? '✔' : '✘'} ${x.text}`).join('\n')}${d.result && d.result.note ? `\n\n📝 ${d.result.note}` : ''}`;
+  else {
+    text = `✅ លទ្ធផលថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when} · ${d.done} / ${d.total} (${d.pct}%)\n\n${d.items.map((x) => `${x.done ? '✔' : '✘'} ${x.text}`).join('\n')}`;
+    // the Clients Task lines they ticked that day (per client), from the PM's workbooks
+    try {
+      const dt = await dayTasks(d.day), owner = req.user.fb_id, all = ((dt.users[owner] || {}).tasks || []).filter((t) => t.done);
+      const mine = all.filter((t) => (req.user.buyer ? (t.to && t.to.id === who.person) : (!t.to || who.role !== 'mb')));
+      if (mine.length) {
+        const byClient = {}; for (const t of mine) (byClient[t.client] = byClient[t.client] || []).push(t);
+        text += `\n\n📌 Clients Task · ${mine.length} done\n` + Object.entries(byClient).map(([c, ts]) => `${c}\n${ts.map((t) => `  ✔ ${t.text}${t.reached != null && t.target ? ` (${t.reached}/${t.target}${t.unit ? ' ' + t.unit : ''})` : ''}`).join('\n')}`).join('\n');
+      }
+      const open = ((dt.users[owner] || {}).tasks || []).filter((t) => !t.done && (req.user.buyer ? (t.to && t.to.id === who.person) : (!t.to || who.role !== 'mb')) && t.from !== 'work' && t.from !== 'ai');
+      if (open.length) text += `\n\n⏳ Not done yet: ${open.length}\n${open.slice(0, 10).map((t) => `  ✘ ${t.client} — ${t.text}`).join('\n')}${open.length > 10 ? `\n  … +${open.length - 10} more` : ''}`;
+    } catch (e) { console.error('[menu] client tasks:', e.message); }
+    if (d.result && d.result.note) text += `\n\n📝 ${d.result.note}`;
+  }
   const chats = new Set(); if (cfg.telegramChatId) chats.add(String(cfg.telegramChatId));
   if (who.role === 'mb') { // the media buyer's PM gets it in their own chat; without a team group the buyer gets a copy too
     let pmId = null;

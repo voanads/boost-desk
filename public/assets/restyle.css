@@ -1,0 +1,123 @@
+/* Boost Desk — clean restyle (Oct 2026). Loaded after app.css; only overrides.
+   Same tokens, same menu, same pages — tidier labels, pills and tiles.
+   Source of truth: the "Boost Desk — new look" Design canvas. */
+
+/* ---------- Section labels: small, uppercase, muted (stat tiles, table heads, form labels) ---------- */
+.summary .lbl,.mk .lbl,.bk .lbl,.cd-stat .lbl,.ost .lbl,.ost-main .lbl,
+th,.dtable td[data-l]::before,
+.fld>span,.lv .st span,.lv .kv span,.paydate span,.payprice span,.pgsplit-h,.invitems-h{
+  text-transform:uppercase!important;letter-spacing:.05em!important;
+  font-size:var(--fs-2xs)!important;font-weight:500!important;color:var(--muted)!important}
+th{padding-top:8px;padding-bottom:8px;white-space:nowrap}
+thead tr,.dtable thead tr{background:var(--bg)}
+
+/* ---------- Stat tiles: hero 1.6rem, every other number 1.2rem, both 700 ---------- */
+.summary .val,.mk b,.bk b,.cd-stat b,.ost .val{font-size:var(--fs-h2)!important;font-weight:700!important;letter-spacing:0!important;line-height:1.3!important;font-variant-numeric:tabular-nums}
+.summary .hero .val,.mk.hero b,.bk.bk-hero b,.cd-stat.hero b,.ost-main .val{font-size:var(--fs-hero)!important;font-weight:700!important;letter-spacing:-.01em!important;line-height:1.2!important}
+.summary>div{gap:4px!important;padding:16px 20px!important}
+.summary .sub{font-size:var(--fs-md)!important;font-weight:400!important}
+.summary>div.hero,.mk.hero,.bk.bk-hero,.cd-stat.hero,#oSum>.ost-main{
+  background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;
+  box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.mk.hero .lbl,.mk.hero .sub,.bk.bk-hero .lbl,.bk.bk-hero .sub,.cd-stat.hero .lbl{color:var(--muted)!important;opacity:1!important}
+
+/* ---------- Chips: bordered pills on surface; selected = soft blue ---------- */
+.chips button,.pb-chips button,.seg button,.csort button,.bfilter button{
+  height:32px;padding:0 12px!important;border:1px solid var(--line)!important;border-radius:var(--r-pill)!important;
+  background:var(--surface)!important;color:var(--ink)!important;font-size:var(--fs-sm)!important;font-weight:500!important;
+  line-height:1;white-space:nowrap;box-shadow:none!important}
+.chips button:hover,.pb-chips button:hover,.seg button:hover{background:var(--bg-2)!important}
+.chips button[aria-pressed=true],.pb-chips button[aria-pressed=true],.chips button.on,
+.seg button[aria-pressed=true],.csort button[aria-pressed=true],.bfilter button[aria-pressed=true]{
+  background:var(--brand-soft)!important;color:var(--brand-text)!important;border-color:var(--line)!important;font-weight:500!important}
+/* the segment becomes a row of pills */
+.seg{border:none!important;background:none!important;overflow:visible!important;gap:4px;border-radius:0!important;padding:0!important}
+.seg-lg{gap:6px}
+.seg-lg button{flex:1;height:36px}
+/* big admin section tabs keep a joined look but in the same colours */
+.admnav{border:1px solid var(--line)!important;border-radius:var(--r-md)!important;overflow:hidden!important;gap:0!important}
+.admnav button{border:none!important;border-radius:0!important;height:36px;font-weight:600!important}
+.admnav button+button{border-left:1px solid var(--line)!important}
+
+/* ---------- Period bar: no box, pick button bordered ---------- */
+.perbar{background:none!important;border:none!important;box-shadow:none!important;padding:0!important;gap:var(--s-2) var(--s-3)!important}
+.perbar .navbtn{width:36px!important;height:36px!important;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md)!important}
+.pb-pick{height:36px!important;border:1px solid var(--line)!important;background:var(--surface)!important;font-weight:600!important;font-size:var(--fs-lg)!important}
+.pb-pick .ic{color:currentColor!important}
+.pb-chips{margin-left:0!important;gap:6px!important}
+.navbtn{width:36px;height:36px;border-radius:var(--r-md);font-size:var(--fs-base)}
+
+/* ---------- Inputs: surface, 1px line, search icon ---------- */
+input[type=search],.filters input[type=search],.chead2 input[type=search],.otools input,.mtools2 input,.cside input[type=search]{
+  background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:var(--r-md)!important;
+  height:36px;padding:0 12px 0 32px!important;font-size:var(--fs-lg)!important;color:var(--ink)!important;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6b82' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important;
+  background-repeat:no-repeat!important;background-position:10px center!important;background-size:16px 16px!important}
+input[type=search]:focus,.filters input[type=search]:focus,.chead2 input[type=search]:focus,.otools input:focus{
+  border-color:var(--brand)!important;box-shadow:0 0 0 3px var(--brand-soft)!important;outline:none}
+input[type=text],input[type=url],input[type=number],input[type=date],input[type=time],select,textarea{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;color:var(--ink)}
+
+/* ---------- Buttons: 38px, 600; one solid blue per screen ---------- */
+button{border-radius:var(--r-md)}
+button.primary{background:var(--brand-fill)!important;color:var(--on-brand)!important;border:none!important;font-weight:600!important;padding:0 16px!important;height:38px;box-shadow:none!important;filter:none!important}
+button.primary:hover{background:var(--brand-hover)!important;filter:none!important}
+button.sm,.sm{height:32px;padding:0 12px;font-size:var(--fs-sm);font-weight:600}
+button.ghost{color:var(--muted)}
+button.ghost:hover{background:var(--bg-2)}
+:focus-visible{outline:2px solid var(--brand)!important;outline-offset:2px}
+
+/* ---------- Cards, panels, tables ---------- */
+.card,.panel{border-radius:var(--r-xl)!important;box-shadow:var(--shadow-sm)!important}
+.panel{padding:16px 20px!important;gap:12px!important}
+.panel>.top h2,.panel>.thead h2,.sechead h2,.msec-h h3{font-size:var(--fs-h3)!important;font-weight:600!important;line-height:1.35}
+.dtable th,.dtable td{padding:10px 12px!important}
+.dtable tbody tr:hover td{background:var(--bg)!important}
+.dtable tfoot td{background:var(--bg);border-top:1px solid var(--line)!important;padding-top:10px!important;font-weight:600}
+td{font-variant-numeric:tabular-nums}
+.dtable .cname b{font-weight:600}
+.dtable .rbtn{height:30px;padding:0 10px!important;font-size:var(--fs-sm)!important;border-radius:var(--r-md)}
+
+/* ---------- Pills always soft ground + word ---------- */
+.pill,.chip,.countpill,.navbadge,.admbadge{border-radius:var(--r-pill);font-size:var(--fs-sm);font-weight:500;padding:3px 10px;line-height:1.3}
+.countpill{font-weight:600;font-size:var(--fs-xs);background:var(--bg-2);color:var(--muted)}
+
+/* ---------- Progress bars: 8px, track bg-2, status fill ---------- */
+.meter,.tgt-bar,.pbar{height:8px!important;border-radius:var(--r-pill)!important;background:var(--bg-2)!important}
+.meter i,.tgt-bar i,.pbar i{border-radius:var(--r-pill)}
+.meter i{background:var(--ok)}
+.meter i.over{background:var(--danger)}
+
+/* ---------- Sidebar (desktop ≥1100px) ---------- */
+@media (min-width:1100px){
+  nav.tabs button{height:40px;padding:0 12px!important;font-size:var(--fs-2xl)!important;font-weight:500!important;border-radius:var(--r-md)!important;color:var(--ink)!important}
+  nav.tabs button:hover{background:var(--bg-2)!important}
+  nav.tabs button[aria-selected=true]{background:var(--brand-soft)!important;color:var(--brand-text)!important;font-weight:600!important}
+  .navgrp:not([hidden]){font-weight:700!important;letter-spacing:.08em!important;padding:14px 12px 6px!important}
+  header.appbar .who{gap:6px;padding:12px 8px 0!important;border-top:1px solid var(--line)}
+  header.appbar .themebtn{width:36px;height:36px;border:1px solid var(--line);border-radius:var(--r-md)}
+  #logoutBtn{height:36px;font-size:var(--fs-md);color:var(--muted)}
+}
+/* ---------- Phone bottom bar ---------- */
+@media (max-width:760px){
+  nav.tabs{background:var(--surface)!important;backdrop-filter:none!important}
+  nav.tabs button{min-height:44px;color:var(--muted)!important;font-weight:500!important;border:none!important}
+  nav.tabs button[aria-selected=true]{color:var(--brand)!important;font-weight:600!important;background:none!important}
+  .summary>div{padding:12px 14px!important}
+}
+
+/* ---------- Dialogs ---------- */
+.dlg-in{border-radius:var(--r-xl)!important;box-shadow:var(--shadow-md)!important;padding:20px!important}
+
+/* ---------- Dark mode: the search icon follows muted ---------- */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) input[type=search],:root:not([data-theme=light]) .otools input{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important}}
+:root[data-theme=dark] input[type=search],:root[data-theme=dark] .otools input{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important}
+@media (max-width:760px){
+  .perbar{width:100%}
+  .pb-nav{width:100%}
+  .pb-pick{flex:1;justify-content:center}
+  .pb-chips{flex:1 1 100%;width:100%;min-width:0;flex-wrap:wrap}
+  .pb-chips button{flex:0 1 auto!important}
+}

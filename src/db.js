@@ -266,6 +266,8 @@ async function saveAccounts(owner, list) {
 const listAccounts = async (owner) => (await q('SELECT * FROM ad_accounts WHERE owner=$1 ORDER BY enabled DESC, lower(name)', [owner])).rows;
 const setAccountEnabled = (owner, id, enabled) => q('UPDATE ad_accounts SET enabled=$3 WHERE owner=$1 AND id=$2', [owner, id, !!enabled]);
 const enabledAccountIds = async (owner) => (await q('SELECT id FROM ad_accounts WHERE owner=$1 AND enabled', [owner])).rows.map((r) => r.id);
+// Ad accounts Meta no longer lists for this login are dropped (their rows stay in raw_rows but no longer count).
+const pruneAccounts = async (owner, keepIds) => (await q('DELETE FROM ad_accounts WHERE owner=$1 AND NOT (id = ANY($2)) RETURNING id', [owner, keepIds])).rows.map((r) => r.id);
 
 // ---- Facebook Pages seen in campaigns (for the "add Page" picker) ----
 async function notePages(owner, names, day) {
@@ -316,8 +318,10 @@ async function stampKinds(owner, rows) {
 const getRaw = async (owner, day) => { const r = (await q('SELECT rows FROM raw_rows WHERE owner=$1 AND day=$2', [owner, day])).rows[0]?.rows || null; return r ? stampKinds(owner, r) : r; };
 const putRaw = (owner, day, rows) =>
   q(`INSERT INTO raw_rows (owner, day, rows) VALUES ($1,$2,$3) ON CONFLICT (owner, day) DO UPDATE SET rows=$3`, [owner, day, JSON.stringify(rows)]);
-const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31') => {
+// Rows of unticked (or removed) ad accounts are left out unless { all: true } — the tick decides what counts, past days too.
+const listRaw = async (owner, from = '2000-01-01', to = '2999-12-31', { all = false } = {}) => {
   const days = (await q(`SELECT to_char(day,'YYYY-MM-DD') AS day, rows FROM raw_rows WHERE owner=$1 AND day BETWEEN $2 AND $3 ORDER BY day`, [owner, from, to])).rows;
+  if (!all) { const on = new Set(await enabledAccountIds(owner)); for (const d of days) d.rows = (d.rows || []).filter((r) => !r.accountId || on.has(r.accountId)); }
   await stampKinds(owner, days.flatMap((d) => d.rows || []));
   return days;
 };
@@ -345,6 +349,6 @@ module.exports = {
   listClients, createClient, updateClient, deleteClient, ownsClient,
   createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice, renumberInvoice, invoiceNumberUsed,
   notePages, listPagesSeen, getSetting, setSetting, getUserSetting, setUserSetting,
-  saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds,
+  saveAccounts, listAccounts, setAccountEnabled, enabledAccountIds, pruneAccounts,
   getDay, getEntry, putEntry, putDayMeta, monthEntries, getRaw, putRaw, listRaw, setDayUnmatched, stampKinds,
 };

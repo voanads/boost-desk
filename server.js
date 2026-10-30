@@ -1291,7 +1291,8 @@ api.post('/accounts/refresh', wrap(async (req, res) => {
   if (r === null) return res.status(409).json({ error: 'A sync is running right now. Try again in a moment.' });
   res.json(await accountsWithToday(me)); // syncDay already refreshed the unticked accounts' totals
 }));
-api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); }));
+// Tick / untick: an unticked account stops syncing and its past spend drops out of every page (a rematch runs in the background).
+api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled(req.user.fb_id, req.params.id, req.body?.enabled); res.json({ ok: true }); sync.exclusive(req.user.fb_id, () => sync.rematch(req.user)).catch((e) => console.error('[accounts] rematch:', e.message)); }));
 
 // Reports
 const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 366;

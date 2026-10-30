@@ -148,6 +148,8 @@ async function refreshAccounts(user) {
   const owner = user.fb_id;
   const list = await meta.adAccounts(token);
   await db.saveAccounts(owner, list);
+  const gone = list.length ? await db.pruneAccounts(owner, list.map((a) => a.id)) : []; // removed from the Facebook account → gone from Boost Desk
+  if (gone.length) { console.log(`[accounts] ${user.name}: ${gone.length} ad account(s) no longer on Facebook removed: ${gone.join(', ')}`); exclusive(owner, () => rematch(user)).catch(() => {}); }
   return list;
 }
 
@@ -239,6 +241,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
 
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
+  const on = new Set(await db.enabledAccountIds(user.fb_id)); items = items.filter((r) => !r.accountId || on.has(r.accountId)); // unticked accounts never count
   await db.stampKinds(user.fb_id, items);
   if (!rematch) await db.notePages(user.fb_id, items.map((it) => it.page), day);
   const plan = buildPlan(items, clients);
@@ -312,10 +315,7 @@ async function syncDay(day, user) {
   let rows = items;
   if (failed.size) { const prev = (await db.getRaw(user.fb_id, day)) || []; rows = rows.concat(prev.filter((r) => failed.has(r.account))); }
   await db.putRaw(user.fb_id, day, rows);
-  const out = await applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
-  // Unticked ad accounts: their numbers stay live too (a quick total per account; the tick only decides what Sync counts).
-  if (day === todayIn()) { try { await untickedToday(user, day); } catch (e) { console.error('[sync] unticked accounts:', e.message); } }
-  return out;
+  return applyDay(day, rows, errors, user, await clientsWithLearnedPages(user.fb_id, rows));
 }
 async function untickedToday(user, day) {
   const owner = user.fb_id, enabled = new Set(await db.enabledAccountIds(owner));
@@ -369,7 +369,7 @@ async function exclusive(owner, fn) {
 // Re-match every saved day after clients change — uses the saved campaign rows, no Meta call.
 async function rematch(user) {
   const t0 = Date.now();
-  const days = await db.listRaw(user.fb_id);
+  const days = await db.listRaw(user.fb_id, undefined, undefined, { all: true }); // applyDay drops the unticked accounts itself
   const all = days.flatMap((d) => d.rows);
   const clients = await clientsWithLearnedPages(user.fb_id, all);
   for (const d of days) {

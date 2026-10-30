@@ -1654,16 +1654,29 @@ api.post('/menu/reset', wrap(async (req, res) => {
   const who = await menuPerson(req, (req.body || {}).as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   await MENU().resetList(who.person, who.role); res.json(await MENU().dayOf(who.person, who.role, sync.todayIn()));
 }));
+// Plan / result alerts go to the team Telegram group (TELEGRAM_CHAT_ID); a media buyer without a team group gets it in their own chat.
+async function menuAlert(req, who, d, kind) {
+  if (!telegram.hasBot()) return;
+  const roleName = who.role === 'mb' ? 'Media buyer' : 'Project Manager', when = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: cfg.tz });
+  const dayLbl = new Date(d.day + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  let text;
+  if (kind === 'plan') text = `📋 ផែនការថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when}\n\n${d.items.map((x, i) => `${i + 1}. ${x.text}`).join('\n')}`;
+  else text = `✅ លទ្ធផលថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when} · ${d.done} / ${d.total} (${d.pct}%)\n\n${d.items.map((x) => `${x.done ? '✔' : '✘'} ${x.text}`).join('\n')}${d.result && d.result.note ? `\n\n📝 ${d.result.note}` : ''}`;
+  let chat = cfg.telegramChatId;
+  if (!chat && who.role === 'mb') { try { const b = await MB().get(who.person); chat = b && b.chat; } catch (_) {} }
+  if (!chat) return;
+  try { await telegram.send(text, chat); } catch (e) { console.error('[menu] telegram:', e.message); }
+}
 // Morning: submit the plan (freezes today's list). Evening: submit the result (closes the day). Reopen undoes the result.
 api.post('/menu/plan', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
-  try { await MENU().submitPlan(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name); res.json(await MENU().dayOf(who.person, who.role, day)); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { await MENU().submitPlan(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name); const d = await MENU().dayOf(who.person, who.role, day); res.json(d); menuAlert(req, who, d, 'plan'); } catch (e) { res.status(400).json({ error: e.message }); }
 }));
 api.post('/menu/result', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
-  await MENU().submitResult(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name, b.note); res.json(await MENU().dayOf(who.person, who.role, day));
+  await MENU().submitResult(who.person, who.role, day, req.user.buyer ? req.user.buyer.name : req.user.name, b.note); const d = await MENU().dayOf(who.person, who.role, day); res.json(d); menuAlert(req, who, d, 'result');
 }));
 api.post('/menu/reopen', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

@@ -1574,6 +1574,26 @@ api.get('/kpis/people', adminOnly, wrap(async (req, res) => {
   const buyers = (await require('./src/buyers').all()).map((b) => ({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', pm: b.addedById || byName[b.addedBy] || null }));
   res.json({ people: [...users, ...buyers] });
 }));
+// Admin My Task page: every person with today's task counts and this month's KPI score (users and media buyers).
+api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn(), ym = today.slice(0, 7), owner = await db.ownerId(), roles = await roleMap(), av = await adminViewers();
+  const users = await db.allUsers(), byName = Object.fromEntries(users.map((u) => [u.name, u.fb_id]));
+  const bl = await MB().all(), teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const dt = await dayTasks(today), K = KPI();
+  const kpiAvg = async (id, buyer) => { try { const rs = (await K.results(id, ym, buyer)).filter((k) => k.target > 0); return rs.length ? Math.round(rs.reduce((t, k) => t + Math.min(k.score, 100), 0) / rs.length) : null; } catch (_) { return null; } };
+  const count = (list) => ({ done: list.filter((t) => t.done).length, open: list.filter((t) => !t.done).length, late: list.filter((t) => !t.done && t.late).length });
+  const people = [];
+  for (const u of users) {
+    const ts = ((dt.users[u.fb_id] || {}).tasks || []).filter((t) => t.from !== 'work' && t.from !== 'ai');
+    const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
+    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', ...count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
+  }
+  for (const b of bl) {
+    const pm = b.addedById || byName[b.addedBy] || null, ts = pm ? ((dt.users[pm] || {}).tasks || []).filter((t) => t.to && t.to.id === b.id) : [];
+    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, ...count(ts), kpi: await kpiAvg(b.id, true) });
+  }
+  res.json({ today, month: ym, people });
+}));
 // My target tasks for a day: every task of mine with a target, with what I reached.
 api.get('/targets/mine', wrap(async (req, res) => {
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn(), out = [];

@@ -2015,13 +2015,19 @@
   const sc3 = (v) => (v >= 100 ? 'ok' : v >= 60 ? 'mid' : 'bad');
   let mtAs = null, mtPeople = null, mtQ = ''; // admin: whose tasks and KPIs the My Task page shows (null = mine)
   const mtAdminPick = () => !!(me && me.canAdmin && !me.buyer && !PM_SITE);
+  const mtPmPick = () => !!(me && !me.buyer && PM_SITE && !MB_SITE); // a PM: me + the media buyers I added
+  async function loadPmPeople() { // the PM's own media buyers with today's menu progress
+    await loadMb();
+    const row = async (id, name, kind, extra) => { let d = null; try { d = await api('/menu' + (id.startsWith('mb:') ? '?as=' + encodeURIComponent(id) : '')); } catch (_) {} return { id, name, kind, role: kind === 'PM' ? 'Me' : 'Media buyer', pmName: '', team: '', done: d ? d.done : 0, open: d ? d.total - d.done : 0, late: 0, pct: d ? d.pct : null, planAt: d && d.plan ? d.plan.at : null, resultAt: d && d.result ? d.result.at : null, kpi: null, ...extra }; };
+    return [await row(me.id, me.name, 'PM', {}), ...(await Promise.all(mbList.map((b) => row('mb:' + b.id, b.name, 'Media buyer', { photo: !!b.photo, linked: !!b.linked }))))];
+  }
   async function loadMyTaskPage() {
     if (!me) return;
     const pp = $('mtPeople');
-    if (mtAdminPick()) {
-      pp.hidden = false; document.body.classList.add('mt-admin');
-      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { mtPeople = (await api('/admin/people-today')).people; } catch (_) { mtPeople = []; } }
-      renderMtPeople();
+    if (mtAdminPick() || mtPmPick()) {
+      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { mtPeople = mtAdminPick() ? (await api('/admin/people-today')).people : await loadPmPeople(); } catch (_) { mtPeople = []; } }
+      if (mtPmPick() && !mtPeople.length) { pp.hidden = true; document.body.classList.remove('mt-admin'); } // a PM with no media buyers: plain page
+      else { pp.hidden = false; document.body.classList.add('mt-admin'); renderMtPeople(); }
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
@@ -2143,9 +2149,9 @@
         ${p.kind === 'Media buyer' && p.photo ? `<span class="avatar"><img src="/mb-pic/${esc(p.id.slice(3))}" alt="" loading="lazy"></span>` : `<span class="avatar">${initials(p.name)}</span>`}
         <span class="mt-pn"><b>${esc(p.name)}${isMe ? ' <small class="hint">· me</small>' : ''}</b><span class="hint">${esc(p.kind === 'Media buyer' ? 'Media buyer' + (p.pmName ? ' · ' + p.pmName : '') : p.role)}${p.team ? ' · ' + esc(p.team) : ''}</span></span>
         <span class="mt-pv"><b class="num ${total && p.open === 0 ? 'is-ok' : p.pct != null && p.pct < 50 ? 'is-danger' : ''}">${total ? `${p.done}/${total}` : '–'}</b><span class="hint">${p.resultAt ? '<span class="is-ok">result sent</span>' : p.planAt ? 'plan sent' : total ? 'no plan yet' : 'no menu'}</span></span>
-        <span class="kpi-score ${p.kpi == null ? 'none' : scoreCls(p.kpi)}" title="KPI this month">${p.kpi == null ? '–' : p.kpi + '%'}</span></button>`; };
+        <span class="kpi-score ${p.pct == null ? 'none' : scoreCls(p.pct)}" title="Menu done today">${p.pct == null ? '–' : p.pct + '%'}</span></button>`; };
     const pms = list.filter((p) => p.kind !== 'Media buyer'), mbs = list.filter((p) => p.kind === 'Media buyer');
-    pp.innerHTML = `<div class="top"><h2>People</h2><span class="hint">${(mtPeople || []).length} · tap one to see their day</span></div>
+    pp.innerHTML = `<div class="top"><h2>${mtPmPick() ? 'My media buyers' : 'People'}</h2><span class="hint">${mtPmPick() ? 'tap one to see and edit their menu' : (mtPeople || []).length + ' · tap one to see their day'}</span></div>
       <input type="search" id="mtSearch" placeholder="Search people" aria-label="Search people" value="${esc(mtQ)}">
       <div class="mt-plist">${!q ? row(meRow, true) : ''}${pms.length ? `<div class="mt-pgrp">People</div>${pms.map((p) => row(p, false)).join('')}` : ''}${mbs.length ? `<div class="mt-pgrp">Media buyers</div>${mbs.map((p) => row(p, false)).join('')}` : ''}${!pms.length && !mbs.length && q ? '<div class="hl-empty">No one matches.</div>' : ''}</div>`;
     $('mtSearch').oninput = () => { mtQ = $('mtSearch').value; const pos = $('mtSearch').selectionStart; renderMtPeople(); const i = $('mtSearch'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (_) {} };
@@ -2188,7 +2194,7 @@
       refreshMtPeople(); loadMtCal();
     };
   }
-  async function refreshMtPeople() { if (!mtAdminPick()) return; try { mtPeople = (await api('/admin/people-today')).people; renderMtPeople(); } catch (_) {} }
+  async function refreshMtPeople() { if (!mtAdminPick() && !mtPmPick()) return; try { mtPeople = mtAdminPick() ? (await api('/admin/people-today')).people : await loadPmPeople(); if (mtPeople.length) renderMtPeople(); } catch (_) {} }
   async function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
     if (me.buyer && !d) { try { d = await api('/mb/me'); } catch (_) { return; } }

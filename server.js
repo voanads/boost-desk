@@ -1629,8 +1629,13 @@ async function menuPerson(req, raw) {
   if (req.user.buyer) return { person: req.user.buyer.id, role: 'mb', name: req.user.buyer.name };
   const as = String(raw || '').trim();
   if (as && as !== req.user.fb_id) {
+    if (as.startsWith('mb:')) { // a PM may open the menus of the media buyers they added; admins any buyer's
+      const b = await MB().get(as.slice(3)); if (!b) return null;
+      const mine = b.addedById === req.user.fb_id || (!b.addedById && b.addedBy === req.user.name);
+      if (!mine && !(await canSeeAdmin(req.user.fb_id))) return null;
+      return { person: b.id, role: 'mb', name: b.name };
+    }
     if (!(await canSeeAdmin(req.user.fb_id))) return null;
-    if (as.startsWith('mb:')) { const b = await MB().get(as.slice(3)); return b ? { person: b.id, role: 'mb', name: b.name } : null; }
     const u = (await db.allUsers()).find((x) => x.fb_id === as); return u ? { person: u.fb_id, role: 'pm', name: u.name } : null;
   }
   // The role set in Admin → Users decides the menu: a Facebook login marked "Media buyer" gets the media buyer menu everywhere.

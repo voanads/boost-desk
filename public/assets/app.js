@@ -2019,6 +2019,7 @@
       renderMtPeople();
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    if (ADMIN_SITE) { $('mtAdd').hidden = true; $('mtTasks').hidden = true; loadMyKpiPage(); loadMtCal(); return; } // /admin: calendar + KPIs only
     renderMyTaskAdd();
     if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
     else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
@@ -2047,7 +2048,7 @@
       <div class="mc-head">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="mc-grid">${'<span class="mc-pad"></span>'.repeat(lead)}${days.map(cell).join('')}</div>`;
     host.querySelectorAll('[data-mcm]').forEach((b) => b.onclick = () => { const [y, m] = mtMonth.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + Number(b.dataset.mcm), 1)); mtMonth = dt.toISOString().slice(0, 7); loadMtCal(); });
-    host.querySelectorAll('[data-mcd]').forEach((b) => b.onclick = () => { mtDay = b.dataset.mcd === d.today ? null : b.dataset.mcd; host.querySelectorAll('[data-mcd]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); if (me.buyer) return; loadMyTasks('mtTasks'); $('mtTasks').scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); });
+    host.querySelectorAll('[data-mcd]').forEach((b) => b.onclick = () => { mtDay = b.dataset.mcd === d.today ? null : b.dataset.mcd; host.querySelectorAll('[data-mcd]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); if (me.buyer || ADMIN_SITE) return; loadMyTasks('mtTasks'); $('mtTasks').scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); });
   }
   function renderMtPeople() {
     const pp = $('mtPeople'), q = mtQ.trim().toLowerCase();

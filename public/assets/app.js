@@ -255,7 +255,7 @@
   }
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
-  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'board', 'target'] : ['dashboard', 'clients', 'lives', 'payments'];
+  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'board', 'mytasks'] : ['dashboard', 'clients', 'lives', 'payments'];
   function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !KEEP.includes(b.dataset.tab)); }
   function paintMore() { const m = $('navMore'); if (!m) return; const cur = document.body.dataset.tab; m.setAttribute('aria-selected', String(!KEEP.includes(cur) && moreTabs().some((b) => b.dataset.tab === cur))); }
   if ($('navMore')) $('navMore').onclick = () => {
@@ -274,6 +274,7 @@
   function showTab(name) {
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
+    if (name === 'target') name = 'mytasks'; // the Target page was removed; daily targets and KPIs live on My Task
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
@@ -3783,7 +3784,7 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'target', 'admin'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -3792,7 +3793,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'profit', 'target'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts', 'profit', 'mytasks'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -3825,13 +3826,13 @@ Thank you for working with Ads Box!`,
         $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');
         const mt = document.querySelector('nav.tabs [data-tab=mytasks]'), tg = document.querySelector('nav.tabs [data-tab=target]'); if (mt && tg) tg.insertAdjacentElement('afterend', mt); // My Task sits with the Admin pages here
       }
-      if (showAdmin) ['admin', 'main', 'board', 'adaccts', 'target'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      if (showAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages
         const pb = document.querySelector('nav.tabs [data-tab=profit]'); pb.hidden = false;
         if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); pb.classList.remove('grp-hidden'); } else $('navGrpAdmin').hidden = false;
       }
-      const adminTabs = ['main', 'board', 'adaccts', 'profit', 'target', 'admin'];
+      const adminTabs = ['main', 'board', 'adaccts', 'profit', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
       else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);

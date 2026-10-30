@@ -380,7 +380,7 @@ api.get('/me', wrap(async (req, res) => {
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
     profitRole: req.user.buyer ? null : await profit.roleOf(req.user.fb_id),
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
-    taxRate: sync.TAX_RATE,
+    taxRate: sync.TAX_RATE, aiOn: (await db.getUserSetting(req.user.fb_id, 'aiOn', true)) !== false,
     today: sync.todayIn(), tz: cfg.tz,
     telegram: { configured: telegram.configured(), bot: telegram.hasBot(), time: cfg.reportTime },
   });
@@ -1658,10 +1658,39 @@ api.get('/me/profile', wrap(async (req, res) => {
   let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(me, 'tgCode', code); }
   const chat = await db.getUserSetting(me, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
   let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}
+  const pages = (await db.listPagesSeen(me)).length, myAlerts = require('./src/myalerts');
   res.json({ buyer: false, id: me, name: req.user.name, picture, role, roleName: RN[role] || 'Project Manager', site: SITE[role] || '/projectmanager', team: (teams.find((t) => t.members.includes(me)) || {}).name || '',
-    facebook: { id: me, expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, autoSync: (await db.enabledAccountIds(me)).length },
+    teams: teams.map((t) => t.name), isAdmin: await canSeeAdmin(me),
+    facebook: { id: me, expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, pages, autoSync: (await db.enabledAccountIds(me)).length },
     telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
+    autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
+}));
+// Settings → Profile: my display name and team.
+api.put('/me/profile', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM to rename you.' });
+  const b = req.body || {}, me = req.user.fb_id, name = String(b.name || '').trim().slice(0, 80);
+  if (name && name !== req.user.name) await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [me, name]);
+  if (b.team !== undefined) { // moving myself between teams (admins may pick any; others only leave or join by name)
+    const teams = await getTeams(), want = String(b.team || '').trim();
+    for (const t of teams) t.members = t.members.filter((x) => x !== me);
+    const t = want ? teams.find((x) => x.name === want) : null; if (want && !t) return res.status(400).json({ error: 'No team with that name.' });
+    if (t) t.members.push(me); await db.setSetting('teams', teams);
+  }
+  res.json({ ok: true, name: name || req.user.name });
+}));
+// Settings → Telegram: a test message to my own chat.
+api.post('/me/telegram/test', wrap(async (req, res) => {
+  const chat = req.user.buyer ? ((await MB().get(req.user.buyer.id)) || {}).chat : (await db.getUserSetting(req.user.fb_id, 'tgChat', null) || {}).id;
+  if (!chat) return res.status(400).json({ error: 'Telegram is not linked yet.' });
+  await telegram.send(`✅ Boost Desk test · ${req.user.name}\nYour Telegram is linked — alerts will arrive here.`, chat); res.json({ ok: true });
+}));
+// Settings → Alerts to my Telegram, and AI advice on/off.
+api.get('/me/alerts', wrap(async (req, res) => res.json(await require('./src/myalerts').prefs(req.user.fb_id))));
+api.put('/me/alerts', wrap(async (req, res) => res.json(await require('./src/myalerts').savePrefs(req.user.fb_id, req.body || {}))));
+api.put('/me/ai', wrap(async (req, res) => {
+  const b = req.body || {}; if (b.on !== undefined) await db.setUserSetting(req.user.fb_id, 'aiOn', !!b.on); if (b.lang) await db.setUserSetting(req.user.fb_id, 'aiLang', b.lang === 'km' ? 'km' : 'en');
+  res.json({ on: (await db.getUserSetting(req.user.fb_id, 'aiOn', true)) !== false, lang: (await db.getUserSetting(req.user.fb_id, 'aiLang', 'en')) === 'km' ? 'km' : 'en' });
 }));
 // My Telegram: a PM / owner connects their own chat to get alerts (plan / result from their media buyers).
 api.get('/me/telegram', wrap(async (req, res) => {

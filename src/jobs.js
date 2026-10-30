@@ -143,6 +143,10 @@ function start() {
   cron.schedule('0 8 * * *', () => H.track('Media buyer tasks', () => require('./buyers').morning(log)).then((n) => { if (n) log('media buyer tasks sent:', n); }).catch((e) => log('media buyer tasks failed:', e.message)), opts);
   cron.schedule('20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
 
+  // Settings → "Alerts to my Telegram": each person's own picks, once a day per thing.
+  H.register('Personal alerts', 60, 'every hour at :25');
+  cron.schedule('25 * * * *', () => H.track('Personal alerts', () => require('./myalerts').run(require('./pm'))).then((n) => { if (n) log('personal alerts sent:', n); }).catch((e) => log('personal alerts failed:', e.message)), opts);
+
   H.register('Health check', 5, 'every 5 minutes');
   cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);

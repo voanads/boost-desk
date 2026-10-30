@@ -670,6 +670,7 @@
   const cdAi = {}, cdPg = {}; // AI answers / Page spend keyed by client + period + language
   const cdAiKey = (cid) => { const r = cdRange(); return r ? `${cid}|${r[0]}|${r[1]}|${aiLang}` : null; };
   function cdAiSection(c) {
+    if (me && me.aiOn === false) return ''; // Settings → AI advice off
     const k = cdAiKey(c.id), st = k ? cdAi[k] : null;
     const lang = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-cdlang="en" aria-pressed="${aiLang === 'en'}">English</button><button type="button" data-cdlang="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button></div>`;
     const body = !st ? `<div class="hint">${aiReady === false ? (me && me.isOwner ? 'Add a Gemini or Claude key in <b>Admin → Settings → AI advice</b> to get advice here.' : 'AI advice is not set up yet — ask the app owner.') : 'What to change for this client, from its spend, lives, posts and orders in this period.'}</div>`
@@ -2050,37 +2051,69 @@
   async function loadSettingsPage() {
     const host = $('stGrid'); if (!host || !me) return;
     let d; try { d = await api('/me/profile'); } catch (e) { host.innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
-    const card = (ic, title, state, body, acts) => `<div class="panel st-card"><div class="st-h"><span class="st-ic">${ic}</span><h2>${title}</h2>${state || ''}</div><div class="st-b">${body}</div>${acts ? `<div class="st-a">${acts}</div>` : ''}</div>`;
-    const row = (k, v) => `<div class="st-row"><span class="hint">${k}</span><b>${v}</b></div>`;
-    const on = (t) => `<span class="pill ok">${t}</span>`, off = (t) => `<span class="pill warn">${t}</span>`, bad = (t) => `<span class="pill bad">${t}</span>`;
+    const card = (title, right, body) => `<div class="panel st-card"><div class="st-h"><h2>${title}</h2>${right || ''}</div>${body}</div>`;
+    const sw = (id, on, label) => `<label class="switch st-sw" title="${esc(label)}"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} aria-label="${esc(label)}"><i></i></label>`;
+    const pill = (cls, t) => `<span class="pill ${cls}">${t}</span>`;
+    const fld = (label, inner) => `<label class="fld">${label}${inner}</label>`;
     const avatar = d.buyer ? (d.photo ? `<img class="st-pic" src="/mb-pic/${esc(d.id)}" alt="">` : `<span class="avatar st-av">${initials(d.name)}</span>`) : (d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
-    const tgBody = d.buyer
-      ? (d.telegram.linked ? 'Your Telegram is connected: tasks from your PM, the 📋 My tasks button and reminders come there. Your name and picture follow your Telegram profile.' : 'Not connected yet — open the invite link from your PM in Telegram and tap <b>Start</b>.')
-      : (d.telegram.linked ? `Connected as <b>${esc(d.telegram.name || 'you')}</b>${d.telegram.at ? ' · ' + esc(ago(d.telegram.at)) : ''}. Your media buyers' morning plans and evening results come to your Telegram${d.role === 'mb' ? ', and your own submissions too' : ''}.` : `Get a Telegram message when your media buyers submit their morning plan and evening result.<br><b>1.</b> Tap <b>Connect my Telegram</b> — Telegram opens the bot${d.telegram.bot ? ' <b>@' + esc(d.telegram.bot) + '</b>' : ''}.<br><b>2.</b> Tap <b>Start</b> there (or, if the chat is already open, send it <code>/connect ${esc(d.telegram.code || '')}</code>).<br><b>3.</b> Come back and tap <b>Check</b> — it connects within a minute.`);
-    host.innerHTML = [
-      card('', 'Profile', '', `<div class="st-prof">${avatar}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${esc(d.roleName)}${d.team ? ' · ' + esc(d.team) : ''}</span></div></div>
-        ${row('Role', esc(d.roleName))}${row('Team', d.team ? esc(d.team) : '<span class="hint">No team yet</span>')}${row('My website', `<a href="${esc(d.site)}">${esc(location.host + d.site)}</a>`)}${d.buyer ? row('Project Manager', esc(d.pm || '—')) + (d.alias && d.alias !== d.name ? row('Also called', esc(d.alias)) : '') : ''}${d.google ? row('Google', esc(d.google.email)) : ''}
-        <div class="hint">${d.buyer ? 'Your name and picture sync from Telegram.' : 'Your name and picture come from your Facebook account. Roles and teams are set by the app owner in Admin.'}</div>`),
-      d.buyer ? '' : card('', 'Facebook account', d.facebook.expired ? bad('Login expired') : d.facebook.daysLeft !== null && d.facebook.daysLeft < 7 ? off(`Expires in ${d.facebook.daysLeft} day${d.facebook.daysLeft === 1 ? '' : 's'}`) : on('Login ok'),
-        `${row('Facebook ID', `<span class="num">${esc(d.facebook.id)}</span>`)}${row('Login valid until', d.facebook.expires ? esc(nice(d.facebook.expires.slice(0, 10))) + (d.facebook.daysLeft !== null ? ` <span class="hint">(${d.facebook.daysLeft} days)</span>` : '') : '—')}${row('Ad accounts', `${d.facebook.accounts} <span class="hint">· ${d.facebook.autoSync} in auto sync</span>`)}${row('Clients', String(d.facebook.clients))}
-        <div class="hint">Boost Desk reads Ads Manager with this login. Facebook logins last about 60 days — log in again before it expires so auto sync keeps running.</div>`,
-        `<a class="btn sm" href="/auth/facebook">↻ Log in with Facebook again</a>`),
-      card('', 'Telegram account', d.telegram.linked ? on('Connected') : off('Not connected'), `<div class="st-txt">${tgBody}</div>`,
-        d.buyer ? '' : (d.telegram.linked ? '<button type="button" class="sm ghost" id="stTgOff">Disconnect</button>' : (d.telegram.link ? `<a class="btn sm primary" href="${esc(d.telegram.link)}" target="_blank" rel="noopener">Connect my Telegram</a><button type="button" class="sm" id="stTgCopy" data-code="/connect ${esc(d.telegram.code || '')}">Copy /connect code</button><button type="button" class="sm ghost" id="stTgCheck">Check</button>` : '<span class="hint">The Telegram bot is not set up on the server yet.</span>'))),
-      d.buyer ? '' : card('', 'My media buyers on Telegram', `<span class="pill">${(d.buyers || []).filter((b) => b.linked).length} / ${(d.buyers || []).length} connected</span>`, '<div class="st-mbs" id="stMbs"><div class="sk"></div></div><div class="hint">Each media buyer gets their tasks, the 📋 My tasks button and the morning reminder in their own Telegram. <b>📊 KPIs</b> sets their monthly targets (they see them on My Task). Not connected yet? Copy their invite link and send it to them — they tap it, then tap <b>Start</b>.</div>',
-        '<form class="st-mbadd" id="stMbForm"><input type="text" id="stMbName" placeholder="New media buyer\'s name" maxlength="60" aria-label="Media buyer name"><button type="submit" class="sm primary">+ Add</button></form>'),
-    ].join('');
+    const dmy = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
+    const teamOpts = (d.teams || []).map((t) => `<option value="${esc(t)}" ${t === d.team ? 'selected' : ''}>${esc(t)}</option>`).join('');
+    // ---- Profile ----
+    const profile = card('Profile', '', `
+      <div class="st-prof">${avatar}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${esc(d.roleName)}${d.buyer && d.pm ? ' · PM ' + esc(d.pm) : ''}</span></div></div>
+      ${fld('Name', `<input type="text" id="stName" value="${esc(d.name)}" maxlength="80" ${d.buyer ? 'readonly' : ''}>`)}
+      ${fld('Login', `<input type="text" value="${esc(d.buyer ? 'Telegram · ' + (d.tgName || d.name) : d.google ? d.google.email : 'Facebook · ' + d.facebook.id)}" readonly>`)}
+      ${fld('Team', d.isAdmin ? `<select id="stTeam"><option value="">No team</option>${teamOpts}</select>` : `<input type="text" value="${esc(d.team || 'No team yet')}" readonly>`)}
+      <div class="hint">${d.buyer ? 'Your name and picture follow your Telegram profile.' : d.isAdmin ? 'Your picture comes from Facebook. Roles are set in Admin → Users.' : 'Your picture comes from Facebook. Teams and roles are set by the app owner in Admin.'}</div>
+      ${d.buyer ? '' : '<div class="st-end"><button type="button" class="primary" id="stSave">Save</button></div>'}`);
+    // ---- Facebook ----
+    const fb = d.buyer ? '' : card('Facebook account', d.facebook.expired ? pill('bad', 'Login expired') : d.facebook.daysLeft !== null && d.facebook.daysLeft < 7 ? pill('warn', `Expires in ${d.facebook.daysLeft} day${d.facebook.daysLeft === 1 ? '' : 's'}`) : pill('ok', 'Connected'), `
+      <div class="st-who">${d.picture ? `<img src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${initials(d.name)}</span>`}<span class="st-pn"><b>${esc(d.name)}</b><span class="hint">${d.facebook.expires ? `Token valid until ${esc(dmy(d.facebook.expires))}` : 'No token'} · ${d.facebook.accounts} ad account${d.facebook.accounts === 1 ? '' : 's'} · ${d.facebook.pages} Page${d.facebook.pages === 1 ? '' : 's'}</span></span></div>
+      <div class="st-btns"><a class="btn fb" href="/auth/facebook">Continue with Facebook</a><button type="button" class="sm danger-txt" id="stFbOff">Disconnect</button></div>`);
+    // ---- Telegram ----
+    const tgHint = d.buyer
+      ? (d.telegram.linked ? 'Tasks from your PM, the 📋 My tasks button and reminders come to your Telegram.' : 'Not linked yet — open the invite link from your PM in Telegram and tap <b>Start</b>.')
+      : (d.telegram.linked ? `Plans and results from your media buyers, and the alerts below, come to your Telegram. Linked to <b>${esc(d.telegram.name || 'you')}</b>${d.telegram.at ? ' · ' + esc(ago(d.telegram.at)) : ''}.` : `Tap <b>Link my Telegram</b> — the bot${d.telegram.bot ? ' <b>@' + esc(d.telegram.bot) + '</b>' : ''} opens; tap <b>Start</b> there (or send it <code>/connect ${esc(d.telegram.code || '')}</code>), then come back and tap <b>Check</b>.`);
+    const tg = card('Telegram account', d.telegram.linked ? pill('ok', 'Linked') : pill('warn', 'Not linked'), `<span class="hint st-txt">${tgHint}</span>
+      <div class="st-btns">${d.telegram.linked ? `<button type="button" class="sm" id="stTgTest">Send test message</button>${d.buyer ? '' : '<button type="button" class="sm" id="stTgOff">Unlink</button>'}` : d.buyer ? '' : (d.telegram.link ? `<a class="btn primary sm" href="${esc(d.telegram.link)}" target="_blank" rel="noopener">Link my Telegram</a><button type="button" class="sm" id="stTgCopy" data-code="/connect ${esc(d.telegram.code || '')}">Copy /connect code</button><button type="button" class="sm" id="stTgCheck">Check</button>` : '<span class="hint">The Telegram bot is not set up on the server yet.</span>')}</div>`);
+    // ---- Media buyers ----
+    const mbs = d.buyer ? '' : card('My media buyers on Telegram', pill('', `${(d.buyers || []).filter((b) => b.linked).length} / ${(d.buyers || []).length} linked`), `
+      <span class="hint">They get their tasks, the 📋 My tasks button and the morning reminder in their own Telegram. <b>📊 KPIs</b> sets their monthly targets.</span>
+      <div class="st-mbs" id="stMbs"><div class="sk"></div></div>
+      <form class="st-mbadd" id="stMbForm"><input type="text" id="stMbName" placeholder="New media buyer's name" maxlength="60" aria-label="Media buyer name"><button type="submit" class="sm">Add</button></form>`);
+    // ---- Auto report / alerts / AI ----
+    const ar = d.autoReport || {}, al = d.alerts || {}, ai = d.ai || {};
+    const auto = d.buyer ? '' : card('My auto report', sw('stArOn', ar.on, 'Auto report'), `<span class="hint">Send every client's report by itself each day.</span>
+      <div class="st-2"><label class="fld">Time<input type="time" id="stArTime" value="${esc(ar.time || '20:00')}"></label><label class="fld">Picture<select id="stArImg"><option value="1" ${ar.withImage !== false ? 'selected' : ''}>With picture</option><option value="0" ${ar.withImage === false ? 'selected' : ''}>Text only</option></select></label></div>
+      <span class="hint">${(ar.skip || []).length ? `${ar.skip.length} client${ar.skip.length === 1 ? '' : 's'} skipped · ` : 'All clients with a Telegram group · '}<button type="button" class="linkbtn" id="stArPick">Choose clients</button></span>`);
+    const chk = (k, label) => `<label class="st-chk"><input type="checkbox" data-alert="${k}" ${al[k] ? 'checked' : ''}>${label}</label>`;
+    const alerts = d.buyer ? '' : card('Alerts to my Telegram', sw('stAlOn', al.on, 'Alerts'), `${d.telegram.linked ? '' : '<span class="hint">Link your Telegram above to get these.</span>'}
+      ${chk('payment', 'Ad account payment failed or disabled')}${chk('overplan', 'Client spends over plan')}${chk('liveNoBoost', 'A client who boosts every day has no boost yet today')}`);
+    const aiCard = d.buyer ? '' : card('AI advice', sw('stAiOn', ai.on !== false, 'AI advice'), `<span class="hint">Show suggestions on each client from this month's numbers, and plan each morning.</span>`);
+    host.innerHTML = `<div class="st-col">${profile}${mbs}</div><div class="st-col">${fb}${tg}${auto}${alerts}${aiCard}</div>`;
     if (!d.buyer) drawSettingsBuyers();
-    const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
+    // ---- wiring ----
+    const put = async (url, body) => { try { return await api(url, { method: 'PUT', body }); } catch (e) { toast(e.message); return null; } };
+    const sv = $('stSave'); if (sv) sv.onclick = async () => { sv.disabled = true; const body = { name: $('stName').value.trim() }; if ($('stTeam')) body.team = $('stTeam').value; const r = await put('/me/profile', body); sv.disabled = false; if (r) { toast('Saved'); me.name = r.name; $('whoName').textContent = r.name; loadSettingsPage(); } };
+    const fbo = $('stFbOff'); if (fbo) fbo.onclick = () => { if (confirm('Disconnect Facebook? This logs you out of Boost Desk — log in with Facebook again to continue.')) $('logoutBtn').click(); };
+    const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { if (!confirm('Unlink your Telegram? Alerts stop until you link it again.')) return; try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
+    const tt = $('stTgTest'); if (tt) tt.onclick = async () => { tt.disabled = true; try { await api('/me/telegram/test', { method: 'POST' }); toast('Sent — check your Telegram'); } catch (e) { toast(e.message); } tt.disabled = false; };
     const ck = $('stTgCheck'); if (ck) ck.onclick = () => loadSettingsPage();
     const cp = $('stTgCopy'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(cp.dataset.code); toast('Copied — paste it to the bot in Telegram'); } catch (_) { prompt('Send this to the bot', cp.dataset.code); } };
+    const arOn = $('stArOn'); if (arOn) arOn.onchange = () => put('/auto-report', { on: arOn.checked }).then((r) => r && toast(r.on ? `Auto report on · ${r.time}` : 'Auto report off'));
+    const arT = $('stArTime'); if (arT) arT.onchange = () => put('/auto-report', { time: arT.value }).then((r) => r && toast('Report time ' + r.time));
+    const arI = $('stArImg'); if (arI) arI.onchange = () => put('/auto-report', { withImage: arI.value === '1' });
+    const arP = $('stArPick'); if (arP) arP.onclick = () => { arSet = null; $('cAutoBtn').click(); $('arDlg').addEventListener('close', () => loadSettingsPage(), { once: true }); };
+    const alOn = $('stAlOn'); if (alOn) alOn.onchange = () => put('/me/alerts', { on: alOn.checked });
+    host.querySelectorAll('[data-alert]').forEach((x) => x.onchange = () => put('/me/alerts', { [x.dataset.alert]: x.checked }));
+    const aiOn = $('stAiOn'); if (aiOn) aiOn.onchange = () => put('/me/ai', { on: aiOn.checked }).then((r) => { if (r) { me.aiOn = r.on; toast(r.on ? 'AI advice on' : 'AI advice off'); } });
   }
   async function drawSettingsBuyers() {
     const host = $('stMbs'); if (!host) return;
     await loadMb();
     const hhmm2 = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
-    host.innerHTML = mbList.length ? mbList.map((b) => `<div class="st-mb">${mbAvatar(b)}<div class="st-mbn"><b>${esc(b.name)}${b.alias && b.alias !== b.name ? ` <span class="hint">(${esc(b.alias)})</span>` : ''}</b><span class="hint">${b.linked ? `<span class="is-ok">✓ Connected</span>${b.tgName ? ' · Telegram: ' + esc(b.tgName) : ''}` : '<span class="is-warn">Not connected — send the invite link</span>'}</span></div>
-        <div class="st-mba"><button type="button" class="sm" data-mbkpi2="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set ${esc(b.name)}'s monthly KPIs">📊 KPIs</button>${b.linked ? `<button type="button" class="ghost sm" data-mbsync="${esc(b.id)}" title="Re-read name and picture from Telegram">↻</button>` : ''}${b.link ? `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">${b.linked ? 'Copy link' : 'Copy invite link'}</button>` : ''}<button type="button" class="ghost sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}" title="Remove">✕</button></div></div>`).join('')
+    host.innerHTML = mbList.length ? mbList.map((b) => `<div class="st-mb">${mbAvatar(b)}<div class="st-mbn"><b>${esc(b.name)}${b.alias && b.alias !== b.name ? ` <span class="hint">(${esc(b.alias)})</span>` : ''}</b><span class="hint">Media buyer · ${b.linked ? `<span class="is-ok">linked</span>${b.tgName ? ' · ' + esc(b.tgName) : ''}` : '<span class="is-warn">not linked — send the invite link</span>'}</span></div>
+        <div class="st-mba"><button type="button" class="sm" data-mbkpi2="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set ${esc(b.name)}'s monthly KPIs">📊 KPIs</button>${b.linked ? `<button type="button" class="sm" data-mbsync="${esc(b.id)}" title="Re-read name and picture from Telegram">↻</button>` : ''}${b.link ? `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">${b.linked ? 'Copy link' : 'Invite link'}</button>` : ''}<button type="button" class="sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}">Remove</button></div></div>`).join('')
       : '<div class="hl-empty">No media buyers yet — add one below.</div>';
     host.querySelectorAll('[data-mbcopy]').forEach((x) => x.onclick = async () => { try { await navigator.clipboard.writeText(x.dataset.mbcopy); toast('Invite link copied — send it to them on Telegram'); } catch (_) { prompt('Copy this link', x.dataset.mbcopy); } });
     host.querySelectorAll('[data-mbkpi2]').forEach((x) => x.onclick = () => openBuyerKpis(x.dataset.mbkpi2, x.dataset.mbname));

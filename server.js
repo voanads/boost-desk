@@ -1637,6 +1637,27 @@ async function menuPerson(req, raw) {
   // The role set in Admin → Users decides the menu: a Facebook login marked "Media buyer" gets the media buyer menu everywhere.
   return { person: req.user.fb_id, role: (await roleOf(req.user.fb_id)) === 'mb' ? 'mb' : 'pm', name: req.user.name };
 }
+// My profile for the Settings page: who I am, my Facebook login, my Telegram, my team.
+api.get('/me/profile', wrap(async (req, res) => {
+  const teams = await getTeams();
+  if (req.user.buyer) {
+    const b = await MB().get(req.user.buyer.id), pm = (await db.allUsers()).find((u) => u.fb_id === req.user.fb_id);
+    return res.json({ buyer: true, name: b ? b.name : req.user.buyer.name, alias: b ? b.alias || '' : '', tgName: b ? b.tgName || '' : '', photo: !!(b && b.photo), id: req.user.buyer.id, pm: pm ? pm.name : (b ? b.addedBy : ''),
+      team: (teams.find((t) => t.members.includes(req.user.fb_id)) || {}).name || '', telegram: { linked: !!(b && b.chat), bot: telegram.hasBot() ? await telegram.username() : '', link: b && telegram.hasBot() ? `https://t.me/${await telegram.username()}?start=mb_${b.code}` : '' }, roleName: 'Media buyer', site: '/mediabuyer' });
+  }
+  const me = req.user.fb_id, owner = (await db.ownerId()) === me, role = owner ? 'owner' : await roleOf(me);
+  const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, SITE = { owner: '/owner', ceo: '/admin', coo: '/admin', pm: '/projectmanager', mb: '/mediabuyer' };
+  const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, left = exp ? Math.round((exp - Date.now()) / 864e5) : null;
+  const accounts = (await db.listAccounts(me)).length, clients = (await db.listClients(me)).filter((c) => !c.archived).length;
+  const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!b.chat }));
+  let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(me, 'tgCode', code); }
+  const chat = await db.getUserSetting(me, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
+  let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}
+  res.json({ buyer: false, id: me, name: req.user.name, picture, role, roleName: RN[role] || 'Project Manager', site: SITE[role] || '/projectmanager', team: (teams.find((t) => t.members.includes(me)) || {}).name || '',
+    facebook: { id: me, expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, autoSync: (await db.enabledAccountIds(me)).length },
+    telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot }, buyers,
+    google: req.session.gEmail ? { email: req.session.gEmail } : null });
+}));
 // My Telegram: a PM / owner connects their own chat to get alerts (plan / result from their media buyers).
 api.get('/me/telegram', wrap(async (req, res) => {
   if (req.user.buyer) return res.json({ buyer: true });

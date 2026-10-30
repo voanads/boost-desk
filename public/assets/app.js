@@ -1976,7 +1976,9 @@
     const host = $(hostId); if (!host || !me || me.buyer) return;
     const as = hostId === 'mtTasks' ? mtAs : null, asQ = as ? `?as=${encodeURIComponent(as.buyer ? as.pm : as.id)}` : '';
     if (as && as.buyer && !as.pm) { host.hidden = false; host.innerHTML = `<div class="top"><h2>✅ ${esc(as.name)}'s tasks today</h2></div><div class="hl-empty">This media buyer has no PM yet, so there is nowhere to add tasks.</div>`; return; }
-    let d; try { d = await api('/tasks/mine' + asQ); } catch (e) { host.hidden = true; return; }
+    const dayQ = hostId === 'mtTasks' && mtDay ? (asQ ? '&' : '?') + 'day=' + mtDay : '';
+    let d; try { d = await api('/tasks/mine' + asQ + dayQ); } catch (e) { host.hidden = true; return; }
+    const dayLbl = hostId === 'mtTasks' && mtDay && mtDay !== d.today ? ' · ' + nice(mtDay).replace(/ \d{4}$/, '') : ' today';
     if (as && as.buyer) d.tasks = d.tasks.filter((t) => t.to && t.to.id === as.id.slice(3));
     const all = d.tasks.filter((t) => t.from !== 'work' && t.from !== 'ai'), open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late); // only tasks people created — not the automatic suggestions
     const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
@@ -1984,7 +1986,7 @@
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const byClient = {}; for (const t of list) (byClient[t.client] = byClient[t.client] || []).push(t);
     host.hidden = false;
-    host.innerHTML = `<div class="top"><h2>✅ ${as ? esc(as.name) + "'s tasks today" : 'My tasks today'} <span class="countpill">${open.length}</span></h2><span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
+    host.innerHTML = `<div class="top"><h2>✅ ${as ? esc(as.name) + "'s tasks" : 'My tasks'}${dayLbl} <span class="countpill">${open.length}</span></h2>${hostId === 'mtTasks' && mtDay && mtDay !== d.today ? '<button type="button" class="ghost sm" id="mtBackToday">Back to today</button>' : ''}<span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
       <div class="seg tm-seg" role="group" aria-label="Show"><button type="button" data-tmf="open" aria-pressed="${tmFilter === 'open'}">Open</button><button type="button" data-tmf="done" aria-pressed="${tmFilter === 'done'}">Done</button><button type="button" data-tmf="all" aria-pressed="${tmFilter === 'all'}">All</button></div></div>
       ${list.length ? Object.entries(byClient).map(([cn, ts]) => `<div class="tmg"><div class="tmg-h"><b>${esc(cn)}</b><span class="hint">${ts.filter((t) => t.done).length} / ${ts.length}</span><button type="button" class="ghost sm" data-tmgo="${ts[0].clientId}">Open client →</button></div>
         ${ts.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
@@ -1993,12 +1995,13 @@
           ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-tmreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit || '')}</span>` : ''}</div>`).join('')}</div>`).join('')
       : `<div class="hl-empty">${tmFilter === 'open' ? (hostId === 'mtTasks' ? '🎉 Nothing open today. Add a task above.' : '🎉 Nothing open today. Add tasks on a client page.') : 'Nothing here yet.'}</div>`}`;
     host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(hostId); });
+    const bt = $('mtBackToday'); if (bt) bt.onclick = () => { mtDay = null; loadMyTasks('mtTasks'); loadMtCal(); };
     host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
     host.querySelectorAll('[data-tmtick]').forEach((b) => b.onclick = async () => {
       const [cid, tid, kind] = b.dataset.tmtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
       try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick${asQ}`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
       catch (e) { toast(e.message); }
-      loadMyTasks(hostId); loadMyTargets(); if (hostId === 'mtTasks') refreshMtPeople();
+      loadMyTasks(hostId); loadMyTargets(); if (hostId === 'mtTasks') { refreshMtPeople(); loadMtCal(); }
     });
     host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(hostId); loadMyTargets(); });
     if (as) host.querySelectorAll('[data-tmgo]').forEach((b) => b.remove()); // another person's clients aren't on this site
@@ -2019,6 +2022,32 @@
     renderMyTaskAdd();
     if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
     else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
+    loadMtCal();
+  }
+  // ---- month calendar of the person's tasks: each day lists its tasks and how much got done (like a staff KPI calendar) ----
+  let mtMonth = null, mtDay = null;
+  async function loadMtCal() {
+    const host = $('mtCal'); if (!host || !me) return;
+    if (mtAs && mtAs.buyer && !mtAs.pm) { host.hidden = true; return; }
+    const t = (me && me.today) || iso(new Date()); if (!mtMonth) mtMonth = t.slice(0, 7);
+    const q = [`month=${mtMonth}`]; if (mtAs) { q.push(`as=${encodeURIComponent(mtAs.buyer ? mtAs.pm : mtAs.id)}`); if (mtAs.buyer) q.push(`buyer=${encodeURIComponent(mtAs.id.slice(3))}`); }
+    let d; try { d = await api('/tasks/month?' + q.join('&')); } catch (e) { host.hidden = true; return; }
+    host.hidden = false;
+    const days = Object.keys(d.days).sort(), first = new Date(days[0] + 'T00:00:00'), lead = (first.getDay() + 6) % 7; // Monday first
+    const withTasks = days.filter((k) => d.days[k].total), avg = withTasks.length ? Math.round(withTasks.reduce((s, k) => s + d.days[k].pct, 0) / withTasks.length) : null;
+    const cls = (p) => (p == null ? '' : p >= 85 ? 'ok' : p >= 50 ? 'mid' : 'bad');
+    const cell = (k) => { const x = d.days[k], n = Number(k.slice(8)), future = k > d.today, isT = k === d.today, on = (mtDay || d.today) === k;
+      const show = x.tasks.slice(0, 4), more = x.tasks.length - show.length;
+      return `<button type="button" class="mc-day ${x.total ? cls(x.pct) : 'none'}${future ? ' future' : ''}${isT ? ' today' : ''}${on ? ' on' : ''}" data-mcd="${k}" aria-pressed="${on}" aria-label="${esc(nice(k))}: ${x.done} of ${x.total} done">
+        <span class="mc-n">${n}</span>
+        <span class="mc-list">${show.map((t) => `<span class="mc-t"><i class="${t.done ? 'done' : t.missed || t.late ? 'late' : 'open'}"></i>${esc(t.text)}</span>`).join('')}${more > 0 ? `<span class="mc-more">+${more} more</span>` : ''}</span>
+        <b class="mc-pct ${cls(x.pct)}">${x.total ? x.pct + '<small>%</small>' : ''}</b></button>`; };
+    const nextOff = mtMonth >= t.slice(0, 7);
+    host.innerHTML = `<div class="top mc-top"><h2>📅 ${esc(monthLabel(mtMonth))}</h2><div class="mc-nav"><button type="button" class="navbtn" data-mcm="-1" aria-label="Previous month">‹</button><button type="button" class="navbtn" data-mcm="1" aria-label="Next month" ${nextOff ? 'disabled' : ''}>›</button></div><span class="hint">${withTasks.length} day${withTasks.length === 1 ? '' : 's'} with tasks${avg != null ? ` · avg <b class="${cls(avg)}">${avg}%</b>` : ''}</span><span class="spacer"></span><span class="mc-legend"><i class="ok"></i>85%+ <i class="mid"></i>50%+ <i class="bad"></i>&lt;50%</span></div>
+      <div class="mc-head">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((x) => `<span>${x}</span>`).join('')}</div>
+      <div class="mc-grid">${'<span class="mc-pad"></span>'.repeat(lead)}${days.map(cell).join('')}</div>`;
+    host.querySelectorAll('[data-mcm]').forEach((b) => b.onclick = () => { const [y, m] = mtMonth.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + Number(b.dataset.mcm), 1)); mtMonth = dt.toISOString().slice(0, 7); loadMtCal(); });
+    host.querySelectorAll('[data-mcd]').forEach((b) => b.onclick = () => { mtDay = b.dataset.mcd === d.today ? null : b.dataset.mcd; host.querySelectorAll('[data-mcd]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); if (me.buyer) return; loadMyTasks('mtTasks'); $('mtTasks').scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); });
   }
   function renderMtPeople() {
     const pp = $('mtPeople'), q = mtQ.trim().toLowerCase();
@@ -2037,7 +2066,7 @@
     $('mtSearch').oninput = () => { mtQ = $('mtSearch').value; const pos = $('mtSearch').selectionStart; renderMtPeople(); const i = $('mtSearch'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (_) {} };
     pp.querySelectorAll('[data-mtp]').forEach((b) => b.onclick = () => {
       const p = mtPeople.find((x) => x.id === b.dataset.mtp);
-      mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null } : null; mtClients = null;
+      mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null } : null; mtClients = null; mtDay = null;
       renderMtPeople(); loadMyTaskPage();
       if (!matchMedia('(min-width: 1100px)').matches) $('mtAdd').scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
     });
@@ -2071,7 +2100,7 @@
       catch (e) { toast(e.message); }
       f.querySelector('button').disabled = false;
       if (me.buyer) loadMyBuyerTasks('mtTasks'); else { loadMyTasks('mtTasks'); loadMyTargets(); }
-      refreshMtPeople();
+      refreshMtPeople(); loadMtCal();
     };
   }
   async function refreshMtPeople() { if (!mtAdminPick()) return; try { mtPeople = (await api('/admin/people-today')).people; renderMtPeople(); } catch (_) {} }

@@ -361,7 +361,7 @@ app.get(['/admin', '/admin/'], wrap(async (req, res) => {
 // ---------- API ----------
 const api = express.Router();
 // Admins (CEO / COO / owner) can see and add tasks for any person: ?as=<fbId> on these routes acts on that person's clients and tasks (ticks are signed with the admin's name).
-const AS_ROUTES = /^\/(tasks\/mine|clients(\/\d+\/(tasks(\/[^/]+)?|tick))?)$/;
+const AS_ROUTES = /^\/(tasks\/mine|tasks\/month|clients(\/\d+\/(tasks(\/[^/]+)?|tick))?)$/;
 api.use(wrap(async (req, res, next) => {
   const as = String(req.query.as || (req.body && req.body.as) || '').trim();
   if (!as || !AS_ROUTES.test(req.path) || req.user.buyer) return next();
@@ -1609,6 +1609,34 @@ api.get('/targets/mine', wrap(async (req, res) => {
   res.json({ day, today: sync.todayIn(), tasks: out });
 }));
 // My tasks today (every client): the same list each client page shows, in one place.
+// A month of one person's tasks (the ones people created — not the automatic suggestions), day by day, for the calendar.
+// Buyers (and admins looking at a buyer: &buyer=<id>) see only the tasks assigned to that buyer.
+api.get('/tasks/month', wrap(async (req, res) => {
+  const today = sync.todayIn(), ym = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : today.slice(0, 7);
+  const owner = req.user.fb_id, buyerId = req.user.buyer ? req.user.buyer.id : (req.query.as && req.query.buyer ? String(req.query.buyer) : '');
+  const cl = (await db.pool.query('SELECT id, name FROM clients WHERE owner=$1', [owner])).rows, cName = Object.fromEntries(cl.map((c) => [c.id, c.name]));
+  const rows = (await db.pool.query(`SELECT key, value FROM settings WHERE key LIKE $1`, [owner + ':cwb:%'])).rows;
+  const localDay = (iso) => { try { return sync.todayIn(undefined, new Date(iso)); } catch (_) { return ''; } };
+  const [y, m] = ym.split('-').map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), days = {};
+  for (let d = 1; d <= last; d++) days[`${ym}-${String(d).padStart(2, '0')}`] = [];
+  for (const r of rows) {
+    const cid = r.key.split(':')[2]; if (!cName[cid]) continue;
+    for (const t of (r.value || {}).tasks || []) {
+      if (t.from === 'ai') continue;
+      if (buyerId && !(t.to && t.to.id === buyerId)) continue;
+      const doneDay = t.done && t.doneAt ? localDay(t.doneAt) : '';
+      const base = { id: t.id, text: t.text, client: cName[cid], clientId: Number(cid), to: t.to ? t.to.name : '', repeat: !!t.repeat };
+      for (const day of Object.keys(days)) {
+        if (t.repeat) { if (t.day <= day && day <= today) days[day].push({ ...base, done: doneDay === day, late: false, missed: day < today && doneDay !== day }); continue; }
+        if (t.day === day) days[day].push({ ...base, done: !!t.done, late: false, missed: !t.done && day < today && !(doneDay && doneDay > day) });
+        else if (t.day < day && ((!t.done && day === today) || doneDay === day)) days[day].push({ ...base, done: doneDay === day, late: true, missed: false, since: t.day });
+      }
+    }
+  }
+  const out = {};
+  for (const [day, list] of Object.entries(days)) { const done = list.filter((t) => t.done).length; out[day] = { tasks: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null }; }
+  res.json({ month: ym, today, days: out });
+}));
 api.get('/tasks/mine', wrap(async (req, res) => {
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
   const dt = await dayTasks(day), mine = (dt.users[req.user.fb_id] || { tasks: [] }).tasks;

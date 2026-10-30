@@ -269,6 +269,7 @@ async function morningPlans(log = () => {}) {
   const cfg = await keyConfig(); if (!cfg.key) return 0;
   let n = 0; const today = sync.todayIn(), since = sync.addDays(today, -3);
   for (const u of await db.allUsers()) {
+    if ((await db.getUserSetting(u.fb_id, 'aiOn', true)) === false) continue; // Settings → AI advice off
     const lang = (await db.getUserSetting(u.fb_id, 'aiLang', 'en')) === 'km' ? 'km' : 'en';
     const active = new Set((await db.monthEntries(u.fb_id, since, today)).filter((r) => { const e = r.data || {}; return Object.values(e.lives || {}).some((l) => Number(l && l.spend) > 0) || Number((e.post || {}).spend) > 0; }).map((r) => r.client_id));
     for (const c of (await db.listClients(u.fb_id)).filter((x) => !x.archived && active.has(x.id))) {

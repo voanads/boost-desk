@@ -3086,3 +3086,31 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 }
 .lv .thumb,.lv:nth-child(n) .thumb,.lv.top .thumb{background:var(--brand-mist)!important}
 .lv-a button.primary{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important} .lv-a button.primary:disabled{background:var(--brand-soft)!important;color:var(--brand-text)!important;border-color:transparent!important;opacity:1}
+
+/* ===== Settings: the canvas layout (two columns of cards) ===== */
+.st-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.st-grid{grid-template-columns:minmax(0,1fr)}}
+.st-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.st-card{padding:16px 20px;gap:12px;border-radius:12px}
+.st-card .st-h{justify-content:space-between} .st-card .st-h h2{font-size:1.1rem;font-weight:600;flex:1}
+.st-card .fld{gap:4px;font-size:.875rem;font-weight:500}
+.st-card .fld input,.st-card .fld select{height:38px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:.9rem;font-weight:400;width:100%;box-sizing:border-box}
+.st-card .fld input[readonly]{background:var(--bg-2);color:var(--muted)}
+.st-prof{padding-bottom:2px} .st-pic,.st-av{width:48px;height:48px;font-size:1rem}
+.st-end{display:flex;justify-content:flex-end}
+.st-end button.primary,.wrap .st-end button.primary{height:38px;padding:0 16px;border:0!important;border-radius:8px;background:var(--brand)!important;color:var(--on-brand)!important;font-size:.875rem;font-weight:600}
+.st-who{display:flex;align-items:center;gap:12px} .st-who img,.st-who .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none}
+.st-btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.st-btns .btn.fb{display:inline-flex;align-items:center;height:38px;padding:0 16px;border:0;border-radius:6px;background:var(--fb);color:#fff;font-size:.875rem;font-weight:600;text-decoration:none}
+.st-btns .btn.fb:hover{filter:brightness(.95);color:#fff}
+.wrap .st-card button.sm,.st-btns .btn.sm{height:34px;padding:0 12px;font-size:.84rem;font-weight:600;border-radius:8px}
+.wrap .st-card button.danger-txt{color:var(--danger)!important;height:38px}
+.st-card .pill.ok{background:var(--ok-soft,#ecfdf5);color:var(--ok)} .st-card .pill.warn{background:var(--warn-soft);color:var(--warn)}
+.st-sw{display:inline-flex;align-items:center;margin:0} .st-sw i{width:40px;height:24px;display:inline-block} .st-sw i:after{width:18px;height:18px}
+.st-sw input{position:absolute;opacity:0;width:0;height:0} .st-sw input:checked+i:after{transform:translateX(16px)}
+.st-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.st-chk{display:flex;align-items:center;gap:10px;font-size:.9rem;min-height:36px;cursor:pointer} .st-chk input{width:18px;height:18px;margin:0;accent-color:var(--brand)}
+.st-mbs{gap:0} .st-mb{padding:10px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;font-size:.9rem} .st-mb:last-child{border-bottom:0}
+.st-mb .avatar{width:32px;height:32px;font-size:.76rem;background:var(--bg-2);color:var(--muted)}
+.st-mba{gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.st-mbadd input{height:38px;min-height:0;padding:0 12px;border:1px solid var(--line);border-radius:8px;font-size:.9rem} .wrap .st-mbadd button.sm{height:38px}

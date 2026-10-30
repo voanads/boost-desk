@@ -3024,3 +3024,48 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .st-mbadd{display:flex;gap:8px;width:100%} .st-mbadd input{flex:1;min-width:0;min-height:38px}
 .linkbtn{all:unset;cursor:pointer;color:var(--brand-text);font-weight:600} .linkbtn:hover{text-decoration:underline}
 .mt-ix.pm{background:var(--ok-soft);color:var(--ok)}
+
+/* ===== "Boost Desk — new look" canvas: clean restyle ===== */
+/* Sidebar: groups, bottom tools row + user row */
+@media (min-width:1100px){
+  header.appbar .who{display:grid!important;grid-template-columns:auto auto 1fr auto;grid-template-rows:auto auto;gap:12px 8px;align-items:center;border-top:1px solid var(--line);padding:14px 8px 0!important;margin-top:auto}
+  header.appbar .who #fontBtn{grid-column:1;grid-row:1}
+  header.appbar .who #themeBtn{grid-column:2;grid-row:1}
+  header.appbar .who #logoutBtn{grid-column:4;grid-row:1;justify-self:end;display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:500;white-space:nowrap;padding:6px 8px}
+  header.appbar .who #logoutBtn .lo-t,header.appbar .who #logoutBtn .lo-ic{display:inline-block!important}
+  header.appbar .who #whoAvatar{grid-column:1;grid-row:2;width:28px;height:28px;background:var(--brand-soft);color:var(--brand-text);font-size:var(--fs-xs)}
+  header.appbar .who #whoName{grid-column:2/5;grid-row:2;font-weight:600;font-size:var(--fs-lg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  nav.tabs .navgrp{font-size:var(--fs-2xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 12px 6px}
+  nav.tabs button{min-height:40px;padding:8px 12px!important;border-radius:var(--r-md)!important;font-size:var(--fs-xl)!important;font-weight:500!important}
+  nav.tabs button[aria-selected=true]{background:var(--brand-soft)!important;color:var(--brand-text)!important}
+}
+/* Stat cards: small uppercase labels, flat */
+.summary .lbl,.cd-stat .lbl,.mb-st .lbl,.ost .lbl,.tm-k .lbl{text-transform:uppercase!important;letter-spacing:.05em!important;font-size:var(--fs-2xs)!important;font-weight:500!important;color:var(--muted)!important}
+.summary>div{padding:16px 18px}
+.summary .sub{font-size:var(--fs-md);color:var(--muted)}
+/* Table headers: small caps */
+th,.dtable th,.kpi-head,.utable th{text-transform:uppercase!important;letter-spacing:.05em!important;font-size:var(--fs-2xs)!important;font-weight:500!important;color:var(--muted)!important}
+/* Dashboard client rows: initials + status under the name */
+.dtable .nm{display:flex;align-items:center;gap:10px} .dtable .nm .cav{width:32px;height:32px;flex:none;background:var(--bg-2);color:var(--muted);font-size:var(--fs-xs);font-weight:600;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+.dtable .nm-t{display:flex;flex-direction:column;min-width:0;line-height:1.25} .dtable .nm-t b{font-weight:600} .dtable .nm-s{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:var(--fs-xs)}
+.dtable .nm .chev{order:-1}
+/* Buttons: quiet secondary, one primary */
+.wrap button:not(.primary):not(.ghost):not(.tcheck):not(.navbtn):not(.mbm-check):not(.mt-person):not(.mc-day):not(.chip-btn):not(.linkbtn):not(.pgname),.wrap a.btn:not(.primary){background:var(--surface);border:1px solid var(--line);color:var(--ink);box-shadow:none}
+.wrap button:not(.primary):not(.ghost):not(.tcheck):not(.navbtn):not(.mbm-check):not(.mt-person):not(.mc-day):not(.chip-btn):not(.linkbtn):not(.pgname):hover{background:var(--bg-2)}
+.wrap .seg button,.wrap .chips button{border:0!important;background:transparent} .wrap .chips button{border:1px solid var(--line)!important;background:var(--surface)} .wrap .seg button[aria-pressed=true],.wrap .chips button[aria-pressed=true]{background:var(--brand-soft)!important;border-color:transparent!important}
+/* Clients detail: header actions, settings summary */
+.cd-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cd-summary .cd-sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 20px}
+.cd-sum-grid>div{display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line);padding-bottom:8px} .cd-sum-grid b{font-weight:600;overflow-wrap:anywhere}
+/* My Task: compact calendar — a number per day, colour = how much of the menu got done */
+.mc-grid{gap:6px} .mc-head{font-weight:500}
+.mc-day{min-height:40px;padding:0 6px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:4px;border-radius:var(--r-md);border:1px solid transparent;background:var(--bg-2);font-weight:600;font-size:var(--fs-lg);color:var(--muted)}
+.mc-day .mc-n{position:static;width:auto;height:auto;background:transparent;margin:0;font-size:inherit;color:inherit;font-weight:600}
+.mc-day .mc-p{font-size:var(--fs-2xs);font-weight:500;opacity:.8} .mc-day .mc-flag{width:14px;height:14px;font-size:9px;margin:0}
+.mc-day.ok{background:var(--ok-soft);color:var(--ok)} .mc-day.mid{background:var(--warn-soft);color:var(--warn)} .mc-day.bad{background:var(--danger-soft);color:var(--danger)}
+.mc-day.none{background:var(--bg-2);color:var(--muted)} .mc-day.future{opacity:.6}
+.mc-day.today{background:var(--brand-fill);color:#fff} .mc-day.today .mc-n{color:#fff}
+.mc-day.on{box-shadow:0 0 0 2px var(--brand)}
+.mc-list,.mc-more,.mc-pct{display:none}
+@media (max-width:760px){.mc-day{min-height:40px;padding:0 4px}.mc-day .mc-p{display:none}}
+nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent} nav.tabs button:hover{background:var(--bg-2)!important} nav.tabs button[aria-selected=true]{background:var(--brand-soft)!important}

@@ -715,7 +715,7 @@
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
         <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
-          <button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">⚙ Client settings</button></div></div>
+          <div class="cd-acts"><button type="button" class="sm" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
@@ -735,10 +735,21 @@
         </div>
         <div class="cd-col">${histSection(c)}</div>
       </div>
+      <section class="cd-sec cd-summary"><div class="cd-sec-h"><h4>Settings</h4><span class="hint">A summary — tap Edit above to change anything</span></div>
+        <div class="cd-sum-grid">
+          <div><span class="hint">Boost type</span><b>${c.type === 'both' ? 'Live + post' : c.type === 'post' ? 'Boost posts' : 'Live'}</b></div>
+          <div><span class="hint">Ad account</span><b>${esc(c.account || '—')}</b></div>
+          <div><span class="hint">Pages</span><b>${(c.pages || []).length ? esc((c.pages || []).slice(0, 3).join(' · ')) + ((c.pages || []).length > 3 ? ` +${c.pages.length - 3}` : '') : '—'}</b></div>
+          <div><span class="hint">Report to</span><b>${c.telegram ? 'Telegram · ' + esc(c.telegram_title || 'group') : '<span class="is-warn">No Telegram group</span>'}</b></div>
+          <div><span class="hint">Service fee</span><b>${c.service && Number(c.service.price) > 0 ? money(c.service.price) + (c.service.day ? ' · pay day ' + esc(String(c.service.day)) : '') : '—'}</b></div>
+          <div><span class="hint">Status</span><b>${c.archived ? 'Paused' : 'Active'}</b></div>
+        </div></section>
     </div>`;
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
+    const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
+    const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });
     const aiAsk = $('cdAiAsk'); if (aiAsk) aiAsk.onsubmit = (ev) => { ev.preventDefault(); const q = aiAsk.querySelector('input').value.trim(); if (q) cdRunAi(c.id, { question: q }); };
@@ -2129,12 +2140,11 @@
     const cls = (p) => (p == null ? '' : p >= 85 ? 'ok' : p >= 50 ? 'mid' : 'bad');
     const cell = (k) => { const x = d.days[k], n = Number(k.slice(8)), future = k > d.today, isT = k === d.today, on = (mtDay || d.today) === k;
       const show = x.tasks.slice(0, 4), more = x.tasks.length - show.length;
-      return `<button type="button" class="mc-day ${x.total ? cls(x.pct) : 'none'}${future ? ' future' : ''}${isT ? ' today' : ''}${on ? ' on' : ''}" data-mcd="${k}" aria-pressed="${on}" aria-label="${esc(nice(k))}: ${x.done} of ${x.total} done">
-        <span class="mc-n">${n}</span>
-        <span class="mc-list">${show.map((t) => `<span class="mc-t"><i class="${t.done ? 'done' : t.missed || t.late ? 'late' : 'open'}"></i>${esc(t.text)}</span>`).join('')}${more > 0 ? `<span class="mc-more">+${more} more</span>` : ''}</span>
-        <b class="mc-pct ${cls(x.pct)}">${x.resultAt ? '<i class="mc-flag" title="Result submitted">✔</i>' : x.planAt ? '<i class="mc-flag plan" title="Plan submitted">P</i>' : ''}${x.total ? x.pct + '<small>%</small>' : ''}</b></button>`; };
+      const tip = `${nice(k)}: ${x.total ? `${x.done} of ${x.total} done (${x.pct}%)` : 'no menu'}${x.resultAt ? ' · result submitted' : x.planAt ? ' · plan submitted' : ''}${show.length ? '\n' + show.map((t) => `${t.done ? '✔' : '✘'} ${t.text}`).join('\n') + (more > 0 ? `\n+${more} more` : '') : ''}`;
+      return `<button type="button" class="mc-day ${x.total ? cls(x.pct) : 'none'}${future ? ' future' : ''}${isT ? ' today' : ''}${on ? ' on' : ''}" data-mcd="${k}" aria-pressed="${on}" title="${esc(tip)}" aria-label="${esc(nice(k))}: ${x.done} of ${x.total} done">
+        <span class="mc-n">${n}</span>${x.total && !isT ? `<small class="mc-p">${x.pct}%</small>` : ''}${x.resultAt ? '<i class="mc-flag" title="Result submitted">✔</i>' : ''}</button>`; };
     const nextOff = mtMonth >= t.slice(0, 7);
-    host.innerHTML = `<div class="top mc-top"><h2>📅 ${esc(monthLabel(mtMonth))}</h2><div class="mc-nav"><button type="button" class="navbtn" data-mcm="-1" aria-label="Previous month">‹</button><button type="button" class="navbtn" data-mcm="1" aria-label="Next month" ${nextOff ? 'disabled' : ''}>›</button></div><span class="hint">${withTasks.length} day${withTasks.length === 1 ? '' : 's'}${avg != null ? ` · avg <b class="${cls(avg)}">${avg}%</b>` : ''}</span><span class="spacer"></span><span class="mc-legend"><i class="ok"></i>85%+ <i class="mid"></i>50%+ <i class="bad"></i>&lt;50%</span></div>
+    host.innerHTML = `<div class="top mc-top"><h2>📅 ${esc(monthLabel(mtMonth))}</h2><div class="mc-nav"><button type="button" class="navbtn" data-mcm="-1" aria-label="Previous month">‹</button><button type="button" class="navbtn" data-mcm="1" aria-label="Next month" ${nextOff ? 'disabled' : ''}>›</button></div><span class="hint">${withTasks.length} day${withTasks.length === 1 ? '' : 's'}${avg != null ? ` · avg <b class="${cls(avg)}">${avg}%</b>` : ''}</span><span class="spacer"></span><span class="mc-legend"><i class="ok"></i>85%+ <i class="mid"></i>50%+ <i class="bad"></i>&lt;50% · hover a day for its tasks</span></div>
       <div class="mc-head">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="mc-grid">${'<span class="mc-pad"></span>'.repeat(lead)}${days.map(cell).join('')}</div>`;
     host.querySelectorAll('[data-mcm]').forEach((b) => b.onclick = () => { const [y, m] = mtMonth.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + Number(b.dataset.mcm), 1)); mtMonth = dt.toISOString().slice(0, 7); loadMtCal(); });
@@ -3141,7 +3151,7 @@ Notes:
       const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
       return `<tr data-cid="${c.id}" style="--i:${Math.min(i, 14)}" class="drow${rowsEnter ? ' enter' : ''}${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
-        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><b>${esc(c.name)}</b>${tags}</div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
+        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><span class="avatar sm cav" aria-hidden="true">${esc(String(c.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</span><div class="nm-t"><b>${esc(c.name)}</b><span class="nm-s">${tags}</span></div></div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
@@ -3939,6 +3949,7 @@ Thank you for working with Ads Box!`,
         const mt = document.querySelector('nav.tabs [data-tab=mytasks]'), tg = document.querySelector('nav.tabs [data-tab=target]'); if (mt && tg) tg.insertAdjacentElement('afterend', mt); // My Task sits with the Admin pages here
         const stb = document.querySelector('nav.tabs [data-tab=settings]'), adb = document.querySelector('nav.tabs [data-tab=admin]'); if (stb && adb) adb.insertAdjacentElement('afterend', stb);
       }
+      if (showAdmin) $('navGrpManage').hidden = false;
       if (showAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
       if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages

@@ -49,7 +49,12 @@ async function onTelegram(fresh, AI) {
     if (changed) await save(cur);
   }
   for (const c of fresh.cmds || []) {
-    const b = (await list()).find((x) => x.chat === c.id); if (!b) continue;
+    const b = (await list()).find((x) => x.chat === c.id);
+    if (!b) { // not a media buyer: a PM typing /start or /connect by hand — tell them how to connect
+      const known = await db.getSetting('tgPmChats', {}); // chats already connected, so we don't nag them
+      if (!known[c.id]) telegram.send('To connect this Telegram to Boost Desk, open Boost Desk → Settings → Telegram account and tap "Connect my Telegram", or send me:\n/connect YOUR-CODE\n(the code is shown on that Settings card).', c.id).catch(() => {});
+      continue;
+    }
     telegram.sendButtons(`📋 ${b.name}, here are your tasks for today.`, c.id, [[{ text: '📋 My tasks', url: dashLink(b) + '#dashboard' }]]).catch(() => {});
   }
   for (const t of fresh.taps || []) {

@@ -1381,6 +1381,7 @@ async function refreshChatsNow() {
       for (const x of users) { const c = await db.getUserSetting(x.fb_id, 'tgCode', ''); if (c && c === st.code) { hit = x; break; } }
       if (!hit) continue;
       await db.setUserSetting(hit.fb_id, 'tgChat', { id: st.id, name: st.name, at: new Date().toISOString() });
+      const known = await db.getSetting('tgPmChats', {}); known[st.id] = hit.fb_id; await db.setSetting('tgPmChats', known);
       telegram.send(`✅ Hi ${hit.name}! Boost Desk alerts come here now: when your media buyers submit their plan in the morning and their result in the evening.`, st.id).catch(() => {});
     } catch (e) { console.error('[telegram] pm link:', e.message); }
   }
@@ -1655,7 +1656,7 @@ api.get('/me/profile', wrap(async (req, res) => {
   let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}
   res.json({ buyer: false, id: me, name: req.user.name, picture, role, roleName: RN[role] || 'Project Manager', site: SITE[role] || '/projectmanager', team: (teams.find((t) => t.members.includes(me)) || {}).name || '',
     facebook: { id: me, expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, autoSync: (await db.enabledAccountIds(me)).length },
-    telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot }, buyers,
+    telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
 }));
 // My Telegram: a PM / owner connects their own chat to get alerts (plan / result from their media buyers).
@@ -1663,7 +1664,7 @@ api.get('/me/telegram', wrap(async (req, res) => {
   if (req.user.buyer) return res.json({ buyer: true });
   let code = await db.getUserSetting(req.user.fb_id, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(req.user.fb_id, 'tgCode', code); }
   const chat = await db.getUserSetting(req.user.fb_id, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
-  res.json({ linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot });
+  res.json({ linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code });
 }));
 api.delete('/me/telegram', wrap(async (req, res) => { if (!req.user.buyer) await db.setUserSetting(req.user.fb_id, 'tgChat', null); res.json({ ok: true }); }));
 api.get('/menu', wrap(async (req, res) => {

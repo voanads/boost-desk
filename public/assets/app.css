@@ -2934,3 +2934,23 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .mt-pv{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2} .mt-pv b{font-size:var(--fs-base)} .mt-pv .hint{font-size:var(--fs-2xs)}
 .mt-person .kpi-score{min-width:46px;text-align:center} .mt-person .kpi-score.none{background:var(--bg-2);color:var(--muted)}
 .mt-tasks .top h2{font-size:var(--fs-xl)}
+/* Month task calendar (My Task) */
+.mt-cal{display:flex;flex-direction:column;gap:10px}
+.mc-top{flex-wrap:wrap;gap:8px 12px;align-items:center} .mc-nav{display:flex;gap:4px} .mc-nav .navbtn{width:32px;height:32px}
+.mc-legend{display:inline-flex;align-items:center;gap:4px 8px;font-size:var(--fs-xs);color:var(--muted)} .mc-legend i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:2px}
+.mc-legend i.ok,.mc-t i.done{background:var(--ok)} .mc-legend i.mid{background:var(--warn)} .mc-legend i.bad,.mc-t i.late{background:var(--danger)} .mc-t i.open{background:var(--muted);opacity:.5}
+.mc-head{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;font-size:var(--fs-2xs);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:center}
+.mc-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.mc-day{position:relative;display:flex;flex-direction:column;gap:4px;min-height:118px;padding:8px 8px 6px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);text-align:left;font:inherit;color:var(--ink);min-width:0}
+.mc-day.ok{background:color-mix(in srgb,var(--ok) 7%,var(--surface));border-color:color-mix(in srgb,var(--ok) 30%,var(--line))}
+.mc-day.mid{background:color-mix(in srgb,var(--warn) 8%,var(--surface));border-color:color-mix(in srgb,var(--warn) 32%,var(--line))}
+.mc-day.bad{background:color-mix(in srgb,var(--danger) 6%,var(--surface));border-color:color-mix(in srgb,var(--danger) 28%,var(--line))}
+.mc-day.none{background:var(--bg-2);border-color:transparent} .mc-day.future{opacity:.75}
+.mc-day.today .mc-n{background:var(--brand-fill);color:#fff} .mc-day.on{box-shadow:0 0 0 2px var(--brand)}
+.mc-n{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:600;color:var(--muted)}
+.mc-list{display:flex;flex-direction:column;gap:2px;padding-right:26px;flex:1;min-width:0}
+.mc-t{display:flex;align-items:center;gap:5px;font-size:var(--fs-xs);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .mc-t i{width:7px;height:7px;border-radius:50%;flex:none}
+.mc-more{font-size:var(--fs-2xs);color:var(--muted)}
+.mc-pct{align-self:flex-end;font-size:var(--fs-lg);font-weight:700;line-height:1} .mc-pct small{font-size:var(--fs-2xs);font-weight:600} .mc-pct.ok{color:var(--ok)} .mc-pct.mid{color:var(--warn)} .mc-pct.bad{color:var(--danger)}
+@media (max-width:760px){.mc-day{min-height:64px;padding:6px 4px 4px}.mc-list{display:none}.mc-n{position:static;width:auto;height:auto;background:transparent;justify-content:flex-start}.mc-pct{font-size:var(--fs-sm)}}
+.mc-n{position:static;align-self:flex-end;margin:-2px -2px 0 0} .mc-list{padding-right:0} .mc-day{min-height:104px;gap:2px}

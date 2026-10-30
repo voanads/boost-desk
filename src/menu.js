@@ -40,6 +40,17 @@ async function save(menu, by) {
   return out;
 }
 
+// A person's own items on top of the role's: every day from the day added, or for one day only.
+const ownKey = (person) => `menuOwn:${person}`;
+const ownOf = async (person) => ((await db.getSetting(ownKey(person), null)) || []).filter((x) => x && x.id && x.text);
+async function addOwn(person, text, day) {
+  const list = await ownOf(person), t = String(text || '').trim().slice(0, 160); if (!t) throw new Error('Type the task.');
+  if (list.length >= 30) throw new Error('That is enough own items — remove one first.');
+  const item = { id: newId(), text: t, since: sync.todayIn(), day: day || null }; list.push(item);
+  await db.setSetting(ownKey(person), list); return item;
+}
+async function removeOwn(person, id) { await db.setSetting(ownKey(person), (await ownOf(person)).filter((x) => x.id !== id)); }
+const ownFor = (list, day) => list.filter((x) => (x.day ? x.day === day : x.since <= day)).map((x) => ({ id: x.id, text: x.text, own: true, once: !!x.day }));
 const tickKey = (person, day) => `menuTicks:${person}:${day}`;
 const ticksOf = async (person, day) => (await db.getSetting(tickKey(person, day), null)) || {};
 async function tick(person, day, itemId, done, by) {
@@ -51,21 +62,21 @@ async function tick(person, day, itemId, done, by) {
 
 // One person's menu for a day: items with done / time / by, and the % done.
 async function dayOf(person, role, day) {
-  const items = (await all())[role] || [], t = await ticksOf(person, day);
+  const items = [...((await all())[role] || []), ...ownFor(await ownOf(person), day)], t = await ticksOf(person, day);
   const list = items.map((i) => ({ ...i, done: !!t[i.id], at: t[i.id] ? t[i.id].at : null, by: t[i.id] ? t[i.id].by : null }));
   const done = list.filter((x) => x.done).length;
   return { day, role, items: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null };
 }
 // A month, day by day (days up to today only have a score; the menu is the current list).
 async function monthOf(person, role, month) {
-  const today = sync.todayIn(), menu = await all(), items = menu[role] || [], since = menu.since;
+  const today = sync.todayIn(), menu = await all(), roleItems = menu[role] || [], since = menu.since, own = await ownOf(person);
   const rows = (await db.pool.query('SELECT key, value FROM settings WHERE key LIKE $1', [`menuTicks:${person}:${month}-%`])).rows;
   const ticks = Object.fromEntries(rows.map((r) => [r.key.split(':').pop(), r.value || {}]));
   const [y, m] = month.split('-').map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), days = {};
   for (let d = 1; d <= last; d++) {
     const day = `${month}-${String(d).padStart(2, '0')}`, t = ticks[day] || {};
     if (day > today || (day < since && !Object.keys(t).length)) { days[day] = { tasks: [], total: 0, done: 0, pct: null }; continue; }
-    const list = items.map((i) => ({ text: i.text, done: !!t[i.id], missed: !t[i.id] && day < today }));
+    const list = [...roleItems, ...ownFor(own, day)].map((i) => ({ text: i.text, done: !!t[i.id], missed: !t[i.id] && day < today }));
     const done = list.filter((x) => x.done).length;
     days[day] = { tasks: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null };
   }
@@ -79,7 +90,8 @@ async function monthStats(person, role, month) {
   const [y, m] = month.split('-').map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   let due = 0; const dayList = [];
   for (let d = 1; d <= last; d++) { const day = `${month}-${String(d).padStart(2, '0')}`; if (day <= today && (day >= since || Object.keys(ticks[day] || {}).length)) { due++; dayList.push(day); } }
-  return items.map((i) => ({ id: i.id, text: i.text, due, done: dayList.filter((day) => (ticks[day] || {})[i.id]).length }));
+  const own = (await ownOf(person)).map((x) => { const ds = dayList.filter((day) => (x.day ? x.day === day : x.since <= day)); return { id: x.id, text: x.text, due: ds.length, done: ds.filter((day) => (ticks[day] || {})[x.id]).length }; });
+  return [...items.map((i) => ({ id: i.id, text: i.text, due, done: dayList.filter((day) => (ticks[day] || {})[i.id]).length })), ...own];
 }
 
-module.exports = { all, save, tick, dayOf, monthOf, monthStats, ROLES };
+module.exports = { all, save, tick, dayOf, monthOf, monthStats, addOwn, removeOwn, ROLES };

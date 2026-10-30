@@ -1793,7 +1793,11 @@ api.post('/clients/:id/tasks', wrap(async (req, res) => {
   await AI().saveWorkbook(req.user.fb_id, req.params.id, w); res.json({ today: sync.todayIn(), ...w, ...(warn ? { warn } : {}) });
 }));
 // Media buyers (no login needed: they connect Telegram once from an invite link).
-api.get('/media-buyers', wrap(async (req, res) => res.json({ buyers: await require('./src/buyers').all(), bot: telegram.hasBot() })));
+// A PM sees only the media buyers they added; the owner / CEO / COO see everyone's.
+api.get('/media-buyers', wrap(async (req, res) => {
+  const all = await require('./src/buyers').all(), me = req.user.fb_id, mine = all.filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name));
+  res.json({ buyers: (await canSeeAdmin(me)) ? all : mine, bot: telegram.hasBot() });
+}));
 // A media buyer's Telegram picture (synced when they connect and once a day).
 app.get('/mb-pic/:id', wrap(async (req, res) => {
   const p = await require('./src/buyers').photoOf(req.params.id); if (!p) return res.status(404).end();

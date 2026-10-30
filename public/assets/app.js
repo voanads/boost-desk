@@ -2022,7 +2022,20 @@
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true; $('mtTasks').hidden = true;
-    loadMtMenu(); loadMyKpiPage(); loadMtCal();
+    loadMtMenu(); loadMyKpiPage(); loadMtCal(); loadMtTelegram();
+  }
+  // My Telegram: connect your own chat so your media buyers' plan / result alerts reach you.
+  async function loadMtTelegram() {
+    const host = $('mtTg'); if (!host) return;
+    if (me.buyer || mtAs) { host.hidden = true; return; }
+    let d; try { d = await api('/me/telegram'); } catch (_) { host.hidden = true; return; }
+    if (!d.bot) { host.hidden = true; return; }
+    host.hidden = false;
+    host.innerHTML = d.linked
+      ? `<div class="top"><h2>✈️ Telegram alerts</h2><span class="pill ok">On</span></div><div class="hint">Connected as <b>${esc(d.name || 'you')}</b>. Your media buyers' plans and results come to your Telegram${me.role === 'mb' ? ', and your own too' : ''}.</div><div class="mt-foot"><button type="button" class="ghost sm" id="mtTgOff">Disconnect</button></div>`
+      : `<div class="top"><h2>✈️ Telegram alerts</h2><span class="pill warn">Off</span></div><div class="hint">Get a Telegram message when your media buyers submit their morning plan and evening result. Tap the button, then tap <b>Start</b> in Telegram — it connects within a minute.</div><div class="mt-foot"><a class="btn sm primary" href="${esc(d.link)}" target="_blank" rel="noopener">Connect my Telegram</a><button type="button" class="ghost sm" id="mtTgCheck">Check</button></div>`;
+    const off = $('mtTgOff'); if (off) off.onclick = async () => { try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadMtTelegram(); };
+    const ck = $('mtTgCheck'); if (ck) ck.onclick = () => loadMtTelegram();
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');

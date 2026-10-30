@@ -2026,7 +2026,7 @@
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true;
-    if (ADMIN_SITE || mtAs) $('mtTasks').hidden = true; else { $('mtTasks').hidden = false; if (me.buyer) loadMyBuyerTasks('mtTasks'); else loadMyTasks('mtTasks'); } // their own Clients Task for the day
+    if (ADMIN_SITE || mtAs || me.buyer) $('mtTasks').hidden = true; else { $('mtTasks').hidden = false; loadMyTasks('mtTasks'); } // a PM's own Clients Task for the day (a media buyer's PM tasks sit inside the menu)
     loadMtMenu(); loadMyKpiPage(); loadMtCal();
   }
   // ---- Settings page: my profile, my Facebook login, my Telegram ----
@@ -2092,8 +2092,8 @@
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
       <div class="mt-items ${closed ? 'closed' : ''}">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${it.done}" data-mtmenu="${esc(it.id)}" aria-label="Done" ${closed ? 'disabled' : ''}>${box}</button>
-        <div class="mt-it"><span class="mt-ix">${i + 1}</span>${d.plan || closed ? `<b>${esc(it.text)}</b>` : `<input class="mt-edit" type="text" maxlength="160" value="${esc(it.text)}" data-mtedit="${esc(it.id)}" aria-label="Task ${i + 1}">`}${it.once ? '<span class="chip meta">this day only</span>' : ''}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>
-        ${d.plan || closed ? '' : `<button type="button" class="ghost sm mt-own-x" data-mtdel="${esc(it.id)}" aria-label="Remove this item" title="Remove">✕</button>`}</div>`).join('') : '<div class="hl-empty">The menu is empty — add your first task below.</div>'}</div>
+        <div class="mt-it"><span class="mt-ix${it.pm ? ' pm' : ''}">${i + 1}</span>${it.pm || d.plan || closed ? `<b>${esc(it.text)}</b>` : `<input class="mt-edit" type="text" maxlength="160" value="${esc(it.text)}" data-mtedit="${esc(it.id)}" aria-label="Task ${i + 1}">`}${it.pm ? `<span class="chip post">📌 ${esc(it.client)}${it.by && !it.done ? '' : ''} · from PM</span>${it.late ? '<span class="is-danger">late</span>' : ''}` : ''}${it.once ? '<span class="chip meta">this day only</span>' : ''}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>
+        ${it.pm || d.plan || closed ? '' : `<button type="button" class="ghost sm mt-own-x" data-mtdel="${esc(it.id)}" aria-label="Remove this item" title="Remove">✕</button>`}</div>`).join('') : '<div class="hl-empty">The menu is empty — add your first task below.</div>'}</div>
       ${d.pct === 100 && !closed ? '<div class="mt-done-all">🎉 Everything is done — submit the result when you leave.</div>' : ''}
       ${d.plan && !closed ? '<div class="hint">The plan is submitted, so the list is fixed for this day. You can still add a task for this day only.</div>' : ''}
       ${closed ? '' : `<form class="mt-own" id="mtOwnForm"><input type="text" id="mtOwnText" maxlength="160" placeholder="+ Add a task to the menu" aria-label="New task"><select id="mtOwnWhen" aria-label="How often">${d.plan ? '' : '<option value="">Every day</option>'}<option value="once">${isToday ? 'Today only' : 'This day only'}</option></select><button type="submit" class="sm primary">Add</button></form>`}

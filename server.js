@@ -1665,17 +1665,38 @@ api.get('/me/telegram', wrap(async (req, res) => {
   res.json({ linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code });
 }));
 api.delete('/me/telegram', wrap(async (req, res) => { if (!req.user.buyer) await db.setUserSetting(req.user.fb_id, 'tgChat', null); res.json({ ok: true }); }));
+// A media buyer's menu also lists the client tasks their PM gave them for the day (ticked here or on the client page).
+async function buyerClientItems(who, day) {
+  if (who.role !== 'mb') return [];
+  const b = await MB().get(who.person); if (!b) return [];
+  const dt = await dayTasks(day), owner = b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy];
+  return (((dt.users[owner] || {}).tasks || [])).filter((t) => t.to && t.to.id === b.id && t.from !== 'work')
+    .map((t) => ({ id: `ct:${t.clientId}:${t.id}`, text: t.text, client: t.client, clientId: t.clientId, pm: true, done: !!t.done, at: t.doneAt || null, by: t.doneBy || null, late: !!t.late, target: t.target || 0, reached: t.reached || 0, unit: t.unit || '' }));
+}
+const withClientItems = async (who, d) => { const extra = await buyerClientItems(who, d.day); if (!extra.length) return d; const items = [...d.items, ...extra], done = items.filter((x) => x.done).length; return { ...d, items, total: items.length, done, pct: items.length ? Math.round(done / items.length * 100) : null }; };
 api.get('/menu', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
-  res.json({ ...(await MENU().dayOf(who.person, who.role, day)), today: sync.todayIn(), name: who.name });
+  res.json({ ...(await withClientItems(who, await MENU().dayOf(who.person, who.role, day))), today: sync.todayIn(), name: who.name });
 }));
 api.post('/menu/tick', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
+  const byName = req.user.buyer ? req.user.buyer.name : req.user.name;
+  const ct = String(b.id || '').match(/^ct:(\d+):([a-f0-9]{6,20})$/);
+  if (ct) { // a client task from the PM: tick it in the client's workbook
+    const cid = ct[1], tid = ct[2], owner = ((await db.pool.query('SELECT owner FROM clients WHERE id=$1', [cid])).rows[0] || {}).owner;
+    if (!owner) return res.status(404).json({ error: 'Client not found.' });
+    const w = await AI().workbook(owner, cid), t = (w.tasks || []).find((x) => x.id === tid); if (!t) return res.status(404).json({ error: 'Task not found.' });
+    const lid = 't:' + t.id + ':' + day; w.log = (w.log || []).filter((x) => x.id !== lid);
+    if (b.done) { const at = new Date().toISOString(); t.done = true; t.doneAt = at; t.doneBy = byName; w.log.push({ id: lid, day, at, by: byName, text: t.text, kind: t.repeat ? 'repeat' : 'me' }); } else { t.done = false; t.doneAt = null; t.doneBy = null; }
+    if (b.reached != null && Number(t.target) > 0) { t.hit = t.hit || {}; t.hit[day] = Math.max(0, Number(b.reached) || 0); }
+    await AI().saveWorkbook(owner, cid, w);
+    return res.json(await withClientItems(who, await MENU().dayOf(who.person, who.role, day)));
+  }
   if (!/^[a-f0-9]{8}$/.test(String(b.id || ''))) return res.status(400).json({ error: 'Which item?' });
-  await MENU().tick(who.person, day, b.id, !!b.done, req.user.buyer ? req.user.buyer.name : req.user.name);
-  res.json(await MENU().dayOf(who.person, who.role, day));
+  await MENU().tick(who.person, day, b.id, !!b.done, byName);
+  res.json(await withClientItems(who, await MENU().dayOf(who.person, who.role, day)));
 }));
 api.post('/menu/item', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

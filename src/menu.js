@@ -75,7 +75,10 @@ async function editItem(person, role, id, text) {
 async function removeItem(person, role, id) { await putList(person, role, (await listOf(person, role)).filter((x) => x.id !== id)); }
 async function resetList(person, role) {
   const tpl = await all(), items = tpl[role].map((x) => ({ id: x.id, text: x.text, since: tpl.since, day: null }));
-  await putList(person, role, items); return items;
+  await putList(person, role, items);
+  const today = sync.todayIn(), st = await stateOf(person, today); // today's plan (if not closed) follows the new list
+  if (st.plan && !st.result) { st.plan.items = items.map((x) => ({ id: x.id, text: x.text, once: false })); await db.setSetting(dayKey(person, today), st); }
+  return items;
 }
 const itemsOn = (items, day) => items.filter((x) => (x.day ? x.day === day : (x.since || '0000') <= day)).map((x) => ({ id: x.id, text: x.text, once: !!x.day }));
 
@@ -140,4 +143,4 @@ async function monthStats(person, role, month) {
   return Object.values(agg);
 }
 
-module.exports = { all, save, tick, dayOf, monthOf, monthStats, listOf, addItem, editItem, removeItem, resetList, submitPlan, submitResult, reopen, ROLES };
+module.exports = { DEFAULT, all, save, tick, dayOf, monthOf, monthStats, listOf, addItem, editItem, removeItem, resetList, submitPlan, submitResult, reopen, ROLES };

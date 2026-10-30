@@ -1676,6 +1676,7 @@ api.get('/menu/month', wrap(async (req, res) => {
 }));
 api.get('/admin/menu', adminOnly, wrap(async (req, res) => res.json({ menu: await MENU().all(), canEdit: await canSeeAdmin(req.user.fb_id) })));
 api.put('/admin/menu', adminOnly, wrap(async (req, res) => res.json({ menu: await MENU().save((req.body || {}).menu, req.user.name) })));
+api.get('/admin/menu/defaults', adminOnly, wrap(async (req, res) => res.json({ menu: MENU().DEFAULT })));
 // A month of one person's tasks (the ones people created — not the automatic suggestions), day by day, for the calendar.
 // Buyers (and admins looking at a buyer: &buyer=<id>) see only the tasks assigned to that buyer.
 api.get('/tasks/month', wrap(async (req, res) => {

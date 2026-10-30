@@ -1378,7 +1378,7 @@ async function refreshChatsNow() {
   for (const st of fresh.pmStarts || []) {
     try {
       const users = await db.allUsers(); let hit = null;
-      for (const x of users) { const c = await db.getUserSetting(x.fb_id, 'tgCode', ''); if (c && c === st.code) { hit = x; break; } }
+      for (const x of users) { const c = String(await db.getUserSetting(x.fb_id, 'tgCode', '') || '').toUpperCase(); if (c && c === String(st.code).toUpperCase()) { hit = x; break; } }
       if (!hit) continue;
       await db.setUserSetting(hit.fb_id, 'tgChat', { id: st.id, name: st.name, at: new Date().toISOString() });
       const known = await db.getSetting('tgPmChats', {}); known[st.id] = hit.fb_id; await db.setSetting('tgPmChats', known);

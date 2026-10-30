@@ -3004,3 +3004,4 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .mt-step .hint{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3}
 .mt-step button{margin-top:2px}
 .menu-cols label button{align-self:flex-start;margin-top:4px}
+.mt-tg{display:flex;flex-direction:column;gap:8px} .mt-tg .mt-foot{justify-content:flex-start;gap:8px}

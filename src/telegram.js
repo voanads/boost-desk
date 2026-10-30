@@ -87,7 +87,7 @@ async function listChats(offset = 0) {
     if (list.length) next = list[list.length - 1].update_id + 1;
     if (list.length < 100) break;
   }
-  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], taps = [], cmds = [];
+  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], pmStarts = [], taps = [], cmds = [];
   for (const u of result) {
     // A button under a bot message was tapped (e.g. a media buyer's "Done").
     if (u.callback_query) { const q = u.callback_query; taps.push({ qid: q.id, data: q.data || '', chat: String((q.message && q.message.chat && q.message.chat.id) || (q.from && q.from.id) || ''), msgId: q.message && q.message.message_id, text: (q.message && q.message.text) || '', name: [q.from && q.from.first_name, q.from && q.from.last_name].filter(Boolean).join(' ') }); continue; }
@@ -98,6 +98,9 @@ async function listChats(offset = 0) {
       // A media buyer opened the bot from their invite link (t.me/<bot>?start=mb_CODE).
       const st = ((u.message || {}).text || '').trim().match(/^\/start\s+mb_([A-Za-z0-9]{8})\b/);
       if (st) starts.push({ id: String(chat.id), code: st[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
+      // A PM / owner connecting their own Telegram for alerts (t.me/<bot>?start=pm_CODE).
+      const sp = ((u.message || {}).text || '').trim().match(/^\/start\s+pm_([A-Za-z0-9]{8})\b/);
+      if (sp) pmStarts.push({ id: String(chat.id), code: sp[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
       // A media buyer asking for their dashboard link (/dashboard, or /start without a code).
       const cm = ((u.message || {}).text || '').trim().match(/^\/(dashboard|start|mytasks)(?:@\w+)?\s*$/i);
       if (cm) cmds.push({ id: String(chat.id), cmd: cm[1].toLowerCase() });
@@ -124,7 +127,7 @@ async function listChats(offset = 0) {
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links, moved, alerts, starts, taps, cmds, next };
+  return { chats: [...found.values()], links, moved, alerts, starts, pmStarts, taps, cmds, next };
 }
 
 // A user's Telegram profile photo (smallest size), as a data URL — or '' when they have none / it's hidden.

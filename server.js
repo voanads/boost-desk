@@ -1374,6 +1374,16 @@ async function refreshChatsNow() {
     }
   }
   try { await require('./src/buyers').onTelegram(fresh, AI); } catch (e) { console.error('[telegram] media buyers:', e.message); }
+  // PMs / owner connecting their own Telegram (t.me/<bot>?start=pm_CODE) for plan / result alerts from their media buyers.
+  for (const st of fresh.pmStarts || []) {
+    try {
+      const users = await db.allUsers(); let hit = null;
+      for (const x of users) { const c = await db.getUserSetting(x.fb_id, 'tgCode', ''); if (c && c === st.code) { hit = x; break; } }
+      if (!hit) continue;
+      await db.setUserSetting(hit.fb_id, 'tgChat', { id: st.id, name: st.name, at: new Date().toISOString() });
+      telegram.send(`✅ Hi ${hit.name}! Boost Desk alerts come here now: when your media buyers submit their plan in the morning and their result in the evening.`, st.id).catch(() => {});
+    } catch (e) { console.error('[telegram] pm link:', e.message); }
+  }
   const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);
   if (fresh.next && fresh.next !== offset) await db.setSetting('telegramOffset', fresh.next); // only after everything above is saved
@@ -1627,6 +1637,14 @@ async function menuPerson(req, raw) {
   // The role set in Admin → Users decides the menu: a Facebook login marked "Media buyer" gets the media buyer menu everywhere.
   return { person: req.user.fb_id, role: (await roleOf(req.user.fb_id)) === 'mb' ? 'mb' : 'pm', name: req.user.name };
 }
+// My Telegram: a PM / owner connects their own chat to get alerts (plan / result from their media buyers).
+api.get('/me/telegram', wrap(async (req, res) => {
+  if (req.user.buyer) return res.json({ buyer: true });
+  let code = await db.getUserSetting(req.user.fb_id, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(req.user.fb_id, 'tgCode', code); }
+  const chat = await db.getUserSetting(req.user.fb_id, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
+  res.json({ linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot });
+}));
+api.delete('/me/telegram', wrap(async (req, res) => { if (!req.user.buyer) await db.setUserSetting(req.user.fb_id, 'tgChat', null); res.json({ ok: true }); }));
 api.get('/menu', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
@@ -1664,10 +1682,17 @@ async function menuAlert(req, who, d, kind) {
   let text;
   if (kind === 'plan') text = `📋 ផែនការថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when}\n\n${d.items.map((x, i) => `${i + 1}. ${x.text}`).join('\n')}`;
   else text = `✅ លទ្ធផលថ្ងៃនេះ · ${who.name} (${roleName})\n🗓 ${dayLbl} · ${when} · ${d.done} / ${d.total} (${d.pct}%)\n\n${d.items.map((x) => `${x.done ? '✔' : '✘'} ${x.text}`).join('\n')}${d.result && d.result.note ? `\n\n📝 ${d.result.note}` : ''}`;
-  let chat = cfg.telegramChatId;
-  if (!chat && who.role === 'mb') { try { const b = await MB().get(who.person); chat = b && b.chat; } catch (_) {} }
-  if (!chat) return;
-  try { await telegram.send(text, chat); } catch (e) { console.error('[menu] telegram:', e.message); }
+  const chats = new Set(); if (cfg.telegramChatId) chats.add(String(cfg.telegramChatId));
+  if (who.role === 'mb') { // the media buyer's PM gets it in their own chat; without a team group the buyer gets a copy too
+    let pmId = null;
+    try { const b = await MB().get(who.person); if (b) { const byName = Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id])); pmId = b.addedById || byName[b.addedBy] || null; if (!cfg.telegramChatId && b.chat) chats.add(String(b.chat)); } } catch (_) {}
+    const addChat = async (id) => { const c = await db.getUserSetting(id, 'tgChat', null); if (c && c.id) chats.add(String(c.id)); };
+    if (pmId) await addChat(pmId);
+    if (req.user && req.user.fb_id) { await addChat(req.user.fb_id); // the submitter's own chat (a Facebook login marked Media buyer), or the PM behind a bot buyer
+      if (!req.user.buyer) { const team = (await getTeams()).find((t) => t.members.includes(req.user.fb_id)); for (const m of (team ? team.members : []).filter((x) => x !== req.user.fb_id)) await addChat(m); } // their teammates (the PM)
+    }
+  }
+  for (const chat of chats) { try { await telegram.send(text, chat); } catch (e) { console.error('[menu] telegram:', e.message); } }
 }
 // Morning: submit the plan (freezes today's list). Evening: submit the result (closes the day). Reopen undoes the result.
 api.post('/menu/plan', wrap(async (req, res) => {

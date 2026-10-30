@@ -499,8 +499,6 @@ async function dayTasks(day) {
       for (const x of [...(t.items || []), ...(t.tips || [])]) {
         if (!x.clientId || !cName[x.clientId]) continue;
         const wbk = wb[`${u.fb_id}:cwb:${x.clientId}`] || {};
-        // ticked on an earlier day and still saying the same thing → stays cleared
-        if ((wbk.log || []).some((l) => String(l.id || '').startsWith('k:') && l.day < day && l.kind === x.kind && l.text === x.title)) continue;
         const tk = (wbk.ticks || {})[`${day}:${x.kind}`];
         out[u.fb_id].tasks.push({ id: `w:${x.clientId}:${x.kind}`, text: x.title, detail: x.detail || '', from: 'work', kind: x.kind, level: x.level || '', day, done: !!tk, doneAt: tk ? tk.at : null, doneBy: tk ? tk.by : null, late: false, client: cName[x.clientId], clientId: Number(x.clientId) });
       }

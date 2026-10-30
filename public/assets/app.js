@@ -2044,11 +2044,26 @@
         `${row('Facebook ID', `<span class="num">${esc(d.facebook.id)}</span>`)}${row('Login valid until', d.facebook.expires ? esc(nice(d.facebook.expires.slice(0, 10))) + (d.facebook.daysLeft !== null ? ` <span class="hint">(${d.facebook.daysLeft} days)</span>` : '') : '—')}${row('Ad accounts', `${d.facebook.accounts} <span class="hint">· ${d.facebook.autoSync} in auto sync</span>`)}${row('Clients', String(d.facebook.clients))}
         <div class="hint">Boost Desk reads Ads Manager with this login. Facebook logins last about 60 days — log in again before it expires so auto sync keeps running.</div>`,
         `<a class="btn sm" href="/auth/facebook">↻ Log in with Facebook again</a>`),
-      card('', 'Telegram account', d.telegram.linked ? on('Connected') : off('Not connected'), `<div class="st-txt">${tgBody}</div>` + (d.buyers && d.buyers.length ? `<div class="st-sub"><span class="hint">Your media buyers on Telegram</span>${d.buyers.map((b) => `<span class="pill ${b.linked ? 'ok' : 'warn'}">${esc(b.name)}${b.linked ? '' : ' · not connected'}</span>`).join(' ')}</div>` : ''),
+      card('', 'Telegram account', d.telegram.linked ? on('Connected') : off('Not connected'), `<div class="st-txt">${tgBody}</div>`,
         d.buyer ? '' : (d.telegram.linked ? '<button type="button" class="sm ghost" id="stTgOff">Disconnect</button>' : (d.telegram.link ? `<a class="btn sm primary" href="${esc(d.telegram.link)}" target="_blank" rel="noopener">Connect my Telegram</a><button type="button" class="sm ghost" id="stTgCheck">Check</button>` : '<span class="hint">The Telegram bot is not set up on the server yet.</span>'))),
+      d.buyer ? '' : card('', 'My media buyers on Telegram', `<span class="pill">${(d.buyers || []).filter((b) => b.linked).length} / ${(d.buyers || []).length} connected</span>`, '<div class="st-mbs" id="stMbs"><div class="sk"></div></div><div class="hint">Each media buyer gets their tasks, the 📋 My tasks button and the morning reminder in their own Telegram. Not connected yet? Copy their invite link and send it to them — they tap it, then tap <b>Start</b>.</div>',
+        '<form class="st-mbadd" id="stMbForm"><input type="text" id="stMbName" placeholder="New media buyer\'s name" maxlength="60" aria-label="Media buyer name"><button type="submit" class="sm primary">+ Add</button></form>'),
     ].join('');
+    if (!d.buyer) drawSettingsBuyers();
     const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
     const ck = $('stTgCheck'); if (ck) ck.onclick = () => loadSettingsPage();
+  }
+  async function drawSettingsBuyers() {
+    const host = $('stMbs'); if (!host) return;
+    await loadMb();
+    const hhmm2 = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+    host.innerHTML = mbList.length ? mbList.map((b) => `<div class="st-mb">${mbAvatar(b)}<div class="st-mbn"><b>${esc(b.name)}${b.alias && b.alias !== b.name ? ` <span class="hint">(${esc(b.alias)})</span>` : ''}</b><span class="hint">${b.linked ? `<span class="is-ok">✓ Connected</span>${b.tgName ? ' · Telegram: ' + esc(b.tgName) : ''}` : '<span class="is-warn">Not connected — send the invite link</span>'}</span></div>
+        <div class="st-mba">${b.linked ? `<button type="button" class="ghost sm" data-mbsync="${esc(b.id)}" title="Re-read name and picture from Telegram">↻</button>` : ''}${b.link ? `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">${b.linked ? 'Copy link' : 'Copy invite link'}</button>` : ''}<button type="button" class="ghost sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}" title="Remove">✕</button></div></div>`).join('')
+      : '<div class="hl-empty">No media buyers yet — add one below.</div>';
+    host.querySelectorAll('[data-mbcopy]').forEach((x) => x.onclick = async () => { try { await navigator.clipboard.writeText(x.dataset.mbcopy); toast('Invite link copied — send it to them on Telegram'); } catch (_) { prompt('Copy this link', x.dataset.mbcopy); } });
+    host.querySelectorAll('[data-mbsync]').forEach((x) => x.onclick = async () => { x.disabled = true; try { await api(`/media-buyers/${encodeURIComponent(x.dataset.mbsync)}/sync`, { method: 'POST' }); toast('Profile refreshed from Telegram'); } catch (e) { toast(e.message); } drawSettingsBuyers(); });
+    host.querySelectorAll('[data-mbdel]').forEach((x) => x.onclick = async () => { const b = mbList.find((y) => y.id === x.dataset.mbdel); if (!confirm(`Remove ${b ? b.name : 'this media buyer'}? Their tasks stay on the clients; they just stop getting new ones.`)) return; try { await api(`/media-buyers/${encodeURIComponent(x.dataset.mbdel)}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); });
+    const f = $('stMbForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const n = $('stMbName').value.trim(); if (!n) return $('stMbName').focus(); try { const b = await api('/media-buyers', { method: 'POST', body: { name: n } }); $('stMbName').value = ''; toast('Added — now copy the invite link and send it to ' + b.name); } catch (e) { toast(e.message); } loadSettingsPage(); };
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');

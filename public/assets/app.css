@@ -3005,3 +3005,14 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .mt-step button{margin-top:2px}
 .menu-cols label button{align-self:flex-start;margin-top:4px}
 .mt-tg{display:flex;flex-direction:column;gap:8px} .mt-tg .mt-foot{justify-content:flex-start;gap:8px}
+/* Settings page (my profile) */
+.st-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+.st-card{display:flex;flex-direction:column;gap:12px;margin:0}
+.st-h{display:flex;align-items:center;gap:8px} .st-h h2{margin:0;font-size:var(--fs-xl);flex:1}
+.st-b{display:flex;flex-direction:column;gap:8px} .st-a{display:flex;gap:8px;flex-wrap:wrap;border-top:1px dashed var(--line);padding-top:10px}
+.st-prof{display:flex;align-items:center;gap:12px;padding-bottom:6px} .st-pic{width:56px;height:56px;border-radius:50%;object-fit:cover} .st-av{width:56px;height:56px;font-size:var(--fs-lg)}
+.st-pn{display:flex;flex-direction:column;line-height:1.3} .st-name{font-size:var(--fs-xl);font-weight:700}
+.st-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-top:1px solid var(--line);padding:8px 0 0} .st-row b{font-weight:600;text-align:right;overflow-wrap:anywhere}
+.st-sub{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:6px} .st-sub .hint{width:100%}
+.pill.bad{background:var(--danger-soft);color:var(--danger)}
+.st-txt{line-height:1.5} .st-txt b{display:inline}

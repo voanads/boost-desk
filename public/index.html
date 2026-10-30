@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=211">
+<link rel="stylesheet" href="/assets/app.css?v=212">
 <link rel="stylesheet" href="/assets/profit.css?v=180">
 </head>
 <body>
@@ -33,6 +33,7 @@
       <button role="tab" data-tab="orders" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5"/><path d="M12 12v9"/></svg><span class="full">Orders</span><span class="short">Orders</span></button>
       <button role="tab" data-tab="payments" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h9l4 4V21l-2.5-1.5L14 21l-2.5-1.5L9 21l-3-1.5Z"/><path d="M9 9h6M9 13h6"/></svg><span class="full">Payments</span><span class="short">Pay</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
+      <button role="tab" data-tab="settings" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="full">Settings</span><span class="short">Settings</span></button>
       <span class="navgrp" id="navGrpAdmin" hidden>Admin</span>
       <button role="tab" data-tab="main" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.8"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/></svg><span class="full">Main Dashboard</span><span class="short">Main</span></button>
       <button role="tab" data-tab="board" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="5" height="17" rx="1.6"/><rect x="9.5" y="3.5" width="5" height="11" rx="1.6"/><rect x="16" y="3.5" width="5" height="14" rx="1.6"/></svg><span class="full">Clients Board</span><span class="short">Board</span></button>
@@ -254,6 +255,12 @@
     </div>
   </section>
 
+  <!-- SETTINGS (my profile) -->
+  <section id="tab-settings" class="wrap" hidden>
+    <div class="ohead"><div><h1>Settings</h1><div class="hint">Your profile, your Facebook login and your Telegram.</div></div></div>
+    <div class="st-grid" id="stGrid"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+  </section>
+
   <!-- MY TASK -->
   <section id="tab-mytasks" class="wrap" hidden>
     <div class="ohead"><div><h1>My Task</h1><div class="hint">The daily task menu and KPIs for this month — <span id="mtWho"></span></div></div></div>
@@ -261,7 +268,7 @@
       <aside class="panel mt-people" id="mtPeople" hidden></aside>
       <div class="mt-grid">
         <div class="mt-col"><div class="panel mt-menu" id="mtMenu"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div><div class="panel mt-addp" id="mtAdd" hidden></div><div class="panel tasks-mine mt-tasks" id="mtTasks" hidden><div class="sk"></div><div class="sk"></div></div><div class="panel mt-cal" id="mtCal" hidden></div></div>
-        <div class="mt-col"><div class="panel mt-tg" id="mtTg" hidden></div><div class="panel kpi-mine mt-kpi" id="mtKpi"></div></div>
+        <div class="panel kpi-mine mt-kpi" id="mtKpi"></div>
       </div>
     </div>
   </section>
@@ -684,6 +691,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=180"></script>
-<script src="/assets/app.js?v=211"></script>
+<script src="/assets/app.js?v=212"></script>
 </body>
 </html>

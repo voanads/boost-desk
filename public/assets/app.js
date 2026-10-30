@@ -281,8 +281,8 @@
     if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
     if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target', 'mytasks'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); }
@@ -297,6 +297,7 @@
     if (name === 'target') loadTargets();
     if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
     if (name === 'mytasks') loadMyTaskPage();
+    if (name === 'settings') loadSettingsPage();
     if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
@@ -2022,20 +2023,32 @@
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true; $('mtTasks').hidden = true;
-    loadMtMenu(); loadMyKpiPage(); loadMtCal(); loadMtTelegram();
+    loadMtMenu(); loadMyKpiPage(); loadMtCal();
   }
-  // My Telegram: connect your own chat so your media buyers' plan / result alerts reach you.
-  async function loadMtTelegram() {
-    const host = $('mtTg'); if (!host) return;
-    if (me.buyer || mtAs) { host.hidden = true; return; }
-    let d; try { d = await api('/me/telegram'); } catch (_) { host.hidden = true; return; }
-    if (!d.bot) { host.hidden = true; return; }
-    host.hidden = false;
-    host.innerHTML = d.linked
-      ? `<div class="top"><h2>✈️ Telegram alerts</h2><span class="pill ok">On</span></div><div class="hint">Connected as <b>${esc(d.name || 'you')}</b>. Your media buyers' plans and results come to your Telegram${me.role === 'mb' ? ', and your own too' : ''}.</div><div class="mt-foot"><button type="button" class="ghost sm" id="mtTgOff">Disconnect</button></div>`
-      : `<div class="top"><h2>✈️ Telegram alerts</h2><span class="pill warn">Off</span></div><div class="hint">Get a Telegram message when your media buyers submit their morning plan and evening result. Tap the button, then tap <b>Start</b> in Telegram — it connects within a minute.</div><div class="mt-foot"><a class="btn sm primary" href="${esc(d.link)}" target="_blank" rel="noopener">Connect my Telegram</a><button type="button" class="ghost sm" id="mtTgCheck">Check</button></div>`;
-    const off = $('mtTgOff'); if (off) off.onclick = async () => { try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadMtTelegram(); };
-    const ck = $('mtTgCheck'); if (ck) ck.onclick = () => loadMtTelegram();
+  // ---- Settings page: my profile, my Facebook login, my Telegram ----
+  async function loadSettingsPage() {
+    const host = $('stGrid'); if (!host || !me) return;
+    let d; try { d = await api('/me/profile'); } catch (e) { host.innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    const card = (ic, title, state, body, acts) => `<div class="panel st-card"><div class="st-h"><span class="st-ic">${ic}</span><h2>${title}</h2>${state || ''}</div><div class="st-b">${body}</div>${acts ? `<div class="st-a">${acts}</div>` : ''}</div>`;
+    const row = (k, v) => `<div class="st-row"><span class="hint">${k}</span><b>${v}</b></div>`;
+    const on = (t) => `<span class="pill ok">${t}</span>`, off = (t) => `<span class="pill warn">${t}</span>`, bad = (t) => `<span class="pill bad">${t}</span>`;
+    const avatar = d.buyer ? (d.photo ? `<img class="st-pic" src="/mb-pic/${esc(d.id)}" alt="">` : `<span class="avatar st-av">${initials(d.name)}</span>`) : (d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
+    const tgBody = d.buyer
+      ? (d.telegram.linked ? 'Your Telegram is connected: tasks from your PM, the 📋 My tasks button and reminders come there. Your name and picture follow your Telegram profile.' : 'Not connected yet — open the invite link from your PM in Telegram and tap <b>Start</b>.')
+      : (d.telegram.linked ? `Connected as <b>${esc(d.telegram.name || 'you')}</b>${d.telegram.at ? ' · ' + esc(ago(d.telegram.at)) : ''}. Your media buyers' morning plans and evening results come to your Telegram${d.role === 'mb' ? ', and your own submissions too' : ''}.` : 'Get a Telegram message when your media buyers submit their morning plan and evening result. Tap <b>Connect</b>, then tap <b>Start</b> in Telegram — it connects within a minute.');
+    host.innerHTML = [
+      card('', 'Profile', '', `<div class="st-prof">${avatar}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${esc(d.roleName)}${d.team ? ' · ' + esc(d.team) : ''}</span></div></div>
+        ${row('Role', esc(d.roleName))}${row('Team', d.team ? esc(d.team) : '<span class="hint">No team yet</span>')}${row('My website', `<a href="${esc(d.site)}">${esc(location.host + d.site)}</a>`)}${d.buyer ? row('Project Manager', esc(d.pm || '—')) + (d.alias && d.alias !== d.name ? row('Also called', esc(d.alias)) : '') : ''}${d.google ? row('Google', esc(d.google.email)) : ''}
+        <div class="hint">${d.buyer ? 'Your name and picture sync from Telegram.' : 'Your name and picture come from your Facebook account. Roles and teams are set by the app owner in Admin.'}</div>`),
+      d.buyer ? '' : card('', 'Facebook account', d.facebook.expired ? bad('Login expired') : d.facebook.daysLeft !== null && d.facebook.daysLeft < 7 ? off(`Expires in ${d.facebook.daysLeft} day${d.facebook.daysLeft === 1 ? '' : 's'}`) : on('Login ok'),
+        `${row('Facebook ID', `<span class="num">${esc(d.facebook.id)}</span>`)}${row('Login valid until', d.facebook.expires ? esc(nice(d.facebook.expires.slice(0, 10))) + (d.facebook.daysLeft !== null ? ` <span class="hint">(${d.facebook.daysLeft} days)</span>` : '') : '—')}${row('Ad accounts', `${d.facebook.accounts} <span class="hint">· ${d.facebook.autoSync} in auto sync</span>`)}${row('Clients', String(d.facebook.clients))}
+        <div class="hint">Boost Desk reads Ads Manager with this login. Facebook logins last about 60 days — log in again before it expires so auto sync keeps running.</div>`,
+        `<a class="btn sm" href="/auth/facebook">↻ Log in with Facebook again</a>`),
+      card('', 'Telegram account', d.telegram.linked ? on('Connected') : off('Not connected'), `<div class="st-txt">${tgBody}</div>` + (d.buyers && d.buyers.length ? `<div class="st-sub"><span class="hint">Your media buyers on Telegram</span>${d.buyers.map((b) => `<span class="pill ${b.linked ? 'ok' : 'warn'}">${esc(b.name)}${b.linked ? '' : ' · not connected'}</span>`).join(' ')}</div>` : ''),
+        d.buyer ? '' : (d.telegram.linked ? '<button type="button" class="sm ghost" id="stTgOff">Disconnect</button>' : (d.telegram.link ? `<a class="btn sm primary" href="${esc(d.telegram.link)}" target="_blank" rel="noopener">Connect my Telegram</a><button type="button" class="sm ghost" id="stTgCheck">Check</button>` : '<span class="hint">The Telegram bot is not set up on the server yet.</span>'))),
+    ].join('');
+    const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
+    const ck = $('stTgCheck'); if (ck) ck.onclick = () => loadSettingsPage();
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
@@ -3856,7 +3869,7 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -3865,7 +3878,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'profit', 'mytasks'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts', 'profit', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -3897,6 +3910,7 @@ Thank you for working with Ads Box!`,
         ['dashboard', 'clients', 'lives', 'orders', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
         $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');
         const mt = document.querySelector('nav.tabs [data-tab=mytasks]'), tg = document.querySelector('nav.tabs [data-tab=target]'); if (mt && tg) tg.insertAdjacentElement('afterend', mt); // My Task sits with the Admin pages here
+        const stb = document.querySelector('nav.tabs [data-tab=settings]'), adb = document.querySelector('nav.tabs [data-tab=admin]'); if (stb && adb) adb.insertAdjacentElement('afterend', stb);
       }
       if (showAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
@@ -3906,7 +3920,7 @@ Thank you for working with Ads Box!`,
       }
       const adminTabs = ['main', 'board', 'adaccts', 'profit', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
-      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
+      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', 'settings', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

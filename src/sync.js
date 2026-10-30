@@ -329,6 +329,33 @@ async function untickedToday(user, day) {
   await db.saveAccounts(owner, list);
 }
 
+// Before a report for today: pull this client's campaigns' spend for today straight from Meta and update the saved
+// numbers (entry lines + raw rows), so the text matches the ads picture (which is always live) and the Dashboard.
+// One insights call per ad account; errors leave the saved numbers as they were. Returns true when something changed.
+async function freshenToday(user, clientId, day) {
+  const owner = user.fb_id, e = await db.getEntry(day, clientId);
+  const ids = new Set();
+  for (const l of Object.values(e.lives || {})) for (const id of l.ids || []) ids.add(String(id));
+  for (const id of (e.post || {}).ids || []) ids.add(String(id));
+  if (!ids.size) return false;
+  const rawDays = await db.listRaw(owner, day, day), rows = (rawDays[0] || {}).rows || [];
+  const accounts = {}; for (const r of rows) if (r.campaignId && r.accountId && ids.has(String(r.campaignId))) (accounts[r.accountId] = accounts[r.accountId] || new Set()).add(String(r.campaignId));
+  if (!Object.keys(accounts).length) return false;
+  const token = await tokenFor(user), fresh = {};
+  for (const act of Object.keys(accounts)) {
+    try { for (const r of await meta.campaignSpendRange(token, act, day, day)) if (accounts[act].has(String(r.campaign_id))) fresh[String(r.campaign_id)] = round2(Number(r.spend) || 0); }
+    catch (err) { if (err.needsLogin || err.rateLimited) throw err; }
+  }
+  if (!Object.keys(fresh).length) return false;
+  let changed = false;
+  const sum = (list, old) => { let t = 0, any = false; for (const id of list || []) { const r = rows.find((x) => String(x.campaignId) === String(id)); const v = fresh[String(id)] != null ? fresh[String(id)] : r ? Number(r.spend) || 0 : null; if (v == null) return old; t += v; any = true; } return any ? round2(t) : old; };
+  for (const l of Object.values(e.lives || {})) { const v = sum(l.ids, l.spend); if (v !== l.spend) { l.spend = v; changed = true; } }
+  if (e.post && e.post.ids) { const v = sum(e.post.ids, e.post.spend); if (v !== e.post.spend) { e.post.spend = v; changed = true; } }
+  for (const r of rows) if (r.campaignId && fresh[String(r.campaignId)] != null && fresh[String(r.campaignId)] !== Number(r.spend)) { r.spend = fresh[String(r.campaignId)]; changed = true; }
+  if (changed) { await db.putEntry(day, clientId, e); await db.putRaw(owner, day, rows); }
+  return changed;
+}
+
 // One sync at a time per admin — the Sync button and background syncs share this.
 const busy = new Set();
 const isBusy = (owner) => busy.has(owner);
@@ -693,4 +720,4 @@ async function unmatchedSpend(owner, from, to) {
   return { spend: round2(spend), pages: Object.values(m).map((x) => ({ page: x.page, pageId: x.pageId, spend: round2(x.spend), camps: Object.entries(x.camps).map(([k, v]) => [String(k), round2(v)]) })).sort((a, b) => b.spend - a.spend) };
 }
 
-module.exports = { scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

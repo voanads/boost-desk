@@ -1397,6 +1397,7 @@ api.get('/client-report/:id', wrap(async (req, res) => {
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip);
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+  if (c && to === sync.todayIn()) { try { await sync.freshenToday(req.user, c.id, to); } catch (e) { console.error('[report] fresh spend:', e.message); } } // today's numbers straight from Meta, like the picture
   const rts = c ? reports.routes(c) : [];
   if (rts.length > 1) { // Pages that report to their own topics: one text per Page
     const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip });

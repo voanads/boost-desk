@@ -2020,20 +2020,40 @@
       renderMtPeople();
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
-    if (ADMIN_SITE) { $('mtAdd').hidden = true; $('mtTasks').hidden = true; loadMyKpiPage(); loadMtCal(); return; } // /admin: calendar + KPIs only
-    renderMyTaskAdd();
-    if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
-    else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
-    loadMtCal();
+    // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
+    $('mtAdd').hidden = true; $('mtTasks').hidden = true;
+    loadMtMenu(); loadMyKpiPage(); loadMtCal();
+  }
+  // ---- the task menu for one day: the role's fixed duties, tick as you go ----
+  const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  async function loadMtMenu() {
+    const host = $('mtMenu'); if (!host || !me) return;
+    const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
+    let d; try { d = await api('/menu' + (q ? '?' + q : '')); } catch (e) { host.innerHTML = `<div class="hint">${esc(e.message)}</div>`; return; }
+    const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+    const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const isToday = d.day === d.today, who = d.name && (mtAs ? mtAs.name : me.buyer ? me.buyer.name : me.name), myName = me.buyer ? me.buyer.name : me.name;
+    const cls = d.pct == null ? '' : d.pct >= 85 ? 'ok' : d.pct >= 50 ? 'mid' : 'bad';
+    host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer duties' : 'Project Manager duties'} · every day${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span></div>
+      <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done</span></div>
+      <div class="mt-items">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
+        <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${it.done}" data-mtmenu="${esc(it.id)}" aria-label="Done">${box}</button>
+        <div class="mt-it"><span class="mt-ix">${i + 1}</span><b>${esc(it.text)}</b>${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div></div>`).join('') : `<div class="hl-empty">No menu for this role yet${me.canAdmin ? ' — set it in Admin → Settings → Task menu' : ' — ask your admin'}.</div>`}</div>
+      ${d.pct === 100 ? '<div class="mt-done-all">🎉 Everything on the menu is done' + (isToday ? ' today' : '') + '.</div>' : ''}`;
+    host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = async () => {
+      const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
+      try { await api('/menu/tick', { method: 'POST', body: { id: b.dataset.mtmenu, done, day: d.day, as: mtAs ? mtAs.id : undefined } }); if (done) successBadge('Done ✓'); } catch (e) { toast(e.message); }
+      loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage();
+    });
+    const bt = $('mtMenuToday'); if (bt) bt.onclick = () => { mtDay = null; loadMtMenu(); loadMtCal(); };
   }
   // ---- month calendar of the person's tasks: each day lists its tasks and how much got done (like a staff KPI calendar) ----
   let mtMonth = null, mtDay = null;
   async function loadMtCal() {
     const host = $('mtCal'); if (!host || !me) return;
-    if (mtAs && mtAs.buyer && !mtAs.pm) { host.hidden = true; return; }
     const t = (me && me.today) || iso(new Date()); if (!mtMonth) mtMonth = t.slice(0, 7);
-    const q = [`month=${mtMonth}`]; if (mtAs) { q.push(`as=${encodeURIComponent(mtAs.buyer ? mtAs.pm : mtAs.id)}`); if (mtAs.buyer) q.push(`buyer=${encodeURIComponent(mtAs.id.slice(3))}`); }
-    let d; try { d = await api('/tasks/month?' + q.join('&')); } catch (e) { host.hidden = true; return; }
+    const q = [`month=${mtMonth}`, mtAsQ()].filter(Boolean);
+    let d; try { d = await api('/menu/month?' + q.join('&')); } catch (e) { host.hidden = true; return; }
     host.hidden = false;
     const days = Object.keys(d.days).sort(), first = new Date(days[0] + 'T00:00:00'), lead = (first.getDay() + 6) % 7; // Monday first
     const withTasks = days.filter((k) => d.days[k].total), avg = withTasks.length ? Math.round(withTasks.reduce((s, k) => s + d.days[k].pct, 0) / withTasks.length) : null;
@@ -2045,11 +2065,11 @@
         <span class="mc-list">${show.map((t) => `<span class="mc-t"><i class="${t.done ? 'done' : t.missed || t.late ? 'late' : 'open'}"></i>${esc(t.text)}</span>`).join('')}${more > 0 ? `<span class="mc-more">+${more} more</span>` : ''}</span>
         <b class="mc-pct ${cls(x.pct)}">${x.total ? x.pct + '<small>%</small>' : ''}</b></button>`; };
     const nextOff = mtMonth >= t.slice(0, 7);
-    host.innerHTML = `<div class="top mc-top"><h2>📅 ${esc(monthLabel(mtMonth))}</h2><div class="mc-nav"><button type="button" class="navbtn" data-mcm="-1" aria-label="Previous month">‹</button><button type="button" class="navbtn" data-mcm="1" aria-label="Next month" ${nextOff ? 'disabled' : ''}>›</button></div><span class="hint">${withTasks.length} day${withTasks.length === 1 ? '' : 's'} with tasks${avg != null ? ` · avg <b class="${cls(avg)}">${avg}%</b>` : ''}</span><span class="spacer"></span><span class="mc-legend"><i class="ok"></i>85%+ <i class="mid"></i>50%+ <i class="bad"></i>&lt;50%</span></div>
+    host.innerHTML = `<div class="top mc-top"><h2>📅 ${esc(monthLabel(mtMonth))}</h2><div class="mc-nav"><button type="button" class="navbtn" data-mcm="-1" aria-label="Previous month">‹</button><button type="button" class="navbtn" data-mcm="1" aria-label="Next month" ${nextOff ? 'disabled' : ''}>›</button></div><span class="hint">${withTasks.length} day${withTasks.length === 1 ? '' : 's'}${avg != null ? ` · avg <b class="${cls(avg)}">${avg}%</b>` : ''}</span><span class="spacer"></span><span class="mc-legend"><i class="ok"></i>85%+ <i class="mid"></i>50%+ <i class="bad"></i>&lt;50%</span></div>
       <div class="mc-head">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((x) => `<span>${x}</span>`).join('')}</div>
       <div class="mc-grid">${'<span class="mc-pad"></span>'.repeat(lead)}${days.map(cell).join('')}</div>`;
     host.querySelectorAll('[data-mcm]').forEach((b) => b.onclick = () => { const [y, m] = mtMonth.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1 + Number(b.dataset.mcm), 1)); mtMonth = dt.toISOString().slice(0, 7); loadMtCal(); });
-    host.querySelectorAll('[data-mcd]').forEach((b) => b.onclick = () => { mtDay = b.dataset.mcd === d.today ? null : b.dataset.mcd; host.querySelectorAll('[data-mcd]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); if (me.buyer || ADMIN_SITE) return; loadMyTasks('mtTasks'); $('mtTasks').scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); });
+    host.querySelectorAll('[data-mcd]').forEach((b) => b.onclick = () => { if (b.dataset.mcd > d.today) return; mtDay = b.dataset.mcd === d.today ? null : b.dataset.mcd; host.querySelectorAll('[data-mcd]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); loadMtMenu(); $('mtMenu').scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); });
   }
   function renderMtPeople() {
     const pp = $('mtPeople'), q = mtQ.trim().toLowerCase();
@@ -2059,7 +2079,7 @@
       return `<button type="button" class="mt-person${on ? ' on' : ''}" data-mtp="${isMe ? '' : esc(p.id)}" aria-pressed="${on}">
         ${p.kind === 'Media buyer' && p.photo ? `<span class="avatar"><img src="/mb-pic/${esc(p.id.slice(3))}" alt="" loading="lazy"></span>` : `<span class="avatar">${initials(p.name)}</span>`}
         <span class="mt-pn"><b>${esc(p.name)}${isMe ? ' <small class="hint">· me</small>' : ''}</b><span class="hint">${esc(p.kind === 'Media buyer' ? 'Media buyer' + (p.pmName ? ' · ' + p.pmName : '') : p.role)}${p.team ? ' · ' + esc(p.team) : ''}</span></span>
-        <span class="mt-pv"><b class="num ${p.late ? 'is-danger' : total && p.open === 0 ? 'is-ok' : ''}">${total ? `${p.done}/${total}` : '–'}</b><span class="hint">${p.late ? p.late + ' late' : total ? 'tasks' : 'no tasks'}</span></span>
+        <span class="mt-pv"><b class="num ${total && p.open === 0 ? 'is-ok' : p.pct != null && p.pct < 50 ? 'is-danger' : ''}">${total ? `${p.done}/${total}` : '–'}</b><span class="hint">${total ? 'menu today' : 'no menu'}</span></span>
         <span class="kpi-score ${p.kpi == null ? 'none' : scoreCls(p.kpi)}" title="KPI this month">${p.kpi == null ? '–' : p.kpi + '%'}</span></button>`; };
     const pms = list.filter((p) => p.kind !== 'Media buyer'), mbs = list.filter((p) => p.kind === 'Media buyer');
     pp.innerHTML = `<div class="top"><h2>People</h2><span class="hint">${(mtPeople || []).length} · tap one to see their day</span></div>
@@ -2106,8 +2126,9 @@
     };
   }
   async function refreshMtPeople() { if (!mtAdminPick()) return; try { mtPeople = (await api('/admin/people-today')).people; renderMtPeople(); } catch (_) {} }
-  function loadMyKpiPage(d) {
+  async function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
+    if (me.buyer && !d) { try { d = await api('/mb/me'); } catch (_) { return; } }
     if (!me.buyer) { host.innerHTML = `<div class="top"><h2>📊 Monthly KPI${mtAs ? ' · ' + esc(mtAs.name) : ''}</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>`; kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); return; }
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.source === 'all' ? 'all daily tasks' : `${k.tasks} task${k.tasks === 1 ? '' : 's'}`}${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
@@ -2285,12 +2306,31 @@
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
+      card('📋', 'Task menu', '', 'The fixed daily duties every Project Manager and every media buyer ticks on their My Task page. One list per role.', '<button class="sm" data-sgo="menu">Edit task menu</button>'),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
       d.canEdit ? card('🔑', 'Admin website · Google sign-in', '<span id="asState"></span>', '<div id="asBox" class="hint">Loading…</div>', '') : '',
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
       d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
     if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); }
+  }
+  // Task menu editor: one line per duty, for PMs and for media buyers.
+  async function openMenuEditor() {
+    let d = $('menuDlg');
+    if (!d) { d = document.createElement('dialog'); d.id = 'menuDlg'; d.className = 'dlg'; d.innerHTML = `<div class="dlg-in menu-in"><div class="dlg-head"><div><h2>📋 Task menu</h2><div class="hint">One duty per line. Everyone with that role sees the same list every day and ticks it on My Task. Reordering or editing a line keeps its history; deleting a line drops it from today on.</div></div><button type="button" class="ghost" id="menuClose" aria-label="Close">✕</button></div>
+      <div class="menu-cols"><label><b>Project Manager</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ PM</span><textarea id="menuPm" rows="9" spellcheck="false"></textarea></label><label><b>Media buyer</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ Media buyer</span><textarea id="menuMb" rows="9" spellcheck="false"></textarea></label></div>
+      <div class="dlg-foot"><span class="hint" id="menuSt"></span><span class="spacer"></span><button type="button" class="ghost" id="menuCancel">Cancel</button><button type="button" class="primary" id="menuSave">Save menu</button></div></div>`; document.body.appendChild(d); $('menuClose').onclick = () => d.close(); $('menuCancel').onclick = () => d.close(); }
+    let cur; try { cur = (await api('/admin/menu')).menu; } catch (e) { return toast(e.message); }
+    const lines = (l) => l.map((x) => x.text).join('\n');
+    $('menuPm').value = lines(cur.pm || []); $('menuMb').value = lines(cur.mb || []); $('menuSt').textContent = `${(cur.pm || []).length} PM duties · ${(cur.mb || []).length} media buyer duties`;
+    const parse = (ta, old) => ta.value.split('\n').map((x) => x.trim()).filter(Boolean).map((text) => { const o = old.find((y) => y.text === text); return o ? { id: o.id, text } : { text }; }); // same text keeps its id (and its ticks)
+    $('menuSave').onclick = async () => {
+      $('menuSave').disabled = true;
+      try { await api('/admin/menu', { method: 'PUT', body: { menu: { pm: parse($('menuPm'), cur.pm || []), mb: parse($('menuMb'), cur.mb || []) } } }); successBadge('Task menu saved'); d.close(); if (!$('tab-mytasks').hidden) loadMyTaskPage(); }
+      catch (e) { toast(e.message); }
+      $('menuSave').disabled = false;
+    };
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
   }
   // Steps to change every secret after a leak (e.g. the Railway incident of 21 Oct 2026). New values are made in
   // this browser only — they are never sent to the server or to chat; you paste them straight into Railway.
@@ -2393,6 +2433,7 @@ Notes:
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();
     if (k === 'qr') $('sQrFile').click();
+    if (k === 'menu') { openMenuEditor(); return; }
     if (k === 'aikey') { const v = prompt('Paste your Gemini key (from aistudio.google.com) or Claude key (starts with sk-ant-)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI advice is on'); aiReady = true; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'aikeydel') { if (!confirm('Remove the AI key? AI advice stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); aiReady = false; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }

@@ -1586,11 +1586,13 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   for (const u of users) {
     const ts = ((dt.users[u.fb_id] || {}).tasks || []).filter((t) => t.from !== 'work' && t.from !== 'ai');
     const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
-    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', ...count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
+    const mn = await MENU().dayOf(u.fb_id, 'pm', today);
+    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
   }
   for (const b of bl) {
     const pm = b.addedById || byName[b.addedBy] || null, ts = pm ? ((dt.users[pm] || {}).tasks || []).filter((t) => t.to && t.to.id === b.id) : [];
-    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, ...count(ts), kpi: await kpiAvg(b.id, true) });
+    const mn = await MENU().dayOf(b.id, 'mb', today);
+    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
   res.json({ today, month: ym, people });
 }));
@@ -1609,6 +1611,38 @@ api.get('/targets/mine', wrap(async (req, res) => {
   res.json({ day, today: sync.todayIn(), tasks: out });
 }));
 // My tasks today (every client): the same list each client page shows, in one place.
+// ---------- Task menu: fixed daily duties per role (PM / media buyer), ticked day by day ----------
+const MENU = () => require('./src/menu');
+// Whose menu: a buyer's own, mine (pm), or — admins — anyone's via ?as=<fbId> or ?as=mb:<buyerId>.
+async function menuPerson(req, raw) {
+  if (req.user.buyer) return { person: req.user.buyer.id, role: 'mb', name: req.user.buyer.name };
+  const as = String(raw || '').trim();
+  if (as && as !== req.user.fb_id) {
+    if (!(await canSeeAdmin(req.user.fb_id))) return null;
+    if (as.startsWith('mb:')) { const b = await MB().get(as.slice(3)); return b ? { person: b.id, role: 'mb', name: b.name } : null; }
+    const u = (await db.allUsers()).find((x) => x.fb_id === as); return u ? { person: u.fb_id, role: 'pm', name: u.name } : null;
+  }
+  return { person: req.user.fb_id, role: 'pm', name: req.user.name };
+}
+api.get('/menu', wrap(async (req, res) => {
+  const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = isDay(req.query.day) ? req.query.day : sync.todayIn();
+  res.json({ ...(await MENU().dayOf(who.person, who.role, day)), today: sync.todayIn(), name: who.name });
+}));
+api.post('/menu/tick', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = isDay(b.day) ? b.day : sync.todayIn(); if (day > sync.todayIn()) return res.status(400).json({ error: 'That day has not come yet.' });
+  if (!/^[a-f0-9]{8}$/.test(String(b.id || ''))) return res.status(400).json({ error: 'Which item?' });
+  await MENU().tick(who.person, day, b.id, !!b.done, req.user.buyer ? req.user.buyer.name : req.user.name);
+  res.json(await MENU().dayOf(who.person, who.role, day));
+}));
+api.get('/menu/month', wrap(async (req, res) => {
+  const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const ym = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : sync.todayIn().slice(0, 7);
+  res.json(await MENU().monthOf(who.person, who.role, ym));
+}));
+api.get('/admin/menu', adminOnly, wrap(async (req, res) => res.json({ menu: await MENU().all(), canEdit: await canSeeAdmin(req.user.fb_id) })));
+api.put('/admin/menu', adminOnly, wrap(async (req, res) => res.json({ menu: await MENU().save((req.body || {}).menu, req.user.name) })));
 // A month of one person's tasks (the ones people created — not the automatic suggestions), day by day, for the calendar.
 // Buyers (and admins looking at a buyer: &buyer=<id>) see only the tasks assigned to that buyer.
 api.get('/tasks/month', wrap(async (req, res) => {

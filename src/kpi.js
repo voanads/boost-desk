@@ -65,10 +65,13 @@ async function results(person, month, isBuyer) {
     let sum = 0; if (Number(t.target) > 0) { for (const [d, v] of Object.entries(t.hit || {})) if (d.startsWith(month)) sum += Number(v) || 0; } else sum = doneDays.size;
     return { t, due: dueDays.length, done, sum };
   });
-  const allDue = stat.reduce((a, x) => a + x.due, 0), allDone = stat.reduce((a, x) => a + x.done, 0);
+  // the daily task menu (fixed duties) counts too: an item named like the KPI, ticked day by day
+  let menu = []; try { menu = await require('./menu').monthStats(person, isBuyer ? 'mb' : 'pm', month); } catch (_) {}
+  const allDue = stat.reduce((a, x) => a + x.due, 0) + menu.reduce((a, x) => a + x.due, 0), allDone = stat.reduce((a, x) => a + x.done, 0) + menu.reduce((a, x) => a + x.done, 0);
   return kpis.map((k) => {
     let due = 0, done = 0, sum = 0, n = 0, linked = 0;
     for (const x of stat) { if (!matches(x.t, k)) continue; n++; if (x.t.kpi) linked++; due += x.due; done += x.done; sum += x.sum; }
+    for (const x of menu) { if (!matches({ text: x.text }, k)) continue; n++; due += x.due; done += x.done; sum += x.done; }
     let source = linked ? 'linked' : n ? 'name' : '';
     if (!n && k.unit === '%') { due = allDue; done = allDone; source = allDue ? 'all' : ''; }
     const auto = k.unit === '%' ? (due ? Math.round(done / due * 1000) / 10 : 0) : Math.round(sum * 100) / 100;

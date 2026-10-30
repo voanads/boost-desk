@@ -2965,3 +2965,17 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
   .kpi-score{grid-column:3/4;grid-row:1;justify-self:end}
   .kpi-x{grid-column:3/4;grid-row:2}
 }
+/* Task menu (My Task) */
+.mt-menu{display:flex;flex-direction:column;gap:12px}
+.mt-prog{display:flex;align-items:center;gap:10px} .mt-prog .tgt-bar{flex:1;height:10px;border-radius:5px;background:var(--bg-2);overflow:hidden} .mt-prog .tgt-bar i{display:block;height:100%;background:var(--brand);border-radius:5px;transition:width .3s}
+.mt-prog .tgt-bar i.ok,.mt-pct.ok{background:var(--ok)} .mt-prog .tgt-bar i.mid{background:var(--warn)} .mt-prog .tgt-bar i.bad{background:var(--danger)}
+.mt-pct{font-size:var(--fs-xl);font-weight:700;min-width:52px;text-align:right;background:none!important} .mt-pct.ok{color:var(--ok)} .mt-pct.mid{color:var(--warn)} .mt-pct.bad{color:var(--danger)}
+.mt-items{display:flex;flex-direction:column;gap:8px}
+.mt-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface);min-height:56px}
+.mt-item.done{background:var(--bg-2);border-color:transparent} .mt-item.done .mt-it b{text-decoration:line-through;color:var(--muted)}
+.mt-it{display:flex;align-items:center;gap:10px;flex:1;min-width:0;flex-wrap:wrap} .mt-it b{font-weight:600;overflow-wrap:anywhere;font-size:var(--fs-lg)}
+.mt-ix{width:24px;height:24px;border-radius:50%;background:var(--brand-soft);color:var(--brand-text);display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:700;flex:none}
+.mt-item.done .mt-ix{background:var(--ok-soft);color:var(--ok)}
+.mt-done-all{text-align:center;color:var(--ok);font-weight:600;padding:6px}
+.menu-in{max-width:900px} .menu-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px} .menu-cols label{display:flex;flex-direction:column;gap:4px} .menu-cols textarea{width:100%;min-height:220px;font:inherit;line-height:1.6;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--ink);resize:vertical}
+@media (max-width:760px){.menu-cols{grid-template-columns:1fr}}

@@ -358,6 +358,17 @@ async function campaignSetups(token, actId, campaignIds) {
 }
 
 // Ad-level numbers for a report picture: one row per ad, like the Ads tab in Ads Manager.
+// Spend per campaign, summed from the ad rows (the same rows the report picture adds up), so text and picture agree to the cent.
+async function adSpendByCampaign(token, actId, campaignIds, since, until) {
+  const out = {};
+  for (let i = 0; i < campaignIds.length; i += 50) {
+    const chunk = campaignIds.slice(i, i + 50);
+    const rows = await allStatuses(`/${actId}/insights`, { level: 'ad', fields: 'campaign_id,spend', time_range: { since, until }, filtering: [{ field: 'campaign.id', operator: 'IN', value: chunk }], limit: 500 },
+      { field: 'ad.effective_status', operator: 'IN', value: AD_STATUSES }, token);
+    for (const r of rows) out[String(r.campaign_id)] = (out[String(r.campaign_id)] || 0) + (Number(r.spend) || 0);
+  }
+  return out;
+}
 async function adInsights(token, actId, campaignIds, since, until) {
   const out = [];
   let reach = 0;
@@ -510,4 +521,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { get, adAccount, videoKind, adInsights, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { get, adAccount, videoKind, adInsights, adSpendByCampaign, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

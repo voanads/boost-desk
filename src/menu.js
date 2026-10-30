@@ -96,7 +96,7 @@ const stateOf = async (person, day) => (await db.getSetting(dayKey(person, day),
 async function submitPlan(person, role, day, by) {
   const st = await stateOf(person, day), items = itemsOn(await listOf(person, role), day);
   if (!items.length) throw new Error('Add at least one task to the menu first.');
-  st.plan = { at: new Date().toISOString(), by, items: items.map((x) => ({ id: x.id, text: x.text, once: x.once })) };
+  st.plan = { at: new Date().toISOString(), by, role, items: items.map((x) => ({ id: x.id, text: x.text, once: x.once })) };
   delete st.result; await db.setSetting(dayKey(person, day), st); return st;
 }
 async function submitResult(person, role, day, by, note) {
@@ -106,11 +106,11 @@ async function submitResult(person, role, day, by, note) {
 }
 async function reopen(person, day) { const st = await stateOf(person, day); delete st.result; await db.setSetting(dayKey(person, day), st); return st; }
 // The day's items: the plan snapshot when one was submitted, else the live list.
-const dayItems = (st, items, day) => (st.plan && Array.isArray(st.plan.items) ? st.plan.items : itemsOn(items, day));
+const dayItems = (st, items, day, role) => (st.plan && Array.isArray(st.plan.items) && (!st.plan.role || !role || st.plan.role === role) ? st.plan.items : itemsOn(items, day));
 
 async function dayOf(person, role, day) {
   const [items, t, st] = await Promise.all([listOf(person, role), ticksOf(person, day), stateOf(person, day)]);
-  const list = dayItems(st, items, day).map((i) => ({ ...i, done: !!t[i.id], at: t[i.id] ? t[i.id].at : null, by: t[i.id] ? t[i.id].by : null }));
+  const list = dayItems(st, items, day, role).map((i) => ({ ...i, done: !!t[i.id], at: t[i.id] ? t[i.id].at : null, by: t[i.id] ? t[i.id].by : null }));
   const done = list.filter((x) => x.done).length;
   return { day, role, items: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null,
     plan: st.plan ? { at: st.plan.at, by: st.plan.by } : null, result: st.result || null };
@@ -123,7 +123,7 @@ async function monthOf(person, role, month) {
   for (let d = 1; d <= last; d++) {
     const day = `${month}-${String(d).padStart(2, '0')}`, t = ticks[day] || {}, st = states[day] || {};
     if (day > today || (day < since && !Object.keys(t).length && !st.plan)) { days[day] = { tasks: [], total: 0, done: 0, pct: null }; continue; }
-    const list = dayItems(st, items, day).map((i) => ({ text: i.text, done: !!t[i.id], missed: !t[i.id] && day < today }));
+    const list = dayItems(st, items, day, role).map((i) => ({ text: i.text, done: !!t[i.id], missed: !t[i.id] && day < today }));
     const done = list.filter((x) => x.done).length;
     days[day] = { tasks: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null, planAt: st.plan ? st.plan.at : null, resultAt: st.result ? st.result.at : null };
   }
@@ -138,7 +138,7 @@ async function monthStats(person, role, month) {
   for (let d = 1; d <= last; d++) {
     const day = `${month}-${String(d).padStart(2, '0')}`, t = ticks[day] || {}, st = states[day] || {};
     if (day > today || (day < since && !Object.keys(t).length && !st.plan)) continue;
-    for (const i of dayItems(st, items, day)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, due: 0, done: 0 }; a.due++; if (t[i.id]) a.done++; }
+    for (const i of dayItems(st, items, day, role)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, due: 0, done: 0 }; a.due++; if (t[i.id]) a.done++; }
   }
   return Object.values(agg);
 }

@@ -1765,7 +1765,7 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · media buyers use <b>/mediabuyer</b> from the Telegram bot. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
+    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
       + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
@@ -1780,8 +1780,8 @@
       else st = '<span class="ustat ok">Running</span>';
       const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
-      const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
-      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${['pm', 'coo', 'ceo'].map((k) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
+      const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
+      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${['pm', 'mb', 'coo', 'ceo'].map((k) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
       const login = u.expired ? '<span class="ustat bad">Login expired</span>' : left !== null ? (left < 7 ? `<span class="ustat bad">Login expires in ${left} day${left === 1 ? '' : 's'}</span>` : `<span>Login ok for ${left} days</span>`) : '<span>Login —</span>';
       const sub = [u.team ? esc(u.team) : 'No team', `${u.clients} client${u.clients === 1 ? '' : 's'}`, `${u.accounts} ad account${u.accounts === 1 ? '' : 's'}`].join(' · ');
       return `<article class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
@@ -1806,7 +1806,7 @@
   });
   $('uList').addEventListener('change', async (ev) => {
     const r = ev.target.dataset.role;
-    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge({ ceo: 'Now CEO — sees everything', coo: 'Now COO — sees everything', pm: 'Now a Project Manager — own team only' }[ev.target.value] || 'Role saved'); } catch (e) { toast(e.message); } return loadUsers(); }
+    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge({ ceo: 'Now CEO — sees everything', coo: 'Now COO — sees everything', pm: 'Now a Project Manager — own team only', mb: 'Now a media buyer — /mediabuyer site and the media buyer task menu' }[ev.target.value] || 'Role saved'); } catch (e) { toast(e.message); } return loadUsers(); }
     const id = ev.target.dataset.auto; if (!id) return;
     try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); } catch (e) { toast(e.message); }
     loadUsers();
@@ -2025,7 +2025,7 @@
     loadMtMenu(); loadMyKpiPage(); loadMtCal();
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
-  const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : MB_SITE ? 'role=mb' : '');
+  const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
   async function loadMtMenu() {
     const host = $('mtMenu'); if (!host || !me) return;
     const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
@@ -2034,7 +2034,7 @@
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const isToday = d.day === d.today, myName = me.buyer ? me.buyer.name : me.name, closed = !!d.result;
     const cls = d.pct == null ? '' : d.pct >= 85 ? 'ok' : d.pct >= 50 ? 'mid' : 'bad';
-    const body = { as: mtAs ? mtAs.id : undefined, role: !mtAs && MB_SITE ? 'mb' : undefined };
+    const body = { as: mtAs ? mtAs.id : undefined };
     // the day's steps: 1 plan → 2 work → 3 result
     const steps = `<div class="mt-steps">
       <div class="mt-step ${d.plan ? 'done' : 'now'}"><div class="mt-sh"><span class="mt-sn">1</span><b>Plan</b></div><span class="hint">${d.plan ? `Submitted ${hhmm(d.plan.at)}${d.plan.by && d.plan.by !== myName ? ' · ' + esc(d.plan.by) : ''}` : 'Check the list, then submit · goes to Telegram'}</span>${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}</div>
@@ -2055,7 +2055,7 @@
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => { const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done }, done ? 'Done ✓' : ''); });
     host.querySelectorAll('[data-mtedit]').forEach((i) => { const orig = i.value; i.onchange = async () => { const t = i.value.trim(); if (!t || t === orig) { i.value = orig; return; } try { await api(`/menu/item/${encodeURIComponent(i.dataset.mtedit)}`, { method: 'PUT', body: { ...body, text: t } }); successBadge('Saved'); } catch (e) { toast(e.message); i.value = orig; } }; i.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); i.blur(); } }; });
-    host.querySelectorAll('[data-mtdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this task from your menu?')) return; try { await api(`/menu/item/${encodeURIComponent(b.dataset.mtdel)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : MB_SITE ? '?role=mb' : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } reload(); });
+    host.querySelectorAll('[data-mtdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this task from your menu?')) return; try { await api(`/menu/item/${encodeURIComponent(b.dataset.mtdel)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } reload(); });
     const f = $('mtOwnForm'); if (f) f.onsubmit = (ev) => { ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus(); post('/menu/item', { text, once: $('mtOwnWhen').value === 'once' || !!d.plan }, 'Added'); };
     const pb = $('mtPlanBtn'); if (pb) pb.onclick = () => { if (!confirm(`Submit the plan for ${isToday ? 'today' : nice(d.day)} — ${d.items.length} task${d.items.length === 1 ? '' : 's'}?`)) return; post('/menu/plan', {}, 'Plan submitted ✓'); };
     const rb = $('mtResultBtn'); if (rb) rb.onclick = () => { const note = prompt(`Submit the result — ${d.done} of ${d.total} done.\nAnything to note for today? (optional)`); if (note === null) return; post('/menu/result', { note }, 'Result submitted ✓'); };
@@ -3803,7 +3803,7 @@ Thank you for working with Ads Box!`,
     $('teamNewForm').hidden = !canEdit;
     $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Main Dashboard then shows spend, orders and suggestions per team. Each person can be in one team.' : 'Teams set up by the app owner.';
     const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
-    const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager' };
+    const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' };
     const memberRows = (t) => t.members.map((m) => { const u = users.find((x) => x.id === m) || {}; return `<div class="tc-row"><span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span><span class="hint">· ${RN[u.role] || 'Project Manager'}</span></div>${(u.buyers || []).map((b) => `<div class="tc-row mb"><span>${esc(b)}</span><span class="hint">· media buyer</span></div>`).join('')}`; }).join('');
     const inTeam = new Set(teams.flatMap((t) => t.members));
     $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">

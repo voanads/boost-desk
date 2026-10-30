@@ -339,6 +339,7 @@ app.get('/', wrap(async (req, res) => {
   if (req.user.google) return res.redirect('/admin');
   // The front door opens the Project Manager site for everyone with a Facebook login; the owner and
   // CEO / COO switch to /owner or /admin from the menu or by typing the address.
+  if ((await roleOf(req.user.fb_id)) === 'mb') return res.redirect('/mediabuyer');
   res.redirect('/projectmanager');
 }));
 // /owner: the app owner's site — every page (Work + Admin). Anyone else is sent to their own site.
@@ -347,10 +348,11 @@ app.get(['/owner', '/owner/'], wrap(async (req, res) => {
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="owner">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Owner</title>');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
-app.get(['/projectmanager', '/projectmanager/'], (req, res) => {
+app.get(['/projectmanager', '/projectmanager/'], wrap(async (req, res) => {
+  if (!req.user.google && (await roleOf(req.user.fb_id)) === 'mb') return res.redirect('/mediabuyer');
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="pm">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Project Manager</title>');
   res.set('Cache-Control', 'no-cache').send(html);
-});
+}));
 // The admin website: the same app, showing only the Main Dashboard and Admin.
 app.get(['/admin', '/admin/'], wrap(async (req, res) => {
   if (!req.user.google && !(await canSeeAdmin(req.user.fb_id))) return res.redirect('/projectmanager'); // a PM's site is /projectmanager
@@ -406,7 +408,7 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
 const adminViewers = async () => new Set(await db.getSetting('adminViewers', []));
 // Company roles: ceo (the app owner, or anyone given it), coo (sees everything, like an admin), pm (own clients).
 // Stored in the setting roles = { fbId: 'ceo'|'coo'|'pm' }; ceo/coo are also admin viewers so every older check holds.
-const ROLES = ['ceo', 'coo', 'pm'];
+const ROLES = ['ceo', 'coo', 'pm', 'mb']; // mb = a media buyer who logs in with Facebook: /mediabuyer site, media buyer task menu
 const roleMap = async () => (await db.getSetting('roles', {})) || {};
 async function roleOf(id) {
   if ((await db.ownerId()) === id) return 'ceo';
@@ -1585,9 +1587,9 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   const people = [];
   for (const u of users) {
     const ts = ((dt.users[u.fb_id] || {}).tasks || []).filter((t) => t.from !== 'work' && t.from !== 'ai');
-    const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
-    const mn = await MENU().dayOf(u.fb_id, 'pm', today);
-    people.push({ id: u.fb_id, name: u.name, kind: 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
+    const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
+    const isMb = ROLES.includes(roles[u.fb_id]) && roles[u.fb_id] === 'mb', mn = await MENU().dayOf(u.fb_id, isMb ? 'mb' : 'pm', today);
+    people.push({ id: u.fb_id, name: u.name, kind: isMb ? 'Media buyer' : 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
   }
   for (const b of bl) {
     const pm = b.addedById || byName[b.addedBy] || null, ts = pm ? ((dt.users[pm] || {}).tasks || []).filter((t) => t.to && t.to.id === b.id) : [];
@@ -1622,8 +1624,8 @@ async function menuPerson(req, raw) {
     if (as.startsWith('mb:')) { const b = await MB().get(as.slice(3)); return b ? { person: b.id, role: 'mb', name: b.name } : null; }
     const u = (await db.allUsers()).find((x) => x.fb_id === as); return u ? { person: u.fb_id, role: 'pm', name: u.name } : null;
   }
-  // A Facebook login working on the /mediabuyer site (a media buyer who logs in with Facebook) gets the media buyer menu.
-  return { person: req.user.fb_id, role: String(req.query.role || (req.body || {}).role || '') === 'mb' ? 'mb' : 'pm', name: req.user.name };
+  // The role set in Admin → Users decides the menu: a Facebook login marked "Media buyer" gets the media buyer menu everywhere.
+  return { person: req.user.fb_id, role: (await roleOf(req.user.fb_id)) === 'mb' ? 'mb' : 'pm', name: req.user.name };
 }
 api.get('/menu', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

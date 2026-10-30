@@ -1991,36 +1991,56 @@
           <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-tmtick="${t.clientId}|${t.id}|${t.from === 'work' ? 'w:' + t.kind : 't'}" data-title="${esc(t.text)}" aria-label="Done">${box}</button>
           <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'work' ? esc(t.detail || 'Today\'s work') : t.from === 'ai' ? 'AI plan' : t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span>` : 'My task'}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}${t.doneBy && t.doneBy !== me.name ? ' by ' + esc(t.doneBy) : ''}` : ''}</span></div>
           ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-tmreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit || '')}</span>` : ''}</div>`).join('')}</div>`).join('')
-      : `<div class="hl-empty">${tmFilter === 'open' ? '🎉 Nothing open today. Add tasks on a client page.' : 'Nothing here yet.'}</div>`}`;
+      : `<div class="hl-empty">${tmFilter === 'open' ? (hostId === 'mtTasks' ? '🎉 Nothing open today. Add a task above.' : '🎉 Nothing open today. Add tasks on a client page.') : 'Nothing here yet.'}</div>`}`;
     host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(hostId); });
     host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
     host.querySelectorAll('[data-tmtick]').forEach((b) => b.onclick = async () => {
       const [cid, tid, kind] = b.dataset.tmtick.split('|'), done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
       try { if (kind.startsWith('w:')) await api(`/clients/${cid}/tick${asQ}`, { method: 'PUT', body: { key: kind.slice(2), done, title: b.dataset.title } }); else await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { done } }); delete cWb[Number(cid)]; }
       catch (e) { toast(e.message); }
-      loadMyTasks(hostId); loadMyTargets();
+      loadMyTasks(hostId); loadMyTargets(); if (hostId === 'mtTasks') refreshMtPeople();
     });
     host.querySelectorAll('[data-tmreach]').forEach((i) => i.onchange = async () => { const [cid, tid] = i.dataset.tmreach.split('|'); try { await api(`/clients/${cid}/tasks/${tid}${asQ}`, { method: 'PATCH', body: { reached: Number(i.value) || 0 } }); delete cWb[Number(cid)]; } catch (e) { toast(e.message); } loadMyTasks(hostId); loadMyTargets(); });
     if (as) host.querySelectorAll('[data-tmgo]').forEach((b) => b.remove()); // another person's clients aren't on this site
   }
   // ---------- My Task page: today's tasks + this month's KPIs, on every site ----------
   const sc3 = (v) => (v >= 100 ? 'ok' : v >= 60 ? 'mid' : 'bad');
-  let mtAs = null, mtPeople = null; // admin: whose tasks and KPIs the My Task page shows (null = mine)
+  let mtAs = null, mtPeople = null, mtQ = ''; // admin: whose tasks and KPIs the My Task page shows (null = mine)
   const mtAdminPick = () => !!(me && me.canAdmin && !me.buyer && !PM_SITE);
   async function loadMyTaskPage() {
     if (!me) return;
-    if (mtAdminPick() && !mtPeople) { try { mtPeople = (await api('/kpis/people')).people; } catch (_) { mtPeople = []; } }
-    const pk = $('mtPick');
-    if (mtAdminPick() && mtPeople) {
-      pk.hidden = false;
-      const others = mtPeople.filter((p) => p.id !== me.id);
-      pk.innerHTML = `<label class="hint" for="mtPerson">Show</label><select id="mtPerson" aria-label="Person"><option value="">Me · ${esc(me.name)}</option>${others.some((p) => p.kind === 'PM') ? `<optgroup label="People">${others.filter((p) => p.kind === 'PM').map((p) => `<option value="${esc(p.id)}" ${mtAs && mtAs.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>` : ''}${others.some((p) => p.kind !== 'PM') ? `<optgroup label="Media buyers">${others.filter((p) => p.kind !== 'PM').map((p) => `<option value="${esc(p.id)}" ${mtAs && mtAs.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>` : ''}</select>`;
-      $('mtPerson').onchange = () => { const p = mtPeople.find((x) => x.id === $('mtPerson').value); mtAs = p ? { id: p.id, name: p.name, buyer: p.kind !== 'PM', pm: p.pm || null } : null; mtClients = null; loadMyTaskPage(); };
-    } else pk.hidden = true;
+    const pp = $('mtPeople');
+    if (mtAdminPick()) {
+      pp.hidden = false; document.body.classList.add('mt-admin');
+      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { mtPeople = (await api('/admin/people-today')).people; } catch (_) { mtPeople = []; } }
+      renderMtPeople();
+    } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
     renderMyTaskAdd();
     if (me.buyer) { loadMyBuyerTasks('mtTasks'); }
     else { loadMyTasks('mtTasks'); loadMyKpiPage(); }
+  }
+  function renderMtPeople() {
+    const pp = $('mtPeople'), q = mtQ.trim().toLowerCase();
+    const list = (mtPeople || []).filter((p) => p.id !== me.id && (!q || p.name.toLowerCase().includes(q) || (p.team || '').toLowerCase().includes(q)));
+    const meRow = (mtPeople || []).find((p) => p.id === me.id) || { id: me.id, name: me.name, kind: 'PM', role: 'Me', done: 0, open: 0, late: 0, kpi: null };
+    const row = (p, isMe) => { const on = isMe ? !mtAs : !!(mtAs && mtAs.id === p.id), total = p.done + p.open;
+      return `<button type="button" class="mt-person${on ? ' on' : ''}" data-mtp="${isMe ? '' : esc(p.id)}" aria-pressed="${on}">
+        ${p.kind === 'Media buyer' && p.photo ? `<span class="avatar"><img src="/mb-pic/${esc(p.id.slice(3))}" alt="" loading="lazy"></span>` : `<span class="avatar">${initials(p.name)}</span>`}
+        <span class="mt-pn"><b>${esc(p.name)}${isMe ? ' <small class="hint">· me</small>' : ''}</b><span class="hint">${esc(p.kind === 'Media buyer' ? 'Media buyer' + (p.pmName ? ' · ' + p.pmName : '') : p.role)}${p.team ? ' · ' + esc(p.team) : ''}</span></span>
+        <span class="mt-pv"><b class="num ${p.late ? 'is-danger' : total && p.open === 0 ? 'is-ok' : ''}">${total ? `${p.done}/${total}` : '–'}</b><span class="hint">${p.late ? p.late + ' late' : total ? 'tasks' : 'no tasks'}</span></span>
+        <span class="kpi-score ${p.kpi == null ? 'none' : scoreCls(p.kpi)}" title="KPI this month">${p.kpi == null ? '–' : p.kpi + '%'}</span></button>`; };
+    const pms = list.filter((p) => p.kind !== 'Media buyer'), mbs = list.filter((p) => p.kind === 'Media buyer');
+    pp.innerHTML = `<div class="top"><h2>People</h2><span class="hint">${(mtPeople || []).length} · tap one to see their day</span></div>
+      <input type="search" id="mtSearch" placeholder="Search people" aria-label="Search people" value="${esc(mtQ)}">
+      <div class="mt-plist">${!q ? row(meRow, true) : ''}${pms.length ? `<div class="mt-pgrp">People</div>${pms.map((p) => row(p, false)).join('')}` : ''}${mbs.length ? `<div class="mt-pgrp">Media buyers</div>${mbs.map((p) => row(p, false)).join('')}` : ''}${!pms.length && !mbs.length && q ? '<div class="hl-empty">No one matches.</div>' : ''}</div>`;
+    $('mtSearch').oninput = () => { mtQ = $('mtSearch').value; const pos = $('mtSearch').selectionStart; renderMtPeople(); const i = $('mtSearch'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (_) {} };
+    pp.querySelectorAll('[data-mtp]').forEach((b) => b.onclick = () => {
+      const p = mtPeople.find((x) => x.id === b.dataset.mtp);
+      mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null } : null; mtClients = null;
+      renderMtPeople(); loadMyTaskPage();
+      if (!matchMedia('(min-width: 1100px)').matches) $('mtAdd').scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
+    });
   }
   // Add a task from the My Task page: pick the client, type the task, (PM) who does it, today or tomorrow.
   let mtBuyers = null, mtClients = null;
@@ -2051,8 +2071,10 @@
       catch (e) { toast(e.message); }
       f.querySelector('button').disabled = false;
       if (me.buyer) loadMyBuyerTasks('mtTasks'); else { loadMyTasks('mtTasks'); loadMyTargets(); }
+      refreshMtPeople();
     };
   }
+  async function refreshMtPeople() { if (!mtAdminPick()) return; try { mtPeople = (await api('/admin/people-today')).people; renderMtPeople(); } catch (_) {} }
   function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
     if (!me.buyer) { host.innerHTML = `<div class="top"><h2>📊 Monthly KPI${mtAs ? ' · ' + esc(mtAs.name) : ''}</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>`; kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); return; }

@@ -2954,3 +2954,14 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .mc-pct{align-self:flex-end;font-size:var(--fs-lg);font-weight:700;line-height:1} .mc-pct small{font-size:var(--fs-2xs);font-weight:600} .mc-pct.ok{color:var(--ok)} .mc-pct.mid{color:var(--warn)} .mc-pct.bad{color:var(--danger)}
 @media (max-width:760px){.mc-day{min-height:64px;padding:6px 4px 4px}.mc-list{display:none}.mc-n{position:static;width:auto;height:auto;background:transparent;justify-content:flex-start}.mc-pct{font-size:var(--fs-sm)}}
 .mc-n{position:static;align-self:flex-end;margin:-2px -2px 0 0} .mc-list{padding-right:0} .mc-day{min-height:104px;gap:2px}
+/* KPI table: in a narrow panel (My Task side column, the media buyer KPI dialog) the row stacks like on the phone */
+.kpi-mine,.mbkpi-in,#mtKpiBody{container-type:inline-size}
+@container (max-width:640px){
+  .kpi-head{display:none}
+  .kpi-row{grid-template-columns:28px minmax(0,1fr) 68px;row-gap:6px}
+  .kpi-name{grid-column:2/3}
+  .kpi-tg{grid-column:2/3;justify-content:flex-start}
+  .kpi-res{grid-column:2/3;justify-content:flex-start;width:max-content;max-width:100%}
+  .kpi-score{grid-column:3/4;grid-row:1;justify-self:end}
+  .kpi-x{grid-column:3/4;grid-row:2}
+}

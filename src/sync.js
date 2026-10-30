@@ -343,7 +343,7 @@ async function freshenToday(user, clientId, day) {
   if (!Object.keys(accounts).length) return false;
   const token = await tokenFor(user), fresh = {};
   for (const act of Object.keys(accounts)) {
-    try { for (const r of await meta.campaignSpendRange(token, act, day, day)) if (accounts[act].has(String(r.campaign_id))) fresh[String(r.campaign_id)] = round2(Number(r.spend) || 0); }
+    try { const by = await meta.adSpendByCampaign(token, act, [...accounts[act]], day, day); for (const [id, v] of Object.entries(by)) fresh[id] = v; }
     catch (err) { if (err.needsLogin || err.rateLimited) throw err; }
   }
   if (!Object.keys(fresh).length) return false;
@@ -351,6 +351,7 @@ async function freshenToday(user, clientId, day) {
   const sum = (list, old) => { let t = 0, any = false; for (const id of list || []) { const r = rows.find((x) => String(x.campaignId) === String(id)); const v = fresh[String(id)] != null ? fresh[String(id)] : r ? Number(r.spend) || 0 : null; if (v == null) return old; t += v; any = true; } return any ? round2(t) : old; };
   for (const l of Object.values(e.lives || {})) { const v = sum(l.ids, l.spend); if (v !== l.spend) { l.spend = v; changed = true; } }
   if (e.post && e.post.ids) { const v = sum(e.post.ids, e.post.spend); if (v !== e.post.spend) { e.post.spend = v; changed = true; } }
+  for (const id of Object.keys(fresh)) fresh[id] = round2(fresh[id]);
   for (const r of rows) if (r.campaignId && fresh[String(r.campaignId)] != null && fresh[String(r.campaignId)] !== Number(r.spend)) { r.spend = fresh[String(r.campaignId)]; changed = true; }
   if (changed) { await db.putEntry(day, clientId, e); await db.putRaw(owner, day, rows); }
   return changed;

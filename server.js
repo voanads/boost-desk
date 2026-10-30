@@ -1636,6 +1636,15 @@ api.post('/menu/tick', wrap(async (req, res) => {
   await MENU().tick(who.person, day, b.id, !!b.done, req.user.buyer ? req.user.buyer.name : req.user.name);
   res.json(await MENU().dayOf(who.person, who.role, day));
 }));
+api.post('/menu/own', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const day = b.once ? (isDay(b.day) ? b.day : sync.todayIn()) : null;
+  try { res.json({ item: await MENU().addOwn(who.person, b.text, day), ...(await MENU().dayOf(who.person, who.role, day || sync.todayIn())) }); } catch (e) { res.status(400).json({ error: e.message }); }
+}));
+api.delete('/menu/own/:id', wrap(async (req, res) => {
+  const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  await MENU().removeOwn(who.person, req.params.id); res.json({ ok: true });
+}));
 api.get('/menu/month', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const ym = /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : sync.todayIn().slice(0, 7);

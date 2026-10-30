@@ -2979,3 +2979,8 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .mt-done-all{text-align:center;color:var(--ok);font-weight:600;padding:6px}
 .menu-in{max-width:900px} .menu-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px} .menu-cols label{display:flex;flex-direction:column;gap:4px} .menu-cols textarea{width:100%;min-height:220px;font:inherit;line-height:1.6;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--ink);resize:vertical}
 @media (max-width:760px){.menu-cols{grid-template-columns:1fr}}
+.mt-own{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding-top:4px;border-top:1px dashed var(--line);margin-top:4px}
+.mt-own input,.mt-own select{min-height:40px}
+.mt-own-x{flex:none;color:var(--muted);padding:4px 8px} .mt-own-x:hover{color:var(--danger)}
+.mt-it .chip.meta{font-size:var(--fs-2xs)}
+@media (max-width:560px){.mt-own{grid-template-columns:1fr 1fr}.mt-own input{grid-column:1/-1}}

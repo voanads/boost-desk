@@ -2038,8 +2038,21 @@
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done</span></div>
       <div class="mt-items">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${it.done}" data-mtmenu="${esc(it.id)}" aria-label="Done">${box}</button>
-        <div class="mt-it"><span class="mt-ix">${i + 1}</span><b>${esc(it.text)}</b>${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div></div>`).join('') : `<div class="hl-empty">No menu for this role yet${me.canAdmin ? ' — set it in Admin → Settings → Task menu' : ' — ask your admin'}.</div>`}</div>
-      ${d.pct === 100 ? '<div class="mt-done-all">🎉 Everything on the menu is done' + (isToday ? ' today' : '') + '.</div>' : ''}`;
+        <div class="mt-it"><span class="mt-ix">${i + 1}</span><b>${esc(it.text)}</b>${it.own ? `<span class="chip meta" title="${it.once ? 'Only this day' : 'Your own item, every day'}">${it.once ? 'today only' : 'mine · every day'}</span>` : ''}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>${it.own ? `<button type="button" class="ghost sm mt-own-x" data-mtown="${esc(it.id)}" aria-label="Remove this item" title="Remove">✕</button>` : ''}</div>`).join('') : `<div class="hl-empty">No menu for this role yet${me.canAdmin ? ' — set it in Admin → Settings → Task menu' : ' — ask your admin'}.</div>`}</div>
+      ${d.pct === 100 ? '<div class="mt-done-all">🎉 Everything on the menu is done' + (isToday ? ' today' : '') + '.</div>' : ''}
+      <form class="mt-own" id="mtOwnForm"><input type="text" id="mtOwnText" maxlength="160" placeholder="+ Add your own task to the menu" aria-label="Your own task"><select id="mtOwnWhen" aria-label="How often"><option value="">Every day</option><option value="once">${isToday ? 'Today only' : 'This day only'}</option></select><button type="submit" class="sm primary">Add</button></form>`;
+    $('mtOwnForm').onsubmit = async (ev) => {
+      ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus();
+      const b = $('mtOwnForm').querySelector('button'); b.disabled = true;
+      try { await api('/menu/own', { method: 'POST', body: { text, once: $('mtOwnWhen').value === 'once', day: d.day, as: mtAs ? mtAs.id : undefined } }); successBadge('Added to your menu'); }
+      catch (e) { toast(e.message); }
+      b.disabled = false; loadMtMenu(); loadMtCal(); refreshMtPeople();
+    };
+    host.querySelectorAll('[data-mtown]').forEach((b) => b.onclick = async () => {
+      if (!confirm('Remove this item from the menu? Past ticks stay in the calendar.')) return;
+      try { await api(`/menu/own/${encodeURIComponent(b.dataset.mtown)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); }
+      loadMtMenu(); loadMtCal(); refreshMtPeople();
+    });
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = async () => {
       const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
       try { await api('/menu/tick', { method: 'POST', body: { id: b.dataset.mtmenu, done, day: d.day, as: mtAs ? mtAs.id : undefined } }); if (done) successBadge('Done ✓'); } catch (e) { toast(e.message); }

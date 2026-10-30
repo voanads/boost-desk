@@ -3085,6 +3085,23 @@ Notes:
 
   // ---------- report dialog (Home + Dashboard + team summary) ----------
   let ckTarget = null;
+  // Edit a line's amount in the report text and the Total (+Tax) line recalculates — one-day reports only
+  // (the lines that start with 🔴 Live / 📌 Boost post, each ending in an amount).
+  const fmtUsd = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function recalcReportText() {
+    const ta = $('ckText'); if (!ta) return;
+    const lines = ta.value.split('\n'), ti = lines.findIndex((l) => /^💰 Total:/.test(l));
+    if (ti < 0 || lines.some((l) => /^📅 /.test(l))) return; // multi-day reports keep their own totals
+    let total = 0, n = 0;
+    for (const l of lines) { if (!/^(🔴|📌)/.test(l)) continue; const m = l.match(/\$\s?(-?[\d,]*\.?\d+)\s*$/); if (m) { total += Number(m[1].replace(/,/g, '')) || 0; n++; } }
+    if (!n) return;
+    const cents = Math.round(total * 100), rate = taxRate();
+    const line = cents > 0 && rate ? `💰 Total: ${fmtUsd(cents / 100)} +Tax ${rate}% = ${fmtUsd(Math.round(cents * (100 + rate) / 100) / 100)}` : `💰 Total: ${fmtUsd(cents / 100)}`;
+    if (lines[ti] === line) return;
+    const pos = ta.selectionStart; lines[ti] = line; ta.value = lines.join('\n'); try { ta.setSelectionRange(pos, pos); } catch (_) {}
+    const h = $('ckRecalc'); if (h) { h.hidden = false; clearTimeout(h._t); h._t = setTimeout(() => { h.hidden = true; }, 1800); }
+  }
+  if ($('ckText')) $('ckText').addEventListener('input', recalcReportText);
   async function openReportDlg(o) {
     const dlg = $('ckDlg'); ckTarget = o;
     $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;

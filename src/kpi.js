@@ -41,26 +41,40 @@ function monthDays(month, today) {
   return out;
 }
 
+// A task counts toward a KPI when it was linked to it, or — auto-detect — when the task text contains the KPI's
+// name (or every word of it). A "%" KPI with no matching task at all uses the person's overall daily completion.
+const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+function matches(t, k) {
+  if (t.kpi) return t.kpi === k.id;
+  const a = norm(t.text), b = norm(k.name); if (!a || !b) return false;
+  if (a.includes(b) || b.includes(a)) return true;
+  const aw = a.split(' '), words = b.split(' ').filter((w) => w.length > 2);
+  const same = (x, y) => x === y || (x.length >= 4 && y.length >= 4 && (x.startsWith(y.slice(0, 4)) || y.startsWith(x.slice(0, 4)))); // boost / boosted, live / lives
+  return words.length > 0 && words.every((w) => aw.some((x) => same(x, w)));
+}
 async function results(person, month, isBuyer) {
   const kpis = await getList(person, month), today = sync.todayIn(), days = monthDays(month, today);
   const all = await tasksOf(person, isBuyer);
   const dayOf = (iso) => { try { return sync.todayIn(undefined, new Date(iso)); } catch (_) { return ''; } };
+  // what each task did this month: days due, days done, reached numbers
+  const stat = all.map(({ t, log }) => {
+    const dueDays = t.repeat ? days.filter((d) => d >= t.day) : (String(t.day || '').startsWith(month) ? [t.day] : []);
+    const doneDays = new Set(log.filter((x) => x.id === 't:' + t.id + ':' + x.day && x.day.startsWith(month)).map((x) => x.day));
+    if (!t.repeat && t.done && t.doneAt && dayOf(t.doneAt).startsWith(month)) doneDays.add(dayOf(t.doneAt));
+    const done = [...doneDays].filter((d) => dueDays.includes(d) || !t.repeat).length;
+    let sum = 0; if (Number(t.target) > 0) { for (const [d, v] of Object.entries(t.hit || {})) if (d.startsWith(month)) sum += Number(v) || 0; } else sum = doneDays.size;
+    return { t, due: dueDays.length, done, sum };
+  });
+  const allDue = stat.reduce((a, x) => a + x.due, 0), allDone = stat.reduce((a, x) => a + x.done, 0);
   return kpis.map((k) => {
-    let due = 0, done = 0, sum = 0, n = 0;
-    for (const { t, log } of all) {
-      if (t.kpi !== k.id) continue; n++;
-      const dueDays = t.repeat ? days.filter((d) => d >= t.day) : (String(t.day || '').startsWith(month) ? [t.day] : []);
-      due += dueDays.length;
-      const doneDays = new Set(log.filter((x) => x.id === 't:' + t.id + ':' + x.day && x.day.startsWith(month)).map((x) => x.day));
-      if (!t.repeat && t.done && t.doneAt && dayOf(t.doneAt).startsWith(month)) doneDays.add(dayOf(t.doneAt));
-      done += [...doneDays].filter((d) => dueDays.includes(d) || !t.repeat).length;
-      if (Number(t.target) > 0) for (const [d, v] of Object.entries(t.hit || {})) { if (d.startsWith(month)) sum += Number(v) || 0; }
-      else sum += doneDays.size;
-    }
+    let due = 0, done = 0, sum = 0, n = 0, linked = 0;
+    for (const x of stat) { if (!matches(x.t, k)) continue; n++; if (x.t.kpi) linked++; due += x.due; done += x.done; sum += x.sum; }
+    let source = linked ? 'linked' : n ? 'name' : '';
+    if (!n && k.unit === '%') { due = allDue; done = allDone; source = allDue ? 'all' : ''; }
     const auto = k.unit === '%' ? (due ? Math.round(done / due * 1000) / 10 : 0) : Math.round(sum * 100) / 100;
     const result = k.manual != null ? k.manual : auto;
     const score = k.target ? Math.round(result / k.target * 1000) / 10 : 0;
-    return { ...k, tasks: n, due, done, auto, result, score, estimated: k.manual == null };
+    return { ...k, tasks: n, due, done, auto, result, score, estimated: k.manual == null, source };
   });
 }
 

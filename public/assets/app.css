@@ -3022,3 +3022,4 @@ body.mt-admin .mt-layout{grid-template-columns:minmax(0,1fr)}
 .st-mbn{display:flex;flex-direction:column;flex:1;min-width:0;line-height:1.25} .st-mbn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .st-mbn .hint{font-size:var(--fs-xs)}
 .st-mba{display:flex;gap:4px;flex:none}
 .st-mbadd{display:flex;gap:8px;width:100%} .st-mbadd input{flex:1;min-width:0;min-height:38px}
+.linkbtn{all:unset;cursor:pointer;color:var(--brand-text);font-weight:600} .linkbtn:hover{text-decoration:underline}

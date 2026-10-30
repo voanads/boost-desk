@@ -2050,7 +2050,7 @@
       ${d.pct === 100 && !closed ? '<div class="mt-done-all">🎉 Everything is done — submit the result when you leave.</div>' : ''}
       ${d.plan && !closed ? '<div class="hint">The plan is submitted, so the list is fixed for this day. You can still add a task for this day only.</div>' : ''}
       ${closed ? '' : `<form class="mt-own" id="mtOwnForm"><input type="text" id="mtOwnText" maxlength="160" placeholder="+ Add a task to the menu" aria-label="New task"><select id="mtOwnWhen" aria-label="How often">${d.plan ? '' : '<option value="">Every day</option>'}<option value="once">${isToday ? 'Today only' : 'This day only'}</option></select><button type="submit" class="sm primary">Add</button></form>`}
-      ${d.plan || closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
+      ${closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => { const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done }, done ? 'Done ✓' : ''); });
@@ -2334,11 +2334,13 @@
   async function openMenuEditor() {
     let d = $('menuDlg');
     if (!d) { d = document.createElement('dialog'); d.id = 'menuDlg'; d.className = 'dlg'; d.innerHTML = `<div class="dlg-in menu-in"><div class="dlg-head"><div><h2>📋 Task menu</h2><div class="hint">One duty per line. Everyone with that role sees the same list every day and ticks it on My Task. Reordering or editing a line keeps its history; deleting a line drops it from today on.</div></div><button type="button" class="ghost" id="menuClose" aria-label="Close">✕</button></div>
-      <div class="menu-cols"><label><b>Project Manager</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ PM</span><textarea id="menuPm" rows="9" spellcheck="false"></textarea></label><label><b>Media buyer</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ Media buyer</span><textarea id="menuMb" rows="9" spellcheck="false"></textarea></label></div>
+      <div class="menu-cols"><label><b>Project Manager</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ PM — everyone on /projectmanager and /owner</span><textarea id="menuPm" rows="9" spellcheck="false"></textarea><button type="button" class="ghost sm" data-menudef="pm">Restore the default PM list</button></label><label><b>Media buyer</b><span class="hint">ការងារប្រចាំថ្ងៃរបស់ Media buyer — everyone on /mediabuyer and from the Telegram bot</span><textarea id="menuMb" rows="9" spellcheck="false"></textarea><button type="button" class="ghost sm" data-menudef="mb">Restore the default media buyer list</button></label></div>
+      <div class="hint">The two lists must differ — a media buyer's day is not a PM's day. People who already have their own list keep it until they tap "Reset to the standard list" on My Task.</div>
       <div class="dlg-foot"><span class="hint" id="menuSt"></span><span class="spacer"></span><button type="button" class="ghost" id="menuCancel">Cancel</button><button type="button" class="primary" id="menuSave">Save menu</button></div></div>`; document.body.appendChild(d); $('menuClose').onclick = () => d.close(); $('menuCancel').onclick = () => d.close(); }
     let cur; try { cur = (await api('/admin/menu')).menu; } catch (e) { return toast(e.message); }
     const lines = (l) => l.map((x) => x.text).join('\n');
     $('menuPm').value = lines(cur.pm || []); $('menuMb').value = lines(cur.mb || []); $('menuSt').textContent = `${(cur.pm || []).length} PM duties · ${(cur.mb || []).length} media buyer duties`;
+    d.querySelectorAll('[data-menudef]').forEach((b) => b.onclick = async () => { try { const df = (await api('/admin/menu/defaults')).menu; const r = b.dataset.menudef; (r === 'pm' ? $('menuPm') : $('menuMb')).value = (df[r] || []).join('\n'); } catch (e) { toast(e.message); } });
     const parse = (ta, old) => ta.value.split('\n').map((x) => x.trim()).filter(Boolean).map((text) => { const o = old.find((y) => y.text === text); return o ? { id: o.id, text } : { text }; }); // same text keeps its id (and its ticks)
     $('menuSave').onclick = async () => {
       $('menuSave').disabled = true;

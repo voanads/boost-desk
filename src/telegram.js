@@ -99,7 +99,7 @@ async function listChats(offset = 0) {
       const st = ((u.message || {}).text || '').trim().match(/^\/start\s+mb_([A-Za-z0-9]{8})\b/);
       if (st) starts.push({ id: String(chat.id), code: st[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
       // A PM / owner connecting their own Telegram for alerts (t.me/<bot>?start=pm_CODE).
-      const sp = ((u.message || {}).text || '').trim().match(/^\/(?:start\s+pm_|connect(?:@\w+)?\s+(?:pm_)?)([A-Za-z0-9]{8})\b/i);
+      const sp = ((u.message || {}).text || '').trim().match(/^\/(?:start\s+pm_|connect(?:@\w+)?\s+(?:pm_)?)([A-Za-z0-9]{6,8})\b/i);
       if (sp) pmStarts.push({ id: String(chat.id), code: sp[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
       // A media buyer asking for their dashboard link (/dashboard, or /start without a code).
       const cm = ((u.message || {}).text || '').trim().match(/^\/(dashboard|start|mytasks|connect)(?:@\w+)?\s*$/i);

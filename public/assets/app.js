@@ -787,7 +787,7 @@
         ${ls.map((l, i) => `<div class="bp-row" data-i="${i}">
           <button type="button" class="bp-pic${l.img ? ' has' : ''}" data-bppic="${i}" aria-label="${l.img ? 'Change' : 'Add'} picture for post ${i + 1}">${l.img ? `<img src="/api/post-img/${esc(l.img)}" alt="">` : l.loading ? '<span class="bp-spin" aria-hidden="true"></span>' : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg><small>Picture</small>'}</button>
           <div class="bp-f">
-            <input type="url" data-f="link" maxlength="400" placeholder="Paste the post link — picture and name fill in" value="${esc(l.link || '')}" aria-label="Post ${i + 1} link" class="bp-link">
+            <input type="url" data-f="link" maxlength="400" placeholder="Paste the post link (or several links at once) — picture and name fill in" value="${esc(l.link || '')}" aria-label="Post ${i + 1} link" class="bp-link">
             <div class="bp-f2">
               <input type="text" data-f="post" maxlength="160" placeholder="Post ${i + 1} name" value="${esc(l.post || '')}" aria-label="Post ${i + 1} name">
               <label><span>$ / day</span><input type="number" data-f="daily" min="0" step="0.5" inputmode="decimal" value="${l.daily || ''}" placeholder="10"></label>
@@ -880,13 +880,25 @@
           try { l.img = (await api('/post-img', { method: 'POST', body: { data: await shrinkImg(f) } })).id; } catch (e) { l.note = e.message; } l.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c); };
         inp.click();
       });
-      form.querySelectorAll('input[data-f="link"]').forEach((x) => x.onchange = async () => {
-        readDraft(); const i = Number(x.closest('[data-i]').dataset.i), l = planDraft[i], url = (l.link || '').trim();
-        if (!/^https:\/\//.test(url) || l.fetched === url) return;
-        l.fetched = url; l.loading = true; l.note = 'Reading the post…'; redrawPlan(c);
+      const fetchLine = async (l) => {
+        const url = (l.link || '').trim(); if (!/^https:\/\//.test(url) || l.fetched === url) return;
+        l.fetched = url; l.loading = true; l.note = 'Reading the post…'; if (planOpen[c.id] === 'edit') redrawPlan(c);
         try { const r = await api('/post-preview', { method: 'POST', body: { url } }); if (r.img) l.img = r.img; if (r.title && !l.post) l.post = r.title; l.note = ''; }
         catch (e) { l.note = e.message; }
         l.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c);
+      };
+      // Several links pasted at once (one per line, or separated by spaces) → one post row per link,
+      // each with this row's $/day, days and start, and every picture and name read in.
+      const urlsIn = (t) => [...new Set(String(t || '').match(/https?:\/\/[^\s,]+/g) || [])];
+      const spread = (i, urls) => {
+        readDraft(); const l = planDraft[i]; l.link = urls[0]; l.fetched = '';
+        const rows = urls.slice(1).map((u) => ({ post: '', link: u, img: '', daily: l.daily, days: l.days, start: l.start }));
+        planDraft.splice(i + 1, 0, ...rows); redrawPlan(c);
+        Promise.all([l, ...rows].map(fetchLine)).catch(() => {});
+      };
+      form.querySelectorAll('input[data-f="link"]').forEach((x) => {
+        x.onpaste = (ev) => { const urls = urlsIn(ev.clipboardData && ev.clipboardData.getData('text')); if (urls.length < 2) return; ev.preventDefault(); spread(Number(x.closest('[data-i]').dataset.i), urls); };
+        x.onchange = () => { readDraft(); const i = Number(x.closest('[data-i]').dataset.i), urls = urlsIn(planDraft[i].link); if (urls.length > 1) return spread(i, urls); fetchLine(planDraft[i]); };
       });
       form.querySelectorAll('[data-bprm]').forEach((b) => b.onclick = () => { readDraft(); planDraft.splice(Number(b.dataset.bprm), 1); if (!planDraft.length) planDraft.push(blank()); redrawPlan(c); });
       form.onsubmit = async (ev) => {

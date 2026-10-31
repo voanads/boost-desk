@@ -3114,3 +3114,9 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .st-mb .avatar{width:32px;height:32px;font-size:.76rem;background:var(--bg-2);color:var(--muted)}
 .st-mba{gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .st-mbadd input{height:38px;min-height:0;padding:0 12px;border:1px solid var(--line);border-radius:8px;font-size:.9rem} .wrap .st-mbadd button.sm{height:38px}
+
+/* Boost plan: extra links under one post's budget */
+.bp-xl{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:6px;align-items:center}
+.bp-xth{width:28px;height:28px;border-radius:6px;object-fit:cover;background:var(--bg-2);display:block} .bp-xth.none{border:1px dashed var(--line)} .bp-xth.spin{border-color:var(--brand)}
+.bp-xl input{min-width:0} .bp-xadd{align-self:flex-start;font-size:var(--fs-sm)}
+.bp-th2{margin-left:-10px;width:28px;height:28px;border:2px solid var(--surface)}

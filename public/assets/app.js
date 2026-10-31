@@ -788,6 +788,8 @@
           <button type="button" class="bp-pic${l.img ? ' has' : ''}" data-bppic="${i}" aria-label="${l.img ? 'Change' : 'Add'} picture for post ${i + 1}">${l.img ? `<img src="/api/post-img/${esc(l.img)}" alt="">` : l.loading ? '<span class="bp-spin" aria-hidden="true"></span>' : '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg><small>Picture</small>'}</button>
           <div class="bp-f">
             <input type="url" data-f="link" maxlength="400" placeholder="Paste the post link (or several links at once) — picture and name fill in" value="${esc(l.link || '')}" aria-label="Post ${i + 1} link" class="bp-link">
+            ${(l.extra || []).map((x, j) => `<div class="bp-xl" data-j="${j}">${x.img ? `<img class="bp-xth" src="/api/post-img/${esc(x.img)}" alt="">` : `<span class="bp-xth none${x.loading ? ' spin' : ''}"></span>`}<input type="url" data-xl="${j}" maxlength="400" placeholder="Another post link under the same budget" value="${esc(x.link || '')}" aria-label="Post ${i + 1} extra link ${j + 1}"><button type="button" class="ghost sm" data-xrm="${j}" aria-label="Remove link">✕</button></div>`).join('')}
+            <button type="button" class="linkbtn bp-xadd" data-xadd="${i}">+ Add another link to this post</button>
             <div class="bp-f2">
               <input type="text" data-f="post" maxlength="160" placeholder="Post ${i + 1} name" value="${esc(l.post || '')}" aria-label="Post ${i + 1} name">
               <label><span>$ / day</span><input type="number" data-f="daily" min="0" step="0.5" inputmode="decimal" value="${l.daily || ''}" placeholder="10"></label>
@@ -828,7 +830,7 @@
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
     return `<section class="bplan ${cls}"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
         <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
-      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
+      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}${(l.extra || []).filter((x) => x.img).slice(0, 3).map((x) => `<img class="bp-th bp-th2" src="/api/post-img/${esc(x.img)}" alt="">`).join('')}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
       ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>Post spend since ${esc(shortDay(p.from))}: <b>${money(p.spent)}</b> of <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>Ends ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}</section>`;
   }
@@ -848,7 +850,7 @@
     renderClients(); loadPlanProg(u); return u;
   }
   function readDraft() {
-    document.querySelectorAll('#bpForm .bp-row[data-i]').forEach((r) => { const l = planDraft[Number(r.dataset.i)]; r.querySelectorAll('[data-f]').forEach((x) => { l[x.dataset.f] = x.value; }); });
+    document.querySelectorAll('#bpForm .bp-row[data-i]').forEach((r) => { const l = planDraft[Number(r.dataset.i)]; r.querySelectorAll('[data-f]').forEach((x) => { l[x.dataset.f] = x.value; }); r.querySelectorAll('[data-xl]').forEach((x) => { const e = (l.extra = l.extra || [])[Number(x.dataset.xl)]; if (e) e.link = x.value; }); });
     if ($('bpTax')) planDraft.tax = $('bpTax').checked;
   }
   function bindPlan(c) {
@@ -887,23 +889,35 @@
         catch (e) { l.note = e.message; }
         l.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c);
       };
-      // Several links pasted at once (one per line, or separated by spaces) → one post row per link,
-      // each with this row's $/day, days and start, and every picture and name read in.
+      // An extra link (another post boosted under the same budget): read its picture in.
+      const fetchExtra = async (x) => {
+        const url = (x.link || '').trim(); if (!/^https:\/\//.test(url) || x.fetched === url) return;
+        x.fetched = url; x.loading = true; if (planOpen[c.id] === 'edit') redrawPlan(c);
+        try { const r = await api('/post-preview', { method: 'POST', body: { url } }); if (r.img) x.img = r.img; } catch (_) {}
+        x.loading = false; if (planOpen[c.id] === 'edit') redrawPlan(c);
+      };
+      // Several links pasted at once (one per line, or separated by spaces) → the first is the post's
+      // link, the rest become extra links of the same post, every picture read in.
       const urlsIn = (t) => [...new Set(String(t || '').match(/https?:\/\/[^\s,]+/g) || [])];
       const spread = (i, urls) => {
-        readDraft(); const l = planDraft[i]; l.link = urls[0]; l.fetched = '';
-        const rows = urls.slice(1).map((u) => ({ post: '', link: u, img: '', daily: l.daily, days: l.days, start: l.start }));
-        planDraft.splice(i + 1, 0, ...rows); redrawPlan(c);
-        Promise.all([l, ...rows].map(fetchLine)).catch(() => {});
+        readDraft(); const l = planDraft[i]; l.link = urls[0]; l.fetched = ''; l.extra = l.extra || [];
+        const more = urls.slice(1).map((u) => ({ link: u, img: '' })); l.extra.push(...more); redrawPlan(c);
+        Promise.all([fetchLine(l), ...more.map(fetchExtra)]).catch(() => {});
       };
       form.querySelectorAll('input[data-f="link"]').forEach((x) => {
         x.onpaste = (ev) => { const urls = urlsIn(ev.clipboardData && ev.clipboardData.getData('text')); if (urls.length < 2) return; ev.preventDefault(); spread(Number(x.closest('[data-i]').dataset.i), urls); };
         x.onchange = () => { readDraft(); const i = Number(x.closest('[data-i]').dataset.i), urls = urlsIn(planDraft[i].link); if (urls.length > 1) return spread(i, urls); fetchLine(planDraft[i]); };
       });
+      form.querySelectorAll('input[data-xl]').forEach((x) => {
+        x.onpaste = (ev) => { const urls = urlsIn(ev.clipboardData && ev.clipboardData.getData('text')); if (urls.length < 2) return; ev.preventDefault(); readDraft(); const l = planDraft[Number(x.closest('[data-i]').dataset.i)], j = Number(x.dataset.xl); l.extra[j].link = urls[0]; const more = urls.slice(1).map((u) => ({ link: u, img: '' })); l.extra.splice(j + 1, 0, ...more); redrawPlan(c); Promise.all([l.extra[j], ...more].map(fetchExtra)).catch(() => {}); };
+        x.onchange = () => { readDraft(); const l = planDraft[Number(x.closest('[data-i]').dataset.i)]; fetchExtra(l.extra[Number(x.dataset.xl)]); };
+      });
+      form.querySelectorAll('[data-xadd]').forEach((b) => b.onclick = () => { readDraft(); const l = planDraft[Number(b.dataset.xadd)]; (l.extra = l.extra || []).push({ link: '', img: '' }); redrawPlan(c); const inp = document.querySelector(`#bpForm .bp-row[data-i="${b.dataset.xadd}"] input[data-xl="${l.extra.length - 1}"]`); if (inp) inp.focus(); });
+      form.querySelectorAll('[data-xrm]').forEach((b) => b.onclick = () => { readDraft(); const l = planDraft[Number(b.closest('[data-i]').dataset.i)]; l.extra.splice(Number(b.dataset.xrm), 1); redrawPlan(c); });
       form.querySelectorAll('[data-bprm]').forEach((b) => b.onclick = () => { readDraft(); planDraft.splice(Number(b.dataset.bprm), 1); if (!planDraft.length) planDraft.push(blank()); redrawPlan(c); });
       form.onsubmit = async (ev) => {
         ev.preventDefault(); readDraft();
-        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: (l.post || '').trim(), link: (l.link || '').trim(), img: l.img || '', daily: Number(l.daily), days: Number(l.days) || 1, start: l.start }));
+        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: (l.post || '').trim(), link: (l.link || '').trim(), img: l.img || '', extra: (l.extra || []).filter((x) => x.link || x.img).map((x) => ({ link: (x.link || '').trim(), img: x.img || '' })), daily: Number(l.daily), days: Number(l.days) || 1, start: l.start }));
         if (!lines.length) { toast('Add a $ a day for at least one post'); return; }
         try { await savePlan(c, { lines, tax: !!planDraft.tax, ...(planDraft.isNew ? { sentAt: null } : {}) }); successBadge('Boost plan saved — tap Send plan'); } catch (e) { toast(e.message); }
       };

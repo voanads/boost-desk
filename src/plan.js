@@ -21,6 +21,8 @@ function clean(b, cur = {}) {
     post: String(l.post || '').trim().slice(0, 160),
     link: /^https:\/\/[^\s]{4,400}$/.test(String(l.link || '').trim()) ? String(l.link).trim() : '',
     img: /^[a-f0-9]{24}$/.test(String(l.img || '')) ? String(l.img) : '',
+    // more posts boosted under the same budget: [{ link, img }]
+    extra: (Array.isArray(l.extra) ? l.extra : []).slice(0, 6).map((x) => ({ link: /^https:\/\/[^\s]{4,400}$/.test(String((x || {}).link || '').trim()) ? String(x.link).trim() : '', img: /^[a-f0-9]{24}$/.test(String((x || {}).img || '')) ? String(x.img) : '' })).filter((x) => x.link || x.img),
     daily: Math.min(1e5, Math.max(0, round2(l.daily))),
     days: Math.min(365, Math.max(1, parseInt(l.days, 10) || 1)),
     start: isDay(l.start) ? l.start : '',
@@ -56,7 +58,7 @@ async function progress(owner, c, today = sync.todayIn()) {
 function lineText(l, i, km) {
   const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
   const when = l.start ? (km ? ` (ចាប់ពី ${dayTxt(l.start, true)})` : ` (from ${dayTxt(l.start)})`) : '';
-  const link = l.link ? `\n    🔗 ${l.link}` : '';
+  const link = [l.link, ...(l.extra || []).map((x) => x.link)].filter(Boolean).map((u) => `\n    🔗 ${u}`).join('');
   return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}${link}`
     : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}${link}`;
 }
@@ -81,13 +83,18 @@ async function send(owner, c, { to = 'client', lang } = {}) {
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
   const lg = lang || c.plan.lang || 'en', km = lg === 'km', text = message(c, c.plan, lg);
   const imgs = [];
-  for (const [i, l] of c.plan.lines.entries()) if (l.img) { const im = await db.getPostImage(owner, l.img); if (im) imgs.push({ ...im, i }); }
+  // Per line: its picture plus the pictures of its extra links (all boosted under that line's budget).
+  for (const [i, l] of c.plan.lines.entries()) {
+    const pics = [];
+    for (const id of [l.img, ...(l.extra || []).map((x) => x.img)].filter(Boolean)) { const im = await db.getPostImage(owner, id); if (im) pics.push(im); }
+    if (pics.length) imgs.push({ i, pics });
+  }
   if (!imgs.length) await telegram.send(text, chat);
   else {
-    // Every post with a picture goes as its own photo with its own line under it, then the totals.
+    // Every line with pictures goes as its own photo (or album) with its line under it, then the totals.
     const head = km ? `🎯 ផែនការ Boost Post — ${c.name}` : `🎯 Boost plan — ${c.name}`;
     const withPic = new Set(imgs.map((x) => x.i));
-    for (const [n, im] of imgs.entries()) await telegram.sendAlbum([im], (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km), chat);
+    for (const [n, im] of imgs.entries()) await telegram.sendAlbum(im.pics, (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km), chat);
     const rest = c.plan.lines.map((l, i) => (withPic.has(i) ? null : lineText(l, i, km))).filter(Boolean);
     const t = totals(c.plan), tail = km
       ? [...rest, rest.length ? '' : null, t.rate ? `ថវិកាផ្សាយ: ${money(t.budget)}` : null, t.rate ? `ពន្ធ ${t.rate}%: ${money(t.tax)}` : null, `💰 សរុបត្រូវបង់: ${money(t.total)}`, '', 'សូមបង់ប្រាក់មុន ដើម្បីចាប់ផ្តើម Boost 🙏']

@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=224">
+<link rel="stylesheet" href="/assets/app.css?v=225">
 <link rel="stylesheet" href="/assets/profit.css?v=180">
 </head>
 <body>
@@ -646,6 +646,13 @@
       <div class="hint">Every 30 minutes Boost Desk sends the boost spend of each Page per day (date, Page ID, spend) for the last 7 days, so adsbox.biz can show cost per order too. Re-sending a day corrects it — nothing is doubled. The key needs the <b>adspend.write</b> permission (Two-way) in adsbox.biz → Admin → API Connecting.</div>
       <div class="pushst"><span id="oPushSt" class="hint"></span><button type="button" class="sm" id="oPushNow">Send now</button></div>
     </div>
+    <div class="pushbox" id="oHookBox">
+      <b>Webhook — adsbox.biz tells Boost Desk right away</b>
+      <div class="hint">Give these two lines to the adsbox.biz developer. When an order is detected, adsbox calls this address and Boost Desk re-reads that day within seconds (instead of waiting for the 5-minute check).</div>
+      <label class="fld"><span>Address</span><input type="text" id="oHookUrl" readonly></label>
+      <label class="fld"><span>Secret <small class="hint">(header <code>X-Webhook-Secret</code>)</small></span><input type="text" id="oHookSec" readonly></label>
+      <div class="pushst"><span id="oHookSt" class="hint"></span><button type="button" class="sm" id="oHookCopy">Copy both</button><button type="button" class="sm ghost" id="oHookNew">New secret</button></div>
+    </div>
     <div class="dlg-foot"><button type="button" class="ghost" id="oKeyDel">Remove key</button><span class="spacer"></span><button type="button" id="oTest">Test connection</button><button type="button" class="primary" id="oSave">Save</button></div>
   </form>
 </dialog>
@@ -691,6 +698,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/profit.js?v=180"></script>
-<script src="/assets/app.js?v=224"></script>
+<script src="/assets/app.js?v=225"></script>
 </body>
 </html>

@@ -221,6 +221,12 @@ const mbOnly = wrap(async (req, res, next) => {
   req.buyer = b; next();
 });
 app.post('/mb/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
+// adsbox.biz → Boost Desk webhook (no login; the shared secret from the Orders → adsbox.biz dialog).
+app.post('/hooks/adsbox', wrap(async (req, res) => {
+  const given = String(req.get('X-Webhook-Secret') || (req.query || {}).secret || (req.body || {}).secret || ''), want = await orders.hookSecret();
+  if (!given || given.length !== want.length || !require('crypto').timingSafeEqual(Buffer.from(given), Buffer.from(want))) return res.status(401).json({ error: 'Bad webhook secret.' });
+  res.json(await orders.receiveHook(req.body));
+}));
 // Every task assigned to this buyer, across every client workbook, with the day's done / late state.
 async function buyerTasks(buyer, day) {
   const today = sync.todayIn();
@@ -1543,6 +1549,8 @@ api.get('/todo', wrap(async (req, res) => res.json(await pm.todo(req.user))));
 // ---------- Orders page (adsbox.biz API) ----------
 api.get('/orders/api', wrap(async (req, res) => { const c = await orders.publicConfig(); if (!(await canSeeAdmin(req.user.fb_id))) { delete c.keyHint; delete c.url; delete c.savedBy; c.url = c.hasKey ? 'set' : ''; } res.json(c); })); // non-admins only learn whether it is connected
 api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders.saveApiConfig(req.body || {}, req.user.name))));
+api.get('/orders/hook', adminOnly, wrap(async (req, res) => res.json({ url: `${req.protocol}://${req.get('host')}/hooks/adsbox`, secret: await orders.hookSecret(), last: ((await db.getSetting('adsboxApi', null)) || {}).hookLast || null })));
+api.post('/orders/hook/renew', adminOnly, wrap(async (req, res) => res.json({ secret: await orders.hookSecret(true) })));
 api.get('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.pushStatus())));
 api.put('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.setPush(!!(req.body || {}).on))));
 api.post('/orders/push', adminOnly, wrap(async (req, res) => { await orders.setPush(true); res.json(await orders.pushSpend(Math.min(31, Number((req.body || {}).days) || 7))); }));

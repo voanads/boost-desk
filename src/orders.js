@@ -87,7 +87,7 @@ async function saveApiConfig({ url, key, listUrl }, by) {
 }
 async function publicConfig() {
   const c = await apiConfig();
-  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null), listError: await db.getSetting('ordersListError', null) };
+  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, hookLast: ((await db.getSetting('adsboxApi', null)) || {}).hookLast || null, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null), listError: await db.getSetting('ordersListError', null) };
 }
 // DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
 // per-order row, a type field saying "new" / "old" (or is_new true/false).
@@ -509,4 +509,31 @@ async function report(owner, from, to, src = 'all') {
   return { from, to, live: false, prev, quality: await periodQuality(from, to), src: key, hasSplit: split.m + split.c + split.a > 0, clients, unmatched, hasData: rows.length > 0 };
 }
 
-module.exports = { compareDay, useLive, periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };
+// ---- Webhook: adsbox.biz tells Boost Desk the moment an order is detected ----
+//   POST /hooks/adsbox  header X-Webhook-Secret: <secret>  body { event, date, page_id, page_name } (or a list)
+// Boost Desk does not trust the counts in the call: it re-reads that day's summary from the API a few seconds
+// later (one call, debounced), so the Orders page is live within seconds and still matches adsbox.
+async function hookSecret(renew = false) {
+  const c = (await db.getSetting('adsboxApi', null)) || {};
+  if (c.hookSecret && !renew) return c.hookSecret;
+  const sec = 'bd_' + require('crypto').randomBytes(18).toString('base64url');
+  await db.setSetting('adsboxApi', { ...c, hookSecret: sec, hookAt: new Date().toISOString() }); return sec;
+}
+const hookTimers = new Map();
+async function receiveHook(body) {
+  const list = Array.isArray(body) ? body : body && Array.isArray(body.orders) ? body.orders : body && Array.isArray(body.data) ? body.data : [body || {}];
+  const today = sync.todayIn(), days = new Set();
+  for (const x of list) {
+    const d = String(x.date || x.day || x.created_at || x.order_date || today).slice(0, 10);
+    days.add(isDay(d) && d <= today && d >= sync.addDays(today, -7) ? d : today);
+  }
+  const c = (await db.getSetting('adsboxApi', null)) || {};
+  await db.setSetting('adsboxApi', { ...c, hookLast: { at: new Date().toISOString(), n: list.length, days: [...days] } });
+  // Re-read each touched day 5 s later; more calls inside those seconds share one re-read.
+  for (const d of days) {
+    if (hookTimers.has(d)) continue;
+    hookTimers.set(d, setTimeout(() => { hookTimers.delete(d); pullRange(d, d, { force: true }).catch((e) => console.error('[orders] hook pull:', e.message)); }, 5000));
+  }
+  return { ok: true, received: list.length, days: [...days] };
+}
+module.exports = { hookSecret, receiveHook, compareDay, useLive, periodQuality, spendRows, pushSpend, pushStatus, setPush, liveTotals, importRows, status, byClient, pullApi, pullRange, testApi, report, publicConfig, saveApiConfig, apiConfig };

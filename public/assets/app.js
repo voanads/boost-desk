@@ -1715,7 +1715,7 @@
     $('oKeyDel').hidden = !c.hasKey;
     const canEdit = !!(me && me.canAdmin); ['oUrl', 'oListUrl', 'oKey', 'oSave', 'oTest', 'oKeyDel', 'oPushOn', 'oPushNow'].forEach((id) => { $(id).disabled = !canEdit; });
     if (!canEdit) $('oKeyInfo').textContent += ' Only admins can change these settings.';
-    loadPush();
+    loadPush(); loadHook();
     dlgOpen($('oDlg'));
   };
   function drawPush(p) {
@@ -1725,6 +1725,12 @@
       : `✓ Sent ${esc(ago(l.at))} · ${l.saved} of ${l.received} rows saved (${esc(l.from)} – ${esc(l.to)})${l.noPage ? ` · ${l.noPage} campaign${l.noPage === 1 ? '' : 's'} skipped (no Page)` : ''}${l.errors && l.errors.length ? ` · <span class="over">${l.errors.length} rows refused: ${esc(l.errors[0].error)}</span>` : ''}`;
   }
   async function loadPush() { try { drawPush(await api('/orders/push')); } catch (_) { $('oPushSt').textContent = ''; } }
+  async function loadHook() {
+    const box = $('oHookBox'); if (!box) return; box.hidden = !(me && me.canAdmin); if (box.hidden) return;
+    try { const h = await api('/orders/hook'); $('oHookUrl').value = h.url; $('oHookSec').value = h.secret; $('oHookSt').textContent = h.last ? `✓ Last call ${ago(h.last.at)} · ${h.last.n} order${h.last.n === 1 ? '' : 's'}` : 'No call from adsbox.biz yet.'; } catch (_) { box.hidden = true; }
+  }
+  $('oHookCopy').onclick = async () => { const t = `Webhook address: ${$('oHookUrl').value}\nHeader X-Webhook-Secret: ${$('oHookSec').value}\nMethod: POST, JSON body { "event": "order.created", "date": "YYYY-MM-DD", "page_id": "…", "page_name": "…" }`; try { await navigator.clipboard.writeText(t); toast('Copied — send it to the adsbox.biz developer'); } catch (_) { prompt('Copy this', t); } };
+  $('oHookNew').onclick = async () => { if (!confirm('Make a new secret? adsbox.biz must be updated with it, or its calls will be refused.')) return; try { await api('/orders/hook/renew', { method: 'POST' }); loadHook(); } catch (e) { toast(e.message); } };
   $('oPushOn').onchange = async () => { try { drawPush(await api('/orders/push', { method: 'PUT', body: { on: $('oPushOn').checked } })); toast($('oPushOn').checked ? 'Spend will be sent to adsbox.biz every 30 minutes' : 'Stopped sending spend'); } catch (e) { toast(e.message); } };
   $('oPushNow').onclick = async () => {
     const b = $('oPushNow'); b.disabled = true; $('oPushSt').textContent = 'Sending…';

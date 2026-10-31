@@ -1633,6 +1633,7 @@
       let msg = '';
       if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
       else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
+      else if (cfg.listUrl && cfg.listError && cfg.last && cfg.listError.at > (cfg.last.at || '')) msg = `ⓘ The order list address could not be read (${esc(cfg.listError.message)}) — counts come from the summary API instead.`;
       else if (!d.hasData) msg = 'No orders for this period yet. Tap <b>↻ Update</b> to fetch them.';
       else if (est) msg = `<span title="Days from before Boost Desk started keeping each day's count (18 Oct) come from adsbox.biz's API and may be too high, so cost per order looks cheaper.">ⓘ ${est} of ${est + (ql.kept || 0)} days are estimates and may be too high.</span>`;
       note.hidden = !msg; note.innerHTML = msg;

@@ -132,6 +132,9 @@ function start() {
   H.register('adsbox.biz orders', 30, 'every 30 minutes');
   H.register('Spend to adsbox.biz', 30, 'every 30 minutes, at :15 and :45');
   cron.schedule('15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
+  // Today's count every 5 minutes (one small call), the last 3 days every 30 minutes.
+  H.register('adsbox.biz today', 5, 'every 5 minutes');
+  cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => H.track('adsbox.biz today', () => require('./orders').pullApi(1)).catch((e) => log('adsbox today failed:', e.message)), opts);
   cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
   // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
   H.register('AI daily plans', 1440, 'daily at 06:40');

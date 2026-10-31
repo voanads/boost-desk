@@ -994,7 +994,7 @@ api.post('/clients/:id/boost-plan/send', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   const b = req.body || {};
-  res.json(await require('./src/plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en' }));
+  res.json(await require('./src/plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || '') }));
 }));
 api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 

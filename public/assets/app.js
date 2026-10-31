@@ -765,7 +765,7 @@
   // ---- post boost plan: posts ($/day × days), tax, total to pay — sent to the client before boosting ----
   const planOpen = {}; // client id → 'edit' | 'send'
   const planProg = {}; // client id → progress from the server (post spend since the plan starts)
-  const planSend = { lang: 'en', to: 'client', text: '', err: '' };
+  const planSend = { lang: 'en', to: 'client', topic: '', text: '', err: '' };
   let planDraft = null; // lines being edited
   const hasPostType = (c) => c.type === 'post' || c.type === 'both';
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -824,7 +824,13 @@
         <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
           ${(() => { const n = (c.plan.lines || []).filter((l) => l.img).length; return n ? `<span class="hint">📷 ${n} picture${n === 1 ? '' : 's'} — each post is sent as its picture with its line under it, then the total.</span>` : ''; })()}
           <span class="hint">Send to</span>
-          ${c.telegram ? `<label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''}> Client's group · ${esc(c.telegram_title || 'Telegram')}</label>` : '<span class="hint bp-nogroup">No Telegram group yet — link one in ⚙ Settings to send it there.</span>'}
+          ${c.telegram ? `<label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''}> Client's group · ${esc(c.telegram_title || 'Telegram')}</label>${(() => {
+            // the group's topics (seen by the bot, or already used for a Page's reports) → send the plan into one of them
+            const g = String(c.telegram).split(':')[0], seen = new Map();
+            for (const t of tgChats) if (t.type === 'topic' && String(t.id).split(':')[0] === g) seen.set(t.id, t.topic || String(t.title).split(' › ').pop());
+            for (const v of Object.values(c.topics || {})) if (v && v.id && String(v.id).split(':')[0] === g && !seen.has(v.id)) seen.set(v.id, String(v.title || v.id).split(' › ').pop());
+            if (!seen.size) return '';
+            return `<label class="bp-topic"><span class="hint">Topic</span><select id="bpTopic"><option value="">Main chat${c.telegram.includes(':') ? ' (the topic set on the client)' : ''}</option>${[...seen].map(([id, n]) => `<option value="${esc(id)}" ${planSend.topic === id ? 'selected' : ''}># ${esc(n)}</option>`).join('')}</select></label>`; })()}` : '<span class="hint bp-nogroup">No Telegram group yet — link one in ⚙ Settings to send it there.</span>'}
           ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> My team group</label>` : ''}
           <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> Just copy the text</label>
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
@@ -924,12 +930,14 @@
     }
     sec.querySelectorAll('[data-bpl]').forEach((b) => b.onclick = () => { planSend.lang = b.dataset.bpl; sec.querySelectorAll('[data-bpl]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { lang: planSend.lang } }).then((u) => { clients = clients.map((x) => x.id === u.id ? u : x); }).catch(() => {}); loadPlanMsg(c); });
     sec.querySelectorAll('input[name="bpTo"]').forEach((r) => r.onchange = () => { planSend.to = r.value; $('bpGo').textContent = r.value === 'copy' ? 'Copy text' : 'Send now'; });
+    if ($('bpTopic')) $('bpTopic').onchange = () => { planSend.topic = $('bpTopic').value; const r = sec.querySelector('input[name="bpTo"][value="client"]'); if (r) { r.checked = true; planSend.to = 'client'; $('bpGo').textContent = 'Send now'; } };
     if ($('bpGo')) $('bpGo').onclick = async () => {
       const b = $('bpGo');
       if (planSend.to === 'copy') { try { await navigator.clipboard.writeText(planSend.text); toast('Copied — paste it to the client'); } catch (_) { toast('Could not copy — select the text and copy it'); } return; }
       b.disabled = true; b.textContent = 'Sending…';
       try {
-        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang } });
+        const tp = $('bpTopic'); planSend.topic = tp ? tp.value : '';
+        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '' } });
         if (planSend.to === 'client') { const now = new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
         planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : 'Plan sent to ' + c.name);
       } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send now'; }

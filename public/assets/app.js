@@ -820,6 +820,7 @@
     if (open === 'send' && planSend.to === 'client' && !c.telegram) planSend.to = 'copy';
     const send = open === 'send' ? `<div class="bp-send"><pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
         <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
+          ${(() => { const n = (c.plan.lines || []).filter((l) => l.img).length; return n ? `<span class="hint">📷 ${n} picture${n === 1 ? '' : 's'} — each post is sent as its picture with its line under it, then the total.</span>` : ''; })()}
           <span class="hint">Send to</span>
           ${c.telegram ? `<label><input type="radio" name="bpTo" value="client" ${planSend.to === 'client' ? 'checked' : ''}> Client's group · ${esc(c.telegram_title || 'Telegram')}</label>` : '<span class="hint bp-nogroup">No Telegram group yet — link one in ⚙ Settings to send it there.</span>'}
           ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> My team group</label>` : ''}

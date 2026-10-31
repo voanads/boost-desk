@@ -57,7 +57,8 @@ async function progress(owner, c, today = sync.todayIn()) {
 // One post's line of the plan: "1. name / $10/day × 7 days = $70 (from 1 Nov) / 🔗 link".
 function lineText(l, i, km) {
   const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
-  const when = l.start ? (km ? ` (ចាប់ពី ${dayTxt(l.start, true)})` : ` (from ${dayTxt(l.start)})`) : '';
+  const end = l.start ? addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '';
+  const when = l.start ? (km ? ` (${dayTxt(l.start, true)} – ${dayTxt(end, true)})` : ` (${dayTxt(l.start)} – ${dayTxt(end)})`) : '';
   const link = [l.link, ...(l.extra || []).map((x) => x.link)].filter(Boolean).map((u) => `\n    🔗 ${u}`).join('');
   return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}${link}`
     : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}${link}`;

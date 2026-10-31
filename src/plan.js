@@ -78,9 +78,15 @@ function message(c, plan, lang = 'en') {
 }
 
 // to: 'client' (their group) or 'team' (the team group).
-async function send(owner, c, { to = 'client', lang } = {}) {
+// topic: a destination "<group>:<thread>" inside the client's group (one of its topics) — optional.
+async function send(owner, c, { to = 'client', lang, topic = '' } = {}) {
   if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
-  const chat = to === 'team' ? cfg.telegramChatId : c.telegram;
+  let chat = to === 'team' ? cfg.telegramChatId : c.telegram;
+  if (to === 'client' && topic) {
+    const group = String(c.telegram || '').split(':')[0];
+    if (!/^-?\d+:\d+$/.test(topic) || topic.split(':')[0] !== group) throw new Error('That topic is not in this client\'s group.');
+    chat = topic;
+  }
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
   const lg = lang || c.plan.lang || 'en', km = lg === 'km', text = message(c, c.plan, lg);
   const imgs = [];

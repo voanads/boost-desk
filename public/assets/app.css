@@ -3120,3 +3120,4 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .bp-xth{width:28px;height:28px;border-radius:6px;object-fit:cover;background:var(--bg-2);display:block} .bp-xth.none{border:1px dashed var(--line)} .bp-xth.spin{border-color:var(--brand)}
 .bp-xl input{min-width:0} .bp-xadd{align-self:flex-start;font-size:var(--fs-sm)}
 .bp-th2{margin-left:-10px;width:28px;height:28px;border:2px solid var(--surface)}
+.bp-topic{display:flex;align-items:center;gap:8px;margin-left:22px} .bp-topic select{min-width:0;max-width:260px}

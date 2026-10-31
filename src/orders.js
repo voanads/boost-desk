@@ -87,7 +87,7 @@ async function saveApiConfig({ url, key, listUrl }, by) {
 }
 async function publicConfig() {
   const c = await apiConfig();
-  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null) };
+  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null), listError: await db.getSetting('ordersListError', null) };
 }
 // DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
 // per-order row, a type field saying "new" / "old" (or is_new true/false).
@@ -112,6 +112,7 @@ function mapRows(body) {
   // The same order seen twice (pages overlapping) is counted once.
   const seen = new Set();
   return list.filter((x) => {
+    if (!isOrderRow(x)) return true; // a summary row (one per Page per day) is never a duplicate, whatever its id
     const id = x && (x.order_id ?? x.orderId ?? x.order_code ?? x.code ?? x.id ?? x._id);
     if (id == null || id === '') return true;
     const k = String(id); if (seen.has(k)) return false; seen.add(k); return true;
@@ -246,7 +247,7 @@ async function pullRangeNow(from, to, force) {
   const plan = []; // days to fetch now
   for (let day = from; day <= to && day <= today; day = sync.addDays(day, 1)) {
     if (day >= yest) { plan.push(day); continue; }               // today / yesterday: always refresh
-    if (state[day] === 'locked') continue;                        // kept as it was — never changes again
+    if (state[day] === 'locked' && !force) continue;              // kept as it was — only an explicit ↻ Update refetches it
     if (state[day] === 'fresh') { state[day] = 'locked'; continue; } // captured while recent → lock it
     if (!force && done[day] && Date.now() - done[day] < 24 * 3600e3) continue; // backfill fetched lately
     plan.push(day);
@@ -254,13 +255,17 @@ async function pullRangeNow(from, to, force) {
   const store = async (day, rowsOfDay) => {
     await q(`DELETE FROM page_orders WHERE source='api' AND day=$1`, [day]);
     n += await importRows(rowsOfDay, 'api');
-    done[day] = Date.now(); state[day] = day >= yest ? 'fresh' : 'backfill';
+    done[day] = Date.now(); state[day] = day >= yest ? 'fresh' : state[day] === 'locked' ? 'locked' : 'backfill';
   };
   try {
+    let viaList = false;
     if (plan.length && (await apiConfig()).listUrl) {
-      const lst = await listOrders(plan[0], plan[plan.length - 1], await knownPageIds(plan[0], plan[plan.length - 1])); if (lst === null) return null;
-      for (const day of plan) await store(day, lst.rows.filter((r) => r.day === day));
-    } else for (const day of plan) {
+      // The order list is optional: when it can't be read (needs a login, 404…) fall back to the summary API.
+      try { const lst = await listOrders(plan[0], plan[plan.length - 1], await knownPageIds(plan[0], plan[plan.length - 1])); if (lst === null) return null;
+        for (const day of plan) await store(day, lst.rows.filter((r) => r.day === day)); viaList = true; }
+      catch (e) { await db.setSetting('ordersListError', { at: new Date().toISOString(), message: e.message }); }
+    }
+    if (!viaList) for (const day of plan) {
       const rows = await summaryDayRows(day); if (rows === null) return null;
       await store(day, rows);
     }
@@ -275,7 +280,8 @@ async function pullRangeNow(from, to, force) {
 }
 // One day from the summary API, one row per Page.
 async function summaryDayRows(day) {
-  const got = await fetchAll(day, day); if (got === null) return null;
+  // Ask for one row per Page per day explicitly — the API's default shape has changed before.
+  const got = await fetchAll(day, day, '&group_by=page_day'); if (got === null) return null;
   const agg = new Map(), rows = mapRows(got.list);
   // The API filters by day: everything it sends belongs to that day (its times may be in UTC, a day off).
   // If it sends rows far from that day, it ignored the filter — then keep only rows dated that day.

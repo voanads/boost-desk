@@ -148,3 +148,7 @@
 #tab-profit .pf-accseg button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-text);font-weight:700}
 #tab-profit .pf-accseg button[data-val=none][aria-pressed=true]{background:var(--danger-soft);color:var(--danger)}
 #tab-profit .pf-accseg button{white-space:nowrap}#tab-profit .pf-sheet td:last-child{white-space:nowrap}
+
+/* Overview: all books */
+.pf-ovbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .pf-ovbar select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.pf-openbook{all:unset;cursor:pointer} .pf-openbook:hover .who{text-decoration:underline}

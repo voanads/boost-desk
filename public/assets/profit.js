@@ -14,6 +14,7 @@ window.BDProfit = (() => {
   let months = {}, current = null, draft = null, dirty = false, saveTimer = null, rulesTimer = null, confirmDel = false, confirmSubmit = false;
   let page = 'accounts', role = 'viewer', canEdit = false, isAdmin = false, me = null;
   let services = JSON.parse(JSON.stringify(DEFAULT_SERVICES)), accessPeople = [];
+  let ov = null, ovMonth = '', ovTeam = ''; // Overview (admins): one month across every book
   // Names in the Developer / Doer / Spender / Supporter dropdowns (settings/main.team). Admins edit the list.
   const DEFAULT_TEAM = ['Dorn Sovandara', 'Hor Vannak', 'Phat Sopheak', 'Eng Khunngoun', 'Nang Sokhy', 'Nuon Ni', 'Van Chivarn', 'Eng Khunmeng', 'Run Vannak', 'Choeun Phanith', 'Van Socheat', 'Chamroun Chetara', 'Chea Lykheang', 'En Chomrey', 'Chhon Bunna', 'Another'];
   let team = DEFAULT_TEAM.slice();
@@ -243,6 +244,55 @@ window.BDProfit = (() => {
     services.forEach((s, i) => { const tot = s.pct.reduce((a, b) => a + num(b), 0), e = byId('pf-rt-' + i); if (e) { e.textContent = (Math.round(tot * 100) / 100) + '%'; e.classList.toggle('warn', Math.abs(tot - 100) > 0.01); } });
   }
 
+  // ---- Overview (Profit admins): every book for one month, filtered by team ----
+  async function renderOverview() {
+    app.innerHTML = '<div class="pf-empty"><h3>Loading…</h3></div>';
+    try { ov = await api('/overview' + (ovMonth ? '?month=' + ovMonth : '')); } catch (e) { app.innerHTML = `<div class="pf-empty"><h3>Can't load the overview</h3><p>${esc(e.message)}</p></div>`; return; }
+    ovMonth = ov.month || '';
+    const all = (ov.books || []).map((b) => ({ ...b, d: normalize(b.data), c: calc(normalize(b.data)) }));
+    const books = all.filter((b) => !ovTeam || b.team === ovTeam || (ovTeam === 'none' && !b.team)).sort((a, b) => b.c.profit - a.c.profit);
+    const sum = (f) => books.reduce((t, b) => t + (b.c[f] || 0), 0), tx = books.reduce((t, b) => t + b.d.transactions.length, 0);
+    // people and services across the chosen books
+    const ppl = {}, svc = {};
+    for (const b of books) {
+      for (const [n, v] of Object.entries(b.c.people)) { const p = ppl[n] = ppl[n] || { total: 0, parts: {}, books: 0 }; p.total += v.total; p.books++; ROLES.forEach((r) => { p.parts[r] = (p.parts[r] || 0) + (v.parts[r] || 0); }); }
+      for (const [n, v] of Object.entries(b.c.svc)) { const x = svc[n] = svc[n] || { total: 0, count: 0, roles: [0, 0, 0, 0, 0] }; x.total += v.total; x.count += v.count; v.roles.forEach((a, i) => { x.roles[i] += a; }); }
+    }
+    const pplRows = Object.entries(ppl).filter(([, v]) => Math.abs(v.total) > 0.004).sort((a, b) => b[1].total - a[1].total);
+    const cell = (x, b) => `<td class="v n${x < 0 ? ' bad' : ''}"${b ? ' style="font-weight:700"' : ''}>${Math.abs(x) < 0.004 ? '<span class="mut">$0</span>' : money(x)}</td>`;
+    const profit = sum('profit'), teamName = ovTeam === 'none' ? 'No team' : ((ov.teams || []).find((t) => t.id === ovTeam) || {}).name || 'All teams';
+    app.innerHTML = `
+    <div class="pf-top"><div><span class="pf-eyebrow">Profit · all books</span><h2>${ovMonth ? esc(monthLabel(ovMonth)) : 'No months yet'}</h2><span class="pf-lastedit">${books.length} book${books.length === 1 ? '' : 's'} · ${esc(teamName)}</span></div>
+      <div class="pf-confirm pf-ovbar"><label class="hint" for="pfOvMonth">Month</label><select id="pfOvMonth" aria-label="Month">${(ov.months || []).map((m) => `<option value="${m}"${m === ovMonth ? ' selected' : ''}>${esc(monthLabel(m))}</option>`).join('') || '<option value="">No months</option>'}</select>
+      <label class="hint" for="pfOvTeam">Team</label><select id="pfOvTeam" aria-label="Team"><option value="">All teams</option>${(ov.teams || []).map((t) => `<option value="${esc(t.id)}"${t.id === ovTeam ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}${all.some((b) => !b.team) ? `<option value="none"${ovTeam === 'none' ? ' selected' : ''}>No team</option>` : ''}</select></div></div>
+    <section class="pf-strip" aria-label="Key numbers">
+      <div class="hl"><span class="k"><span class="ic">÷</span>Profit to split</span><span class="v">${money(profit)}</span><span class="sub">${tx} transactions · ${books.length} books</span></div>
+      <div><span class="k">Increase</span><span class="v${sum('increase') < 0 ? ' bad' : ''}">${money(sum('increase'))}</span><span class="sub">ABA + to receive − deposits − FB debt</span></div>
+      <div><span class="k">Carry over</span><span class="v${sum('carry') < 0 ? ' bad' : ''}">${money(sum('carry'))}</span><span class="sub">for next month</span></div>
+      <div><span class="k">To receive</span><span class="v">${money(sum('toReceive'))}</span><span class="sub">from clients</span></div>
+      <div><span class="k">FB debt</span><span class="v">${money(sum('fbDebt'))}</span><span class="sub">active ad accounts</span></div>
+      <div><span class="k">Boost deposits</span><span class="v">${money(sum('deposit'))}</span><span class="sub">held for clients</span></div>
+    </section>
+    <section class="pf-sheet">
+      <div class="pf-title t-blue"><span>By book</span><span class="t2">${books.length} books · tap a name to open that book</span></div>
+      <div class="pf-scroll"><table style="min-width:760px"><thead><tr><th>Book</th><th>Team</th><th class="n">Deals</th><th class="n">Profit</th><th class="n">Increase</th><th class="n">Carry over</th><th class="n">To receive</th><th class="n">FB debt</th><th>Status</th></tr></thead><tbody>
+      ${books.map((b) => `<tr><td class="v"><button type="button" class="pf-link pf-openbook" data-openbook="${esc(b.id)}"><span class="who">${avatar(b.name)}${esc(b.name)}</span></button></td><td class="v mut">${esc(b.teamName || '—')}</td><td class="v n mut">${b.d.transactions.length}</td>${cell(b.c.profit, 1)}${cell(b.c.increase)}${cell(b.c.carry)}${cell(b.c.toReceive)}${cell(b.c.fbDebt)}<td class="v">${b.d.submitted ? `<span class="pf-locked">✓ Submitted</span>` : '<span class="mut">Open</span>'}</td></tr>`).join('') || '<tr><td class="v mut" colspan="9">No books have this month yet</td></tr>'}
+      <tr class="total"><td>Sum</td><td></td><td class="n">${tx}</td><td class="n">${money(profit)}</td><td class="n">${money(sum('increase'))}</td><td class="n">${money(sum('carry'))}</td><td class="n">${money(sum('toReceive'))}</td><td class="n">${money(sum('fbDebt'))}</td><td></td></tr>
+      </tbody></table></div>
+    </section>
+    <div class="pf-grid3">
+      <section class="pf-sheet"><div class="pf-title t-gold"><span>By person</span><span class="t2">${pplRows.length} people · all chosen books</span></div><div class="pf-scroll"><table style="min-width:560px"><thead><tr><th>Person</th><th class="n">Sum</th>${ROLES.map((r) => `<th class="n">${ROLE_LABEL[r]}</th>`).join('')}</tr></thead><tbody>
+        ${pplRows.map(([name, v]) => `<tr><td class="v"><span class="who">${avatar(name)}${esc(name)}</span></td>${cell(v.total, 1)}${ROLES.map((r) => cell(v.parts[r] || 0)).join('')}</tr>`).join('') || '<tr><td class="v mut" colspan="7">No transactions</td></tr>'}
+        <tr class="total"><td>Sum</td><td class="n">${money(profit)}</td>${ROLES.map((r) => `<td class="n">${money(books.reduce((t, b) => t + b.c.roles[r], 0))}</td>`).join('')}</tr></tbody></table></div></section>
+      <section class="pf-sheet"><div class="pf-title t-red"><span>By service type</span></div><div class="pf-scroll"><table style="min-width:560px"><thead><tr><th>Service</th><th class="n">Deals</th><th class="n">Sum</th>${ROLES.map((r) => `<th class="n">${ROLE_LABEL[r]}</th>`).join('')}</tr></thead><tbody>
+        ${Object.entries(svc).sort((a, b) => b[1].total - a[1].total).map(([n, v]) => `<tr><td class="v">${esc(n)}</td><td class="v n mut">${v.count}</td>${cell(v.total, 1)}${v.roles.map((x) => cell(x)).join('')}</tr>`).join('') || '<tr><td class="v mut" colspan="8">No transactions</td></tr>'}
+        </tbody></table></div></section>
+    </div>`;
+    byId('pfOvMonth').onchange = (e) => { ovMonth = e.target.value; renderOverview(); };
+    byId('pfOvTeam').onchange = (e) => { ovTeam = e.target.value; renderOverview(); };
+    app.querySelectorAll('[data-openbook]').forEach((b) => b.onclick = async () => { if (dirty) await saveNow(); viewBook = b.dataset.openbook; current = ovMonth; draft = null; page = 'accounts'; setStatus(''); await refresh(true); if (months[ovMonth]) { current = ovMonth; draft = normalize(months[current]); renderMonthSel(); render(); } });
+  }
+
   // ---- Access (Profit admins) ----
   async function renderAccess() {
     app.innerHTML = `<div class="pf-top"><div><span class="pf-eyebrow">Profit</span><h2>Who can use Profit</h2><span class="pf-lastedit">Everyone has their own Profit book. Admins can also open anyone’s book.</span></div></div>
@@ -263,8 +313,9 @@ window.BDProfit = (() => {
   function render() {
     if (!app) return;
     root.querySelectorAll('[data-pfpage]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pfpage === page)));
-    $('#pfMonthBar').hidden = page === 'access';
+    $('#pfMonthBar').hidden = page === 'access' || page === 'overview';
     if (page === 'access') { renderAccess(); return; }
+    if (page === 'overview') { renderOverview(); return; }
     if (!current) { app.innerHTML = emptyHTML(); return; }
     page === 'split' ? renderSplit() : renderAccounts();
     if (!editable()) { app.querySelectorAll('[data-path]').forEach((e) => { e.disabled = true; }); app.querySelectorAll("[data-add],[data-remove^='accounts.'],[data-remove^='clients.'],[data-remove^='transactions.'],#pfFillMeta").forEach((e) => { e.hidden = true; }); }
@@ -461,17 +512,17 @@ window.BDProfit = (() => {
     let s;
     try { s = await api('/state' + (viewBook && viewBook !== myId ? '?book=' + encodeURIComponent(viewBook) : '')); } catch (e) { if (first) app.innerHTML = `<div class="pf-empty"><h3>Can't open Profit</h3><p>${esc(e.message)}</p></div>`; return; }
     role = s.role || 'member'; isAdmin = role === 'admin'; serviceUse = s.serviceUse || {}; canEdit = !!s.mine; myId = s.me || myId; viewBook = s.book || myId; books = s.books || [];
-    $('#pfNewBtn').hidden = !canEdit; $('#pfAccessTab').hidden = !isAdmin; renderBookSel();
+    $('#pfNewBtn').hidden = !canEdit; $('#pfAccessTab').hidden = !isAdmin; $('#pfOverviewTab').hidden = !isAdmin; renderBookSel();
     const nextServices = s.settings && s.settings.main ? servicesFrom(s.settings.main) : services;
     const main = (s.settings && s.settings.main) || {};
     const nextTeam = Array.isArray(main.team) ? main.team.map((x) => String(x || '').trim()).filter(Boolean) : DEFAULT_TEAM.slice();
     const servicesChanged = JSON.stringify(nextServices) !== JSON.stringify(services) || JSON.stringify(nextTeam) !== JSON.stringify(team); services = nextServices; team = nextTeam;
     months = s.months || {};
-    if (first || !current || (!months[current] && !dirty)) { const ids = Object.keys(months).sort(); current = ids.pop() || null; draft = current ? normalize(months[current]) : null; renderMonthSel(); render(); return; }
+    if (first || !current || (!months[current] && !dirty)) { const ids = Object.keys(months).sort(); current = ids.pop() || null; draft = current ? normalize(months[current]) : null; renderMonthSel(); if (page !== 'overview') render(); return; }
     let changed = servicesChanged;
     if (!dirty && months[current]) { const fresh = normalize(months[current]); if (JSON.stringify(fresh) !== JSON.stringify(draft)) { draft = fresh; changed = true; } }
     renderMonthSel();
-    if (changed && page !== 'access' && !typing()) render();
+    if (changed && page !== 'access' && page !== 'overview' && !typing()) render();
   }
 
   function show(meInfo) {
@@ -482,7 +533,7 @@ window.BDProfit = (() => {
       root.innerHTML = `<div class="pf">
         <div class="bhead"><div><h1>Profit</h1><div class="hint">Your monthly ad accounts, client balances and profit split.</div></div>
           <div class="bh-r" id="pfMonthBar"><span id="pfBookWrap" hidden><label for="pfBookSel" class="hint">Book</label><select id="pfBookSel" aria-label="Whose Profit book"></select></span><label for="pfMonthSel" class="hint">Month</label><select id="pfMonthSel" aria-label="Month"></select><button class="sm" id="pfNewBtn" type="button" hidden>+ New month</button><span class="pf-status" id="pfStatus" aria-live="polite"></span></div></div>
-        <div class="seg pf-seg" role="group" aria-label="Profit pages"><button type="button" data-pfpage="accounts" aria-pressed="true">Accounts &amp; clients</button><button type="button" data-pfpage="split" aria-pressed="false">Profit split</button><button type="button" data-pfpage="access" aria-pressed="false" id="pfAccessTab" hidden>Access</button></div>
+        <div class="seg pf-seg" role="group" aria-label="Profit pages"><button type="button" data-pfpage="accounts" aria-pressed="true">Accounts &amp; clients</button><button type="button" data-pfpage="split" aria-pressed="false">Profit split</button><button type="button" data-pfpage="overview" aria-pressed="false" id="pfOverviewTab" hidden>All books</button><button type="button" data-pfpage="access" aria-pressed="false" id="pfAccessTab" hidden>Access</button></div>
         <div id="pfApp"><div class="pf-empty"><h3>Loading…</h3></div></div></div>`;
       app = byId('pfApp'); statusEl = byId('pfStatus');
       wire();

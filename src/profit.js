@@ -170,6 +170,19 @@ function router({ sitePeople }) {
     res.json({ ok: true });
   }));
   r.get('/meta-accounts', wrap(async (req, res) => res.json({ accounts: await metaAccounts(me(req)) })));
+  // Overview (admins): one month across every book, with each book's team, so the app owner sees the
+  // whole company's profit and can narrow it to one team. The numbers are worked out in the browser
+  // with the same formulas as a single book.
+  r.get('/overview', admin, wrap(async (req, res) => {
+    const ids = (await q("SELECT DISTINCT id FROM profit_docs WHERE col='months' ORDER BY id DESC")).rows.map((x) => x.id);
+    const month = VALID_ID.test(String(req.query.month || '')) ? String(req.query.month) : ids[0] || '';
+    const teams = (await db.getSetting('teams', [])) || [], teamOf = {};
+    for (const t of teams) for (const m of t.members || []) teamOf[m] = t.id;
+    const names = Object.fromEntries((await people()).map((p) => [p.id, p.name]));
+    const rows = month ? (await q("SELECT book, data FROM profit_docs WHERE col='months' AND id=$1", [month])).rows : [];
+    res.json({ month, months: ids, teams: teams.map((t) => ({ id: t.id, name: t.name })),
+      books: rows.map((r) => ({ id: r.book, name: names[r.book] || r.book, team: teamOf[r.book] || '', teamName: (teams.find((t) => t.id === teamOf[r.book]) || {}).name || '', data: r.data })) });
+  }));
 
   // Rename a service type in every person's deals (split rules are shared by all books).
   r.post('/rename-service', admin, wrap(async (req, res) => {

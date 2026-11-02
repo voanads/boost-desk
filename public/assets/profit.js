@@ -108,13 +108,14 @@ window.BDProfit = (() => {
   const editable = () => canEdit && !locked();
   function topRow() {
     const sub = draft && draft.submitted;
+    const moveBtn = isAdmin ? '<button class="sm" type="button" id="pfMove" title="Entered under the wrong month? Move it">Move month…</button>' : '';
     const lockBadge = sub ? `<span class="pf-locked">✓ Submitted by <b>${esc(sub.by || '')}</b> · ${esc(when(sub.at))}</span>${isAdmin ? '<button class="sm" type="button" id="pfUnlock">Unlock</button>' : ''}` : '';
     let right;
-    if (!canEdit) right = `${lockBadge}<span class="pf-roleb viewer">${esc(bookName())}’s book · view only</span>`;
-    else if (sub) right = lockBadge;
+    if (!canEdit) right = `${lockBadge}${moveBtn}<span class="pf-roleb viewer">${esc(bookName())}’s book · view only</span>`;
+    else if (sub) right = lockBadge + moveBtn;
     else if (confirmDel) right = `<span class="hint">Delete ${esc(monthLabel(current))} for good?</span><button class="sm danger" type="button" id="pfDelYes">Delete</button><button class="sm" type="button" id="pfDelNo">Keep</button>`;
     else if (confirmSubmit) right = `<span class="hint">Submit ${esc(monthLabel(current))}? After this nobody can change it${isAdmin ? ' until an admin unlocks it' : ''}.</span><button class="sm primary" type="button" id="pfSubmitYes">Submit</button><button class="sm" type="button" id="pfSubmitNo">Cancel</button>`;
-    else right = '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button><button class="sm primary" type="button" id="pfSubmitBtn">Submit month</button>';
+    else right = moveBtn + '<button class="ghost sm pf-danger" type="button" id="pfDelBtn">Delete month</button><button class="sm primary" type="button" id="pfSubmitBtn">Submit month</button>';
     return `<div class="pf-top"><div><span class="pf-eyebrow">${page === 'split' ? 'Profit split' : 'Ad accounts &amp; clients'}</span><h2>${esc(monthLabel(current))}</h2>${draft && draft._by ? `<span class="pf-lastedit">Last edited by <b>${esc(draft._by)}</b> · ${esc(when(draft._at))}</span>` : ''}</div>
     <div class="pf-confirm">${right}</div></div>`;
   }
@@ -356,6 +357,13 @@ window.BDProfit = (() => {
     try { const r = await api('/months/' + current + '/submit', 'POST', {}); draft.submitted = r.submitted; if (months[current]) months[current].submitted = r.submitted; confirmSubmit = false; setStatus('Submitted'); renderMonthSel(); render(); }
     catch (e) { setStatus("Couldn't submit: " + e.message); }
   }
+  async function moveMonth() {
+    const to = prompt(`Move ${monthLabel(current)} of ${bookName()}'s book to which month? (YYYY-MM)`, current); if (!to || to === current) return;
+    if (!/^\d{4}-\d{2}$/.test(to)) { setStatus('Type the month like 2026-10'); return; }
+    if (dirty) await saveNow();
+    try { await api('/months/' + current + '/move' + (viewBook && viewBook !== myId ? '?book=' + encodeURIComponent(viewBook) : ''), 'POST', { to }); months[to] = months[current]; delete months[current]; current = to; draft = normalize(months[to]); setStatus('Moved to ' + monthLabel(to)); renderMonthSel(); render(); }
+    catch (e) { setStatus("Couldn't move: " + e.message); }
+  }
   async function unlockMonth() {
     if (!current || !isAdmin) return;
     try { await api('/months/' + current + '/unlock' + (viewBook && viewBook !== myId ? '?book=' + encodeURIComponent(viewBook) : ''), 'POST', {}); delete draft.submitted; if (months[current]) delete months[current].submitted; setStatus('Unlocked'); renderMonthSel(); render(); }
@@ -461,6 +469,7 @@ window.BDProfit = (() => {
       if (b.id === 'pfSubmitNo') { confirmSubmit = false; render(); return; }
       if (b.id === 'pfSubmitYes') { submitMonth(); return; }
       if (b.id === 'pfUnlock') { unlockMonth(); return; }
+      if (b.id === 'pfMove') { moveMonth(); return; }
       if (b.id === 'pfDelNo') { confirmDel = false; render(); return; }
       if (b.id === 'pfDelYes') { deleteMonth(); return; }
       if (b.id === 'pfNewBtn') { openNew(); return; }

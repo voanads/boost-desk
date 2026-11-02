@@ -169,6 +169,17 @@ function router({ sitePeople }) {
     await put(book, 'months', req.params.id, cur);
     res.json({ ok: true });
   }));
+  // Move a month to another month id (admins, any book via ?book=) — for a month entered under the wrong month.
+  r.post('/months/:id/move', admin, wrap(async (req, res) => {
+    const book = String(req.query.book || me(req)), to = String((req.body || {}).to || '');
+    if (!VALID_BOOK.test(book) || !VALID_ID.test(req.params.id) || !/^\d{4}-\d{2}$/.test(to)) return res.status(400).json({ error: 'Pick a month like 2026-10.' });
+    if (to === req.params.id) return res.json({ ok: true });
+    const cur = await getDoc(book, 'months', req.params.id); if (!cur) return res.status(404).json({ error: 'Month not found.' });
+    if (await getDoc(book, 'months', to)) return res.status(409).json({ error: `This book already has a ${to} month. Delete or move that one first.` });
+    cur.movedFrom = req.params.id; cur.movedBy = req.user.name; cur.movedAt = new Date().toISOString();
+    await put(book, 'months', to, cur); await del(book, 'months', req.params.id);
+    res.json({ ok: true, to });
+  }));
   r.get('/meta-accounts', wrap(async (req, res) => res.json({ accounts: await metaAccounts(me(req)) })));
   // Overview (admins): one month across every book, with each book's team, so the app owner sees the
   // whole company's profit and can narrow it to one team. The numbers are worked out in the browser

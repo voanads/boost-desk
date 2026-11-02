@@ -1,119 +1,92 @@
-# Boost Desk — design system ("Calm console", Oct 2026)
+# Boost Desk — design system
 
-How every page of Boost Desk should look. The values live as CSS variables in
-`public/assets/app.css` (`:root`, and `:root[data-theme=dark]`). Use the
-variable names in CSS, never raw values. If this file and `app.css` disagree,
-`app.css` is right — fix this file. `docs/design-system.md` lists the class
-names of the shared components.
-
-## Feel
-
-Calm, clear, fast to scan on a phone at the end of a work day. One
-professional blue, white cards on a soft grey ground, **no gradients, no
-glows, no background lights** — depth comes from a 1 px line and a faint
-shadow. Status told by colour **and** words. Khmer and English sit side by
-side, so the type must carry Khmer well. Inspiration: Linear, Stripe, Vercel.
+"Calm console", Professional Blue. Flat surfaces, one blue, status by colour, numbers in Inter.
+Every value below is a CSS custom property in `public/assets/app.css` `:root` — **use the token, never the raw value.**
+Dark theme swaps the tokens (`[data-theme=dark]` or the device setting); no component needs its own dark rule.
 
 ## Colour
 
-| Token | Light | Dark | Role |
-| --- | --- | --- | --- |
-| `--brand` | `#2563EB` | `#3B82F6` | Links, selected icons, the blue edge on hero cards, bars |
-| `--brand-fill` | `#2563EB` | `#2563EB` | Solid fills with white text: the one main button, solid badges |
-| `--brand-text` | `#1D4ED8` | `#93C5FD` | Text on `--brand-soft` (selected chips, segments, nav item) |
-| `--brand-soft` | `#EEF4FF` | `#1E2A4A` | Selected chips/segments/nav item, soft tags |
-| `--bg` / `--bg-2` | `#F6F7F9` / `#F1F3F7` | `#0B1220` / `#172033` | Page ground / inset areas, option boxes |
-| `--surface` | `#FFFFFF` | `#111827` | Cards, sidebar, dialogs, inputs |
-| `--line` | `#E5E7EB` | `#1F2937` | Borders, dividers |
-| `--ink` / `--muted` | `#0F172A` / `#5B6B82` | `#F1F5F9` / `#94A3B8` | Text / secondary text and labels |
-| `--ok` + `--ok-soft` | `#047857` / `#ECFDF5` | `#34D399` / `#0F2A22` | Done, on plan, connected, running |
-| `--warn` + `--warn-soft` | `#B45309` / `#FFFBEB` | `#FBBF24` / `#2A2210` | Needs attention, ahead of plan, ends today |
-| `--danger` (= `--live`) + `--danger-soft` | `#B91C1C` / `#FEF2F2` | `#F87171` / `#3A1719` | Live videos, over budget, late, delete |
-| `--on-brand` | `#FFFFFF` | `#FFFFFF` | Text on `--brand-fill` or a solid status colour |
+| Role | Token | Light | Dark | Use for |
+|---|---|---|---|---|
+| Brand | `--brand` | #2563EB | #3B82F6 | links, active nav, focus rings, meters |
+| Brand fill | `--brand-fill` | #2563EB | #2563EB | solid buttons and badges (white text in both themes) |
+| Brand hover | `--brand-hover` | #1D4ED8 | #1D4ED8 | hover on solid brand |
+| Brand text | `--brand-text` | #1D4ED8 | #93C5FD | brand-coloured text on a surface |
+| Brand soft | `--brand-soft` | #EEF4FF | #1E2A4A | selected nav / segmented chip background |
+| On brand | `--on-brand` | #fff | #fff | text on a solid brand or status fill |
+| Page | `--bg` | #F6F7F9 | #0B1220 | body |
+| Page 2 | `--bg-2` | #F1F3F7 | #172033 | inputs, hover rows, quiet avatars |
+| Surface | `--surface` | #fff | #111827 | cards, dialogs, tables |
+| Line | `--line` | #E5E7EB | #1F2937 | every border |
+| Ink | `--ink` | #0F172A | #F1F5F9 | body text |
+| Muted | `--muted` | #5B6B82 | #94A3B8 | hints, labels, secondary numbers |
+| OK | `--ok` / `--ok-soft` | #047857 / #ECFDF5 | #34D399 / #0F2A22 | success pills, positive numbers |
+| Warn | `--warn` / `--warn-soft` | #B45309 / #FFFBEB | #FBBF24 / #2A2210 | attention pills |
+| Danger | `--danger` / `--danger-soft` | #B91C1C / #FEF2F2 | #F87171 / #3A1719 | errors, negative numbers, destructive buttons |
+| Facebook | `--fb` | #1877F2 | #1877F2 | "Continue with Facebook" only |
+| Decorative | `--fx-1…9` | — | — | confetti, sparks — never for meaning |
 
-`--grad`, `--grad-hero` and `--ok-grad` still exist for older rules but are
-**solid colours** now. Do not add a gradient.
-
-Rules
-- **One solid blue button per screen** — the main action (Sync from Meta,
-  Save, Send, Add). Everything else is white with a `--line` border, or text.
-- **Hero number** (Total spent, Spent this month, per order): a white card
-  with a 3 px blue inside edge (`box-shadow: inset 3px 0 0 var(--brand)`)
-  and ink text — never a filled card.
-- Selected chips, segments and the current sidebar item are **soft blue**
-  (`--brand-soft` background, `--brand-text` text), never solid.
-- Status colours always come with a word (On plan, Late, Connected). Never
-  colour alone. Every status pill passes 4.5:1 on its soft background.
-- Dark mode redefines every token above, so a new block must use tokens; a
-  raw `#fff` or `#0F172A` breaks in dark mode.
-- Text contrast: body ≥ 4.5:1, large numbers ≥ 3:1. `--muted` passes on
-  `--surface`, `--bg`, `--bg-2` and `--brand-soft`.
+Aliases kept for old rules (don't use in new work): `--accent` = ok, `--live` = danger, `--bad`, `--card`, `--bg-1`, `--brand-2`.
+No gradients anywhere (`--grad` is the flat brand fill).
 
 ## Typography
 
-- Family: `--f-ui` — **Inter** by default, with Kantumruy Pro for Khmer;
-  the Aa picker lets a person switch (System, Noto Sans, Lexend, Plus
-  Jakarta, Onest). Numbers use `--f-num` (same family, `tabular-nums`).
-- Scale (rem, from `--fs-*`): 2xs .72 · xs .76 · sm .8 · md .84 · lg .875 ·
-  xl .9 · 2xl .95 · base 1 · h3 1.1 · h2 1.2 · h1 1.4 · hero 1.6. The Aa
-  picker's text size (S/M/L/XL) scales the root, so sizes stay in rem.
-- Weights: 400 body, 500 labels, 600 names and buttons, 700 headings and
-  numbers.
-- Two number sizes only: **hero** (`--fs-hero`, the one headline figure)
-  and **card** (`--fs-h2`, every other stat). Section labels are
-  `--fs-2xs`, uppercase, `--muted`, letter-spacing .05em.
-- Line length ≤ 75 characters; body ≥ 14 px at the M size.
+Font: `--f-ui` = Inter for Latin, Kantumruy Pro for Khmer, weights **400 / 500 / 600 / 700 only**. Numbers use the same face (`--f-num`), tabular where they line up in tables.
 
-## Spacing
+| Token | Size | Use |
+|---|---|---|
+| `--fs-hero` | 1.6rem | the one big number on a page |
+| `--fs-h1` | 1.4rem | page title (700, letter-spacing −.01em) |
+| `--fs-h2` | 1.2rem | section title |
+| `--fs-h3` | 1.1rem | card title (600) |
+| `--fs-base` | 1rem | body |
+| `--fs-xl` / `--fs-2xl` | .9 / .95rem | emphasised body, inputs |
+| `--fs-lg` | .875rem | buttons, field labels |
+| `--fs-md` | .84rem | hints |
+| `--fs-sm` | .8rem | pills |
+| `--fs-xs` / `--fs-2xs` | .76 / .72rem | table heads, eyebrows (uppercase, letter-spacing .06–.08em, 700, muted) |
 
-4-px grid: 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 28. For new work use
-the `--s-*` tokens: 1 = 4 · 2 = 8 · 3 = 12 · 4 = 16 · 5 = 24 · 6 = 32. Cards pad
-16–20 px, rows 8–12 px, page gutter 24 px (14 px on phone). Grid gaps 8–14 px.
-Content width: full width of the main column; dialogs max 560 px.
+## Spacing, radius, elevation, motion
 
-## Shape and depth
-
-Radius scale (`--r-*`): xs 4 · sm 6 · md 8 · lg 10 · xl 12 · pill 999.
-- Buttons and inputs `--r-md` (8); cards and dialogs `--r-xl` (12); small
-  tags `--r-pill`; avatars 50 %.
-- Shadow: `--shadow-sm` (1 px, 4 % ink) on cards; `--shadow-md` on
-  dialogs and toasts. Nothing lifts or glows on hover — hover is a tint.
+- Spacing scale `--s-1…6` = 4 · 8 · 12 · 16 · 24 · 32. Card padding 16 × 20, grid gaps 16, row gaps 8–12.
+- Radius: `--r-sm` 6 (small buttons, Facebook button) · `--r-md` 8 (inputs, buttons, chips) · `--r-xl` 12 (cards, dialogs) · `--r-pill` 999 (pills, switches). Avoid `--r-xs`/`--r-lg` in new work.
+- Shadow: `--shadow-sm` on cards (barely there), `--shadow-md` on popovers, `--shadow-lg` on dialogs. Borders carry the structure, not shadows.
+- Motion: `--t-fast` .15s for hover/press, `--t-med` .3s for panels, `--ease` cubic-bezier(.2,.8,.2,1). Respect `prefers-reduced-motion`.
 
 ## Components
 
-- **Button** primary (solid `--brand-fill`, white text, hover
-  `--brand-hover`), secondary (`--surface`, `--line` border), ghost (no
-  border, `--muted` text), danger (`--danger` text, `--line` border, hover
-  `--danger-soft`). Min height 44 px on phone, 36 px for small buttons on
-  touch screens. Focus: 2 px `--brand` outline; disabled: 55 % opacity.
-- **Chip / segment**: `--surface` with a `--line` border, soft blue when
-  selected.
-- **Card**: `--surface`, 1 px `--line`, `--r-xl`, title row with a one-line
-  hint on the right.
-- **Stat card**: label (2xs uppercase) · number (card size) · sub-line
-  (muted). The first tile is the hero: a white card with the 3 px blue
-  inside edge (see Colour rules), never filled.
-- **Table / list row**: 8–12 px padding, `--line` dividers, numbers right
-  aligned and tabular.
-- **Status pill**: soft background + matching text + the word.
-- **Progress bar**: 6–10 px, `--bg-2` track, status colour fill, black
-  marker for "where it should be".
-- **Dialog**: centred, max 560 px, header with ✕, dark save bar for long
-  forms (`--ink` background, `--surface` text).
-- **Navigation**: desktop = white sidebar with groups (Work / Admin / Manage,
-  each foldable); phone = bottom bar with **four** tabs (Dashboard, Clients,
-  Live videos, Payments) and **More** for the rest. Admin pages only show
-  for admins.
+**Card** `.panel` / `.card` — surface, 1px line, radius 12, padding 16 × 20, `--shadow-sm`. Title row: `h2` at `--fs-h3` 600 on the left, a pill or action on the right. (Profit's `.pf-sheet` and Settings' `.st-card` are the same card.)
 
-## Icons and imagery
+**Button**
+- Primary `button.primary` — brand fill, white text, radius 8, height 38 (34 with `.sm`), 600.
+- Secondary (default button inside `.wrap`) — surface, 1px line, ink text; hover → `--bg-2`.
+- Ghost `.ghost` — no border, muted text; for Cancel / ✕ / Hide.
+- Danger `.danger` (solid) or `.danger-txt` (text only) — destructive actions, always behind a confirm.
+- Link `.linkbtn` — brand text, underline on hover; for inline actions in hints.
+- States: hover, `:focus-visible` 2px brand outline offset 2, `:disabled` 50 % opacity, `.busy` spinner. Facebook login is the only off-palette button (`--fb`).
 
-- Inline stroke SVG icons, 2 px stroke, round caps, 17–22 px. Emoji only as
-  task-type markers inside lists (📨 🔁 ✍️), never as navigation icons.
-- Facebook Page pictures come from Meta and are shown round; post pictures
-  are 4:3 thumbnails with `--r-md`.
+**Pill** `.pill` + `ok | warn | bad` (soft background, strong text, radius pill, `--fs-sm` 500). Plain `.pill` = neutral count. All other status badges (`.arstate`, `.pf-roleb`, `.pf-locked`, `.sc-st`, `.is-ok`…) should look identical to this.
 
-## Writing
+**Chip / segmented** `.seg > button` — pill group; selected = `--brand-soft` background + `--brand-text`. Used for filters (Today / 7 days…), languages, teams. May carry a muted number after the label.
 
-Sentence case. Short labels. Khmer for client-facing text (reports, plans,
-to-do titles), English for admin and settings. Say what happened, not what
-the system did ("Plan sent to DC Shop", not "Request succeeded").
+**Switch** `.switch` (46 × 28) and `.st-sw` (40 × 24) — line background off, brand on, white knob (`--paper`).
+
+**Field** `.fld` — label `--fs-lg` 500 above, input height 38, 1px line, radius 8, surface background; read-only = `--bg-2` + muted text. Inline hint below in `--fs-md` muted.
+
+**Stat tile** — uppercase eyebrow label (`--fs-2xs`), number at `--fs-hero` 700, one-line muted sub. The *one* key number on a page may use the inverted tile (brand fill, white text); never more than one per row.
+
+**Table** — uppercase muted heads, zebra-free, 1px line between rows, numbers right-aligned in `.n`, totals row bold on `--bg-2`. Row hover `--bg-2`. Names with an avatar (`.who`).
+
+**Avatar** — initials on `--bg-2`/muted (people) or `--brand-soft`/`--brand-text` (me); 32 in lists, 40 in headers, 48 on profile.
+
+**Dialog** `.dlg` — surface, radius 12, `--shadow-lg`, head with title + muted sub + ✕ ghost, footer with secondary on the left and primary on the right.
+
+**Toast / note** — `.note` inline (bg-2, radius 8); toasts bottom-centre, 3 s.
+
+## Rules of thumb
+
+1. One primary button per card. Everything else is secondary or ghost.
+2. Colour means status, not decoration: green = ok, amber = needs attention, red = wrong/negative, blue = selected/brand. Grey for everything else.
+3. Labels above, values below; uppercase only for eyebrows and table heads.
+4. New styles go into the component's base rule, not a new "pass" block at the end of the file, and never with `!important`.
+5. Khmer text sits next to English in the same style (`lang="km"`), no separate font size.

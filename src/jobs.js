@@ -119,9 +119,11 @@ function start() {
   if (process.env.AUTO_SYNC !== 'off') {
     let running = false;
     const guard = (fn) => async () => { if (running) return; running = true; try { await fn(); } finally { running = false; } };
-    H.register('New campaigns check', 5, 'every 5 minutes'); H.register('Hourly sync', 60, 'every hour at :07'); H.register('30-day refresh', 1440, 'daily at 05:30');
+    H.register('New campaigns check', 5, 'every 5 minutes'); H.register('Hourly sync', 60, 'every hour at :07'); H.register('Today sync', 15, 'every 15 minutes at :22, :37, :52'); H.register('30-day refresh', 1440, 'daily at 05:30');
     cron.schedule('*/5 * * * *', guard(T('New campaigns check', () => forEachAdmin(checkNewCampaigns, 'new-campaign check'))), opts);
     cron.schedule('7 * * * *', guard(T('Hourly sync', () => forEachAdmin((u) => rangeFor(u, 2, 'hourly'), 'hourly sync'))), opts);
+    // Today alone every 15 minutes in between, so the Dashboard and reports are never more than a quarter hour behind Meta.
+    cron.schedule('22,37,52 * * * *', guard(T('Today sync', () => forEachAdmin((u) => rangeFor(u, 1, 'today'), 'today sync'))), opts);
     cron.schedule('30 5 * * *', guard(T('30-day refresh', () => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync'))), opts);
     log('Background auto sync on (new campaigns every 5 min, hourly refresh, 30-day refresh at 05:30)');
   }

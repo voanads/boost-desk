@@ -265,7 +265,8 @@ window.BDProfit = (() => {
     app.innerHTML = `
     <div class="pf-top"><div><span class="pf-eyebrow">Profit · all books</span><h2>${ovMonth ? esc(monthLabel(ovMonth)) : 'No months yet'}</h2><span class="pf-lastedit">${books.length} book${books.length === 1 ? '' : 's'} · ${esc(teamName)}</span></div>
       <div class="pf-confirm pf-ovbar"><label class="hint" for="pfOvMonth">Month</label><select id="pfOvMonth" aria-label="Month">${(ov.months || []).map((m) => `<option value="${m}"${m === ovMonth ? ' selected' : ''}>${esc(monthLabel(m))}</option>`).join('') || '<option value="">No months</option>'}</select>
-      <label class="hint" for="pfOvTeam">Team</label><select id="pfOvTeam" aria-label="Team"><option value="">All teams</option>${(ov.teams || []).map((t) => `<option value="${esc(t.id)}"${t.id === ovTeam ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}${all.some((b) => !b.team) ? `<option value="none"${ovTeam === 'none' ? ' selected' : ''}>No team</option>` : ''}</select></div></div>
+      </div></div>
+    <div class="seg pf-seg pf-teams" role="group" aria-label="Team">${[{ id: '', name: 'All teams', n: all.length, p: all.reduce((t, b) => t + b.c.profit, 0) }, ...(ov.teams || []).map((t) => ({ ...t, n: all.filter((b) => b.team === t.id).length, p: all.filter((b) => b.team === t.id).reduce((x, b) => x + b.c.profit, 0) })).filter((t) => t.n), ...(all.some((b) => !b.team) ? [{ id: 'none', name: 'No team', n: all.filter((b) => !b.team).length, p: all.filter((b) => !b.team).reduce((x, b) => x + b.c.profit, 0) }] : [])].map((t) => `<button type="button" data-ovteam="${esc(t.id)}" aria-pressed="${t.id === ovTeam}">${esc(t.name)} <span class="mut">${money(t.p, 0)}</span></button>`).join('')}</div>
     <section class="pf-strip" aria-label="Key numbers">
       <div class="hl"><span class="k"><span class="ic">÷</span>Profit to split</span><span class="v">${money(profit)}</span><span class="sub">${tx} transactions · ${books.length} books</span></div>
       <div><span class="k">Increase</span><span class="v${sum('increase') < 0 ? ' bad' : ''}">${money(sum('increase'))}</span><span class="sub">ABA + to receive − deposits − FB debt</span></div>
@@ -290,7 +291,7 @@ window.BDProfit = (() => {
         </tbody></table></div></section>
     </div>`;
     byId('pfOvMonth').onchange = (e) => { ovMonth = e.target.value; renderOverview(); };
-    byId('pfOvTeam').onchange = (e) => { ovTeam = e.target.value; renderOverview(); };
+    app.querySelectorAll('[data-ovteam]').forEach((b) => b.onclick = () => { ovTeam = b.dataset.ovteam; renderOverview(); });
     app.querySelectorAll('[data-openbook]').forEach((b) => b.onclick = async () => { if (dirty) await saveNow(); viewBook = b.dataset.openbook; current = ovMonth; draft = null; page = 'accounts'; setStatus(''); await refresh(true); if (months[ovMonth]) { current = ovMonth; draft = normalize(months[current]); renderMonthSel(); render(); } });
   }
 

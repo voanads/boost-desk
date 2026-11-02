@@ -152,3 +152,4 @@
 /* Overview: all books */
 .pf-ovbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap} .pf-ovbar select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
 .pf-openbook{all:unset;cursor:pointer} .pf-openbook:hover .who{text-decoration:underline}
+.pf-teams{margin:0 0 14px;flex-wrap:wrap} .pf-teams button .mut{font-weight:500;margin-left:4px}

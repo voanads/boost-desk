@@ -279,10 +279,9 @@
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
     if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
-    if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (name === 'profit' && !(me && me.profitRole)) name = 'dashboard';
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'profit', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'profit', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (name === 'profit') name = 'dashboard'; // the Profit panel was removed
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
+    ['main', 'board', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); }
@@ -298,7 +297,6 @@
     if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
     if (name === 'mytasks') loadMyTaskPage();
     if (name === 'settings') loadSettingsPage();
-    if (name === 'profit' && window.BDProfit) window.BDProfit.show(me);
     if (name === 'accounts') api('/accounts').then((a) => { accounts = a; renderAccounts(); }).catch(() => {});
     try { history.replaceState(null, '', '#' + name); } catch (_) {}
   }
@@ -1402,7 +1400,6 @@
     $('coSub').textContent = `${nice(d.from)} – ${nice(d.to)} · ${d.people.users} people · ${d.people.teams} teams · ${d.people.buyers} media buyers (${d.people.buyersLinked} on Telegram)`;
     $('coKpis').innerHTML = `
       <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
-      <div class="mk"><span class="lbl">Profit</span><b class="num ${d.money.profit.total < 0 ? 'bad' : ''}">${money(d.money.profit.total)}</b><span class="sub">${d.money.profit.books} books · ${d.money.profit.submitted} submitted · company share ${money(d.money.profit.company)}</span></div>
       <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
       <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>
       <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.kpis.hit} of ${d.kpis.total} KPIs at 100 %+</span></div>
@@ -1414,7 +1411,6 @@
     $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small></span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
     $('coAlerts').innerHTML = d.alerts.length ? `<div class="co-list">${d.alerts.map((a) => `<div class="co-row al ${a.level}"><span class="co-dot"></span><div class="co-rt"><b>${esc(a.text)}</b><span class="hint">${esc(a.client)} · ${esc(a.person)}${a.detail ? ' · ' + esc(a.detail) : ''}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No critical alerts right now.</div>';
     $('coOverdue').innerHTML = d.overdue.length ? `<div class="co-list">${d.overdue.map((o) => `<div class="co-row"><div class="co-rt"><b>${esc(o.text)}</b><span class="hint">${esc(o.client)} · ${esc(o.person)}${o.to ? ' → ' + esc(o.to) : ''} · since ${esc(nice(o.day).replace(/ \d{4}$/, ''))}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No overdue tasks.</div>';
-    const P = d.money.profit.byBook; $('coProfit').innerHTML = P.length ? `<div class="co-list">${P.sort((a, b) => b.profit - a.profit).map((b) => `<div class="co-row"><div class="co-rt"><b>${esc(b.name)}</b><span class="hint">${b.submitted ? '✓ submitted' : 'not submitted yet'}</span></div><span class="num co-rv ${b.profit < 0 ? 'bad' : ''}">${money(b.profit)}</span></div>`).join('')}</div>` : `<div class="empty">No Profit book has ${monLbl(d.month)} yet.</div>`;
     $('coNewHint').textContent = `${d.clients.new} added in ${monLbl(d.month)}`;
     $('coNew').innerHTML = d.clients.newList.length ? `<div class="co-list">${d.clients.newList.map((c) => `<div class="co-row"><div class="co-rt"><b>${esc(c.name)}</b><span class="hint">${esc(c.owner)}</span></div></div>`).join('')}</div>` : '<div class="empty">No new clients this month.</div>';
   }
@@ -3985,7 +3981,7 @@ Thank you for working with Ads Box!`,
       me = await api('/me');
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) && !(b.dataset.tab === 'profit' && me.profitRole); });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -3994,7 +3990,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'profit', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'adaccts', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -4031,13 +4027,9 @@ Thank you for working with Ads Box!`,
       if (showAdmin) $('navGrpManage').hidden = false;
       if (showAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
-      if (me.profitRole) { // Profit: a PM sees their own book; on /projectmanager it sits with the Work pages
-        const pb = document.querySelector('nav.tabs [data-tab=profit]'); pb.hidden = false;
-        if (PM_SITE) { const after = document.querySelector('nav.tabs [data-tab=accounts]'); if (after) after.insertAdjacentElement('afterend', pb); pb.classList.remove('grp-hidden'); } else $('navGrpAdmin').hidden = false;
-      }
-      const adminTabs = ['main', 'board', 'adaccts', 'profit', 'admin'];
+      const adminTabs = ['main', 'board', 'adaccts', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
-      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', 'settings', ...(me.profitRole ? ['profit'] : []), ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
+      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', 'settings', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

@@ -2709,7 +2709,7 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 .co-top{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
 .co-nav{display:flex;align-items:center;gap:6px}
 .co-nav b{min-width:150px;text-align:center}
-.co-kpis{display:grid;grid-template-columns:1.3fr repeat(5,minmax(0,1fr));gap:var(--s-3)}
+.co-kpis{display:grid;grid-template-columns:1.3fr repeat(4,minmax(0,1fr));gap:var(--s-3)}
 .co-kpis .mk b small{font-size:var(--fs-md);color:var(--muted);font-weight:600}
 .co-kpis .mk.warn{border-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
 .co-kpis .num.good,.co-tt .good{color:var(--ok)} .co-kpis .num.mid,.co-tt .mid{color:var(--warn)} .co-kpis .num.bad,.co-tt .bad{color:var(--danger)}

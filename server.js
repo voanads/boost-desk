@@ -384,7 +384,7 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: (await db.ownerId()) === req.user.fb_id,
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
-    profitRole: req.user.buyer ? null : await profit.roleOf(req.user.fb_id),
+    profitRole: null, // the Profit panel was removed
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE, aiOn: (await db.getUserSetting(req.user.fb_id, 'aiOn', true)) !== false,
     today: sync.todayIn(), tz: cfg.tz,
@@ -393,7 +393,7 @@ api.get('/me', wrap(async (req, res) => {
 }));
 
 // Profit tab (monthly ad accounts, clients and profit split) — its own access list.
-api.use('/profit', profit.router({ sitePeople: async () => (await siteCfg()).people }));
+// Profit panel removed (Nov 2026): the router stays in src/profit.js and its tables are kept, but nothing is mounted.
 
 // Auto sync control — only the app owner can see or change it, for every account that logged in.
 const ownerOnly = wrap(async (req, res, next) => {

@@ -121,3 +121,313 @@ td{font-variant-numeric:tabular-nums}
   .pb-chips{flex:1 1 100%;width:100%;min-width:0;flex-wrap:wrap}
   .pb-chips button{flex:0 1 auto!important}
 }
+
+/* ---------- SMIT AdsCheck Pro Table UI (#tab-accounts) ---------- */
+.smit-table-card {
+  background: var(--surface, #ffffff);
+  border: 1.5px solid #22c55e;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+.smit-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.smit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+}
+.smit-table thead tr:first-child {
+  background: var(--surface, #ffffff) !important;
+  border-bottom: 1px solid var(--line, #e2e8f0);
+}
+.smit-table th {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: var(--ink, #1e293b) !important;
+  padding: 10px 12px !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  user-select: none;
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.smit-table th:last-child {
+  border-right: none;
+}
+.smit-table th:hover {
+  background: var(--bg-2, #f8fafc);
+}
+.smit-col-chk {
+  width: 42px;
+  text-align: center !important;
+  cursor: default !important;
+}
+.smit-col-tt {
+  width: 105px;
+}
+.smit-col-acct {
+  min-width: 220px;
+  text-align: left !important;
+}
+.smit-col-orig {
+  width: 175px;
+}
+.smit-col-num {
+  width: 145px;
+}
+.smit-th-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.smit-th-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.smit-th-lbl {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.smit-col-orig .smit-th-lbl {
+  margin: 0 auto;
+}
+.smit-grip {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0.75;
+}
+.smit-sort {
+  font-style: normal;
+  font-size: 11px;
+  color: #64748b;
+  margin-left: 2px;
+}
+.smit-caret {
+  font-style: normal;
+  font-size: 10px;
+  color: #64748b;
+}
+.smit-shield {
+  font-size: 12px;
+  line-height: 1;
+  background: #dcfce7;
+  color: #16a34a;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* Yellow Info Banner Row */
+.smit-banner-row td {
+  background: #fef3c7 !important;
+  padding: 6px 14px !important;
+  border-bottom: 1px solid #fde68a !important;
+}
+.smit-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.smit-bell {
+  font-size: 13px;
+  line-height: 1;
+}
+.smit-banner-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.smit-banner-txt {
+  color: #d97706;
+  font-weight: 500;
+}
+.smit-learn-link {
+  color: #16a34a;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.smit-dont-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-weight: 500;
+  cursor: pointer;
+}
+.smit-banner-close {
+  background: none !important;
+  border: none !important;
+  padding: 0 4px !important;
+  height: auto !important;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+}
+
+/* Body Rows */
+.smit-table tbody tr {
+  border-bottom: 1px solid var(--line, #f1f5f9);
+  transition: background 0.1s ease;
+}
+.smit-table tbody tr:hover {
+  background: var(--bg-2, #f8fafc) !important;
+}
+.smit-table tbody td {
+  padding: 9px 12px !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+.smit-table tbody td:last-child {
+  border-right: none;
+}
+.smit-td-chk {
+  text-align: center;
+}
+.smit-td-orig {
+  text-align: center;
+  color: var(--ink, #334155);
+}
+.smit-td-num {
+  text-align: right;
+  font-weight: 500;
+}
+.smit-acct-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.12s ease;
+}
+.smit-acct-link:hover .smit-acct-name {
+  color: #10b981;
+  text-decoration: underline;
+}
+.smit-acct-link:hover .smit-acct-id {
+  color: #0f172a;
+}
+.smit-billing-link,
+.smit-orig-link,
+.smit-acct-link-num {
+  display: inline-block;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.smit-billing-link:hover {
+  color: #10b981;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.smit-orig-link:hover,
+.smit-acct-link-num:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.smit-tt {
+  text-decoration: none;
+  cursor: pointer;
+}
+.smit-tt:hover {
+  text-decoration: underline;
+  opacity: 0.88;
+}
+.smit-acct-name {
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.smit-acct-id {
+  font-size: 11.5px;
+  color: var(--muted, #64748b);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* TT Status Dot + Label */
+.smit-tt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.smit-tt .smit-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.smit-tt.is-active {
+  color: #10b981;
+}
+.smit-tt.is-active .smit-dot {
+  background: #10b981;
+}
+.smit-tt.is-disabled {
+  color: #ef4444;
+}
+.smit-tt.is-disabled .smit-dot {
+  background: #ef4444;
+}
+.smit-tt.is-warn {
+  color: #f59e0b;
+}
+.smit-tt.is-warn .smit-dot {
+  background: #f59e0b;
+}
+
+/* Footer Summary Row */
+.smit-table tfoot tr {
+  background: var(--surface, #ffffff) !important;
+  border-top: 1.5px solid var(--line, #e2e8f0) !important;
+}
+.smit-table tfoot td {
+  padding: 11px 12px !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  color: var(--ink, #0f172a) !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+}
+.smit-table tfoot td:last-child {
+  border-right: none;
+}
+.smit-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: -0.03em;
+  font-family: "Inter", system-ui, sans-serif;
+}
+.smit-logo-badge .s1 { color: #0ea5e9; }
+.smit-logo-badge .s2 { color: #10b981; }
+.smit-logo-badge .s3 { color: #f59e0b; }
+.smit-logo-badge .s4 { color: #ef4444; }

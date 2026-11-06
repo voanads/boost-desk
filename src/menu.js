@@ -1,9 +1,10 @@
 // Task menu: the list of duties a person does every day, planned in the morning and closed in the evening.
 //
 //   taskMenu                     = { pm: [{ id, text }], mb: [...], since }   the role templates (Admin → Settings)
-//   menuList:<person>:<role>     = { items: [{ id, text, since, day }] }       the person's own list (starts as a copy
+//   menuList:<person>:<role>     = { items: [{ id, text, since, day, kpi }] }  the person's own list (starts as a copy
 //                                                                              of the template; they edit, add, remove)
-//   menuTicks:<person>:<day>     = { itemId: { at, by } }                      what was ticked that day
+//   menuTicks:<person>:<day>     = { itemId: { at, by, amount } }              what was ticked that day (amount: how much
+//                                                                              it added to the item's KPI — $, cases…)
 //   menuDay:<person>:<day>       = { plan: { at, by, items }, result: { at, by, note, done, total } }
 //                                                                              "Submit plan" freezes the day's list;
 //                                                                              "Submit result" closes the day
@@ -67,10 +68,12 @@ async function addItem(person, role, text, day) {
   if (st.plan && Array.isArray(st.plan.items)) { st.plan.items.push({ id: item.id, text: item.text, once: !!day }); await db.setSetting(dayKey(person, d), st); }
   return item;
 }
-async function editItem(person, role, id, text) {
+// text and/or kpi (the id of a monthly KPI this item counts toward; '' unlinks)
+async function editItem(person, role, id, text, kpi) {
   const items = await listOf(person, role), it = items.find((x) => x.id === id); if (!it) throw new Error('Item not found.');
-  const t = String(text || '').trim().slice(0, 160); if (!t) throw new Error('Type the task.');
-  it.text = t; await putList(person, role, items); return it;
+  if (text !== undefined) { const t = String(text || '').trim().slice(0, 160); if (!t) throw new Error('Type the task.'); it.text = t; }
+  if (kpi !== undefined) { if (kpi && !okId(kpi)) throw new Error('Which KPI?'); if (kpi) it.kpi = kpi; else delete it.kpi; }
+  await putList(person, role, items); return it;
 }
 async function removeItem(person, role, id) { await putList(person, role, (await listOf(person, role)).filter((x) => x.id !== id)); }
 async function resetList(person, role) {
@@ -80,14 +83,14 @@ async function resetList(person, role) {
   if (st.plan && !st.result) { st.plan.items = items.map((x) => ({ id: x.id, text: x.text, once: false })); await db.setSetting(dayKey(person, today), st); }
   return items;
 }
-const itemsOn = (items, day) => items.filter((x) => (x.day ? x.day === day : (x.since || '0000') <= day)).map((x) => ({ id: x.id, text: x.text, once: !!x.day }));
+const itemsOn = (items, day) => items.filter((x) => (x.day ? x.day === day : (x.since || '0000') <= day)).map((x) => ({ id: x.id, text: x.text, once: !!x.day, kpi: x.kpi || '' }));
 
 // ---- per day: ticks, plan, result ----
 const tickKey = (person, day) => `menuTicks:${person}:${day}`;
 const ticksOf = async (person, day) => (await db.getSetting(tickKey(person, day), null)) || {};
-async function tick(person, day, itemId, done, by) {
+async function tick(person, day, itemId, done, by, amount) {
   const t = await ticksOf(person, day);
-  if (done) t[itemId] = { at: new Date().toISOString(), by }; else delete t[itemId];
+  if (done) { t[itemId] = { at: new Date().toISOString(), by }; if (amount != null && amount !== '') t[itemId].amount = Math.max(0, Number(amount) || 0); } else delete t[itemId];
   await db.setSetting(tickKey(person, day), t);
   return t;
 }
@@ -96,7 +99,7 @@ const stateOf = async (person, day) => (await db.getSetting(dayKey(person, day),
 async function submitPlan(person, role, day, by) {
   const st = await stateOf(person, day), items = itemsOn(await listOf(person, role), day);
   if (!items.length) throw new Error('Add at least one task to the menu first.');
-  st.plan = { at: new Date().toISOString(), by, role, items: items.map((x) => ({ id: x.id, text: x.text, once: x.once })) };
+  st.plan = { at: new Date().toISOString(), by, role, items: items.map((x) => ({ id: x.id, text: x.text, once: x.once, kpi: x.kpi || '' })) };
   delete st.result; await db.setSetting(dayKey(person, day), st); return st;
 }
 async function submitResult(person, role, day, by, note) {
@@ -106,11 +109,15 @@ async function submitResult(person, role, day, by, note) {
 }
 async function reopen(person, day) { const st = await stateOf(person, day); delete st.result; await db.setSetting(dayKey(person, day), st); return st; }
 // The day's items: the plan snapshot when one was submitted, else the live list.
-const dayItems = (st, items, day, role, wholeMonth = false) => (st.plan && Array.isArray(st.plan.items) && (!st.plan.role || !role || st.plan.role === role) ? st.plan.items : wholeMonth ? items.filter((x) => (x.day ? x.day === day : true)).map((x) => ({ id: x.id, text: x.text, once: !!x.day })) : itemsOn(items, day));
+const dayItems = (st, items, day, role, wholeMonth = false) => {
+  const kpiOf = (id) => { const it = items.find((x) => x.id === id); return it && it.kpi ? it.kpi : ''; }; // the KPI link follows the live list
+  if (st.plan && Array.isArray(st.plan.items) && (!st.plan.role || !role || st.plan.role === role)) return st.plan.items.map((x) => ({ ...x, kpi: kpiOf(x.id) || x.kpi || '' }));
+  return wholeMonth ? items.filter((x) => (x.day ? x.day === day : true)).map((x) => ({ id: x.id, text: x.text, once: !!x.day, kpi: x.kpi || '' })) : itemsOn(items, day);
+};
 
 async function dayOf(person, role, day) {
   const [items, t, st] = await Promise.all([listOf(person, role), ticksOf(person, day), stateOf(person, day)]);
-  const list = dayItems(st, items, day, role).map((i) => ({ ...i, done: !!t[i.id], at: t[i.id] ? t[i.id].at : null, by: t[i.id] ? t[i.id].by : null }));
+  const list = dayItems(st, items, day, role).map((i) => ({ ...i, done: !!t[i.id], at: t[i.id] ? t[i.id].at : null, by: t[i.id] ? t[i.id].by : null, amount: t[i.id] && t[i.id].amount != null ? t[i.id].amount : null }));
   const done = list.filter((x) => x.done).length;
   return { day, role, items: list, total: list.length, done, pct: list.length ? Math.round(done / list.length * 100) : null,
     plan: st.plan ? { at: st.plan.at, by: st.plan.by } : null, result: st.result || null };
@@ -129,7 +136,7 @@ async function monthOf(person, role, month) {
   }
   return { month, today, days };
 }
-// For KPIs: per item, how many days it was due and ticked this month.
+// For KPIs: per item, how many days it was due and ticked this month, and the amounts typed when ticking (sum).
 async function monthStats(person, role, month) {
   const today = sync.todayIn(), items = await listOf(person, role);
   const q = async (prefix) => Object.fromEntries((await db.pool.query('SELECT key, value FROM settings WHERE key LIKE $1', [`${prefix}:${person}:${month}-%`])).rows.map((r) => [r.key.split(':').pop(), r.value || {}]));
@@ -138,7 +145,7 @@ async function monthStats(person, role, month) {
   for (let d = 1; d <= last; d++) {
     const day = `${month}-${String(d).padStart(2, '0')}`, t = ticks[day] || {}, st = states[day] || {};
     if (day > today) continue; // KPIs count the whole month so far: every day from the 1st, ticked or not
-    for (const i of dayItems(st, items, day, role, true)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, due: 0, done: 0 }; a.due++; if (t[i.id]) a.done++; }
+    for (const i of dayItems(st, items, day, role, true)) { const a = agg[i.id] = agg[i.id] || { id: i.id, text: i.text, kpi: i.kpi || '', due: 0, done: 0, sum: 0 }; a.due++; if (t[i.id]) { a.done++; a.sum += t[i.id].amount != null ? Number(t[i.id].amount) || 0 : 1; } }
   }
   return Object.values(agg);
 }

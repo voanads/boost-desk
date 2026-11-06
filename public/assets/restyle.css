@@ -311,6 +311,49 @@ td{font-variant-numeric:tabular-nums}
   text-align: right;
   font-weight: 500;
 }
+.smit-acct-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.12s ease;
+}
+.smit-acct-link:hover .smit-acct-name {
+  color: #10b981;
+  text-decoration: underline;
+}
+.smit-acct-link:hover .smit-acct-id {
+  color: #0f172a;
+}
+.smit-billing-link,
+.smit-orig-link,
+.smit-acct-link-num {
+  display: inline-block;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.smit-billing-link:hover {
+  color: #10b981;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.smit-orig-link:hover,
+.smit-acct-link-num:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.smit-tt {
+  text-decoration: none;
+  cursor: pointer;
+}
+.smit-tt:hover {
+  text-decoration: underline;
+  opacity: 0.88;
+}
 .smit-acct-name {
   font-weight: 600;
   color: var(--ink, #0f172a);

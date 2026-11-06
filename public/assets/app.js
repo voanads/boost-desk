@@ -700,9 +700,14 @@
       const i = a.info || {};
       const ok = [1, 201].includes(i.statusCode), warn = [9, 3, 7, 8, 100].includes(i.statusCode);
       const statusLabel = ok ? 'Active' : (i.status || 'Disabled');
-      const ttHtml = `<span class="smit-tt ${ok ? 'is-active' : warn ? 'is-warn' : 'is-disabled'}" title="${esc(i.disableReason || statusLabel)}"><i class="smit-dot"></i>${esc(statusLabel)}</span>`;
       const numId = String(a.id || '').replace(/^act_/, '');
       const origId = i.originalId || i.businessId || '-';
+      const hasOrig = origId && origId !== '-' && /^\d+$/.test(String(origId));
+      const adsManagerUrl = 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=' + encodeURIComponent(numId);
+      const billingUrl = 'https://business.facebook.com/billing_hub/accounts/details?asset_id=' + encodeURIComponent(numId) + (hasOrig ? '&business_id=' + encodeURIComponent(origId) : '');
+      const origUrl = hasOrig ? 'https://business.facebook.com/settings/ad-accounts?business_id=' + encodeURIComponent(origId) : adsManagerUrl;
+      const statusUrl = ok ? adsManagerUrl : 'https://business.facebook.com/accountquality/?landing_page=overview&act=' + encodeURIComponent(numId);
+      const ttHtml = `<a class="smit-tt ${ok ? 'is-active' : warn ? 'is-warn' : 'is-disabled'}" href="${esc(statusUrl)}" target="_blank" rel="noopener" title="${esc(i.disableReason || statusLabel)} — Click to open ${ok ? 'Ads Manager' : 'Account Quality'}"><i class="smit-dot"></i>${esc(statusLabel)}</a>`;
       const bal = Number(i.balance) || 0;
       const th = i.threshold != null && Number(i.threshold) > 0 ? Number(i.threshold) : null;
       const rem = th != null ? Math.round(th - bal) : null;
@@ -718,15 +723,17 @@
         <td class="smit-td-chk"><input type="checkbox" data-acct="${esc(a.id)}" ${a.enabled ? 'checked' : ''} aria-label="Include in sync"></td>
         <td>${ttHtml}</td>
         <td>
-          <div class="smit-acct-name">${esc(a.name)}</div>
-          <div class="smit-acct-id">${esc(numId)}</div>
+          <a class="smit-acct-link" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open ${esc(a.name)} (${esc(numId)}) in Facebook Ads Manager">
+            <div class="smit-acct-name">${esc(a.name)}</div>
+            <div class="smit-acct-id">${esc(numId)}</div>
+          </a>
         </td>
-        <td class="smit-td-orig" data-smit-cell="orig">${esc(origId)}</td>
-        <td class="smit-td-num" data-smit-cell="balance">${smitNum(bal, true)}</td>
-        <td class="smit-td-num" data-smit-cell="threshold">${th != null ? smitNum(Math.round(th * 100) / 100, false) : '-'}</td>
-        <td class="smit-td-num" data-smit-cell="remain">${rem != null ? smitNum(rem, true) : '-'}</td>
-        <td class="smit-td-num" data-smit-cell="limit">${lim != null ? smitNum(lim, false) : '-'}</td>
-        <td class="smit-td-num" data-smit-cell="spent">${smitNum(spent, true)}</td>
+        <td class="smit-td-orig" data-smit-cell="orig">${hasOrig ? `<a class="smit-orig-link" href="${esc(origUrl)}" target="_blank" rel="noopener" title="Open Business / Owner ${esc(origId)}">${esc(origId)}</a>` : esc(origId)}</td>
+        <td class="smit-td-num" data-smit-cell="balance"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing &amp; Payment details for ${esc(a.name)}">${smitNum(bal, true)}</a></td>
+        <td class="smit-td-num" data-smit-cell="threshold"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing Threshold for ${esc(a.name)}">${th != null ? smitNum(Math.round(th * 100) / 100, false) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="remain"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing &amp; Payment details for ${esc(a.name)}">${rem != null ? smitNum(rem, true) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="limit"><a class="smit-acct-link-num" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open Ads Manager for ${esc(a.name)}">${lim != null ? smitNum(lim, false) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="spent"><a class="smit-acct-link-num" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open Ads Manager for ${esc(a.name)}">${smitNum(spent, true)}</a></td>
       </tr>`;
     }).join('') || '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No matching ad accounts.</td></tr>';
 

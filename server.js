@@ -1308,8 +1308,9 @@ async function accountsWithToday(owner) {
       if (ext[a.id].v != null && ext[a.id].v > 0) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
       const c = cleanCard(ext[a.id].card);
       if (c) i.card = c; else delete i.card;
-      if (ext[a.id].dailyLimit != null && ext[a.id].dailyLimit > 0) i.dailyLimit = ext[a.id].dailyLimit; else delete i.dailyLimit;
+      if (ext[a.id].dailyLimit != null && ext[a.id].dailyLimit > 0) i.dailyLimit = ext[a.id].dailyLimit;
       if (ext[a.id].business && !i.business) i.business = ext[a.id].business;
+      if (ext[a.id].originalId && !i.originalId) i.originalId = ext[a.id].originalId;
       if (ext[a.id].role) i.role = ext[a.id].role;
       if (ext[a.id].nextBillDate && ext[a.id].nextBillDate !== '—') i.nextBillDate = ext[a.id].nextBillDate;
     }
@@ -1332,6 +1333,7 @@ api.post('/accounts/ext-sync', wrap(async (req, res) => {
     const rawDsl = it.dailyLimit != null || it.daily_limit != null ? Number(it.dailyLimit ?? it.daily_limit) : null;
     const dailyLimit = rawDsl != null && isFinite(rawDsl) && rawDsl > 0 ? Math.round(rawDsl * 100) / 100 : null;
     const business = String(it.business || it.business_name || it.businessName || '').trim().slice(0, 120) || null;
+    const originalId = String(it.originalId || it.businessId || it.business_id || '').trim().slice(0, 40) || null;
     const role = String(it.role || '').trim().slice(0, 40) || null;
     const nextBillDate = String(it.nextBillDate || it.pay_date || '').trim().slice(0, 40) || null;
     map[id] = {
@@ -1340,6 +1342,7 @@ api.post('/accounts/ext-sync', wrap(async (req, res) => {
       card,
       dailyLimit,
       business,
+      originalId,
       role,
       nextBillDate: nextBillDate && nextBillDate !== '—' ? nextBillDate : null,
       at: new Date().toISOString()

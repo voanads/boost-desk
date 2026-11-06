@@ -99,17 +99,20 @@ const DISABLE_REASON = {
   15: 'Compromised ad account',
 };
 
-const ACCOUNT_FIELDS = 'id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone_name,business{name}';
+const ACCOUNT_FIELDS = 'id,name,account_status,disable_reason,balance,amount_spent,spend_cap,adtrust_dsl,owner,currency,timezone_name,business{id,name}';
+const FALLBACK_ACCOUNT_FIELDS = 'id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone_name,business{id,name}';
 // adspaymentcycle.threshold_amount is the account's automatic-payment ("billing") threshold — the
 // balance at which Meta charges the card — in minor units. It's an internal edge that Meta returns
 // only for some apps/tokens; if asking for it fails (unknown field, no permission on the edge), we
 // retry with the plain field set so the account list always loads. Genuine login / rate-limit errors
 // still surface, since they'd fail the retry too.
-const THRESHOLD_FIELD = 'adspaymentcycle{threshold_amount,billing_period}';
+const THRESHOLD_FIELD = 'adspaymentcycle{threshold_amount,billing_period},funding_source_details';
 
 function mapAccount(a) {
   // balance, amount_spent and spend_cap come in minor units (cents) as strings.
   const cycle = Array.isArray(a.adspaymentcycle?.data) ? a.adspaymentcycle.data[0] : null;
+  const fsd = a.funding_source_details;
+  const card = fsd && typeof fsd === 'object' ? (fsd.display_string || (fsd.brand && fsd.last_4 ? `${fsd.brand} •••• ${fsd.last_4}` : '')) : '';
   return {
     id: a.id,
     name: a.name,
@@ -119,10 +122,13 @@ function mapAccount(a) {
     balance: Number(a.balance || 0) / 100,
     amountSpent: Number(a.amount_spent || 0) / 100,
     spendCap: Number(a.spend_cap || 0) / 100,
-    threshold: cycle && cycle.threshold_amount != null ? Number(cycle.threshold_amount) / 100 : null,
+    dailyLimit: a.adtrust_dsl != null && Number(a.adtrust_dsl) > 0 ? Number(a.adtrust_dsl) : null,
+    threshold: cycle && cycle.threshold_amount != null && Number(cycle.threshold_amount) > 0 ? Number(cycle.threshold_amount) / 100 : null,
     currency: a.currency,
     timezone: a.timezone_name,
     business: a.business?.name || '',
+    originalId: a.business?.id || a.owner || '',
+    ...(card ? { card } : {}),
   };
 }
 
@@ -132,15 +138,25 @@ async function adAccounts(token) {
     return rows.map(mapAccount);
   } catch (e) {
     if (e.needsLogin || e.rateLimited) throw e; // real problems, not the optional threshold edge
-    const rows = await getAll('/me/adaccounts', { fields: ACCOUNT_FIELDS, limit: 100 }, token);
-    return rows.map(mapAccount);
+    try {
+      const rows = await getAll('/me/adaccounts', { fields: ACCOUNT_FIELDS, limit: 100 }, token);
+      return rows.map(mapAccount);
+    } catch (e2) {
+      if (e2.needsLogin || e2.rateLimited) throw e2;
+      const rows = await getAll('/me/adaccounts', { fields: FALLBACK_ACCOUNT_FIELDS, limit: 100 }, token);
+      return rows.map(mapAccount);
+    }
   }
 }
 
 // One ad account by ID (for adding an account by hand). Throws if this login can't open it.
 async function adAccount(token, actId) {
   try { return mapAccount(await get(`/${actId}`, { fields: `${ACCOUNT_FIELDS},${THRESHOLD_FIELD}` }, token)); }
-  catch (e) { if (e.needsLogin || e.rateLimited) throw e; return mapAccount(await get(`/${actId}`, { fields: ACCOUNT_FIELDS }, token)); }
+  catch (e) {
+    if (e.needsLogin || e.rateLimited) throw e;
+    try { return mapAccount(await get(`/${actId}`, { fields: ACCOUNT_FIELDS }, token)); }
+    catch (e2) { if (e2.needsLogin || e2.rateLimited) throw e2; return mapAccount(await get(`/${actId}`, { fields: FALLBACK_ACCOUNT_FIELDS }, token)); }
+  }
 }
 async function accountSpend(token, actId, day) {
   const d = await get(`/${actId}/insights`, { fields: 'spend', time_range: { since: day, until: day } }, token);

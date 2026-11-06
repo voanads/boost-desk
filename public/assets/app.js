@@ -642,6 +642,15 @@
     }
   }
 
+  let smitSortCol = '';
+  let smitSortAsc = true;
+  const smitNum = (v, zeroAsZero = true) => {
+    if (v == null || v === '' || Number.isNaN(Number(v))) return zeroAsZero ? '0' : '-';
+    const n = Math.round(Number(v) * 100) / 100;
+    if (n === 0 && !zeroAsZero) return '-';
+    return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  };
+
   function renderAccounts() {
     $('acctList').innerHTML = accounts.map((a) => `<option value="${esc(a.name)}"></option>`).join('');
     let act = 0, bad = 0, today = 0;
@@ -658,35 +667,94 @@
       if (acctFilter === 'active' && !ok) return false;
       if (acctFilter === 'bad' && ok) return false;
       if (q) {
-        const hay = `${a.name || ''} ${a.id || ''} ${i.business || ''} ${i.card || ''} ${i.status || ''}`.toLowerCase();
+        const hay = `${a.name || ''} ${a.id || ''} ${i.originalId || ''} ${i.business || ''} ${i.card || ''} ${i.status || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
 
+    if (smitSortCol) {
+      const dir = smitSortAsc ? 1 : -1;
+      filtered.sort((a, b) => {
+        const ia = a.info || {}, ib = b.info || {};
+        if (smitSortCol === 'status') return ((ia.statusCode || 99) - (ib.statusCode || 99)) * dir;
+        if (smitSortCol === 'name') return String(a.name || '').localeCompare(String(b.name || '')) * dir;
+        if (smitSortCol === 'originalId') return String(ia.originalId || '').localeCompare(String(ib.originalId || '')) * dir;
+        if (smitSortCol === 'balance') return ((Number(ia.balance) || 0) - (Number(ib.balance) || 0)) * dir;
+        if (smitSortCol === 'threshold') return ((Number(ia.threshold) || -1) - (Number(ib.threshold) || -1)) * dir;
+        if (smitSortCol === 'remain') {
+          const ra = ia.threshold != null ? Number(ia.threshold) - (Number(ia.balance) || 0) : -1e9;
+          const rb = ib.threshold != null ? Number(ib.threshold) - (Number(ib.balance) || 0) : -1e9;
+          return (ra - rb) * dir;
+        }
+        if (smitSortCol === 'limit') return ((Number(ia.dailyLimit || ia.spendCap) || -1) - (Number(ib.dailyLimit || ib.spendCap) || -1)) * dir;
+        if (smitSortCol === 'spent') return ((Number(ia.amountSpent) || 0) - (Number(ib.amountSpent) || 0)) * dir;
+        return 0;
+      });
+    }
+
+    let totBalance = 0;
+    let totThreshold = 0;
+    let totLimit = 0;
+    let totSpent = 0;
+
     $('acctBody').innerHTML = filtered.map((a) => {
       const i = a.info || {};
       const ok = [1, 201].includes(i.statusCode), warn = [9, 3, 7, 8, 100].includes(i.statusCode);
-      const chip = `<span class="chip ${ok ? 'ok' : warn ? 'warn' : 'bad'}">${esc(i.status || '—')}</span>${i.disableReason ? `<div class="hint">${esc(i.disableReason)}</div>` : ''}`;
-      const capLeft = i.spendCap ? money(Math.max(0, i.spendCap - i.amountSpent)) : (i.dailyLimit ? `${money(i.dailyLimit)}<span class="hint">/day</span>` : '<span class="muted">No limit</span>');
-      const cur = i.currency && i.currency !== 'USD' ? ` <span class="hint">${esc(i.currency)}</span>` : '';
+      const statusLabel = ok ? 'Active' : (i.status || 'Disabled');
+      const numId = String(a.id || '').replace(/^act_/, '');
+      const origId = i.originalId || i.businessId || '-';
+      const hasOrig = origId && origId !== '-' && /^\d+$/.test(String(origId));
+      const adsManagerUrl = 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=' + encodeURIComponent(numId);
+      const billingUrl = 'https://business.facebook.com/billing_hub/accounts/details?asset_id=' + encodeURIComponent(numId) + (hasOrig ? '&business_id=' + encodeURIComponent(origId) : '');
+      const origUrl = hasOrig ? 'https://business.facebook.com/settings/ad-accounts?business_id=' + encodeURIComponent(origId) : adsManagerUrl;
+      const statusUrl = ok ? adsManagerUrl : 'https://business.facebook.com/accountquality/?landing_page=overview&act=' + encodeURIComponent(numId);
+      const ttHtml = `<a class="smit-tt ${ok ? 'is-active' : warn ? 'is-warn' : 'is-disabled'}" href="${esc(statusUrl)}" target="_blank" rel="noopener" title="${esc(i.disableReason || statusLabel)} — Click to open ${ok ? 'Ads Manager' : 'Account Quality'}"><i class="smit-dot"></i>${esc(statusLabel)}</a>`;
       const bal = Number(i.balance) || 0;
-      const th = i.threshold != null ? Number(i.threshold) : null;
-      const pct = th && th > 0 ? Math.min(100, Math.round((bal / th) * 100)) : 0;
-      const barCol = pct >= 85 ? '#ef4444' : pct >= 65 ? '#f59e0b' : '#10b981';
-      const thHtml = th != null
-        ? `<div style="display:inline-flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:120px">
-            <div><b>${money(th)}</b> <span class="hint" style="font-size:11px">(${pct}%)</span></div>
-            <div style="width:100%;height:5px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${barCol}"></div></div>
-            ${i.card ? `<div class="hint" style="font-size:11px">💳 ${esc(i.card)}</div>` : ''}
-          </div>`
-        : (i.card ? `<div class="hint">💳 ${esc(i.card)}</div>` : '<span class="muted">—</span>');
-      return `<tr><td><input type="checkbox" data-acct="${esc(a.id)}" ${a.enabled ? 'checked' : ''} aria-label="Include in sync"></td>
-        <td>${esc(a.name)}<div class="hint num">${esc(a.id)}${i.business ? ' · ' + esc(i.business) : ''}${i.role ? ' · ' + esc(i.role) : ''}</div></td>
-        <td>${chip}</td>
-        <td class="r num">${i.todayError ? '<span class="hint" title="' + esc(i.todayError) + '">error</span>' : i.todaySpend != null ? (Number(i.todaySpend) > 0 ? '<b>' + money(i.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
-        <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${thHtml}</td><td class="r num">${capLeft}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted">No matching ad accounts.</td></tr>';
+      const th = i.threshold != null && Number(i.threshold) > 0 ? Number(i.threshold) : null;
+      const rem = th != null ? Math.round(th - bal) : null;
+      const lim = i.dailyLimit != null && Number(i.dailyLimit) > 0 ? Number(i.dailyLimit) : (i.spendCap != null && Number(i.spendCap) > 0 ? Number(i.spendCap) : null);
+      const spent = Number(i.amountSpent) || 0;
+
+      totBalance += bal;
+      if (th != null) totThreshold += th;
+      if (lim != null) totLimit += lim;
+      totSpent += spent;
+
+      return `<tr data-smit-row="${esc(numId)}">
+        <td class="smit-td-chk"><input type="checkbox" data-acct="${esc(a.id)}" ${a.enabled ? 'checked' : ''} aria-label="Include in sync"></td>
+        <td>${ttHtml}</td>
+        <td>
+          <a class="smit-acct-link" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open ${esc(a.name)} (${esc(numId)}) in Facebook Ads Manager">
+            <div class="smit-acct-name">${esc(a.name)}</div>
+            <div class="smit-acct-id">${esc(numId)}</div>
+          </a>
+        </td>
+        <td class="smit-td-orig" data-smit-cell="orig">${hasOrig ? `<a class="smit-orig-link" href="${esc(origUrl)}" target="_blank" rel="noopener" title="Open Business / Owner ${esc(origId)}">${esc(origId)}</a>` : esc(origId)}</td>
+        <td class="smit-td-num" data-smit-cell="balance"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing &amp; Payment details for ${esc(a.name)}">${smitNum(bal, true)}</a></td>
+        <td class="smit-td-num" data-smit-cell="threshold"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing Threshold for ${esc(a.name)}">${th != null ? smitNum(Math.round(th * 100) / 100, false) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="remain"><a class="smit-billing-link" href="${esc(billingUrl)}" target="_blank" rel="noopener" title="Open Billing &amp; Payment details for ${esc(a.name)}">${rem != null ? smitNum(rem, true) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="limit"><a class="smit-acct-link-num" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open Ads Manager for ${esc(a.name)}">${lim != null ? smitNum(lim, false) : '-'}</a></td>
+        <td class="smit-td-num" data-smit-cell="spent"><a class="smit-acct-link-num" href="${esc(adsManagerUrl)}" target="_blank" rel="noopener" title="Open Ads Manager for ${esc(a.name)}">${smitNum(spent, true)}</a></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">No matching ad accounts.</td></tr>';
+
+    if ($('acctFoot')) {
+      const totRemain = Math.round(totThreshold - totBalance);
+      $('acctFoot').innerHTML = `<tr>
+        <td colspan="2" style="text-align:center">
+          <span class="smit-logo-badge"><span class="s1">S</span><span class="s2">M</span><span class="s3">I</span><span class="s4">T</span></span>
+        </td>
+        <td><b>${filtered.length} Advertising Account</b></td>
+        <td></td>
+        <td class="smit-td-num"><b>${smitNum(totBalance, true)}</b></td>
+        <td class="smit-td-num"><b>${smitNum(Math.round(totThreshold * 100) / 100, true)}</b></td>
+        <td class="smit-td-num"><b>${smitNum(totRemain, true)}</b></td>
+        <td class="smit-td-num"><b>${smitNum(totLimit, true)}</b></td>
+        <td class="smit-td-num"><b>${smitNum(totSpent, true)}</b></td>
+      </tr>`;
+    }
+
     $('aCount').textContent = accounts.length; $('aActive').textContent = act; $('aBad').textContent = bad;
     $('aBad').classList.toggle('over', bad > 0); $('aToday').textContent = money(today);
     const seen = accounts.map((a) => a.seen_at).sort().pop();
@@ -699,6 +767,54 @@
     });
     renderAcctDrawer();
   }
+
+  // SMIT table column sorting & banner controls
+  document.querySelectorAll('#smitAccountsTable th[data-smit-sort]').forEach((th) => {
+    th.onclick = () => {
+      const col = th.dataset.smitSort;
+      if (smitSortCol === col) smitSortAsc = !smitSortAsc;
+      else { smitSortCol = col; smitSortAsc = false; }
+      renderAccounts();
+    };
+  });
+  if ($('smitSelectAll')) {
+    $('smitSelectAll').onchange = (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('#acctBody input[data-acct]').forEach((cb) => {
+        if (cb.checked !== checked) {
+          cb.checked = checked;
+          cb.dispatchEvent(new Event('change'));
+        }
+      });
+    };
+  }
+  if ($('smitBannerRow')) {
+    try {
+      if (localStorage.getItem('smit-banner-hide') === '1') $('smitBannerRow').hidden = true;
+    } catch (_) {}
+    if ($('smitBannerClose')) {
+      $('smitBannerClose').onclick = () => {
+        if ($('smitBannerDontShow')?.checked) {
+          try { localStorage.setItem('smit-banner-hide', '1'); } catch (_) {}
+        }
+        $('smitBannerRow').hidden = true;
+      };
+    }
+    if ($('smitBannerSyncLink')) {
+      $('smitBannerSyncLink').onclick = (e) => {
+        e.preventDefault();
+        if ($('extBox')) $('extBox').hidden = false;
+      };
+    }
+  }
+  window.addEventListener('adscheck:accounts-updated', () => {
+    api('/accounts').then((list) => {
+      if (Array.isArray(list)) {
+        accounts = list;
+        renderAccounts();
+      }
+    }).catch(() => {});
+  });
 
   // Sub-view & filter controls
   if ($('acctViewSeg')) {

@@ -2210,11 +2210,11 @@
       <div class="kpi-rows">${d.kpis.map((k, i) => `<div class="kpi-row" data-ki="${i}">
         <span class="kpi-n">${i + 1}</span>
         <input type="text" class="kpi-name" value="${esc(k.name)}" data-kf="name" aria-label="KPI ${i + 1} name" maxlength="120">
-        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small></span>
+        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"></span><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small>
         <span class="kpi-res ${k.estimated ? 'est' : ''}" title="${k.estimated ? (k.source === 'all' ? `Auto from every daily task this month (${k.done} of ${k.due} done). Name a task like this KPI to count only those.` : k.source === 'name' ? `Auto from ${k.tasks} daily task${k.tasks === 1 ? '' : 's'} named like this KPI (${k.done} of ${k.due} done).` : `Auto from ${k.tasks} linked task${k.tasks === 1 ? '' : 's'} (${k.done} of ${k.due} done).`) + ' Type a value to confirm it.' : 'Typed · auto would be ' + fmtN(k.auto)}"><input type="number" min="0" step="any" inputmode="decimal" value="${fmtN(k.result)}" data-kf="manual" aria-label="Result"><small>${esc(k.unit || '')}</small></span>
         <span class="kpi-score ${scoreCls(k.score)}">${k.estimated ? '≈' : ''}${fmtN(k.score)}%</span>
-        <span class="kpi-x"><button type="button" class="ghost sm" data-ksug title="Suggested actions for this KPI" aria-label="Suggested actions">💡</button>${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
-      <div class="hint kpi-foot">✨ ≈ = auto from your tasks. Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due, a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
+        <span class="kpi-x"><button type="button" class="ghost sm" data-ksug title="Suggested actions for this KPI" aria-label="Suggested actions">💡</button>${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel title="Remove this KPI" aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
+      <details class="kpi-foot"><summary class="hint">✨ ≈ = auto from your tasks · <span class="linkbtn">how it works</span></summary><div class="hint">Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due; a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div></details>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
     const kpis = d.kpis.map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit, manual: k.estimated ? null : k.result }));
     const save = async (msg) => { const s = host.querySelector('.kpi-st'); if (s) s.textContent = 'Saving…'; try { await api('/kpis', { method: 'PUT', body: { person, month: st.month, kpis } }); if (s) s.textContent = msg || 'Saved'; } catch (e) { if (s) s.textContent = e.message; } };
     const reload = () => kpiPanel(hostId, person, st.month);
@@ -2331,7 +2331,7 @@
       else { pp.hidden = false; document.body.classList.add('mt-admin'); renderMtPeople(); }
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     document.body.classList.toggle('mt-pm', mtPmPick() && !pp.hidden);
-    $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    $('mtWho').textContent = (mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name) + ' · ' + nice(me.today || iso(new Date())).replace(/ \d{4}$/, '');
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true;
     if (ADMIN_SITE || mtAs || me.buyer) $('mtTasks').hidden = true; else { $('mtTasks').hidden = false; loadMyTasks('mtTasks'); } // a PM's own Clients Task for the day (a media buyer's PM tasks sit inside the menu)
@@ -2422,8 +2422,8 @@
     try { kpis = (await api(`/kpis?person=${encodeURIComponent(kpiPerson)}&month=${ym(me.today || iso(new Date()))}`)).kpis || []; } catch (_) {}
     const kpiOf = (id) => kpis.find((k) => k.id === id);
     const kpiChip = (it) => { if (it.pm) return ''; const k = it.kpi ? kpiOf(it.kpi) : null;
-      return k ? `<button type="button" class="chip kpi mt-kpi" data-mtkpi="${esc(it.id)}" title="Counts toward this KPI — tap to change">📊 ${esc(k.name)}</button>`
-        : kpis.length && !closed ? `<button type="button" class="chip meta mt-kpi add" data-mtkpi="${esc(it.id)}" title="Count this task toward a monthly KPI">+ KPI</button>` : ''; };
+      return k ? `<button type="button" class="chip kpi mt-kchip" data-mtkpi="${esc(it.id)}" title="Counts toward this KPI — tap to change">📊 ${esc(k.name)}</button>`
+        : kpis.length && !closed ? `<button type="button" class="chip meta mt-kchip add" data-mtkpi="${esc(it.id)}" title="Count this task toward a monthly KPI">+ KPI</button>` : ''; };
     const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const isToday = d.day === d.today, myName = me.buyer ? me.buyer.name : me.name, closed = !!d.result;
@@ -2434,7 +2434,7 @@
       <div class="mt-step ${d.plan ? 'done' : 'now'}"><span class="mt-sn">${d.plan ? '✓' : '1'}</span><div><b>Plan</b><span class="hint">${d.plan ? `Submitted ${hhmm(d.plan.at)}${d.plan.by && d.plan.by !== myName ? ' · ' + esc(d.plan.by) : ''}` : 'Check the list, then submit'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '2'}</span><div><b>Work</b><span class="hint">${closed ? `${d.done} of ${d.total} done` : 'Tick each item as you finish it'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '3'}</span><div><b>Result</b><span class="hint">${closed ? `Submitted ${hhmm(d.result.at)}${d.result.note ? ' · ' + esc(d.result.note) : ''}` : 'Submit before you leave'}</span></div></div>
-      <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length ? '' : 'disabled'}>Submit result</button>`}</div></div>`;
+      <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length && (d.plan || d.done) ? '' : 'disabled'} title="${d.plan || d.done ? 'Close the day and send the result to Telegram' : 'Submit the plan first (or tick at least one task)'}">Submit result</button>`}</div></div>`;
     host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span></div>
       ${steps}
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
@@ -2449,9 +2449,15 @@
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => {
-      const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null; let amount;
-      if (done && k && k.unit !== '%') { const v = prompt(`${k.name}\nHow much did this add today? (${k.unit || 'count'})`, '1'); if (v === null) return; amount = Math.max(0, Number(v) || 0); }
-      b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done, amount }, done ? (k ? `Done ✓ · ${k.name}` : 'Done ✓') : '');
+      const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null;
+      const go = (amount) => { b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done, amount }, done ? (k ? `Done ✓ · ${k.name}` : 'Done ✓') : ''); };
+      if (!(done && k && k.unit !== '%')) return go();
+      // a number KPI: ask how much this added, right in the row
+      const row = b.closest('.mt-item'); if (row.querySelector('.mt-amt')) return;
+      const f = document.createElement('form'); f.className = 'mt-amt'; f.innerHTML = `<span class="hint">${esc(k.name)} · add</span><input type="number" inputmode="decimal" min="0" step="any" value="1" aria-label="How much"><b>${esc(k.unit || '')}</b><button type="submit" class="sm primary">Done ✓</button><button type="button" class="ghost sm" data-amtx>Cancel</button>`;
+      row.querySelector('.mt-it').after(f); const inp = f.querySelector('input'); inp.focus(); inp.select();
+      f.onsubmit = (ev) => { ev.preventDefault(); const v = inp.value.trim(); if (v === '') { inp.focus(); return; } go(Math.max(0, Number(v) || 0)); };
+      f.querySelector('[data-amtx]').onclick = () => f.remove();
     });
     // link an item to a KPI: the chip turns into a picker
     host.querySelectorAll('[data-mtkpi]').forEach((c) => c.onclick = () => {
@@ -2465,7 +2471,8 @@
     host.querySelectorAll('[data-mtdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this task from your menu?')) return; try { await api(`/menu/item/${encodeURIComponent(b.dataset.mtdel)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } reload(); });
     const f = $('mtOwnForm'); if (f) f.onsubmit = (ev) => { ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus(); post('/menu/item', { text, once: $('mtOwnWhen').value === 'once' || !!d.plan }, 'Added'); };
     const pb = $('mtPlanBtn'); if (pb) pb.onclick = () => { if (!confirm(`Submit the plan for ${isToday ? 'today' : nice(d.day)} — ${d.items.length} task${d.items.length === 1 ? '' : 's'}?`)) return; post('/menu/plan', {}, 'Plan submitted ✓'); };
-    const rb = $('mtResultBtn'); if (rb) rb.onclick = () => { const note = prompt(`Submit the result — ${d.done} of ${d.total} done.\nAnything to note for today? (optional)`); if (note === null) return; post('/menu/result', { note }, 'Result submitted ✓'); };
+    const rb = $('mtResultBtn'); if (rb) rb.onclick = () => { const dlg = $('mtResDlg'); $('mtResSub').textContent = `${isToday ? 'Today' : nice(d.day)} · ${d.done} of ${d.total} done — this closes the day and sends the result to Telegram.`; $('mtResNote').value = '';
+      $('mtResForm').onsubmit = (ev) => { ev.preventDefault(); dlg.close(); post('/menu/result', { note: $('mtResNote').value.trim() }, 'Result submitted ✓'); }; $('mtResCancel').onclick = $('mtResClose').onclick = () => dlg.close(); dlg.showModal(); $('mtResNote').focus(); };
     const ro = $('mtReopenBtn'); if (ro) ro.onclick = () => post('/menu/reopen', {}, 'Day reopened');
     const rs = $('mtResetBtn'); if (rs) rs.onclick = () => { if (!confirm('Replace your list with the standard list for your role? Your own items are removed (past days keep their history).')) return; post('/menu/reset', {}, 'Menu reset'); };
     const bt = $('mtMenuToday'); if (bt) bt.onclick = () => { mtDay = null; loadMtMenu(); loadMtCal(); };

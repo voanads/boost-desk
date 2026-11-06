@@ -17,7 +17,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=242">
+<link rel="stylesheet" href="/assets/app.css?v=248">
 <link rel="stylesheet" href="/assets/restyle.css?v=1">
 </head>
 <body>
@@ -259,7 +259,7 @@
 
   <!-- MY TASK -->
   <section id="tab-mytasks" class="wrap" hidden>
-    <div class="ohead"><div><h1>My Task</h1><div class="hint">The daily task menu and KPIs for this month — <span id="mtWho"></span></div></div></div>
+    <div class="ohead"><div><h1>My Task</h1><div class="hint"><span id="mtWho"></span></div></div></div>
     <div class="mt-layout">
       <aside class="panel mt-people" id="mtPeople" hidden></aside>
       <div class="mt-grid">
@@ -649,6 +649,13 @@
     <div class="ksug-list" id="kSugList"></div>
   </form>
 </dialog>
+<dialog id="mtResDlg" class="dlg" aria-labelledby="mtResTitle">
+  <form class="dlg-in mtres-in" id="mtResForm">
+    <div class="dlg-head"><div><h2 id="mtResTitle">Submit the result</h2><div class="hint" id="mtResSub"></div></div><button type="button" class="ghost" id="mtResClose" aria-label="Close">✕</button></div>
+    <label class="fld"><span>Anything to note for today? (optional)</span><textarea id="mtResNote" rows="3" maxlength="500" placeholder="e.g. DC Shop live moved to tomorrow"></textarea></label>
+    <div class="dlg-foot"><button type="button" class="ghost" id="mtResCancel">Cancel</button><button type="submit" class="primary" id="mtResGo">Submit result</button></div>
+  </form>
+</dialog>
 <dialog id="arDlg" class="dlg" aria-labelledby="arTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="arTitle">Auto daily report</h2><div class="hint">Every day at the time you set, each client's report goes to their own Telegram group by itself.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
@@ -725,6 +732,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/adscheck-bridge-sdk.js?v=234"></script>
-<script src="/assets/app.js?v=238"></script>
+<script src="/assets/app.js?v=241"></script>
 </body>
 </html>

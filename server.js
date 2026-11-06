@@ -127,6 +127,9 @@ app.get('/login', wrap(async (req, res) => {
 }));
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip'], (req, res) => {
+  res.download(path.join(__dirname, 'public', 'adscheck-connect-extension.zip'), 'AdsCheck-Connect-Pro-v3.1.0.zip');
+});
 
 app.use(health.middleware);
 // ---- Public read-only API: boost spend per Page per day, for adsbox.biz (or any outside site) ----

@@ -464,11 +464,13 @@
     const gaps = c.checks.filter((x) => x.missing > (x.tol != null ? x.tol : Math.max(0.5, x.meta * 0.003))); // small gaps = spend that came in during the sync, or cent rounding
     const t = new Date(c.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     if (!gaps.length) { status(el, `✓ Checked at ${t}: all spend from ${c.checks.length} ad account${c.checks.length === 1 ? '' : 's'} was found (${nice(c.from).replace(/^\w+, /, '')} – ${nice(c.to).replace(/^\w+, /, '')}).`); return; }
-    // A small gap while today is in the range is Meta still settling the day (a live that is running, delayed
-    // billing): the per-campaign rows lag the account total by a few dollars and catch up on the next sync.
-    const settling = me && c.to >= me.today && gaps.every((g) => g.missing <= Math.max(5, g.meta * 0.01));
-    if (settling) { status(el, `ⓘ Checked at ${t}: ${gaps.map((g) => `${g.account} is ${money(g.missing)} behind Meta's total`).join(' · ')} — today is still settling on Meta; the next sync catches up.`); return; }
-    status(el, `⚠ Checked at ${t}: some spend was not found — ` + gaps.map((g) => `${g.account}: Meta ${money(g.meta)}, found ${money(g.found)} (missing ${money(g.missing)})`).join(' · ') + '. Sync again later; if it stays, tell your developer which accounts.', true);
+    // A gap while today is in the range is Meta still settling the day: the account total updates faster
+    // than the per-campaign rows, so while a live is running the rows lag by some dollars (the sync logs show
+    // every campaign and ad row present). The next sync — within 15 minutes — catches up. Only a gap that is
+    // large, or on a range that ended before today, means spend is really missing.
+    const settling = me && c.to >= me.today && gaps.every((g) => g.missing <= Math.max(25, g.meta * 0.10));
+    if (settling) { status(el, `ⓘ Checked at ${t}: ${gaps.map((g) => `${g.account} is ${money(g.missing)} behind Meta's total`).join(' · ')} — Meta's per-campaign numbers lag the account total while ads are running today; the next sync (within 15 min) catches up.`); return; }
+    status(el, `⚠ Checked at ${t}: some spend was not found — ` + gaps.map((g) => `${g.account}: Meta ${money(g.meta)}, found ${money(g.found)} (missing ${money(g.missing)})`).join(' · ') + '. Tap Sync from Meta; if it is still short tomorrow, check in Ad accounts that every campaign of that account is matched to a client.', true);
   }
 
   // ---------- checklist actions ----------

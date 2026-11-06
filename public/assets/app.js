@@ -2188,11 +2188,11 @@
       <div class="kpi-rows">${d.kpis.map((k, i) => `<div class="kpi-row" data-ki="${i}">
         <span class="kpi-n">${i + 1}</span>
         <input type="text" class="kpi-name" value="${esc(k.name)}" data-kf="name" aria-label="KPI ${i + 1} name" maxlength="120">
-        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"></span>
+        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small></span>
         <span class="kpi-res ${k.estimated ? 'est' : ''}" title="${k.estimated ? (k.source === 'all' ? `Auto from every daily task this month (${k.done} of ${k.due} done). Name a task like this KPI to count only those.` : k.source === 'name' ? `Auto from ${k.tasks} daily task${k.tasks === 1 ? '' : 's'} named like this KPI (${k.done} of ${k.due} done).` : `Auto from ${k.tasks} linked task${k.tasks === 1 ? '' : 's'} (${k.done} of ${k.due} done).`) + ' Type a value to confirm it.' : 'Typed · auto would be ' + fmtN(k.auto)}"><input type="number" min="0" step="any" inputmode="decimal" value="${fmtN(k.result)}" data-kf="manual" aria-label="Result"><small>${esc(k.unit || '')}</small></span>
         <span class="kpi-score ${scoreCls(k.score)}">${k.estimated ? '≈' : ''}${fmtN(k.score)}%</span>
         <span class="kpi-x">${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
-      <div class="hint kpi-foot">✨ ≈ = auto from daily tasks: a task whose text matches the KPI name counts for it; a % KPI with no matching task uses all of the month's tasks (done ÷ due). Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
+      <div class="hint kpi-foot">✨ ≈ = auto from your tasks. Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due, a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
     const kpis = d.kpis.map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit, manual: k.estimated ? null : k.result }));
     const save = async (msg) => { const s = host.querySelector('.kpi-st'); if (s) s.textContent = 'Saving…'; try { await api('/kpis', { method: 'PUT', body: { person, month: st.month, kpis } }); if (s) s.textContent = msg || 'Saved'; } catch (e) { if (s) s.textContent = e.message; } };
     const reload = () => kpiPanel(hostId, person, st.month);
@@ -2394,6 +2394,13 @@
     const host = $('mtMenu'); if (!host || !me) return;
     const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
     let d; try { d = await api('/menu' + (q ? '?' + q : '')); } catch (e) { host.innerHTML = `<div class="hint">${esc(e.message)}</div>`; return; }
+    // this month's KPIs of the person, so an item can be linked to one and a tick can carry an amount
+    const kpiPerson = mtAs ? mtAs.id : me.id; let kpis = [];
+    try { kpis = (await api(`/kpis?person=${encodeURIComponent(kpiPerson)}&month=${ym(me.today || iso(new Date()))}`)).kpis || []; } catch (_) {}
+    const kpiOf = (id) => kpis.find((k) => k.id === id);
+    const kpiChip = (it) => { if (it.pm) return ''; const k = it.kpi ? kpiOf(it.kpi) : null;
+      return k ? `<button type="button" class="chip kpi mt-kpi" data-mtkpi="${esc(it.id)}" title="Counts toward this KPI — tap to change">📊 ${esc(k.name)}</button>`
+        : kpis.length && !closed ? `<button type="button" class="chip meta mt-kpi add" data-mtkpi="${esc(it.id)}" title="Count this task toward a monthly KPI">+ KPI</button>` : ''; };
     const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const isToday = d.day === d.today, myName = me.buyer ? me.buyer.name : me.name, closed = !!d.result;
@@ -2410,7 +2417,7 @@
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
       <div class="mt-items ${closed ? 'closed' : ''}">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${it.done}" data-mtmenu="${esc(it.id)}" aria-label="Done" ${closed ? 'disabled' : ''}>${box}</button>
-        <div class="mt-it"><span class="mt-ix${it.pm ? ' pm' : ''}">${i + 1}</span>${it.pm || d.plan || closed ? `<b>${esc(it.text)}</b>` : `<input class="mt-edit" type="text" maxlength="160" value="${esc(it.text)}" data-mtedit="${esc(it.id)}" aria-label="Task ${i + 1}">`}${it.pm ? `<span class="chip post">📌 ${esc(it.client)}${it.by && !it.done ? '' : ''} · from PM</span>${it.late ? '<span class="is-danger">late</span>' : ''}` : ''}${it.once ? '<span class="chip meta">this day only</span>' : ''}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>
+        <div class="mt-it"><span class="mt-ix${it.pm ? ' pm' : ''}">${i + 1}</span>${it.pm || d.plan || closed ? `<b>${esc(it.text)}</b>` : `<input class="mt-edit" type="text" maxlength="160" value="${esc(it.text)}" data-mtedit="${esc(it.id)}" aria-label="Task ${i + 1}">`}${it.pm ? `<span class="chip post">📌 ${esc(it.client)}${it.by && !it.done ? '' : ''} · from PM</span>${it.late ? '<span class="is-danger">late</span>' : ''}` : ''}${it.once ? '<span class="chip meta">this day only</span>' : ''}${kpiChip(it)}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.amount != null && it.kpi && kpiOf(it.kpi) ? ` · +${fmtN(it.amount)} ${esc(kpiOf(it.kpi).unit)}` : ''}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>
         ${it.pm || d.plan || closed ? '' : `<button type="button" class="ghost sm mt-own-x" data-mtdel="${esc(it.id)}" aria-label="Remove this item" title="Remove">✕</button>`}</div>`).join('') : '<div class="hl-empty">The menu is empty — add your first task below.</div>'}</div>
       ${d.pct === 100 && !closed ? '<div class="mt-done-all">🎉 Everything is done — submit the result when you leave.</div>' : ''}
       ${d.plan && !closed ? '<div class="hint">The plan is submitted, so the list is fixed for this day. You can still add a task for this day only.</div>' : ''}
@@ -2418,7 +2425,19 @@
       ${closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
-    host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => { const done = b.getAttribute('aria-checked') !== 'true'; b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done }, done ? 'Done ✓' : ''); });
+    host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => {
+      const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null; let amount;
+      if (done && k && k.unit !== '%') { const v = prompt(`${k.name}\nHow much did this add today? (${k.unit || 'count'})`, '1'); if (v === null) return; amount = Math.max(0, Number(v) || 0); }
+      b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done, amount }, done ? (k ? `Done ✓ · ${k.name}` : 'Done ✓') : '');
+    });
+    // link an item to a KPI: the chip turns into a picker
+    host.querySelectorAll('[data-mtkpi]').forEach((c) => c.onclick = () => {
+      const it = d.items.find((x) => x.id === c.dataset.mtkpi) || {}; const sel = document.createElement('select'); sel.className = 'mt-kpisel'; sel.setAttribute('aria-label', 'Count toward KPI');
+      sel.innerHTML = '<option value="">— no KPI —</option>' + kpis.map((k) => `<option value="${esc(k.id)}" ${k.id === it.kpi ? 'selected' : ''}>${esc(k.name)}${k.unit ? ' (' + esc(k.unit) + ')' : ''}</option>`).join('');
+      c.replaceWith(sel); sel.focus();
+      sel.onchange = async () => { try { await api(`/menu/item/${encodeURIComponent(c.dataset.mtkpi)}`, { method: 'PUT', body: { ...body, kpi: sel.value } }); successBadge(sel.value ? 'Linked to KPI' : 'KPI removed'); } catch (e) { toast(e.message); } reload(); };
+      sel.onblur = () => { if (sel.isConnected) sel.replaceWith(c); };
+    });
     host.querySelectorAll('[data-mtedit]').forEach((i) => { const orig = i.value; i.onchange = async () => { const t = i.value.trim(); if (!t || t === orig) { i.value = orig; return; } try { await api(`/menu/item/${encodeURIComponent(i.dataset.mtedit)}`, { method: 'PUT', body: { ...body, text: t } }); successBadge('Saved'); } catch (e) { toast(e.message); i.value = orig; } }; i.onkeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); i.blur(); } }; });
     host.querySelectorAll('[data-mtdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this task from your menu?')) return; try { await api(`/menu/item/${encodeURIComponent(b.dataset.mtdel)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } reload(); });
     const f = $('mtOwnForm'); if (f) f.onsubmit = (ev) => { ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus(); post('/menu/item', { text, once: $('mtOwnWhen').value === 'once' || !!d.plan }, 'Added'); };

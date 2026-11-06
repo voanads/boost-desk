@@ -2968,16 +2968,22 @@ body.mt-pm .mt-person .kpi-score{min-width:0;padding:2px 8px;font-size:var(--fs-
 .kpi-mine,.mbkpi-in,#mtKpiBody{container-type:inline-size}
 @container (max-width:640px){
   .kpi-head{display:none}
-  .kpi-row{grid-template-columns:24px minmax(0,1fr) auto;row-gap:4px;padding:6px 10px}
-  .kpi-name{grid-column:2/3;min-height:32px;padding:2px 6px;margin-left:-6px}
-  .kpi-score{grid-column:3/4;grid-row:1;justify-self:end;padding:2px 8px;font-size:var(--fs-sm)}
-  .kpi-row{position:relative}
-  .kpi-tg{grid-column:2/3;grid-row:2;justify-content:flex-start;align-items:center;gap:4px;font-size:var(--fs-sm);color:var(--muted);padding-right:150px}
+  .kpi-row{grid-template-columns:24px minmax(0,1fr) auto auto;row-gap:4px;padding:6px 10px}
+  .kpi-name{grid-column:2/4;grid-row:1;min-height:32px;padding:2px 6px;margin-left:-6px}
+  .kpi-score{grid-column:4/5;grid-row:1;justify-self:end;padding:2px 8px;font-size:var(--fs-sm)}
+  .kpi-tg{grid-column:2/3;grid-row:2;justify-content:flex-start;align-items:center;gap:4px;font-size:var(--fs-sm);color:var(--muted);min-width:0}
   .kpi-tg::before{content:"Target";font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
-  .kpi-tg input[type=number]{width:64px;min-height:30px;padding:2px 6px} .kpi-unit{width:46px;min-height:30px;padding:2px 4px}
-  .kpi-res{grid-column:2/3;grid-row:2;justify-self:end;align-self:center;width:max-content;max-width:140px;padding-right:6px}
-  .kpi-res input{width:62px;min-height:28px;padding:2px 4px}
-  .kpi-x{grid-column:3/4;grid-row:2;justify-self:end}
+  .kpi-tg input[type=number]{width:64px;min-height:30px;padding:2px 6px;flex:none} .kpi-unit{width:52px;min-height:30px;padding:2px 6px;flex:none}
+  .kpi-tg{display:contents}
+  .kpi-tg input:first-child{grid-column:2/3;grid-row:2;justify-self:start}
+  .kpi-tg .kpi-unit{grid-column:2/3;grid-row:2;justify-self:start;margin-left:68px}
+  .kpi-tg::before{grid-column:2/3;grid-row:2;align-self:center;margin-left:124px}
+  .kpi-tg::before{content:"target"}
+  .kpi-from{grid-column:2/5;grid-row:3;white-space:normal;margin:0}
+  .kpi-from.auto::before{content:"✨ auto · "}
+  .kpi-res{grid-column:3/4;grid-row:2;justify-self:end;align-self:center;width:max-content;padding-right:6px}
+  .kpi-res input{width:64px;min-height:28px;padding:2px 4px}
+  .kpi-x{grid-column:4/5;grid-row:2;justify-self:end}
   .kpi-x .ghost.sm{padding:2px 4px;min-height:28px}
 }
 /* Task menu (My Task) */
@@ -3001,6 +3007,12 @@ body.mt-pm .mt-person .kpi-score{min-width:0;padding:2px 8px;font-size:var(--fs-
 .mt-it .chip.meta{font-size:var(--fs-2xs)}
 @media (max-width:560px){.mt-own{grid-template-columns:1fr 1fr}.mt-own input{grid-column:1/-1}}
 /* Task menu: plan → work → result */
+/* menu item ↔ KPI link */
+.mt-kpi{cursor:pointer;font:inherit;font-size:var(--fs-2xs);line-height:1.2;padding:3px 8px;border-radius:var(--r-pill);border:1px solid transparent}
+.chip.kpi{background:var(--ok-soft);color:var(--ok);font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mt-kpi.add{opacity:0;background:transparent;border-color:var(--line);color:var(--muted)} .mt-item:hover .mt-kpi.add,.mt-kpi.add:focus-visible{opacity:1} .mt-kpi.add:hover{color:var(--brand-text);border-color:var(--brand)}
+.mt-kpisel{min-height:30px;padding:2px 6px;font-size:var(--fs-sm);max-width:280px}
+.kpi-from{color:var(--muted);font-size:var(--fs-2xs);white-space:nowrap;align-self:center;margin-left:4px}
 /* the day's three steps as one row */
 .mt-steps{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--bg-2)}
 .mt-step{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 0;padding:0;border:0;background:none}

@@ -1811,7 +1811,7 @@ api.post('/menu/tick', wrap(async (req, res) => {
     return res.json(await withClientItems(who, await MENU().dayOf(who.person, who.role, day)));
   }
   if (!/^[a-f0-9]{8}$/.test(String(b.id || ''))) return res.status(400).json({ error: 'Which item?' });
-  await MENU().tick(who.person, day, b.id, !!b.done, byName);
+  await MENU().tick(who.person, day, b.id, !!b.done, byName, b.amount);
   res.json(await withClientItems(who, await MENU().dayOf(who.person, who.role, day)));
 }));
 api.post('/menu/item', wrap(async (req, res) => {
@@ -1821,7 +1821,7 @@ api.post('/menu/item', wrap(async (req, res) => {
 }));
 api.put('/menu/item/:id', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
-  try { res.json({ item: await MENU().editItem(who.person, who.role, req.params.id, b.text) }); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { res.json({ item: await MENU().editItem(who.person, who.role, req.params.id, b.text, b.kpi) }); } catch (e) { res.status(400).json({ error: e.message }); }
 }));
 api.delete('/menu/item/:id', wrap(async (req, res) => {
   const who = await menuPerson(req, req.query.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

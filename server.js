@@ -1660,6 +1660,18 @@ api.put('/kpis', wrap(async (req, res) => {
   await KPI().putList(who.buyer ? who.id.slice(3) : who.id, month, (req.body || {}).kpis);
   res.json({ ok: true });
 }));
+// 💡 Suggested daily actions for one KPI (AI). The person's menu and other KPIs give it context.
+api.post('/kpis/suggest', wrap(async (req, res) => {
+  const b = req.body || {}, who = await kpiPerson(req, b.person); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const k = b.kpi || {}; if (!String(k.name || '').trim()) return res.status(400).json({ error: 'Which KPI?' });
+  const month = /^\d{4}-\d{2}$/.test(b.month) ? b.month : sync.todayIn().slice(0, 7);
+  const pid = who.buyer ? who.id.slice(3) : who.id, role = who.buyer ? 'mb' : 'pm';
+  let menu = [], others = [];
+  try { menu = (await MENU().listOf(pid, role)).map((x) => x.text); } catch (_) {}
+  try { others = (await KPI().getList(pid, month)).filter((x) => x.id !== k.id).map((x) => `${x.name} (${x.target} ${x.unit})`); } catch (_) {}
+  try { res.json(await AI().kpiSuggest(req.user.fb_id, { name: String(k.name).slice(0, 120), target: Number(k.target) || 0, unit: String(k.unit || '').slice(0, 12), role, menu, others, lang: b.lang === 'en' ? 'en' : 'km', fresh: !!b.fresh })); }
+  catch (e) { res.status(e.status || 500).json({ error: e.message, notSetUp: !!e.notSetUp }); }
+}));
 // People whose KPIs an admin can open: every user and every media buyer.
 api.get('/kpis/people', adminOnly, wrap(async (req, res) => {
   const users = (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name, kind: 'PM' }));
@@ -1817,7 +1829,7 @@ api.post('/menu/tick', wrap(async (req, res) => {
 api.post('/menu/item', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = b.once ? (isDay(b.day) ? b.day : sync.todayIn()) : null;
-  try { await MENU().addItem(who.person, who.role, b.text, day); res.json(await MENU().dayOf(who.person, who.role, day || sync.todayIn())); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { const it = await MENU().addItem(who.person, who.role, b.text, day); if (b.kpi) await MENU().editItem(who.person, who.role, it.id, undefined, b.kpi); res.json(await MENU().dayOf(who.person, who.role, day || sync.todayIn())); } catch (e) { res.status(400).json({ error: e.message }); }
 }));
 api.put('/menu/item/:id', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });

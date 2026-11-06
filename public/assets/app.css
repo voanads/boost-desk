@@ -3007,6 +3007,16 @@ body.mt-pm .mt-person .kpi-score{min-width:0;padding:2px 8px;font-size:var(--fs-
 .mt-it .chip.meta{font-size:var(--fs-2xs)}
 @media (max-width:560px){.mt-own{grid-template-columns:1fr 1fr}.mt-own input{grid-column:1/-1}}
 /* Task menu: plan → work → result */
+/* 💡 KPI suggested actions */
+.ksug-in{max-width:640px}
+.ksug-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
+.ksug-list{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow:auto}
+.ksug{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;background:var(--surface)}
+.ksug .mt-ix{margin-top:2px}
+.ksug b{display:block;font-weight:600;font-size:var(--fs-lg)} .ksug .hint{display:block;margin-top:3px;line-height:1.4}
+.ksug-act{display:flex;gap:6px;flex-direction:column;align-items:stretch}
+.ksug.added{background:var(--ok-soft);border-color:transparent}
+.ksug-empty{border:1.5px dashed var(--line);border-radius:var(--r-lg);padding:20px;text-align:center;color:var(--muted)}
 /* menu item ↔ KPI link */
 .mt-kpi{cursor:pointer;font:inherit;font-size:var(--fs-2xs);line-height:1.2;padding:3px 8px;border-radius:var(--r-pill);border:1px solid transparent}
 .chip.kpi{background:var(--ok-soft);color:var(--ok);font-weight:600;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -2174,6 +2174,28 @@
   const ymAdd = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
   const scoreCls = (s) => s >= 100 ? 'ok' : s >= 60 ? 'mid' : 'bad';
   const fmtN = (v) => Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10);
+  // 💡 Suggested actions for one KPI: AI ideas the person can add to their daily menu (linked to the KPI) or copy.
+  let kSugLang = 'km';
+  async function openKpiSuggest(person, month, k, after) {
+    const dlg = $('kSugDlg'), list = $('kSugList'); if (!dlg) return;
+    $('kSugSub').textContent = `${k.name} · target ${fmtN(k.target)} ${k.unit || ''}`.trim();
+    const asQ = person && person !== me.id ? person : undefined;
+    const load = async (fresh) => {
+      list.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>';
+      let d; try { d = await api('/kpis/suggest', { method: 'POST', body: { person, month, kpi: { id: k.id, name: k.name, target: k.target, unit: k.unit }, lang: kSugLang, fresh } }); }
+      catch (e) { list.innerHTML = `<div class="ksug-empty">${esc(e.message)}</div>`; return; }
+      list.innerHTML = d.actions.map((a, i) => `<div class="ksug" data-i="${i}"><span class="mt-ix">${i + 1}</span><div><b>${esc(a.title)}</b><span class="hint">${esc(a.how)}</span></div>
+        <div class="ksug-act"><button type="button" class="sm primary" data-sadd="${i}">+ Add to menu</button><button type="button" class="sm" data-scopy="${i}">Copy</button></div></div>`).join('');
+      list.querySelectorAll('[data-sadd]').forEach((b) => b.onclick = async () => { const a = d.actions[Number(b.dataset.sadd)]; b.disabled = true; b.textContent = 'Adding…';
+        try { await api('/menu/item', { method: 'POST', body: { as: asQ, text: a.title, kpi: k.id } }); b.textContent = '✓ In your menu'; b.closest('.ksug').classList.add('added'); successBadge('Added to the menu'); if (typeof loadMtMenu === 'function' && $('mtMenu')) loadMtMenu(); if (after) after(); }
+        catch (e) { toast(e.message); b.disabled = false; b.textContent = '+ Add to menu'; } });
+      list.querySelectorAll('[data-scopy]').forEach((b) => b.onclick = async () => { const a = d.actions[Number(b.dataset.scopy)]; try { await navigator.clipboard.writeText(a.title + '\n' + a.how); toast('Copied'); } catch (_) { prompt('Copy', a.title); } });
+    };
+    $('kSugLang').querySelectorAll('button').forEach((b) => { b.classList.toggle('on', b.dataset.l === kSugLang); b.onclick = () => { kSugLang = b.dataset.l; $('kSugLang').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); load(false); }; });
+    $('kSugNew').onclick = () => load(true);
+    if (!dlg.open) dlg.showModal();
+    load(false);
+  }
   async function kpiPanel(hostId, person, month) {
     const host = $(hostId); if (!host) return;
     const st = kpiState[hostId] = kpiState[hostId] || {}; st.person = person; st.month = month || st.month || ym((me && me.today) || iso(new Date()));
@@ -2191,7 +2213,7 @@
         <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small></span>
         <span class="kpi-res ${k.estimated ? 'est' : ''}" title="${k.estimated ? (k.source === 'all' ? `Auto from every daily task this month (${k.done} of ${k.due} done). Name a task like this KPI to count only those.` : k.source === 'name' ? `Auto from ${k.tasks} daily task${k.tasks === 1 ? '' : 's'} named like this KPI (${k.done} of ${k.due} done).` : `Auto from ${k.tasks} linked task${k.tasks === 1 ? '' : 's'} (${k.done} of ${k.due} done).`) + ' Type a value to confirm it.' : 'Typed · auto would be ' + fmtN(k.auto)}"><input type="number" min="0" step="any" inputmode="decimal" value="${fmtN(k.result)}" data-kf="manual" aria-label="Result"><small>${esc(k.unit || '')}</small></span>
         <span class="kpi-score ${scoreCls(k.score)}">${k.estimated ? '≈' : ''}${fmtN(k.score)}%</span>
-        <span class="kpi-x">${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
+        <span class="kpi-x"><button type="button" class="ghost sm" data-ksug title="Suggested actions for this KPI" aria-label="Suggested actions">💡</button>${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
       <div class="hint kpi-foot">✨ ≈ = auto from your tasks. Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due, a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
     const kpis = d.kpis.map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit, manual: k.estimated ? null : k.result }));
     const save = async (msg) => { const s = host.querySelector('.kpi-st'); if (s) s.textContent = 'Saving…'; try { await api('/kpis', { method: 'PUT', body: { person, month: st.month, kpis } }); if (s) s.textContent = msg || 'Saved'; } catch (e) { if (s) s.textContent = e.message; } };
@@ -2203,6 +2225,7 @@
       const i = Number(row.dataset.ki);
       row.querySelectorAll('[data-kf]').forEach((inp) => inp.onchange = async () => { const f = inp.dataset.kf; kpis[i][f] = f === 'name' || f === 'unit' ? inp.value : inp.value === '' ? (f === 'manual' ? null : 0) : Number(inp.value); await save(); reload(); });
       const au = row.querySelector('[data-kauto]'); if (au) au.onclick = async () => { kpis[i].manual = null; await save('Back to auto'); reload(); };
+      row.querySelector('[data-ksug]').onclick = () => openKpiSuggest(person, st.month, d.kpis[i], reload);
       row.querySelector('[data-kdel]').onclick = async () => { if (!confirm('Remove this KPI?')) return; kpis.splice(i, 1); await save('Removed'); reload(); };
     });
   }

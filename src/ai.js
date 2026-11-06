@@ -280,4 +280,30 @@ async function morningPlans(log = () => {}) {
   return n;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans };
+
+// ---------- KPI → suggested daily actions ----------
+const KPI_SYSTEM = `You coach the staff of Ads Box, a Facebook ads agency in Cambodia (project managers and media buyers who boost client lives and posts, send daily reports, collect payments and keep clients).
+You get ONE monthly KPI of one person (name, target, unit, what they already do every day). Suggest 5 or 6 concrete DAILY actions that move that KPI, ordered by impact.
+Answer ONLY with JSON: {"actions":[{"title":"short imperative task, max 60 characters","how":"one or two sentences: how to do it and what to check"}]}
+Rules: actions must be things one person can do and tick off each day; tie them to Facebook Pages, lives, boosted posts, reports, Telegram, orders, payments where relevant; no generic advice ("work hard"); do not repeat the duties they already do unless you add a specific twist; keep the KPI's own words.`;
+const kpiCache = new Map();
+async function kpiSuggest(ownerId, { name, target, unit, role = 'pm', menu = [], others = [], lang = 'km', fresh = false }) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  const ck = crypto.createHash('sha1').update(JSON.stringify([name, target, unit, role, lang, menu])).digest('hex');
+  const hit = kpiCache.get(ck); if (!fresh && hit && Date.now() - hit.at < 6 * 3600e3) return { ...hit.out, cached: true };
+  const today = sync.todayIn(), useKey = `aiUse:${today}`, used = Number(await db.getUserSetting(ownerId, useKey, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const langLine = lang === 'km' ? 'Write title and how in Khmer (ខ្មែរ); keep product words like Boost, Live, Page, Ad account, Telegram in English.' : 'Write title and how in simple English.';
+  const user = `${langLine}\n\nKPI: ${name}\nTarget this month: ${target} ${unit}\nRole: ${role === 'mb' ? 'media buyer' : 'project manager'}\nTheir daily menu now: ${menu.length ? menu.map((m) => '- ' + m).join('\n') : '(empty)'}\nTheir other KPIs: ${others.length ? others.join('; ') : '(none)'}`;
+  const out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, KPI_SYSTEM, [{ role: 'user', content: user }]);
+  await db.setUserSetting(ownerId, useKey, used + 1);
+  let actions = [];
+  try { const m = out.text.match(/\{[\s\S]*\}/); actions = (JSON.parse(m ? m[0] : out.text).actions || []); } catch (_) { throw new Error('The AI answer could not be read. Try again.'); }
+  actions = actions.slice(0, 6).map((a) => ({ title: String((a && a.title) || '').trim().slice(0, 160), how: String((a && a.how) || '').trim().slice(0, 400) })).filter((a) => a.title);
+  if (!actions.length) throw new Error('The AI gave no actions. Try again.');
+  const result = { actions, at: new Date().toISOString() };
+  kpiCache.set(ck, { at: Date.now(), out: result }); for (const [k, v] of kpiCache) if (Date.now() - v.at > 6 * 3600e3) kpiCache.delete(k);
+  return result;
+}
+module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest };

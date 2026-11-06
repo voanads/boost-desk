@@ -523,32 +523,256 @@
   $('dateInput').onchange = () => { if ($('dateInput').value) { date = $('dateInput').value; loadDay(); } };
 
   // ---------- ad accounts ----------
+  let acctView = 'all', acctFilter = 'all', acctQuery = '';
+
+  function renderAcctDrawer() {
+    const drawer = $('acctProDrawer');
+    if (!drawer) return;
+    if (acctView === 'all') { drawer.hidden = true; return; }
+    drawer.hidden = false;
+
+    if (acctView === 'cards') {
+      const byCard = {};
+      for (const a of accounts) {
+        const i = a.info || {};
+        const c = i.card || 'No card synced yet (click Sync from Extension)';
+        const g = byCard[c] || (byCard[c] = { card: c, count: 0, active: 0, balance: 0, spend: 0, items: [] });
+        g.count++;
+        if ([1, 201].includes(i.statusCode)) g.active++;
+        g.balance += Number(i.balance) || 0;
+        g.spend += Number(i.amountSpent) || 0;
+        g.items.push(a);
+      }
+      const list = Object.values(byCard).sort((a, b) => b.balance - a.balance);
+      drawer.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b>💳 Extended Payment Cards (${list.length})</b><span class="hint">Grouped by payment method across your ad accounts</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${list.map((g) => `
+          <div style="border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:12px;background:var(--bg2,#f8fafc)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <b>💳 ${esc(g.card)}</b>
+              <span class="chip ok">${g.active}/${g.count} active</span>
+            </div>
+            <div style="margin-top:8px;font-size:13px;display:flex;justify-content:space-between">
+              <span class="hint">Balance due: <b style="color:var(--fg,#0f172a)">${money(g.balance)}</b></span>
+              <span class="hint">Lifetime: <b>${money(g.spend)}</b></span>
+            </div>
+          </div>`).join('')}</div>`;
+    } else if (acctView === 'bm') {
+      const byBm = {};
+      for (const a of accounts) {
+        const i = a.info || {};
+        const b = i.business || 'Personal Ad Accounts';
+        const g = byBm[b] || (byBm[b] = { bm: b, count: 0, active: 0, balance: 0, spend: 0 });
+        g.count++;
+        if ([1, 201].includes(i.statusCode)) g.active++;
+        g.balance += Number(i.balance) || 0;
+        g.spend += Number(i.amountSpent) || 0;
+      }
+      const list = Object.values(byBm).sort((a, b) => b.spend - a.spend);
+      drawer.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b>🏢 Business Managers (${list.length})</b><span class="hint">Accounts grouped by owning Business Manager</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${list.map((g) => `
+          <div style="border:1px solid var(--line,#e2e8f0);border-radius:12px;padding:12px;background:var(--bg2,#f8fafc)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <b>🏢 ${esc(g.bm)}</b>
+              <span class="chip">${g.count} accts (${g.active} active)</span>
+            </div>
+            <div style="margin-top:8px;font-size:13px;display:flex;justify-content:space-between">
+              <span class="hint">Balance due: <b>${money(g.balance)}</b></span>
+              <span class="hint">Lifetime spend: <b>${money(g.spend)}</b></span>
+            </div>
+          </div>`).join('')}</div>`;
+    } else if (acctView === 'share') {
+      const ticked = accounts.filter((a) => a.enabled);
+      drawer.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
+        <div><b>👥 Super Share — Bulk Grant / Revoke Account Roles</b><div class="hint">Applies to all <b>${ticked.length} ticked ad accounts</b> in the Sync column via the AdsCheck Connect Pro extension.</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <input type="text" id="bdShareUids" placeholder="Facebook User IDs (comma separated)…" style="flex:1;min-width:220px">
+          <select id="bdShareRole">
+            <option value="281423141961500">Admin (Full control)</option>
+            <option value="461336843905730">Advertiser (Campaigns)</option>
+            <option value="498940650138739">Analyst (View only)</option>
+          </select>
+          <button type="button" class="primary" id="bdShareGrantBtn">Grant Role to Ticked</button>
+          <button type="button" class="ghost" id="bdShareRevokeBtn">Remove User</button>
+        </div>
+        <div class="hint" id="bdShareMsg"></div>
+      </div>`;
+      const runShare = async (action) => {
+        const uids = ($('bdShareUids')?.value || '').split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+        const role = $('bdShareRole')?.value || '281423141961500';
+        const ids = accounts.filter((a) => a.enabled).map((a) => String(a.id).replace(/^act_/, ''));
+        if (!uids.length) { toast('Enter at least 1 Facebook User ID'); return; }
+        if (!window.AdsCheckBridge) { toast('Install or enable the AdsCheck Connect Pro extension first'); return; }
+        $('bdShareMsg').textContent = `Running ${action} across ${ids.length} accounts…`;
+        try {
+          const r = await window.AdsCheckBridge.bulkAction({ action, accountIds: ids, userIds: uids, role });
+          const okCount = Array.isArray(r?.results) ? r.results.filter((x) => x.ok).length : ids.length;
+          $('bdShareMsg').textContent = `✓ Completed on ${okCount}/${ids.length} accounts.`;
+          toast(`Super Share finished (${okCount}/${ids.length} accounts)`);
+        } catch (e) { $('bdShareMsg').textContent = e.message; }
+      };
+      if ($('bdShareGrantBtn')) $('bdShareGrantBtn').onclick = () => runShare('ADD_USER');
+      if ($('bdShareRevokeBtn')) $('bdShareRevokeBtn').onclick = () => runShare('REMOVE_USER');
+    } else if (acctView === 'pixel') {
+      const ticked = accounts.filter((a) => a.enabled);
+      drawer.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
+        <div><b>🔗 Bulk Share Meta Pixel / Dataset</b><div class="hint">Shares your Pixel ID with all <b>${ticked.length} ticked ad accounts</b> via the AdsCheck Connect Pro extension.</div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <input type="text" id="bdPixelId" placeholder="Meta Pixel ID (e.g. 948102938471625)…" style="min-width:220px">
+          <input type="text" id="bdPixelBm" placeholder="Owning Business Manager ID…" style="min-width:200px">
+          <button type="button" class="primary" id="bdPixelRunBtn">Share Pixel to Ticked Accounts</button>
+        </div>
+        <div class="hint" id="bdPixelMsg"></div>
+      </div>`;
+      if ($('bdPixelRunBtn')) $('bdPixelRunBtn').onclick = async () => {
+        const pixelId = ($('bdPixelId')?.value || '').trim();
+        const businessId = ($('bdPixelBm')?.value || '').trim();
+        const ids = accounts.filter((a) => a.enabled).map((a) => String(a.id).replace(/^act_/, ''));
+        if (!pixelId) { toast('Enter a Meta Pixel ID'); return; }
+        if (!window.AdsCheckBridge) { toast('Install or enable the AdsCheck Connect Pro extension first'); return; }
+        $('bdPixelMsg').textContent = `Sharing Pixel ${pixelId} to ${ids.length} accounts…`;
+        try {
+          const r = await window.AdsCheckBridge.bulkAction({ action: 'SHARE_PIXEL', accountIds: ids, pixelId, businessId });
+          const okCount = Array.isArray(r?.results) ? r.results.filter((x) => x.ok).length : ids.length;
+          $('bdPixelMsg').textContent = `✓ Shared Pixel ${pixelId} to ${okCount}/${ids.length} accounts.`;
+          toast(`Pixel shared to ${okCount} accounts`);
+        } catch (e) { $('bdPixelMsg').textContent = e.message; }
+      };
+    }
+  }
+
   function renderAccounts() {
     $('acctList').innerHTML = accounts.map((a) => `<option value="${esc(a.name)}"></option>`).join('');
     let act = 0, bad = 0, today = 0;
-    $('acctBody').innerHTML = accounts.map((a) => {
+    for (const a of accounts) {
+      const i = a.info || {};
+      const ok = [1, 201].includes(i.statusCode);
+      if (ok) act++; else bad++;
+      today += Number(i.todaySpend) || 0;
+    }
+    const q = acctQuery.trim().toLowerCase();
+    const filtered = accounts.filter((a) => {
+      const i = a.info || {};
+      const ok = [1, 201].includes(i.statusCode);
+      if (acctFilter === 'active' && !ok) return false;
+      if (acctFilter === 'bad' && ok) return false;
+      if (q) {
+        const hay = `${a.name || ''} ${a.id || ''} ${i.business || ''} ${i.card || ''} ${i.status || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    $('acctBody').innerHTML = filtered.map((a) => {
       const i = a.info || {};
       const ok = [1, 201].includes(i.statusCode), warn = [9, 3, 7, 8, 100].includes(i.statusCode);
-      if (ok) act++; if (!ok) bad++; today += Number(i.todaySpend) || 0;
       const chip = `<span class="chip ${ok ? 'ok' : warn ? 'warn' : 'bad'}">${esc(i.status || '—')}</span>${i.disableReason ? `<div class="hint">${esc(i.disableReason)}</div>` : ''}`;
-      const cap = i.spendCap ? money(Math.max(0, i.spendCap - i.amountSpent)) : '<span class="muted">No limit</span>';
+      const capLeft = i.spendCap ? money(Math.max(0, i.spendCap - i.amountSpent)) : (i.dailyLimit ? `${money(i.dailyLimit)}<span class="hint">/day</span>` : '<span class="muted">No limit</span>');
       const cur = i.currency && i.currency !== 'USD' ? ` <span class="hint">${esc(i.currency)}</span>` : '';
+      const bal = Number(i.balance) || 0;
+      const th = i.threshold != null ? Number(i.threshold) : null;
+      const pct = th && th > 0 ? Math.min(100, Math.round((bal / th) * 100)) : 0;
+      const barCol = pct >= 85 ? '#ef4444' : pct >= 65 ? '#f59e0b' : '#10b981';
+      const thHtml = th != null
+        ? `<div style="display:inline-flex;flex-direction:column;align-items:flex-end;gap:3px;min-width:120px">
+            <div><b>${money(th)}</b> <span class="hint" style="font-size:11px">(${pct}%)</span></div>
+            <div style="width:100%;height:5px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${barCol}"></div></div>
+            ${i.card ? `<div class="hint" style="font-size:11px">💳 ${esc(i.card)}</div>` : ''}
+          </div>`
+        : (i.card ? `<div class="hint">💳 ${esc(i.card)}</div>` : '<span class="muted">—</span>');
       return `<tr><td><input type="checkbox" data-acct="${esc(a.id)}" ${a.enabled ? 'checked' : ''} aria-label="Include in sync"></td>
-        <td>${esc(a.name)}<div class="hint num">${esc(a.id)}${i.business ? ' · ' + esc(i.business) : ''}</div></td>
+        <td>${esc(a.name)}<div class="hint num">${esc(a.id)}${i.business ? ' · ' + esc(i.business) : ''}${i.role ? ' · ' + esc(i.role) : ''}</div></td>
         <td>${chip}</td>
         <td class="r num">${i.todayError ? '<span class="hint" title="' + esc(i.todayError) + '">error</span>' : i.todaySpend != null ? (Number(i.todaySpend) > 0 ? '<b>' + money(i.todaySpend) + '</b>' : '<span class="muted">$0.00</span>') : '<span class="muted">–</span>'}</td>
-        <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${i.threshold != null ? money(i.threshold) : '<span class="muted">—</span>'}</td><td class="r num">${cap}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted">No ad accounts loaded yet. Tap Refresh from Meta.</td></tr>';
+        <td class="r num">${money(i.balance)}${cur}</td><td class="r num">${thHtml}</td><td class="r num">${capLeft}</td><td class="r num">${money(i.amountSpent)}</td></tr>`;
+    }).join('') || '<tr><td colspan="8" class="muted">No matching ad accounts.</td></tr>';
     $('aCount').textContent = accounts.length; $('aActive').textContent = act; $('aBad').textContent = bad;
     $('aBad').classList.toggle('over', bad > 0); $('aToday').textContent = money(today);
     const seen = accounts.map((a) => a.seen_at).sort().pop();
     const tAt = accounts.map((a) => a.info && a.info.todayAt).filter(Boolean).sort().pop();
     if (seen) $('acctUpdated').textContent = (tAt ? "Today's spend as of " + new Date(tAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ' (updates with every sync). ' : '') + 'Ticked accounts are included in Sync.';
-    document.querySelectorAll('[data-acct]').forEach((cb) => cb.onchange = () => api('/accounts/' + encodeURIComponent(cb.dataset.acct), { method: 'PATCH', body: { enabled: cb.checked } }).then(() => toast(cb.checked ? 'Included in sync' : 'Left out of sync')).catch((e) => toast(e.message)));
+    document.querySelectorAll('[data-acct]').forEach((cb) => cb.onchange = () => {
+      const acc = accounts.find((x) => x.id === cb.dataset.acct);
+      if (acc) acc.enabled = cb.checked;
+      api('/accounts/' + encodeURIComponent(cb.dataset.acct), { method: 'PATCH', body: { enabled: cb.checked } }).then(() => toast(cb.checked ? 'Included in sync' : 'Left out of sync')).catch((e) => toast(e.message));
+    });
+    renderAcctDrawer();
   }
+
+  // Sub-view & filter controls
+  if ($('acctViewSeg')) {
+    $('acctViewSeg').querySelectorAll('button[data-av]').forEach((btn) => {
+      btn.onclick = () => {
+        acctView = btn.dataset.av || 'all';
+        $('acctViewSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+        renderAcctDrawer();
+      };
+    });
+  }
+  if ($('acctFilterSeg')) {
+    $('acctFilterSeg').querySelectorAll('button[data-af]').forEach((btn) => {
+      btn.onclick = () => {
+        acctFilter = btn.dataset.af || 'all';
+        $('acctFilterSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+        renderAccounts();
+      };
+    });
+  }
+  if ($('acctSearch')) {
+    $('acctSearch').oninput = (e) => { acctQuery = e.target.value || ''; renderAccounts(); };
+  }
+
+  // Direct Web-to-Extension Bridge sync (AdsCheck Connect Pro)
+  async function syncFromExtensionBridge(silent = false) {
+    const bridge = window.AdsCheckBridge;
+    if (!bridge) {
+      if (!silent) toast('Extension bridge not loaded');
+      return false;
+    }
+    const btn = $('extBridgeSyncBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing from Extension…'; }
+    try {
+      const res = await bridge.syncAccounts(true);
+      if (res && res.ok && Array.isArray(res.accounts) && res.accounts.length > 0) {
+        const saved = await api('/accounts/ext-sync', { method: 'POST', body: { accounts: res.accounts } });
+        if (saved && Array.isArray(saved.accounts)) {
+          accounts = saved.accounts;
+          renderAccounts();
+        }
+        if ($('extBtn')) $('extBtn').innerHTML = '🟢 AdsCheck Pro Connected';
+        if (!silent) toast(`Synced thresholds & cards for ${res.accounts.length} accounts from Extension!`);
+        return true;
+      } else if (!silent) {
+        toast(res?.error || 'Open Facebook in another tab and make sure AdsCheck Connect Pro is enabled.');
+      }
+    } catch (e) {
+      if (!silent) toast(e.message || 'Extension not detected — click Download Extension (.zip) to install.');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Sync from Browser Extension'; }
+    }
+    return false;
+  }
+
+  if ($('extBridgeSyncBtn')) {
+    $('extBridgeSyncBtn').onclick = () => syncFromExtensionBridge(false);
+  }
+  if (window.AdsCheckBridge) {
+    window.AdsCheckBridge.onReady(() => {
+      if ($('extBtn')) $('extBtn').innerHTML = '🟢 AdsCheck Pro Connected';
+      syncFromExtensionBridge(true);
+    });
+  }
+
   $('refreshAccts').onclick = async () => {
     const b = $('refreshAccts'); b.disabled = true; b.textContent = 'Refreshing…';
-    try { accounts = await api('/accounts/refresh', { method: 'POST' }); renderAccounts(); toast("Ad accounts and today's spend updated"); if (date === me.today) loadDay(); }
+    try {
+      accounts = await api('/accounts/refresh', { method: 'POST' });
+      if (window.AdsCheckBridge && window.AdsCheckBridge.isInstalled()) {
+        await syncFromExtensionBridge(true);
+      }
+      renderAccounts();
+      toast("Ad accounts and today's spend updated");
+      if (date === me.today) loadDay();
+    }
     catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Refresh from Meta'; }
   };
   // Threshold extension setup: reveal the per-user endpoint + key to paste into Check My Ads.

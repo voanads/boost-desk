@@ -174,14 +174,30 @@ app.post('/public-api/thresholds', wrap(async (req, res) => {
   const map = (await db.getUserSetting(owner, 'extThresholds', {})) || {};
   let stored = 0;
   for (const it of items) {
-    const id = String((it && (it.id || it.account_id)) || '').trim();
+    const rawId = String((it && (it.id || it.account_id || it.accountId || it.meta_account_id)) || '').trim();
+    const id = rawId.startsWith('act_') ? rawId : (rawId ? 'act_' + rawId : '');
     if (!/^act_\d{5,25}$/.test(id)) continue;
-    const v = Number(it.threshold);
-    if (!isFinite(v) || v < 0 || v > 1e9) { // null/absent threshold clears a stale value
-      if (it.threshold === null) delete map[id];
+    const prev = map[id] || {};
+    const v = it.threshold != null ? Number(it.threshold) : prev.v;
+    const card = String(it.card || it.payment_card || it.paymentMethods || prev.card || '').trim().slice(0, 80) || null;
+    const dailyLimit = it.dailyLimit != null || it.daily_limit != null ? Number(it.dailyLimit ?? it.daily_limit) : (prev.dailyLimit ?? null);
+    const business = String(it.business || it.business_name || it.businessName || prev.business || '').trim().slice(0, 120) || null;
+    const role = String(it.role || prev.role || '').trim().slice(0, 40) || null;
+    const nextBillDate = String(it.nextBillDate || it.pay_date || prev.nextBillDate || '').trim().slice(0, 40) || null;
+    if (it.threshold === null && !card && dailyLimit == null) {
+      delete map[id];
       continue;
     }
-    map[id] = { v: Math.round(v * 100) / 100, cur: (String(it.currency || '').slice(0, 8) || null), at: new Date().toISOString() };
+    map[id] = {
+      v: isFinite(v) && v >= 0 && v <= 1e9 ? Math.round(v * 100) / 100 : (prev.v ?? null),
+      cur: (String(it.currency || prev.cur || '').slice(0, 8) || null),
+      card,
+      dailyLimit: isFinite(dailyLimit) && dailyLimit > 0 ? Math.round(dailyLimit * 100) / 100 : null,
+      business,
+      role,
+      nextBillDate,
+      at: new Date().toISOString()
+    };
     stored++;
   }
   await db.setUserSetting(owner, 'extThresholds', map);
@@ -1272,10 +1288,49 @@ async function accountsWithToday(owner) {
     if (rows && a.enabled) { i.todaySpend = Math.round((byAcct[a.id] || 0) * 100) / 100; i.todayAt = meta0?.synced_at || null; delete i.todayError; }
     // Meta's API doesn't return the billing threshold; use what the browser extension pushed when
     // the API left it blank. Flagged so the UI can note where it came from.
-    if (i.threshold == null && ext[a.id] && ext[a.id].v != null) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
+    if (ext[a.id]) {
+      if (i.threshold == null && ext[a.id].v != null) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
+      if (ext[a.id].card) i.card = ext[a.id].card;
+      if (ext[a.id].dailyLimit != null) i.dailyLimit = ext[a.id].dailyLimit;
+      if (ext[a.id].business && !i.business) i.business = ext[a.id].business;
+      if (ext[a.id].role) i.role = ext[a.id].role;
+      if (ext[a.id].nextBillDate) i.nextBillDate = ext[a.id].nextBillDate;
+    }
   }
   return list;
 }
+// Direct Web-to-Extension Bridge Sync (saves Thresholds, Payment Cards, Daily Limits & BMs from AdsCheck Connect Pro)
+api.post('/accounts/ext-sync', wrap(async (req, res) => {
+  const owner = req.user.fb_id;
+  const items = Array.isArray((req.body || {}).accounts) ? req.body.accounts : (Array.isArray((req.body || {}).thresholds) ? req.body.thresholds : []);
+  const map = (await db.getUserSetting(owner, 'extThresholds', {})) || {};
+  let stored = 0;
+  for (const it of items) {
+    const rawId = String((it && (it.id || it.account_id || it.accountId || it.meta_account_id)) || '').trim();
+    const id = rawId.startsWith('act_') ? rawId : (rawId ? 'act_' + rawId : '');
+    if (!/^act_\d{5,25}$/.test(id)) continue;
+    const prev = map[id] || {};
+    const v = it.threshold != null ? Number(it.threshold) : prev.v;
+    const card = String(it.card || it.payment_card || it.paymentMethods || prev.card || '').trim().slice(0, 80) || null;
+    const dailyLimit = it.dailyLimit != null || it.daily_limit != null ? Number(it.dailyLimit ?? it.daily_limit) : (prev.dailyLimit ?? null);
+    const business = String(it.business || it.business_name || it.businessName || prev.business || '').trim().slice(0, 120) || null;
+    const role = String(it.role || prev.role || '').trim().slice(0, 40) || null;
+    const nextBillDate = String(it.nextBillDate || it.pay_date || prev.nextBillDate || '').trim().slice(0, 40) || null;
+    map[id] = {
+      v: isFinite(v) && v >= 0 && v <= 1e9 ? Math.round(v * 100) / 100 : (prev.v ?? null),
+      cur: (String(it.currency || prev.cur || '').slice(0, 8) || null),
+      card,
+      dailyLimit: isFinite(dailyLimit) && dailyLimit > 0 ? Math.round(dailyLimit * 100) / 100 : null,
+      business,
+      role,
+      nextBillDate,
+      at: new Date().toISOString()
+    };
+    stored++;
+  }
+  await db.setUserSetting(owner, 'extThresholds', map);
+  res.json({ ok: true, stored, accounts: await accountsWithToday(owner) });
+}));
 // The logged-in user's key + endpoint for the Check My Ads extension to push thresholds (lazily created).
 api.get('/ext/key', wrap(async (req, res) => {
   const owner = req.user.fb_id;

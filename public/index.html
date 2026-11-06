@@ -334,12 +334,18 @@
     <div class="top">
       <div><h1>Ad accounts</h1><div class="hint" id="acctUpdated">Balances, limits and status from Meta. Ticked accounts are included in Sync.</div></div>
       <span class="spacer"></span>
-      <button id="extBtn" class="ghost" title="Meta doesn't share the billing threshold with apps — the Check My Ads extension can push it here">🧩 Threshold extension</button>
+      <button id="extBtn" class="ghost" title="Meta doesn't share the billing threshold with apps — the AdsCheck / Check My Ads extension can push it here">🧩 Threshold extension</button>
       <button id="refreshAccts" class="primary">Refresh from Meta</button>
     </div>
     <div class="note" id="extBox" hidden>
-      <b>Show the billing threshold automatically</b>
-      <p class="hint" style="margin:6px 0 10px">Meta's API doesn't give apps the billing threshold, so the Threshold column stays blank. The <b>Check My Ads</b> browser extension reads it from your own Facebook session and can send just the numbers here — no passwords or cookies. Paste these two values into the extension's <b>Boost Desk</b> settings, then run its sync.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <b>Show billing thresholds, payment cards &amp; limits automatically</b>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a href="/adscheck-connect-extension.zip" download="AdsCheck-Connect-Pro-v3.1.0.zip" class="ghost sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1px solid var(--line,#cbd5e1);font-weight:600;font-size:12px">⬇ Download Extension (.zip)</a>
+          <button type="button" class="primary sm" id="extBridgeSyncBtn">⚡ Sync from Browser Extension</button>
+        </div>
+      </div>
+      <p class="hint" style="margin:6px 0 10px" id="extBridgeHint">Meta's API doesn't give apps the billing threshold or card digits. Install the <b>AdsCheck Connect Pro</b> extension to sync Thresholds, Payment Cards, and Daily Spend Limits directly from your browser session with 1 click — or paste the Endpoint URL and Key below into your extension settings.</p>
       <label class="fld"><span>Endpoint URL</span><input type="text" id="extUrl" readonly></label>
       <label class="fld"><span>Your key</span><input type="text" id="extKey" readonly placeholder="Loading…"></label>
       <div class="dlg-foot"><span class="hint">Keep this key private — anyone with it can write threshold numbers to your workspace.</span><span class="spacer"></span><button type="button" class="ghost" id="extCopyUrl">Copy URL</button><button type="button" class="primary" id="extCopyKey">Copy key</button></div>
@@ -350,8 +356,26 @@
       <div><span class="lbl">Need attention</span><span class="val num" id="aBad">0</span></div>
       <div><span class="lbl">Spent today</span><span class="val num" id="aToday">$0.00</span></div>
     </div>
-    <div class="panel"><div class="tablewrap"><table>
-      <thead><tr><th>Sync</th><th>Account</th><th>Status</th><th class="r">Today</th><th class="r">Balance due</th><th class="r">Threshold</th><th class="r">Spend limit left</th><th class="r">Lifetime spend</th></tr></thead>
+    <div class="otools" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+      <div class="seg" id="acctViewSeg" role="group" aria-label="Account view">
+        <button type="button" data-av="all" aria-pressed="true">All accounts</button>
+        <button type="button" data-av="cards" aria-pressed="false">💳 Payment cards</button>
+        <button type="button" data-av="bm" aria-pressed="false">🏢 Business Managers</button>
+        <button type="button" data-av="share" aria-pressed="false">👥 Super Share</button>
+        <button type="button" data-av="pixel" aria-pressed="false">🔗 Share Pixel</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="seg" id="acctFilterSeg" role="group" aria-label="Status filter">
+          <button type="button" data-af="all" aria-pressed="true">All</button>
+          <button type="button" data-af="active" aria-pressed="false">Active</button>
+          <button type="button" data-af="bad" aria-pressed="false">Need attention</button>
+        </div>
+        <input type="search" id="acctSearch" placeholder="Search account, ID, card, BM…" aria-label="Search ad accounts" style="min-width:210px">
+      </div>
+    </div>
+    <div id="acctProDrawer" class="panel" style="margin-bottom:14px;padding:16px" hidden></div>
+    <div class="panel" id="acctTablePanel"><div class="tablewrap"><table>
+      <thead><tr><th>Sync</th><th>Account</th><th>Status</th><th class="r">Today</th><th class="r">Balance due</th><th class="r">Threshold &amp; Card</th><th class="r">Spend limit left</th><th class="r">Lifetime spend</th></tr></thead>
       <tbody id="acctBody"></tbody>
     </table></div></div>
   </section>
@@ -693,6 +717,7 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/app.js?v=233"></script>
+<script src="/assets/adscheck-bridge-sdk.js?v=234"></script>
+<script src="/assets/app.js?v=234"></script>
 </body>
 </html>

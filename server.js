@@ -1278,6 +1278,19 @@ api.get('/dashboard', wrap(async (req, res) => {
 // Ad accounts
 // Today's spend per ad account comes from the campaign rows the last sync saved for today
 // (Sync, auto sync every hour / on new campaigns), so it stays current without extra Meta calls.
+const FAKE_DEMO_CARDS = new Set([
+  'Visa •••• 4829',
+  'Mastercard •••• 7741',
+  'Visa •••• 3104',
+  'Mastercard •••• 9912',
+  'Amex •••• 1008',
+  'Visa •••• 6590',
+]);
+const cleanCard = (c) => {
+  const s = String(c || '').trim().slice(0, 80);
+  return s && !FAKE_DEMO_CARDS.has(s) ? s : null;
+};
+
 async function accountsWithToday(owner) {
   const list = await db.listAccounts(owner);
   const day = sync.todayIn();
@@ -1292,12 +1305,13 @@ async function accountsWithToday(owner) {
     // Meta's API doesn't return the billing threshold; use what the browser extension pushed when
     // the API left it blank. Flagged so the UI can note where it came from.
     if (ext[a.id]) {
-      if (i.threshold == null && ext[a.id].v != null) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
-      if (ext[a.id].card) i.card = ext[a.id].card;
-      if (ext[a.id].dailyLimit != null) i.dailyLimit = ext[a.id].dailyLimit;
+      if (ext[a.id].v != null && ext[a.id].v > 0) { i.threshold = ext[a.id].v; i.thresholdExt = true; }
+      const c = cleanCard(ext[a.id].card);
+      if (c) i.card = c; else delete i.card;
+      if (ext[a.id].dailyLimit != null && ext[a.id].dailyLimit > 0) i.dailyLimit = ext[a.id].dailyLimit; else delete i.dailyLimit;
       if (ext[a.id].business && !i.business) i.business = ext[a.id].business;
       if (ext[a.id].role) i.role = ext[a.id].role;
-      if (ext[a.id].nextBillDate) i.nextBillDate = ext[a.id].nextBillDate;
+      if (ext[a.id].nextBillDate && ext[a.id].nextBillDate !== '—') i.nextBillDate = ext[a.id].nextBillDate;
     }
   }
   return list;
@@ -1312,21 +1326,22 @@ api.post('/accounts/ext-sync', wrap(async (req, res) => {
     const rawId = String((it && (it.id || it.account_id || it.accountId || it.meta_account_id)) || '').trim();
     const id = rawId.startsWith('act_') ? rawId : (rawId ? 'act_' + rawId : '');
     if (!/^act_\d{5,25}$/.test(id)) continue;
-    const prev = map[id] || {};
-    const v = it.threshold != null ? Number(it.threshold) : prev.v;
-    const card = String(it.card || it.payment_card || it.paymentMethods || prev.card || '').trim().slice(0, 80) || null;
-    const dailyLimit = it.dailyLimit != null || it.daily_limit != null ? Number(it.dailyLimit ?? it.daily_limit) : (prev.dailyLimit ?? null);
-    const business = String(it.business || it.business_name || it.businessName || prev.business || '').trim().slice(0, 120) || null;
-    const role = String(it.role || prev.role || '').trim().slice(0, 40) || null;
-    const nextBillDate = String(it.nextBillDate || it.pay_date || prev.nextBillDate || '').trim().slice(0, 40) || null;
+    const rawThr = it.threshold != null && it.threshold !== '' ? Number(it.threshold) : null;
+    const v = rawThr != null && isFinite(rawThr) && rawThr > 0 && rawThr <= 1e9 ? Math.round(rawThr * 100) / 100 : null;
+    const card = cleanCard(it.card || it.payment_card || it.paymentMethods);
+    const rawDsl = it.dailyLimit != null || it.daily_limit != null ? Number(it.dailyLimit ?? it.daily_limit) : null;
+    const dailyLimit = rawDsl != null && isFinite(rawDsl) && rawDsl > 0 ? Math.round(rawDsl * 100) / 100 : null;
+    const business = String(it.business || it.business_name || it.businessName || '').trim().slice(0, 120) || null;
+    const role = String(it.role || '').trim().slice(0, 40) || null;
+    const nextBillDate = String(it.nextBillDate || it.pay_date || '').trim().slice(0, 40) || null;
     map[id] = {
-      v: isFinite(v) && v >= 0 && v <= 1e9 ? Math.round(v * 100) / 100 : (prev.v ?? null),
-      cur: (String(it.currency || prev.cur || '').slice(0, 8) || null),
+      v,
+      cur: (String(it.currency || '').slice(0, 8) || null),
       card,
-      dailyLimit: isFinite(dailyLimit) && dailyLimit > 0 ? Math.round(dailyLimit * 100) / 100 : null,
+      dailyLimit,
       business,
       role,
-      nextBillDate,
+      nextBillDate: nextBillDate && nextBillDate !== '—' ? nextBillDate : null,
       at: new Date().toISOString()
     };
     stored++;

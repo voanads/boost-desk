@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "AdsCheck Connect Pro",
+  "version": "3.1.0",
+  "description": "Cross-platform Facebook Ads data connection bridge for AdsCheck Pro Web App",
+  "minimum_chrome_version": "105",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AdsCheck Connect Pro",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "scripting",
+    "cookies",
+    "alarms",
+    "notifications",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "http://*/*",
+      "https://*/*"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*",
+        "https://adsmanager.facebook.com/*",
+        "https://business.facebook.com/*"
+      ],
+      "js": ["content/main-world.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": ["content/bridge.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png", "dashboard.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

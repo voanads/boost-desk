@@ -18,7 +18,7 @@
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
 <link rel="stylesheet" href="/assets/app.css?v=242">
-<link rel="stylesheet" href="/assets/restyle.css?v=1">
+<link rel="stylesheet" href="/assets/restyle.css?v=2">
 </head>
 <body>
 <div class="wrap">
@@ -374,10 +374,79 @@
       </div>
     </div>
     <div id="acctProDrawer" class="panel" style="margin-bottom:14px;padding:16px" hidden></div>
-    <div class="panel" id="acctTablePanel"><div class="tablewrap"><table>
-      <thead><tr><th>Sync</th><th>Account</th><th>Status</th><th class="r">Today</th><th class="r">Balance due</th><th class="r">Threshold &amp; Card</th><th class="r">Spend limit left</th><th class="r">Lifetime spend</th></tr></thead>
-      <tbody id="acctBody"></tbody>
-    </table></div></div>
+    <div class="smit-table-card" id="acctTablePanel">
+      <div class="smit-table-scroll">
+        <table class="smit-table" id="smitAccountsTable">
+          <thead>
+            <tr>
+              <th class="smit-col-chk"><input type="checkbox" id="smitSelectAll" checked aria-label="Select all accounts"></th>
+              <th class="smit-col-tt" data-smit-sort="status">
+                <div class="smit-th-flex">
+                  <span>TT <i class="smit-sort">⇅</i></span>
+                  <span class="smit-shield" title="Account Status">🔒</span>
+                </div>
+              </th>
+              <th class="smit-col-acct" data-smit-sort="name">
+                <div class="smit-th-flex">
+                  <span>Account <i class="smit-sort">⇅</i></span>
+                </div>
+              </th>
+              <th class="smit-col-orig" data-smit-sort="originalId">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Original ID <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+              <th class="smit-col-num" data-smit-sort="balance">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Balance <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+              <th class="smit-col-num" data-smit-sort="threshold">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Threshold <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+              <th class="smit-col-num" data-smit-sort="remain">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Remain Threshold <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+              <th class="smit-col-num" data-smit-sort="limit">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Limit <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+              <th class="smit-col-num" data-smit-sort="spent">
+                <div class="smit-th-grid">
+                  <span class="smit-grip">⠿</span>
+                  <span class="smit-th-lbl">Total Spent <i class="smit-sort">⇅</i> <i class="smit-caret">▾</i></span>
+                </div>
+              </th>
+            </tr>
+            <tr class="smit-banner-row" id="smitBannerRow">
+              <td colspan="9">
+                <div class="smit-banner-inner">
+                  <span class="smit-bell">🔔</span>
+                  <div class="smit-banner-right">
+                    <span class="smit-banner-txt">The login session is synced with AdsCheck Pro.</span>
+                    <a href="#accounts" class="smit-learn-link" id="smitBannerSyncLink">Learn more</a>
+                    <label class="smit-dont-show"><input type="checkbox" id="smitBannerDontShow"> Don't show again</label>
+                    <button type="button" class="smit-banner-close" id="smitBannerClose" aria-label="Dismiss">✕</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </thead>
+          <tbody id="acctBody"></tbody>
+          <tfoot id="acctFoot"></tfoot>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ADMIN (owner only) -->
@@ -724,7 +793,7 @@
   <div class="fp-lbl">Text size</div>
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
-<script src="/assets/adscheck-bridge-sdk.js?v=234"></script>
-<script src="/assets/app.js?v=238"></script>
+<script src="/assets/adscheck-bridge-sdk.js?v=239"></script>
+<script src="/assets/app.js?v=239"></script>
 </body>
 </html>

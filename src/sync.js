@@ -514,8 +514,12 @@ async function dropIds(clientId, drop) {
   for (const k of drop) { const [day, key] = k.split(':'); for (const id of await partIds(day, clientId, [key])) ids.add(id); }
   return ids;
 }
-async function clientReport(owner, clientId, from, to, kind = '', parts = null, scope = null) {
+// opts.orders (default true): add the client's adsbox.biz orders — per day in a range, with cost per order.
+async function clientReport(owner, clientId, from, to, kind = '', parts = null, scope = null, opts = {}) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
+  let od = null; // { orders, daily: { day: n } } for this client, when adsbox.biz has data
+  if (opts.orders !== false) { try { const bc = await require('./orders').byClient(owner, from, to); od = (bc.clients || {})[Number(clientId)] || null; if (od && !(od.orders > 0)) od = null; } catch (_) { od = null; } }
+  const perOrder = (spend, n) => n > 0 && spend > 0 ? ` · ${fmt(spend / n)} per order` : '';
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }
   const sp = splitParts(parts), drop = sp.drop; parts = sp.pick;
   let rows;
@@ -543,6 +547,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
     spent = total;
     if (!total) lines.push('No boost spend on this day.');
     lines.push('', totalWithTax(total));
+    if (od) lines.push(`🛒 Orders: ${od.orders}${perOrder(total, od.orders)}`);
     if (e.note) lines.push(`📝 ${e.note}`);
   } else {
     lines.push(head, `🗓 ${periodName(from, to)}`, '');
@@ -561,7 +566,8 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
       const parts = [];
       if (dn) parts.push(`${dn} live${dn > 1 ? 's' : ''}`);
       if (dp) parts.push('post');
-      daily.push(`• ${shortDay(r.day)}: ${fmt(t)}${parts.length ? ' (' + parts.join(' + ') + ')' : ''}`);
+      const on = od && od.daily ? od.daily[r.day] || 0 : 0;
+      daily.push(`• ${shortDay(r.day)}: ${fmt(t)}${parts.length ? ' (' + parts.join(' + ') + ')' : ''}${od ? ` · ${on} order${on === 1 ? '' : 's'}` : ''}`);
       const m = monthly[r.day.slice(0, 7)] || (monthly[r.day.slice(0, 7)] = { t: 0, n: 0, d: 0, p: 0 });
       m.t += t; m.n += dn; m.d++; m.p += dp;
     }
@@ -573,6 +579,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
       const sub = [];
       if (L && (live > 0 || !P)) sub.push(`🔴 Lives: ${fmt(live)} (${lives} live${lives === 1 ? '' : 's'})`);
       if (P && (post > 0 || !L)) sub.push(`📌 Boost posts: ${fmt(post)}`);
+      if (od) sub.push(`🛒 Orders: ${od.orders}${perOrder(total, od.orders)}`);
       lines.push(...sub, `📅 ${days} day${days === 1 ? '' : 's'} with boosts`, '', ...daily);
     }
   }

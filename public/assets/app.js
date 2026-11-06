@@ -3575,14 +3575,17 @@ Notes:
     const h = $('ckRecalc'); if (h) { h.hidden = false; clearTimeout(h._t); h._t = setTimeout(() => { h.hidden = true; }, 1800); }
   }
   if ($('ckText')) $('ckText').addEventListener('input', recalcReportText);
+  const ckOrders = () => { const el = $('ckOrders'); return el ? el.checked : true; };
+  try { const v = localStorage.getItem('bd:ckOrders'); if (v === '0' && $('ckOrders')) $('ckOrders').checked = false; } catch (_) {}
+  if ($('ckOrders')) $('ckOrders').onchange = () => { try { localStorage.setItem('bd:ckOrders', ckOrders() ? '1' : '0'); } catch (_) {} if (ckTarget && ckTarget.kind === 'client') openReportDlg({ ...ckTarget }); };
   async function openReportDlg(o) {
-    const dlg = $('ckDlg'); ckTarget = o;
+    const dlg = $('ckDlg'); ckTarget = o; $('ckOrdersLbl').hidden = o.kind !== 'client';
     $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
     if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}${ckOrders() ? '' : '&orders=0'}`);
         if (ckTarget !== o) return;
         $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}${o.skip ? ' · some Pages left out' : ''}`;
         $('ckText').value = r.text;
@@ -3668,7 +3671,7 @@ Notes:
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, skip: o.skip || [], page: o.routes && o.route != null ? o.route : undefined } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, skip: o.skip || [], page: o.routes && o.route != null ? o.route : undefined, orders: ckOrders() } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

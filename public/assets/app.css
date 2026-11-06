@@ -3006,6 +3006,7 @@ body.mt-pm .mt-person .kpi-score{min-width:0;padding:2px 8px;font-size:var(--fs-
 .mt-it .chip.meta{font-size:var(--fs-2xs)}
 @media (max-width:560px){.mt-own{grid-template-columns:1fr 1fr}.mt-own input{grid-column:1/-1}}
 /* Task menu: plan → work → result */
+.ckopts{margin:8px 0 2px} .ckopts .chk{font-size:var(--fs-md)}
 /* 💡 KPI suggested actions */
 .ksug-in{max-width:640px}
 .ksug-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px}

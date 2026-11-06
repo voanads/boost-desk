@@ -1486,16 +1486,16 @@ const skipScope = (skip) => (skip.length ? { exclude: skip } : null);
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip);
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip), orders = req.query.orders !== '0';
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (c && to === sync.todayIn()) { try { await sync.freshenToday(req.user, c.id, to); } catch (e) { console.error('[report] fresh spend:', e.message); } } // today's numbers straight from Meta, like the picture
   const rts = c ? reports.routes(c) : [];
   if (rts.length > 1) { // Pages that report to their own topics: one text per Page
-    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip });
-    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
+    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip, orders });
+    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
     return res.json({ ...r, routes: list });
   }
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip)));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders }));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
@@ -1555,20 +1555,20 @@ api.post('/client-report/:id/delete', wrap(async (req, res) => {
   res.json({ ok: true, deleted: ok, failed: rec.msgs.length - ok });
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip);
+  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip), orders = (req.body || {}).orders !== false;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const cl = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (cl && reports.routes(cl).length > 1) { // each Page to its own topic (or just the one picked in the dialog)
     const page = (req.body || {}).page;
     const track = [];
-    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip, track });
+    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip, track, orders });
     if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
     await rememberSent(req.user, cl.id, from, to, track, done.map((d) => d.to).join(', '));
     const sentAt = new Date().toISOString();
     if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
     return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
   }
-  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;

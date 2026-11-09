@@ -129,10 +129,13 @@ app.get('/login', wrap(async (req, res) => {
 app.get(['/adscheck', '/adscheck/', '/adscheck.html', '/check', '/smit'], (req, res) => {
   res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.html'));
 });
+app.get(['/adscheck.js', '/adscheck/adscheck.js'], (req, res) => {
+  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.js'));
+});
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
-app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip'], (req, res) => {
-  res.download(path.join(__dirname, 'public', 'adscheck-connect-extension.zip'), 'AdsCheck-Connect-Pro-v3.1.0.zip');
+app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip', '/AdsCheck-Pro-NoLogin-Extension.zip'], (req, res) => {
+  res.download(path.join(__dirname, 'public', 'adscheck-connect-extension.zip'), 'AdsCheck-Pro-NoLogin-Extension.zip');
 });
 
 app.use(health.middleware);

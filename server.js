@@ -125,6 +125,10 @@ app.get('/login', wrap(async (req, res) => {
   if (await loggedIn(req)) return res.redirect('/'); // already logged in: go straight to the app
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 }));
+// Public standalone AdsCheck Pro page (no Boost Desk login required):
+app.get(['/adscheck', '/adscheck/', '/adscheck.html', '/check', '/smit'], (req, res) => {
+  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.html'));
+});
 // Always revalidate so a new deploy shows up on the next refresh.
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip'], (req, res) => {

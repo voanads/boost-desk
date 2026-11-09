@@ -3006,6 +3006,7 @@ body.mt-pm .mt-person .kpi-score{min-width:0;padding:2px 8px;font-size:var(--fs-
 .mt-it .chip.meta{font-size:var(--fs-2xs)}
 @media (max-width:560px){.mt-own{grid-template-columns:1fr 1fr}.mt-own input{grid-column:1/-1}}
 /* Task menu: plan → work → result */
+.cd-accts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px} .chip.acct{background:var(--bg-2);color:var(--ink);font-weight:500;text-transform:none;letter-spacing:0} .chip.acct small{color:var(--muted);font-weight:500}
 .ckopts{margin:8px 0 2px} .ckopts .chk{font-size:var(--fs-md)}
 /* 💡 KPI suggested actions */
 .ksug-in{max-width:640px}

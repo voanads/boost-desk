@@ -1048,6 +1048,12 @@
     const skip = []; for (const p of l) if (p.page !== page) { if (p.pageId) skip.push(p.pageId); skip.push(p.page); }
     openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel(), only: '', parts: null, skip: skip.length ? skip : null });
   }
+  // The ad accounts that ran this client's ads in the chosen period (from the dashboard data).
+  function cdAccounts(m) {
+    const list = (m && m.accounts) || []; if (!list.length) return '';
+    const shown = list.slice(0, 3), more = list.length - shown.length;
+    return `<div class="cd-accts" title="Ad accounts that ran this client's ads in this period">${shown.map((a) => `<span class="chip acct" title="${esc(a.id)}">💳 ${esc(a.name)}${list.length > 1 ? ` <small>${money(a.spend)}</small>` : ''}</span>`).join('')}${more > 0 ? `<span class="chip meta">+${more} more</span>` : ''}</div>`;
+  }
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
@@ -1059,7 +1065,7 @@
     parkForm(); // rescue the form before the panel is redrawn
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
-        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div></div>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div>${cdAccounts(m)}</div></div>
           <div class="cd-acts"><button type="button" class="sm" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>

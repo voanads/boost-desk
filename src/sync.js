@@ -414,13 +414,16 @@ async function dashboard(owner, from, to) {
   const per = new Map(clients.map((c) => [c.id, {
     id: c.id, name: c.name, type: c.type, pages: [...new Set([c.name, c.match, ...(c.pages || [])].filter(Boolean))],
     budget: c.budget, archived: c.archived, telegram: c.telegram || '', days: 0, lives: 0, liveSpend: 0, postSpend: 0, spend: 0, overDays: 0, daily: {}, results: 0, resultType: '', resSpend: 0,
+    accounts: [], // the ad accounts that ran this client's ads in the range: [{ id, name, spend }]
   }]));
-  const byDay = {};
+  const byDay = {}, campClient = new Map(); // campaign id → client id, from the saved entries
   for (const r of rows) {
     const c = clients.find((x) => x.id === r.client_id);
     const p = per.get(r.client_id);
     if (!c || !p) continue;
     const e = r.data || {};
+    for (const l of Object.values(e.lives || {})) for (const id of (l && l.ids) || []) campClient.set(String(id), r.client_id);
+    for (const id of ((e.post || {}).ids) || []) campClient.set(String(id), r.client_id);
     const post = hasPost(c) ? Number((e.post || {}).spend) || 0 : 0;
     let live = 0, lives = 0;
     // Cost per result counts boost posts only. resSpend = post spend from days synced with results,
@@ -433,6 +436,18 @@ async function dashboard(owner, from, to) {
     p.spend = round2(p.spend + total); p.daily[r.day] = total;
     if (c.budget && total > c.budget + 0.009) p.overDays++;
     byDay[r.day] = round2((byDay[r.day] || 0) + total);
+  }
+  // Which ad account each client's campaigns ran on (from the saved campaign rows of the range).
+  if (campClient.size) {
+    try {
+      const acc = new Map(); // client id → { accountId → { id, name, spend } }
+      for (const d of await db.listRaw(owner, from, to)) for (const r of d.rows || []) {
+        const cid = campClient.get(String(r.campaignId)); if (cid == null || !r.accountId) continue;
+        const m = acc.get(cid) || acc.set(cid, new Map()).get(cid); const a = m.get(r.accountId) || m.set(r.accountId, { id: r.accountId, name: r.account || r.accountId, spend: 0 }).get(r.accountId);
+        a.spend = round2(a.spend + (Number(r.spend) || 0)); if (r.account) a.name = r.account;
+      }
+      for (const [cid, m] of acc) { const p = per.get(cid); if (p) p.accounts = [...m.values()].sort((a, b) => b.spend - a.spend); }
+    } catch (e) { console.log('[dashboard] accounts per client skipped:', e.message); }
   }
   const list = [...per.values()].map((p) => ({ ...p, planned: round2(p.days * p.budget), diff: round2(p.spend - p.days * p.budget) }));
   list.sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));

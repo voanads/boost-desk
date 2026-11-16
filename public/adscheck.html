@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en" data-adscheck-standalone="true">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AdsCheck Pro · SMIT Ad Account Checker (No Login Required)</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --line-soft: #f1f5f9;
+    --smit-green: #10b981;
+    --smit-green-dark: #059669;
+    --smit-head-bg: #ecfdf5;
+    --smit-head-border: #d1fae5;
+    --blue: #2563eb;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Top Navigation Bar */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  .brand-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    font-weight: 900;
+    font-size: 15px;
+    letter-spacing: -0.03em;
+  }
+  .brand-badge .s1 { color: #0ea5e9; }
+  .brand-badge .s2 { color: #10b981; }
+  .brand-badge .s3 { color: #f59e0b; }
+  .brand-badge .s4 { color: #ef4444; }
+  .brand-title b {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .brand-title span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .ext-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .ext-pill.is-ready {
+    background: #ecfdf5;
+    color: #065f46;
+    border-color: #a7f3d0;
+  }
+  .ext-pill i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 13px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+  .btn:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+  .btn-primary {
+    background: var(--smit-green);
+    color: #ffffff;
+    border-color: var(--smit-green-dark);
+  }
+  .btn-primary:hover {
+    background: var(--smit-green-dark);
+    border-color: #047857;
+  }
+  .btn-blue {
+    background: var(--blue);
+    color: #ffffff;
+    border-color: #1d4ed8;
+  }
+  .btn-blue:hover {
+    background: #1d4ed8;
+  }
+
+  /* Main Container */
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 18px 24px 48px;
+  }
+
+  /* KPI Strip */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 16px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  }
+  .kpi-card span {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+  .kpi-card b {
+    display: block;
+    margin-top: 4px;
+    font-size: 21px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .kpi-card b.green { color: var(--smit-green); }
+  .kpi-card b.red { color: var(--danger); }
+
+  /* Filter & Sub-view Toolbar */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .seg {
+    display: inline-flex;
+    background: #e2e8f0;
+    padding: 3px;
+    border-radius: 9px;
+    gap: 2px;
+    flex-wrap: wrap;
+  }
+  .seg button {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .seg button[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+  .search-input {
+    min-width: 260px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--ink);
+  }
+  .search-input:focus {
+    outline: 2px solid rgba(16, 185, 129, 0.25);
+    border-color: var(--smit-green);
+  }
+
+  /* Drawer for Cards / BM / Super Share / Pixel / Token */
+  .drawer {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+  }
+  .drawer[hidden] { display: none; }
+  .drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .mini-card {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 12px 14px;
+    background: #f8fafc;
+  }
+
+  /* SMIT AdsCheck Pro Table */
+  .smit-table-wrap {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    overflow-x: auto;
+  }
+  .smit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .smit-table thead tr.smit-thead-row {
+    background: var(--smit-head-bg);
+    border-bottom: 1px solid var(--smit-head-border);
+  }
+  .smit-table thead th {
+    padding: 10px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #064e3b;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    border-right: 1px solid #d1fae5;
+    user-select: none;
+    white-space: nowrap;
+    cursor: pointer;
+    text-align: left;
+  }
+  .smit-table thead th:last-child { border-right: none; }
+  .smit-table thead th:hover { background: #d1fae5; }
+  .smit-th-chk { width: 38px; text-align: center !important; cursor: default !important; }
+  .smit-th-tt { width: 105px; }
+  .smit-th-acct { min-width: 220px; }
+  .smit-th-orig { min-width: 165px; text-align: right !important; }
+  .smit-th-num { min-width: 130px; text-align: right !important; }
+  .smit-sort { font-size: 11px; color: #6b7280; margin-left: 3px; font-weight: 400; }
+  .smit-grip {
+    float: left;
+    color: #9ca3af;
+    font-size: 11px;
+    margin-right: 6px;
+    letter-spacing: -1px;
+    font-weight: 400;
+  }
+
+  /* Yellow SMIT Notice Row */
+  .smit-banner-row td {
+    background: #fef9c3 !important;
+    border-bottom: 1px solid #fde047 !important;
+    padding: 7px 14px !important;
+    font-size: 12.5px;
+    color: #a16207;
+  }
+  .smit-banner-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .smit-banner-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .smit-banner-text {
+    color: #ca8a04;
+    font-weight: 500;
+  }
+  .smit-banner-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .smit-banner-link {
+    color: #059669;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .smit-banner-chk {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #4b5563;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .smit-banner-close {
+    background: transparent;
+    border: none;
+    color: #4b5563;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+  }
+
+  /* Table Body Rows */
+  .smit-table tbody tr {
+    border-bottom: 1px solid var(--line-soft);
+    transition: background 0.1s ease;
+  }
+  .smit-table tbody tr:hover {
+    background: #f8fafc;
+  }
+  .smit-table tbody td {
+    padding: 9px 12px;
+    border-right: 1px solid var(--line-soft);
+    vertical-align: middle;
+    color: #1e293b;
+    font-variant-numeric: tabular-nums;
+  }
+  .smit-table tbody td:last-child { border-right: none; }
+  .smit-td-chk { text-align: center; width: 38px; }
+  .smit-td-orig { text-align: right; color: #334155; font-size: 13px; }
+  .smit-td-num { text-align: right; font-weight: 500; }
+
+  /* Clickable Links in Table */
+  .smit-acct-link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .smit-acct-link:hover .smit-acct-name {
+    color: var(--smit-green);
+    text-decoration: underline;
+  }
+  .smit-acct-name {
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .smit-acct-id {
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.3;
+    margin-top: 2px;
+  }
+  .smit-billing-link,
+  .smit-orig-link,
+  .smit-acct-link-num {
+    display: inline-block;
+    width: 100%;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .smit-billing-link:hover {
+    color: var(--smit-green);
+    text-decoration: underline;
+    font-weight: 600;
+  }
+  .smit-orig-link:hover,
+  .smit-acct-link-num:hover {
+    color: var(--blue);
+    text-decoration: underline;
+  }
+
+  /* TT Status Badge */
+  .smit-tt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 12.5px;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .smit-tt:hover {
+    text-decoration: underline;
+    opacity: 0.88;
+  }
+  .smit-tt .smit-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .smit-tt.is-active { color: #10b981; }
+  .smit-tt.is-active .smit-dot { background: #10b981; }
+  .smit-tt.is-disabled { color: #ef4444; }
+  .smit-tt.is-disabled .smit-dot { background: #ef4444; }
+  .smit-tt.is-warn { color: #f59e0b; }
+  .smit-tt.is-warn .smit-dot { background: #f59e0b; }
+
+  /* Footer Summary Row */
+  .smit-table tfoot tr {
+    background: var(--surface);
+    border-top: 1.5px solid var(--line);
+  }
+  .smit-table tfoot td {
+    padding: 11px 12px;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink);
+    border-right: 1px solid var(--line-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .smit-table tfoot td:last-child { border-right: none; }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #0f172a;
+    color: #ffffff;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: all 0.2s ease;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div class="brand">
+      <span class="brand-badge"><span class="s1">S</span><span class="s2">M</span><span class="s3">I</span><span class="s4">T</span></span>
+      <div class="brand-title">
+        <b>AdsCheck Pro · Standalone</b>
+        <span id="lastSyncText">No Boost Desk login required — powered by your browser session</span>
+      </div>
+    </div>
+    <span class="ext-pill" id="extStatusPill"><i></i><span id="extStatusLabel">Checking extension…</span></span>
+  </div>
+
+  <div class="top-actions">
+    <button type="button" class="btn btn-primary" id="syncExtBtn">⚡ Sync from Browser Extension</button>
+    <button type="button" class="btn" id="toggleTokenBtn">🔑 Token Sync (No Extension)</button>
+    <a class="btn" href="https://boost-desk-production.up.railway.app/adscheck-connect-extension.zip" download="AdsCheck-Connect-Pro-v3.1.0.zip">⬇ Download Extension (.zip)</a>
+    <button type="button" class="btn" id="exportCsvBtn">⬇ Export CSV</button>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Summary KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card"><span>Total Accounts</span><b id="kpiTotal">0</b></div>
+    <div class="kpi-card"><span>Active</span><b class="green" id="kpiActive">0</b></div>
+    <div class="kpi-card"><span>Disabled / Attention</span><b class="red" id="kpiDisabled">0</b></div>
+    <div class="kpi-card"><span>Total Balance</span><b id="kpiBalance">0</b></div>
+    <div class="kpi-card"><span>Total Threshold</span><b id="kpiThreshold">0</b></div>
+    <div class="kpi-card"><span>Total Spent</span><b id="kpiSpent">0</b></div>
+  </div>
+
+  <!-- Sub-view & Filter Toolbar -->
+  <div class="toolbar">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="seg" id="viewSeg" role="group" aria-label="View mode">
+        <button type="button" data-view="all" aria-pressed="true">Ad Accounts</button>
+        <button type="button" data-view="cards" aria-pressed="false">💳 Payment Cards</button>
+        <button type="button" data-view="bm" aria-pressed="false">🏢 Business Managers</button>
+        <button type="button" data-view="share" aria-pressed="false">👥 Super Share</button>
+        <button type="button" data-view="pixel" aria-pressed="false">🔗 Share Pixel</button>
+      </div>
+      <div class="seg" id="filterSeg" role="group" aria-label="Status filter">
+        <button type="button" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-filter="active" aria-pressed="false">Active</button>
+        <button type="button" data-filter="bad" aria-pressed="false">Disabled / Attention</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <input type="search" class="search-input" id="searchInput" placeholder="Search account name, ID, Original ID, card…">
+      <button type="button" class="btn" id="clearCacheBtn" title="Clear locally cached accounts">Clear Cache</button>
+    </div>
+  </div>
+
+  <!-- Optional Token Sync Drawer (works even without the extension installed) -->
+  <div class="drawer" id="tokenDrawer" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <b>🔑 Direct Meta Access Token Sync (No Extension Required)</b>
+        <div style="color:var(--muted);font-size:12.5px;margin-top:2px">Paste a Facebook Access Token (<code>EAAB...</code> or <code>EAAG...</code>) to fetch your Ad Accounts, Balances, Thresholds, and Spend directly in your browser. Your token never leaves your computer.</div>
+      </div>
+      <button type="button" class="btn" id="closeTokenDrawerBtn">Close</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <input type="password" id="fbTokenInput" class="search-input" style="flex:1;min-width:280px" placeholder="Paste EAAB... or EAAG... Facebook Access Token">
+      <button type="button" class="btn btn-blue" id="runTokenSyncBtn">Fetch Ad Accounts Now</button>
+    </div>
+  </div>
+
+  <!-- Sub-view Drawer (Cards / BM / Share / Pixel) -->
+  <div class="drawer" id="subViewDrawer" hidden></div>
+
+  <!-- SMIT AdsCheck Pro Table -->
+  <div class="smit-table-wrap">
+    <table class="smit-table" id="smitStandaloneTable">
+      <thead>
+        <tr class="smit-thead-row">
+          <th class="smit-th-chk"><input type="checkbox" id="selectAllChk" checked aria-label="Select all accounts"></th>
+          <th class="smit-th-tt" data-sort="status">TT <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-acct" data-sort="name">Account <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-orig" data-sort="originalId"><span class="smit-grip">⋮⋮</span>Original ID <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-num" data-sort="balance"><span class="smit-grip">⋮⋮</span>Balance <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-num" data-sort="threshold"><span class="smit-grip">⋮⋮</span>Threshold <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-num" data-sort="remain"><span class="smit-grip">⋮⋮</span>Remain Threshold <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-num" data-sort="limit"><span class="smit-grip">⋮⋮</span>Limit <span class="smit-sort">⇅</span></th>
+          <th class="smit-th-num" data-sort="spent"><span class="smit-grip">⋮⋮</span>Total Spent <span class="smit-sort">⇅</span></th>
+        </tr>
+        <tr class="smit-banner-row" id="smitBannerRow">
+          <td colspan="9">
+            <div class="smit-banner-inner">
+              <div class="smit-banner-left">
+                <span class="smit-bell">🔔</span>
+                <span class="smit-banner-text">Click any <b>Account Name</b> to open Facebook Ads Manager, or click any <b>Threshold / Balance</b> to open Facebook Billing &amp; Payment settings.</span>
+              </div>
+              <div class="smit-banner-right">
+                <a href="#sync" class="smit-banner-link" id="bannerSyncLink">Sync now</a>
+                <label class="smit-banner-chk"><input type="checkbox" id="bannerDontShow"> Don't show again</label>
+                <button type="button" class="smit-banner-close" id="bannerCloseBtn" aria-label="Close">×</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </thead>
+      <tbody id="acctBody"></tbody>
+      <tfoot id="acctFoot"></tfoot>
+    </table>
+  </div>
+</main>
+
+<div class="toast" id="toastEl"></div>
+
+<script src="adscheck.js"></script>
+</body>
+</html>

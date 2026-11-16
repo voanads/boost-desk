@@ -68,7 +68,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*.png", "dashboard.html"],
+      "resources": ["icons/*.png", "dashboard.html", "adscheck.html", "adscheck.js"],
       "matches": ["<all_urls>"]
     }
   ]

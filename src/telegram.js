@@ -93,7 +93,7 @@ async function listChats(offset = 0) {
     if (u.callback_query) { const q = u.callback_query; taps.push({ qid: q.id, data: q.data || '', chat: String((q.message && q.message.chat && q.message.chat.id) || (q.from && q.from.id) || ''), msgId: q.message && q.message.message_id, text: (q.message && q.message.text) || '', name: [q.from && q.from.first_name, q.from && q.from.last_name].filter(Boolean).join(' ') }); continue; }
     const m = u.message || u.my_chat_member || u.channel_post || {}, chat = m.chat;
     if (chat && chat.type === 'private') {
-      const pt = ((u.message || {}).text || '').trim().match(/^\/alerts(?:@\w+)?\s+([A-Za-z0-9]{6})\b/i);
+      const pt = ((u.message || {}).text || '').trim().match(/^\/alerts(?:@\w+)?\s+([A-Za-z0-9]{6,8})\b/i);
       if (pt) alerts.push({ id: String(chat.id), code: pt[1].toUpperCase(), name: [chat.first_name, chat.last_name].filter(Boolean).join(' ') || chat.username || '' });
       // A media buyer opened the bot from their invite link (t.me/<bot>?start=mb_CODE).
       const st = ((u.message || {}).text || '').trim().match(/^\/start\s+mb_([A-Za-z0-9]{8})\b/);
@@ -123,7 +123,7 @@ async function listChats(offset = 0) {
     }
     // "/link CODE" typed in a group (or in one topic of it) links it to one Boost Desk account.
     const t = (u.message || u.channel_post || {}).text || '';
-    const mm = t.trim().match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6})\b/i);
+    const mm = t.trim().match(/^\/(link|unlink)(?:@\w+)?\s+([A-Za-z0-9]{6,8})\b/i);
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins

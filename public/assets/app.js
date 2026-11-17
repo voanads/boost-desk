@@ -4457,7 +4457,7 @@ Thank you for working with Ads Box!`,
         document.documentElement.classList.add('asbuyer'); me.profitRole = null;
         if (me.buyer) { $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account"; if (me.buyer.photo) setTimeout(() => { $('whoAvatar').innerHTML = `<img src="/mb-pic/${esc(me.buyer.id)}" alt="">`; }, 0); }
         const g = $('dGreet'); if (g) g.textContent = `${me.buyer ? me.buyer.name : me.name} · ${me.name}'s clients`;
-        const acc = document.querySelector('nav.tabs [data-tab=accounts]'); if (acc) acc.hidden = true;
+        const ah = $('acctUpdated'); if (ah) ah.textContent = 'Balances, limits and status of your PM\'s ad accounts — read-only here; your PM syncs and ticks them.'; // a media buyer sees the team's ad accounts but can't change them
       }
       // /projectmanager shows only the Work pages, even to the owner; /admin shows everything.
       const showAdmin = me.canAdmin && !PM_SITE;

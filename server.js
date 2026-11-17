@@ -1725,9 +1725,8 @@ api.post('/report/:day/send', wrap(async (req, res) => {
 // ---------- auto daily report ----------
 api.get('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.autoSettings(req.user.fb_id)), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null), bot: telegram.hasBot(), tz: cfg.tz })));
 api.put('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.saveAutoSettings(req.user.fb_id, req.body || {})), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null) })));
-// Reports page: every client of this account for one day — spend, orders, and whether the report went out.
-api.get('/reports/status', wrap(async (req, res) => {
-  const owner = req.user.fb_id, today = sync.todayIn(), day = isDay(req.query.day) && req.query.day <= today ? req.query.day : today;
+// One workspace's clients for one day: spend, orders, and whether each report went out.
+async function reportStatus(owner, day) {
   const clients = (await db.listClients(owner)).filter((c) => !c.archived), set = await extras.autoSettings(owner);
   let oc = { clients: {} }; try { oc = await require('./src/orders').byClient(owner, day, day); } catch (_) { /* orders not connected */ }
   const live = (c) => c.type === 'live' || c.type === 'both', post = (c) => c.type === 'post' || c.type === 'both' || !c.type;
@@ -1742,9 +1741,30 @@ api.get('/reports/status', wrap(async (req, res) => {
       status: sent ? 'sent' : !chat ? 'nogroup' : spend > 0 ? 'unsent' : 'nospend' });
   }
   const rank = { unsent: 0, nogroup: 1, sent: 2, nospend: 3 }; rows.sort((a, b) => rank[a.status] - rank[b.status] || b.spend - a.spend || a.name.localeCompare(b.name));
+  return { rows, auto: { on: !!set.on, time: set.time }, anyOrders: rows.some((r) => r.orders != null), totals: reportTotals(rows) };
+}
+function reportTotals(rows) {
   const cnt = (k) => rows.filter((r) => r.status === k).length, tot = (k) => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0), spend = Math.round(tot('spend') * 100) / 100, orders = tot('orders');
-  res.json({ day, today, rows, bot: telegram.hasBot(), auto: { on: !!set.on, time: set.time }, anyOrders: rows.some((r) => r.orders != null),
-    totals: { clients: rows.length, spend, orders, cpo: orders > 0 && spend > 0 ? Math.round(spend / orders * 100) / 100 : null, sent: cnt('sent'), unsent: cnt('unsent'), nogroup: cnt('nogroup'), nospend: cnt('nospend') } });
+  return { clients: rows.length, spend, orders, cpo: orders > 0 && spend > 0 ? Math.round(spend / orders * 100) / 100 : null, sent: cnt('sent'), unsent: cnt('unsent'), nogroup: cnt('nogroup'), nospend: cnt('nospend') };
+}
+// Reports page: every client of this account for one day.
+api.get('/reports/status', wrap(async (req, res) => {
+  const today = sync.todayIn(), day = isDay(req.query.day) && req.query.day <= today ? req.query.day : today;
+  res.json({ day, today, bot: telegram.hasBot(), ...(await reportStatus(req.user.fb_id, day)) });
+}));
+// Team reports (leaders): the same day for every team, one group per Project Manager. Read only.
+api.get('/admin/reports', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn(), day = isDay(req.query.day) && req.query.day <= today ? req.query.day : today;
+  const users = await db.allUsers(), tms = await getTeams(), teamOf = {}; for (const t of tms) for (const m of t.members) teamOf[m] = t.name;
+  let buyers = []; try { buyers = await MB().all(); } catch (_) { /* no media buyers yet */ }
+  const teams = [];
+  for (const u of users) {
+    const r = await reportStatus(u.fb_id, day); if (!r.rows.length) continue;
+    teams.push({ owner: u.fb_id, name: u.name, team: teamOf[u.fb_id] || '', buyers: buyers.filter((b) => b.addedById === u.fb_id).map((b) => b.name), ...r });
+  }
+  teams.sort((a, b) => b.totals.unsent - a.totals.unsent || b.totals.nogroup - a.totals.nogroup || b.totals.spend - a.totals.spend || a.name.localeCompare(b.name));
+  const all = teams.flatMap((t) => t.rows);
+  res.json({ day, today, bot: telegram.hasBot(), teams, anyOrders: teams.some((t) => t.anyOrders), totals: { ...reportTotals(all), teams: teams.length, teamsDone: teams.filter((t) => !t.totals.unsent).length } });
 }));
 api.post('/auto-report/run', wrap(async (req, res) => {
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.' });

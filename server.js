@@ -499,6 +499,7 @@ api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
 // Includes tasks left open from earlier days (only when looking at today) and earlier tasks finished on this day.
 // A task's target for one day: { target, unit, reached } (reached is typed by the person; per day for every-day tasks).
 const tgt = (t, day) => (Number(t.target) > 0 ? { target: Number(t.target), unit: String(t.unit || ''), reached: Number((t.hit || {})[day]) || 0 } : {});
+const AI_TASK_DAYS = 3; // unticked AI plan tasks drop off after this many days
 async function dayTasks(day) {
   const today = sync.todayIn();
   const users = await db.allUsers(), out = {};
@@ -520,6 +521,7 @@ async function dayTasks(day) {
       }
       const late = t.day < day && ((!t.done && day === today) || doneDay === day);
       if (t.day !== day && !late) continue;
+      if (t.from === 'ai' && !t.done && t.day < sync.addDays(day, -AI_TASK_DAYS)) continue; // an AI idea nobody ticked in 3 days has expired
       o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid), ...tgt(t, t.day), to: t.to ? { id: t.to.id, name: t.to.name } : null, sentAt: t.sentAt || null, kpi: t.kpi || '' });
     }
   }
@@ -1029,8 +1031,10 @@ api.get('/day/:day', wrap(async (req, res) => {
   if (!isDay(req.params.day)) return res.status(400).json({ error: 'Bad date.' });
   res.json(await db.getDay(req.user.fb_id, req.params.day));
 }));
+const UNSAFE_KEY = new Set(['__proto__', 'constructor', 'prototype']);
 function deepMerge(t, s) {
   for (const k of Object.keys(s)) {
+    if (UNSAFE_KEY.has(k)) continue; // never let a request body reach Object.prototype
     if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) { t[k] = t[k] && typeof t[k] === 'object' ? t[k] : {}; deepMerge(t[k], s[k]); }
     else t[k] = s[k];
   }
@@ -1387,7 +1391,7 @@ api.patch('/accounts/:id', wrap(async (req, res) => { await db.setAccountEnabled
 const rangeOk = (from, to) => isDay(from) && isDay(to) && from <= to && (Date.parse(to) - Date.parse(from)) / 864e5 <= 366;
 // Telegram groups are private per account: a group belongs to the account whose link code was sent
 // in it ("/link CODE"), or to the account that already uses it for one of its clients.
-const newCode = () => Array.from({ length: 6 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('');
+const newCode = () => { const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = require('crypto').randomBytes(8); return Array.from(r.subarray(0, 8), (b) => A[b % 32]).join(''); }; // 8 chars, crypto RNG
 async function linkCode(fbId) {
   let c = await db.getUserSetting(fbId, 'tgCode', null);
   if (!c) { c = newCode(); await db.setUserSetting(fbId, 'tgCode', c); }
@@ -1496,16 +1500,16 @@ const skipScope = (skip) => (skip.length ? { exclude: skip } : null);
 api.get('/client-report/:id', wrap(async (req, res) => {
   const { from, to } = req.query;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
-  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip);
+  const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip), orders = req.query.orders !== '0';
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (c && to === sync.todayIn()) { try { await sync.freshenToday(req.user, c.id, to); } catch (e) { console.error('[report] fresh spend:', e.message); } } // today's numbers straight from Meta, like the picture
   const rts = c ? reports.routes(c) : [];
   if (rts.length > 1) { // Pages that report to their own topics: one text per Page
-    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip });
-    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
+    const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip, orders });
+    const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
     return res.json({ ...r, routes: list });
   }
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip)));
+  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders }));
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture
@@ -1565,20 +1569,20 @@ api.post('/client-report/:id/delete', wrap(async (req, res) => {
   res.json({ ok: true, deleted: ok, failed: rec.msgs.length - ok });
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
-  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip);
+  const { from, to, text, withImage } = req.body || {}, kind = kindOf((req.body || {}).kind), parts = partsOf((req.body || {}).parts), skip = skipOf((req.body || {}).skip), orders = (req.body || {}).orders !== false;
   if (!rangeOk(from, to)) return res.status(400).json({ error: 'Pick a valid date or month.' });
   const cl = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (cl && reports.routes(cl).length > 1) { // each Page to its own topic (or just the one picked in the dialog)
     const page = (req.body || {}).page;
     const track = [];
-    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip, track });
+    const done = await reports.send(req.user, cl, from, to, { kind, parts, withImage: withImage !== false, only: page != null && page !== '' ? String(page) : null, text, skip, track, orders });
     if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
     await rememberSent(req.user, cl.id, from, to, track, done.map((d) => d.to).join(', '));
     const sentAt = new Date().toISOString();
     if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
     return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
   }
-  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip));
+  const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
   if (!r.client.telegram) return res.status(400).json({ error: `${r.client.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const body = typeof text === 'string' && text.trim() ? text.slice(0, 12000) : r.text;
   let png = null;
@@ -1758,7 +1762,7 @@ api.get('/me/profile', wrap(async (req, res) => {
   const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, left = exp ? Math.round((exp - Date.now()) / 864e5) : null;
   const accounts = (await db.listAccounts(me)).length, clients = (await db.listClients(me)).filter((c) => !c.archived).length;
   const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!b.chat }));
-  let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(me, 'tgCode', code); }
+  let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = newCode(); await db.setUserSetting(me, 'tgCode', code); }
   const chat = await db.getUserSetting(me, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
   let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}
   const pages = (await db.listPagesSeen(me)).length, myAlerts = require('./src/myalerts');
@@ -1798,7 +1802,7 @@ api.put('/me/ai', wrap(async (req, res) => {
 // My Telegram: a PM / owner connects their own chat to get alerts (plan / result from their media buyers).
 api.get('/me/telegram', wrap(async (req, res) => {
   if (req.user.buyer) return res.json({ buyer: true });
-  let code = await db.getUserSetting(req.user.fb_id, 'tgCode', ''); if (!code) { code = require('crypto').randomBytes(4).toString('hex').toUpperCase(); await db.setUserSetting(req.user.fb_id, 'tgCode', code); }
+  let code = await db.getUserSetting(req.user.fb_id, 'tgCode', ''); if (!code) { code = newCode(); await db.setUserSetting(req.user.fb_id, 'tgCode', code); }
   const chat = await db.getUserSetting(req.user.fb_id, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
   res.json({ linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code });
 }));
@@ -2115,7 +2119,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(err.status || 500).json({ error: err.message || 'Something went wrong.' });
 });
 
-db.init().then(() => profit.init()).then(() => {
+db.init().then(() => { profit.init().catch((e) => console.log('[profit] init skipped:', e.message)); }).then(() => {
   require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));

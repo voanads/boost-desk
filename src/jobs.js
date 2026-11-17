@@ -107,8 +107,8 @@ async function sendDailyReport(day = sync.todayIn()) {
       warn += `\n\n🔑 ${user.name}'s Facebook login expires ${new Date(user.token_expires).toLocaleDateString('en-GB')}. Log in again to keep syncing.`;
     }
     const head = admins.length > 1 ? `👤 ${user.name}\n` : '';
-    await telegram.send(head + (await sync.buildReport(user.fb_id, day)) + warn);
-    sent.push(user.name);
+    try { await telegram.send(head + (await sync.buildReport(user.fb_id, day)) + warn); sent.push(user.name); }
+    catch (e) { log(`daily report for ${user.name} failed:`, e.message); } // one failure must not stop the other reports
   }
   return sent;
 }

@@ -1065,8 +1065,8 @@
     parkForm(); // rescue the form before the panel is redrawn
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
-        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div>${cdAccounts(m)}</div></div>
-          <div class="cd-acts"><button type="button" class="sm" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings">Edit</button></div></div></div>
+        <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div class="cd-tw"><div class="cd-tline"><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div>${cdAccounts(m)}</div></div>
+          <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
@@ -1086,7 +1086,7 @@
         </div>
         <div class="cd-col">${histSection(c)}</div>
       </div>
-      <section class="cd-sec cd-summary"><div class="cd-sec-h"><h4>Settings</h4><span class="hint">A summary — tap Edit above to change anything</span></div>
+      <details class="cd-sec cd-summary"><summary class="cd-sec-h"><h4>Settings</h4><span class="hint">${c.type === 'both' ? 'Live + post' : c.type === 'post' ? 'Boost posts' : 'Live'} · ${esc(c.account || 'no ad account')} · ${c.telegram ? 'Telegram ✓' : 'no Telegram group'} — tap to see all</span></summary>
         <div class="cd-sum-grid">
           <div><span class="hint">Boost type</span><b>${c.type === 'both' ? 'Live + post' : c.type === 'post' ? 'Boost posts' : 'Live'}</b></div>
           <div><span class="hint">Ad account</span><b>${esc(c.account || '—')}</b></div>
@@ -1094,7 +1094,7 @@
           <div><span class="hint">Report to</span><b>${c.telegram ? 'Telegram · ' + esc(c.telegram_title || 'group') : '<span class="is-warn">No Telegram group</span>'}</b></div>
           <div><span class="hint">Service fee</span><b>${c.service && Number(c.service.price) > 0 ? money(c.service.price) + (c.service.day ? ' · pay day ' + esc(String(c.service.day)) : '') : '—'}</b></div>
           <div><span class="hint">Status</span><b>${c.archived ? 'Paused' : 'Active'}</b></div>
-        </div></section>
+        </div></details>
     </div>`;
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
@@ -1309,7 +1309,7 @@
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
     // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
     const upcoming = (w.tasks || []).filter((t) => !t.done && (t.day || '') > today).sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const tasks = (w.tasks || []).filter((t) => (t.day || '') <= today && (t.repeat || !t.done || !t.doneDay || t.doneDay >= today)).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
+    const tasks = (w.tasks || []).filter((t) => (t.day || '') <= today && (t.repeat || !t.done || !t.doneDay || t.doneDay >= today) && !(t.from === 'ai' && !t.done && t.day < addDaysIso(today, -3))).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
     const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const doneN = todo.filter((x) => tick(x.kind)).length + tasks.filter((t) => t.done).length; // ticked items drop out of the list (they're in Done history); "Show" brings them back for a look
@@ -1318,11 +1318,11 @@
       ...tasks.filter((t) => showDoneWork || !t.done).map((t) => `<div class="task ${t.done ? 'done' : ''}"><button type="button" class="tcheck" role="checkbox" aria-checked="${!!t.done}" data-ctask="${esc(t.id)}" aria-label="Done">${box}</button><span class="todo-ic" aria-hidden="true">${t.repeat ? '🔁' : t.from === 'ai' ? '✨' : '✍️'}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span> ` : ''}${t.kpi && kpiNames[t.kpi] ? `<span class="kpi-chip" title="Counts toward this KPI">KPI · ${esc(kpiNames[t.kpi])}</span> ` : ''}${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}${!t.repeat && t.day && t.day !== today ? ' · ' + esc(nice(t.day).replace(/ \d{4}$/, '')) : ''}${t.done && t.doneAt ? ' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '') : ''}</span>${Number(t.target) > 0 ? (() => { const k = t.repeat ? today : t.day, r = Number((t.hit || {})[k]) || 0, pct = Math.min(100, Math.round(r / t.target * 100)); return `<div class="ttgt ${pct >= 100 ? 'hit' : ''}"><span class="ttgt-bar"><i style="width:${pct}%"></i></span><label class="ttgt-in"><span class="vh">Reached</span><input type="number" min="0" step="1" inputmode="numeric" value="${r || ''}" placeholder="0" data-ctreach="${esc(t.id)}" aria-label="Reached"></label><span class="ttgt-of">/ ${t.target}${t.unit ? ' ' + esc(t.unit) : ''} · ${pct}%</span></div>`; })() : ''}</div>${t.from !== 'ai' ? `<button type="button" class="ghost sm trep${t.repeat ? ' on' : ''}" data-ctrep="${esc(t.id)}" aria-pressed="${!!t.repeat}" title="${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}" aria-label="Repeat every day">🔁</button>` : ''}<button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Delete task">✕</button></div>`),
     ];
     return `<section class="cd-sec worksec"><div class="cd-sec-h"><h4>✅ Clients Task</h4><span class="countpill">${open}</span>${doneN ? `<button type="button" class="ghost sm" data-showdone aria-pressed="${showDoneWork}">${showDoneWork ? 'Hide done' : `Done today · ${doneN}`}</button>` : ''}${histOff() ? '<span class="spacer"></span><button type="button" class="ghost sm hist-show" data-histshow>Show history</button>' : ''}</div>
-      <div class="cd-todo">${rows.join('') || `<div class="todo-done">🎉 ${doneN ? `All ${doneN} done for this client today.` : 'Nothing to do for this client today.'}</div>`}</div>
-      ${upcoming.length ? `<div class="upcoming"><div class="up-h"><b>📅 Planned</b><span class="hint">${upcoming.length} task${upcoming.length === 1 ? '' : 's'} for later days</span></div>${upcoming.map((t) => `<div class="task up"><span class="up-day">${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}</span> · sent that morning` : 'Your task'}</span></div><button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Remove">✕</button></div>`).join('')}</div>` : ''}
       <form class="ai-ask task-new" id="cdTaskForm"><div class="task-main"><input type="text" maxlength="200" placeholder="+ Add a task for this client" aria-label="Add a task"><button type="button" class="sm task-more" id="cdTaskMore" aria-expanded="false" aria-controls="cdTaskOpts" title="Give this task to a media buyer">Media buyer ▾</button><button type="submit" class="sm primary">Add</button></div>
         <div class="task-opts" id="cdTaskOpts" hidden><select id="cdTaskTo" aria-label="Who does this task" hidden>${mbOptions()}</select><div class="mb-pick" role="group" aria-label="Who does this task">${mbChips()}</div>
-          <div class="mb-pick day-pick" role="group" aria-label="Which day"><span class="hint">Day</span><button type="button" data-daypick="" aria-pressed="${!taskDay}">Today</button><button type="button" data-daypick="${esc(addDaysIso(today, 1))}" aria-pressed="${taskDay === addDaysIso(today, 1)}">Tomorrow</button><label class="day-other"><input type="date" id="cdTaskDay" min="${esc(addDaysIso(today, 1))}" max="${esc(addDaysIso(today, 60))}" value="${esc(taskDay && taskDay !== addDaysIso(today, 1) ? taskDay : '')}" aria-label="Another day"></label></div></div></form></section>`;
+          <div class="mb-pick day-pick" role="group" aria-label="Which day"><span class="hint">Day</span><button type="button" data-daypick="" aria-pressed="${!taskDay}">Today</button><button type="button" data-daypick="${esc(addDaysIso(today, 1))}" aria-pressed="${taskDay === addDaysIso(today, 1)}">Tomorrow</button><label class="day-other"><input type="date" id="cdTaskDay" min="${esc(addDaysIso(today, 1))}" max="${esc(addDaysIso(today, 60))}" value="${esc(taskDay && taskDay !== addDaysIso(today, 1) ? taskDay : '')}" aria-label="Another day"></label></div></div></form>
+      <div class="cd-todo">${rows.join('') || `<div class="todo-done">🎉 ${doneN ? `All ${doneN} done for this client today.` : 'Nothing to do for this client today.'}</div>`}</div>
+      ${upcoming.length ? `<div class="upcoming"><div class="up-h"><b>📅 Planned</b><span class="hint">${upcoming.length} task${upcoming.length === 1 ? '' : 's'} for later days</span></div>${upcoming.map((t) => `<div class="task up"><span class="up-day">${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span><div class="todo-t"><b>${esc(t.text)}</b><span class="hint">${t.to ? `<span class="to-chip">→ ${esc(t.to.name)}</span> · sent that morning` : 'Your task'}</span></div><button type="button" class="ghost sm tdel" data-ctdel="${esc(t.id)}" aria-label="Remove">✕</button></div>`).join('')}</div>` : ''}</section>`;
   }
   function paintWork() {
     const sec = document.querySelector('#cDetail .worksec'), c = clients.find((x) => x.id === cSel); if (!sec || !c) return;
@@ -1336,6 +1336,8 @@
     if (a.n) row.insertAdjacentHTML('beforeend', `<span class="cr-badge${a.urgent ? ' urgent' : ''}">${a.n}</span>`);
   }
   const histOff = () => { try { return localStorage.getItem('bd-hist') === 'off'; } catch (_) { return false; } };
+  const histFull = () => { try { return localStorage.getItem('bd-histfull') === 'on'; } catch (_) { return false; } };
+  document.addEventListener('click', (ev) => { const b = ev.target.closest('#cDetail [data-histfull]'); if (!b) return; try { localStorage.setItem('bd-histfull', b.dataset.histfull); } catch (_) {} if (!b.dataset.hday) paintAi(); });
   const applyHist = () => document.documentElement.classList.toggle('hist-off', histOff());
   applyHist();
   document.addEventListener('click', (ev) => {
@@ -1462,7 +1464,15 @@
     const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
     const monthName = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
     const pickN = pick ? (byDay[pick] || []).length : 0;
-    return `<section class="cd-sec histsec"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4><span class="hint hs-hint">What got ticked, day by day — tap a day to see it.</span><button type="button" class="ghost sm hs-toggle" data-histhide title="Hide this panel">Hide</button>
+    if (!histFull()) { // compact card: numbers + last 7 days; the calendar and the list open on demand
+      const last7 = Array.from({ length: 7 }, (_, i) => addD(today, i - 6)), hasAny = all.length > 0;
+      const recent = all.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 3);
+      return `<section class="cd-sec histsec compact"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4><button type="button" class="ghost sm" data-histfull="on">Calendar ▾</button><button type="button" class="ghost sm hs-toggle" data-histhide title="Hide this panel">Hide</button></div>
+        <div class="hs-stats"><div><span>Done</span><b>${inMonth.length}</b><small>this month</small></div><div><span>Active days</span><b>${Object.keys(byDay).length}</b><small>of ${sofar} so far</small></div><div><span>Streak</span><b>${streak}</b><small>day${streak === 1 ? '' : 's'} in a row</small></div></div>
+        <div class="hs-week" aria-label="Last 7 days">${last7.map((d) => { const n = all.filter((x) => x.day === d).length; return `<button type="button" class="hw-d${n ? ' has' : ''}${d === today ? ' today' : ''}" data-histfull="on" data-hday="${d}" title="${esc(nice(d))}: ${n} done"><small>${new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 2)}</small><b>${n || '·'}</b></button>`; }).join('')}</div>
+        ${recent.length ? `<div class="hs-recent">${recent.map((x) => { const k = HK[x.kind] || ['CK', 'Check', 'ck']; return `<div class="hl-it"><span class="hl-tm">${esc(dTitle(x.day).slice(0, 3))}</span><span class="hl-tag ${k[2]}" aria-hidden="true">${k[0]}</span><div class="hl-tx"><b>${esc(x.text)}</b><span class="hint">${esc(k[1])}${x.by ? ' · ' + esc(x.by) : ''}</span></div></div>`; }).join('')}</div>` : `<div class="hl-empty">${hasAny ? 'Nothing this month yet.' : w.today ? 'Ticked tasks show up here, day by day.' : 'Loading…'}</div>`}</section>`;
+    }
+    return `<section class="cd-sec histsec"><div class="hs-head"><span class="hs-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><h4>Done history</h4><span class="hint hs-hint">What got ticked, day by day — tap a day to see it.</span><button type="button" class="ghost sm" data-histfull="off">Less ▴</button><button type="button" class="ghost sm hs-toggle" data-histhide title="Hide this panel">Hide</button>
         <div class="hm-nav"><button type="button" data-hmon="-1" aria-label="Previous month"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button><b>${esc(label)}</b><button type="button" data-hmon="1" aria-label="Next month" ${ym >= today.slice(0, 7) ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button></div></div>
       <div class="hs-stats"><div><span>Done</span><b>${inMonth.length}</b><small>this month</small></div><div><span>Active days</span><b>${Object.keys(byDay).length}</b><small>of ${sofar} so far</small></div><div><span>Streak</span><b>${streak}</b><small>day${streak === 1 ? '' : 's'} in a row</small></div></div>
       <div class="hcal-w"><div class="hcal"><span class="hc-w">Mon</span><span class="hc-w">Tue</span><span class="hc-w">Wed</span><span class="hc-w">Thu</span><span class="hc-w">Fri</span><span class="hc-w">Sat</span><span class="hc-w">Sun</span>${cells}</div>
@@ -1474,7 +1484,7 @@
     const mb = ev.target.closest('#cDetail [data-hmon]'), db_ = ev.target.closest('#cDetail [data-hday]'); if (!mb && !db_) return;
     const c = clients.find((x) => x.id === cSel); if (!c) return; const today = (cWb[c.id] && cWb[c.id].today) || me.today;
     if (mb) { const [y, m] = (histMonth[c.id] || today.slice(0, 7)).split('-').map(Number), d = new Date(Date.UTC(y, m - 1 + Number(mb.dataset.hmon), 1)); histMonth[c.id] = d.toISOString().slice(0, 7); histDay[c.id] = ''; }
-    else histDay[c.id] = db_.dataset.hday === histDay[c.id] ? '' : db_.dataset.hday;
+    else { histDay[c.id] = db_.dataset.hday === histDay[c.id] ? '' : db_.dataset.hday; if (histDay[c.id]) histMonth[c.id] = histDay[c.id].slice(0, 7); }
     paintAi();
   });
   document.addEventListener('click', async (ev) => {
@@ -1744,19 +1754,22 @@
   }
   function renderCompany() {
     const d = coData; if (!d || d.month !== coMonth) return;
-    const pc = (v) => (v == null ? '–' : v + '%'), col = (v) => (v == null ? '' : v >= 100 ? 'good' : v >= 60 ? 'mid' : 'bad');
+    // Pace: on day 17 of 30 a KPI at 57% is on track, so colours compare with where the month should be, not with 100%.
+    const dim = new Date(Date.UTC(Number(d.month.slice(0, 4)), Number(d.month.slice(5, 7)), 0)).getUTCDate(), pace = d.isThisMonth ? Math.max(5, Math.round(Number(d.to.slice(8, 10)) / dim * 100)) : 100;
+    const pc = (v) => (v == null ? '–' : v + '%'), col = (v) => (v == null ? '' : v >= pace ? 'good' : v >= pace * 0.6 ? 'mid' : 'bad');
+    const paceTxt = (v) => (v == null || !d.isThisMonth ? '' : v >= pace ? 'on track' : `behind by ${pace - v} pts`);
     $('coSub').textContent = `${nice(d.from)} – ${nice(d.to)} · ${d.people.users} people · ${d.people.teams} teams · ${d.people.buyers} media buyers (${d.people.buyersLinked} on Telegram)`;
     $('coKpis').innerHTML = `
       <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
       <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
       <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>
-      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.kpis.hit} of ${d.kpis.total} KPIs at 100 %+</span></div>
+      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.isThisMonth ? `day ${Number(d.to.slice(8, 10))}/${dim} · expected ${pace}% · ${paceTxt(d.kpis.avg) || '–'}` : `${d.kpis.hit} of ${d.kpis.total} KPIs reached`}</span></div>
       <div class="mk ${d.tasks.overdue ? 'warn' : ''}"><span class="lbl">Today's tasks</span><b class="num">${d.tasks.done}<small> / ${d.tasks.done + d.tasks.open}</small></b><span class="sub">${d.tasks.overdue ? `<span class="is-danger">${d.tasks.overdue} overdue</span>` : 'nothing overdue'} · target ${pc(d.tasks.targetPct)}</span></div>`;
     $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th>Team</th><th>People</th><th class="r">Clients</th><th class="r">Spend</th><th class="r">Revenue</th><th class="r">Tasks today</th><th class="r">Overdue</th><th class="r">Target</th><th class="r">KPI</th></tr></thead><tbody>${d.teams.map((t) => `<tr>
       <td><b>${esc(t.name)}</b></td><td class="hint">${t.people.map((p) => esc(p.name)).join(', ') || '—'}${t.buyers ? ` · ${t.buyers} MB` : ''}</td><td class="r num">${t.clients}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.revenue)}</td>
       <td class="r num">${t.tasks.done} / ${t.tasks.done + t.tasks.open}</td><td class="r num ${t.tasks.overdue ? 'bad' : ''}">${t.tasks.overdue || '–'}</td><td class="r num ${col(t.targetPct)}">${pc(t.targetPct)}</td><td class="r num ${col(t.kpiAvg)}">${pc(t.kpiAvg)}${t.kpis ? `<span class="hint"> · ${t.kpis}</span>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No teams yet — make them in Admin → Teams.</div>';
     const K = d.kpis.rows; $('coTgHint').textContent = K.length ? `${K.length} KPIs with a target this month` : '';
-    $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small></span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
+    $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.unit === '%' ? `${k.result}%<small> · ${k.done || 0} of ${k.due || 0} done · target ${k.target}%</small>` : `${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small>`}</span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
     $('coAlerts').innerHTML = d.alerts.length ? `<div class="co-list">${d.alerts.map((a) => `<div class="co-row al ${a.level}"><span class="co-dot"></span><div class="co-rt"><b>${esc(a.text)}</b><span class="hint">${esc(a.client)} · ${esc(a.person)}${a.detail ? ' · ' + esc(a.detail) : ''}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No critical alerts right now.</div>';
     $('coOverdue').innerHTML = d.overdue.length ? `<div class="co-list">${d.overdue.map((o) => `<div class="co-row"><div class="co-rt"><b>${esc(o.text)}</b><span class="hint">${esc(o.client)} · ${esc(o.person)}${o.to ? ' → ' + esc(o.to) : ''} · since ${esc(nice(o.day).replace(/ \d{4}$/, ''))}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No overdue tasks.</div>';
     $('coNewHint').textContent = `${d.clients.new} added in ${monLbl(d.month)}`;
@@ -1913,7 +1926,7 @@
     try { bData = await api('/main/board' + (force ? '?fresh=1' : '')); bAt = Date.now(); renderBoard(); }
     catch (e) { if (!bData) $('bDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; }
   }
-  const bState = (c) => { const open = c.tasks.filter((t) => !t.done), urgent = open.filter((t) => t.from === 'work' && t.level === 'bad').length; return { total: c.tasks.length, done: c.tasks.length - open.length, open: open.length, urgent }; };
+  const bState = (c) => { const work = c.tasks.filter((t) => t.from !== 'ai'), open = work.filter((t) => !t.done), urgent = open.filter((t) => t.from === 'work' && t.level === 'bad').length, ai = c.tasks.filter((t) => t.from === 'ai' && !t.done).length; return { total: work.length, done: work.length - open.length, open: open.length, urgent, ai }; }; // AI ideas are counted apart: they are suggestions, not duties
   const bCpo = (x) => (x && x.orders > 0 && x.spend > 0 ? (x.ordSpend || x.spend) / x.orders : null);
   const bKey = (c) => c.owner + ':' + c.id;
   function renderBoard() {
@@ -1923,11 +1936,11 @@
     const all = d.clients.map((c) => ({ ...c, st: bState(c), cpo: bCpo(c.month), cpoY: bCpo(c.yest) }));
     const inTeam = (c) => !bTeam || (bTeam === '__none' ? !c.team : c.team === bTeam);
     const scope = all.filter(inTeam), sum = (f) => scope.reduce((a, c) => a + f(c), 0);
-    const tot = { clients: scope.length, total: sum((c) => c.st.total), done: sum((c) => c.st.done), urgent: sum((c) => c.st.urgent), spend: sum((c) => c.month.spend), busy: scope.filter((c) => c.st.open).length };
+    const tot = { clients: scope.length, total: sum((c) => c.st.total), done: sum((c) => c.st.done), urgent: sum((c) => c.st.urgent), spend: sum((c) => c.month.spend), busy: scope.filter((c) => c.st.open).length, ai: sum((c) => c.st.ai) };
     const pct = tot.total ? Math.round(tot.done / tot.total * 100) : 0;
     const ords = scope.filter((c) => c.month.orders > 0), avg = ords.length ? ords.reduce((a, c) => a + (c.month.ordSpend || c.month.spend), 0) / ords.reduce((a, c) => a + c.month.orders, 0) : null;
     $('bKpis').innerHTML = `
-      <div class="bk bk-ring"><span class="ring" style="--p:${pct}"><b class="num">${pct}%</b></span><span><span class="lbl">Done today</span><b class="num">${tot.done}<small>/${tot.total}</small></b><span class="sub">work &amp; tasks</span></span></div>
+      <div class="bk bk-ring"><span class="ring" style="--p:${pct}"><b class="num">${pct}%</b></span><span><span class="lbl">Done today</span><b class="num">${tot.done}<small>/${tot.total}</small></b><span class="sub">menu &amp; tasks${tot.ai ? ` · ✨ ${tot.ai} AI idea${tot.ai === 1 ? '' : 's'}` : ''}</span></span></div>
       <div class="bk"><span class="lbl">Clients</span><b class="num">${tot.clients}</b><span class="sub">${tot.busy} with work left</span></div>
       <div class="bk ${tot.urgent ? 'bad' : ''}"><span class="lbl">Urgent</span><b class="num">${tot.urgent}</b><span class="sub">${tot.urgent ? 'unpaid, overspend…' : 'nothing urgent'}</span></div>
       <div class="bk"><span class="lbl">Spent this month</span><b class="num">${money(tot.spend)}</b><span class="sub">${avg != null ? 'avg ' + money(avg) + ' per order' : esc(nice(d.from).replace(/ \d{4}$/, '')) + ' – today'}</span></div>`;
@@ -2170,8 +2183,9 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
-      + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
+    $('uHint').innerHTML = `<details class="uhelp"><summary>Which site does each role use?</summary>` + (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
+      + '</details>';
+    { let bn = $('uSyncOff'); if (!bn) { bn = document.createElement('div'); bn.id = 'uSyncOff'; bn.className = 'note onote stale'; $('uHint').insertAdjacentElement('beforebegin', bn); } bn.hidden = !!d.autoSyncServer; bn.innerHTML = '⚠ <b>Auto sync is switched off on the server</b> — nobody\'s spend updates by itself until <code>AUTO_SYNC</code> is removed in Railway → Variables. People can still tap <b>Run now</b>.'; }
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
     const rows = list.map((u, i) => {
@@ -2334,11 +2348,11 @@
       <div class="kpi-rows">${d.kpis.map((k, i) => `<div class="kpi-row" data-ki="${i}">
         <span class="kpi-n">${i + 1}</span>
         <input type="text" class="kpi-name" value="${esc(k.name)}" data-kf="name" aria-label="KPI ${i + 1} name" maxlength="120">
-        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small></span>
+        <span class="kpi-tg"><input type="number" min="0" step="any" inputmode="decimal" value="${k.target || ''}" data-kf="target" aria-label="Target"><input type="text" class="kpi-unit" value="${esc(k.unit)}" data-kf="unit" placeholder="unit" maxlength="12" aria-label="Unit"></span><small class="kpi-from ${k.estimated ? 'auto' : ''}" title="${k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'} count toward this KPI` : 'No task counts toward this KPI yet — tap + KPI on a task in the menu'}">${k.estimated ? (k.tasks ? `${k.tasks} task${k.tasks === 1 ? '' : 's'}` : k.source === 'all' ? 'all tasks' : 'no task linked yet') : `typed · auto would be ${fmtN(k.auto)}`}</small>
         <span class="kpi-res ${k.estimated ? 'est' : ''}" title="${k.estimated ? (k.source === 'all' ? `Auto from every daily task this month (${k.done} of ${k.due} done). Name a task like this KPI to count only those.` : k.source === 'name' ? `Auto from ${k.tasks} daily task${k.tasks === 1 ? '' : 's'} named like this KPI (${k.done} of ${k.due} done).` : `Auto from ${k.tasks} linked task${k.tasks === 1 ? '' : 's'} (${k.done} of ${k.due} done).`) + ' Type a value to confirm it.' : 'Typed · auto would be ' + fmtN(k.auto)}"><input type="number" min="0" step="any" inputmode="decimal" value="${fmtN(k.result)}" data-kf="manual" aria-label="Result"><small>${esc(k.unit || '')}</small></span>
         <span class="kpi-score ${scoreCls(k.score)}">${k.estimated ? '≈' : ''}${fmtN(k.score)}%</span>
-        <span class="kpi-x"><button type="button" class="ghost sm" data-ksug title="Suggested actions for this KPI" aria-label="Suggested actions">💡</button>${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
-      <div class="hint kpi-foot">✨ ≈ = auto from your tasks. Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due, a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
+        <span class="kpi-x"><button type="button" class="ghost sm" data-ksug title="Suggested actions for this KPI" aria-label="Suggested actions">💡</button>${!k.estimated ? `<button type="button" class="ghost sm" data-kauto title="Back to the auto result">↺</button>` : ''}<button type="button" class="ghost sm" data-kdel title="Remove this KPI" aria-label="Remove KPI ${i + 1}">🗑</button></span></div>`).join('')}</div>
+      <details class="kpi-foot"><summary class="hint">✨ ≈ = auto from your tasks · <span class="linkbtn">how it works</span></summary><div class="hint">Tap <b>+ KPI</b> on a task in the menu to count it toward a KPI: a % KPI counts days done ÷ days due; a number KPI adds what you type when you tick it. A task named like the KPI counts by itself. Type a result to confirm it; ↺ goes back to auto.</div></details>` : `<div class="kpi-empty">No KPIs for ${esc(ymLabel(st.month))} yet.${d.prev ? ' Copy last month\'s, or add one.' : ' Add the first one.'}</div>`}`;
     const kpis = d.kpis.map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit, manual: k.estimated ? null : k.result }));
     const save = async (msg) => { const s = host.querySelector('.kpi-st'); if (s) s.textContent = 'Saving…'; try { await api('/kpis', { method: 'PUT', body: { person, month: st.month, kpis } }); if (s) s.textContent = msg || 'Saved'; } catch (e) { if (s) s.textContent = e.message; } };
     const reload = () => kpiPanel(hostId, person, st.month);
@@ -2455,7 +2469,7 @@
       else { pp.hidden = false; document.body.classList.add('mt-admin'); renderMtPeople(); }
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     document.body.classList.toggle('mt-pm', mtPmPick() && !pp.hidden);
-    $('mtWho').textContent = mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name;
+    $('mtWho').textContent = (mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name) + ' · ' + nice(me.today || iso(new Date())).replace(/ \d{4}$/, '');
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true;
     if (ADMIN_SITE || mtAs || me.buyer) $('mtTasks').hidden = true; else { $('mtTasks').hidden = false; loadMyTasks('mtTasks'); } // a PM's own Clients Task for the day (a media buyer's PM tasks sit inside the menu)
@@ -2546,8 +2560,8 @@
     try { kpis = (await api(`/kpis?person=${encodeURIComponent(kpiPerson)}&month=${ym(me.today || iso(new Date()))}`)).kpis || []; } catch (_) {}
     const kpiOf = (id) => kpis.find((k) => k.id === id);
     const kpiChip = (it) => { if (it.pm) return ''; const k = it.kpi ? kpiOf(it.kpi) : null;
-      return k ? `<button type="button" class="chip kpi mt-kpi" data-mtkpi="${esc(it.id)}" title="Counts toward this KPI — tap to change">📊 ${esc(k.name)}</button>`
-        : kpis.length && !closed ? `<button type="button" class="chip meta mt-kpi add" data-mtkpi="${esc(it.id)}" title="Count this task toward a monthly KPI">+ KPI</button>` : ''; };
+      return k ? `<button type="button" class="chip kpi mt-kchip" data-mtkpi="${esc(it.id)}" title="Counts toward this KPI — tap to change">📊 ${esc(k.name)}</button>`
+        : kpis.length && !closed ? `<button type="button" class="chip meta mt-kchip add" data-mtkpi="${esc(it.id)}" title="Count this task toward a monthly KPI">+ KPI</button>` : ''; };
     const box = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const isToday = d.day === d.today, myName = me.buyer ? me.buyer.name : me.name, closed = !!d.result;
@@ -2558,7 +2572,7 @@
       <div class="mt-step ${d.plan ? 'done' : 'now'}"><span class="mt-sn">${d.plan ? '✓' : '1'}</span><div><b>Plan</b><span class="hint">${d.plan ? `Submitted ${hhmm(d.plan.at)}${d.plan.by && d.plan.by !== myName ? ' · ' + esc(d.plan.by) : ''}` : 'Check the list, then submit'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '2'}</span><div><b>Work</b><span class="hint">${closed ? `${d.done} of ${d.total} done` : 'Tick each item as you finish it'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '3'}</span><div><b>Result</b><span class="hint">${closed ? `Submitted ${hhmm(d.result.at)}${d.result.note ? ' · ' + esc(d.result.note) : ''}` : 'Submit before you leave'}</span></div></div>
-      <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length ? '' : 'disabled'}>Submit result</button>`}</div></div>`;
+      <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length && (d.plan || d.done) ? '' : 'disabled'} title="${d.plan || d.done ? 'Close the day and send the result to Telegram' : 'Submit the plan first (or tick at least one task)'}">Submit result</button>`}</div></div>`;
     host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span></div>
       ${steps}
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
@@ -2573,9 +2587,15 @@
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => {
-      const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null; let amount;
-      if (done && k && k.unit !== '%') { const v = prompt(`${k.name}\nHow much did this add today? (${k.unit || 'count'})`, '1'); if (v === null) return; amount = Math.max(0, Number(v) || 0); }
-      b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done, amount }, done ? (k ? `Done ✓ · ${k.name}` : 'Done ✓') : '');
+      const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null;
+      const go = (amount) => { b.disabled = true; post('/menu/tick', { id: b.dataset.mtmenu, done, amount }, done ? (k ? `Done ✓ · ${k.name}` : 'Done ✓') : ''); };
+      if (!(done && k && k.unit !== '%')) return go();
+      // a number KPI: ask how much this added, right in the row
+      const row = b.closest('.mt-item'); if (row.querySelector('.mt-amt')) return;
+      const f = document.createElement('form'); f.className = 'mt-amt'; f.innerHTML = `<span class="hint">${esc(k.name)} · add</span><input type="number" inputmode="decimal" min="0" step="any" value="1" aria-label="How much"><b>${esc(k.unit || '')}</b><button type="submit" class="sm primary">Done ✓</button><button type="button" class="ghost sm" data-amtx>Cancel</button>`;
+      row.querySelector('.mt-it').after(f); const inp = f.querySelector('input'); inp.focus(); inp.select();
+      f.onsubmit = (ev) => { ev.preventDefault(); const v = inp.value.trim(); if (v === '') { inp.focus(); return; } go(Math.max(0, Number(v) || 0)); };
+      f.querySelector('[data-amtx]').onclick = () => f.remove();
     });
     // link an item to a KPI: the chip turns into a picker
     host.querySelectorAll('[data-mtkpi]').forEach((c) => c.onclick = () => {
@@ -2589,7 +2609,8 @@
     host.querySelectorAll('[data-mtdel]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this task from your menu?')) return; try { await api(`/menu/item/${encodeURIComponent(b.dataset.mtdel)}${mtAs ? '?as=' + encodeURIComponent(mtAs.id) : ''}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } reload(); });
     const f = $('mtOwnForm'); if (f) f.onsubmit = (ev) => { ev.preventDefault(); const text = $('mtOwnText').value.trim(); if (!text) return $('mtOwnText').focus(); post('/menu/item', { text, once: $('mtOwnWhen').value === 'once' || !!d.plan }, 'Added'); };
     const pb = $('mtPlanBtn'); if (pb) pb.onclick = () => { if (!confirm(`Submit the plan for ${isToday ? 'today' : nice(d.day)} — ${d.items.length} task${d.items.length === 1 ? '' : 's'}?`)) return; post('/menu/plan', {}, 'Plan submitted ✓'); };
-    const rb = $('mtResultBtn'); if (rb) rb.onclick = () => { const note = prompt(`Submit the result — ${d.done} of ${d.total} done.\nAnything to note for today? (optional)`); if (note === null) return; post('/menu/result', { note }, 'Result submitted ✓'); };
+    const rb = $('mtResultBtn'); if (rb) rb.onclick = () => { const dlg = $('mtResDlg'); $('mtResSub').textContent = `${isToday ? 'Today' : nice(d.day)} · ${d.done} of ${d.total} done — this closes the day and sends the result to Telegram.`; $('mtResNote').value = '';
+      $('mtResForm').onsubmit = (ev) => { ev.preventDefault(); dlg.close(); post('/menu/result', { note: $('mtResNote').value.trim() }, 'Result submitted ✓'); }; $('mtResCancel').onclick = $('mtResClose').onclick = () => dlg.close(); dlg.showModal(); $('mtResNote').focus(); };
     const ro = $('mtReopenBtn'); if (ro) ro.onclick = () => post('/menu/reopen', {}, 'Day reopened');
     const rs = $('mtResetBtn'); if (rs) rs.onclick = () => { if (!confirm('Replace your list with the standard list for your role? Your own items are removed (past days keep their history).')) return; post('/menu/reset', {}, 'Menu reset'); };
     const bt = $('mtMenuToday'); if (bt) bt.onclick = () => { mtDay = null; loadMtMenu(); loadMtCal(); };
@@ -2773,6 +2794,12 @@
     }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : aaF !== 'all' ? 'No ad account in this view.' : 'No ad accounts yet — tap Refresh from Facebook.'}</div>`;
     const newest = d.accounts.map((a) => a.seenAt).filter(Boolean).sort().pop();
     $('aaUpdated').textContent = newest ? 'From Facebook ' + ago(newest) : '';
+    { // stale data is a warning, not a footnote
+      const hrs = newest ? (Date.now() - Date.parse(newest)) / 36e5 : null, old = hrs == null || hrs > 2;
+      let bn = $('aaStale'); if (!bn) { bn = document.createElement('div'); bn.id = 'aaStale'; bn.className = 'note onote stale'; $('aaKpis').insertAdjacentElement('beforebegin', bn); }
+      bn.hidden = !old; if (old) bn.innerHTML = `⚠ ${newest ? `These numbers are from Facebook <b>${esc(ago(newest))}</b>` : 'Not refreshed from Facebook yet'} — balances and problems may have changed. <button type="button" class="linkish" data-aarefresh>Refresh now</button>${d.autoSyncServer === false ? ' · auto sync is off on the server' : ''}`;
+      const rb = bn.querySelector('[data-aarefresh]'); if (rb) rb.onclick = () => $('aaRefresh').click();
+    }
     // ---- detail
     const a = list.find((x) => x.id === aaSel);
     if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
@@ -3409,6 +3436,7 @@ Notes:
       if (!l) { close(); continue; }
       let m;
       if ((m = l.match(/^#{1,4}\s+(.*)$/))) { close(); out.push(`<h4>${inline(m[1])}</h4>`); }
+      else if (/^[-*•]\s*\d+[.)]?\s*$/.test(l) || /^\d+[.)]?$/.test(l)) continue; // a bullet with only a number is an AI formatting slip, not a task
       else if ((m = l.match(/^[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
       else if ((m = l.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
       else { close(); out.push(`<p>${inline(l)}</p>`); }
@@ -3692,14 +3720,17 @@ Notes:
     const h = $('ckRecalc'); if (h) { h.hidden = false; clearTimeout(h._t); h._t = setTimeout(() => { h.hidden = true; }, 1800); }
   }
   if ($('ckText')) $('ckText').addEventListener('input', recalcReportText);
+  const ckOrders = () => { const el = $('ckOrders'); return el ? el.checked : true; };
+  try { const v = localStorage.getItem('bd:ckOrders'); if (v === '0' && $('ckOrders')) $('ckOrders').checked = false; } catch (_) {}
+  if ($('ckOrders')) $('ckOrders').onchange = () => { try { localStorage.setItem('bd:ckOrders', ckOrders() ? '1' : '0'); } catch (_) {} if (ckTarget && ckTarget.kind === 'client') openReportDlg({ ...ckTarget }); };
   async function openReportDlg(o) {
-    const dlg = $('ckDlg'); ckTarget = o;
+    const dlg = $('ckDlg'); ckTarget = o; $('ckOrdersLbl').hidden = o.kind !== 'client';
     $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
     if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
     const bot = me.telegram && me.telegram.bot;
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}`);
+        const r = await api(`/client-report/${o.cid}?from=${o.from}&to=${o.to}${o.only ? '&kind=' + o.only : ''}${o.parts ? '&parts=' + encodeURIComponent(o.parts.join(',')) : ''}${o.skip ? '&skip=' + encodeURIComponent(JSON.stringify(o.skip)) : ''}${ckOrders() ? '' : '&orders=0'}`);
         if (ckTarget !== o) return;
         $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}${o.skip ? ' · some Pages left out' : ''}`;
         $('ckText').value = r.text;
@@ -3785,7 +3816,7 @@ Notes:
     const b = $('ckSend'); b.disabled = true; b.classList.add('busy');
     try {
       if (o.kind === 'client') {
-        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, skip: o.skip || [], page: o.routes && o.route != null ? o.route : undefined } });
+        const r = await api(`/client-report/${o.cid}/send`, { method: 'POST', body: { from: o.from, to: o.to, text: $('ckText').value, withImage: picOk && $('ckWithImg').checked, kind: o.only || '', parts: o.parts || null, skip: o.skip || [], page: o.routes && o.route != null ? o.route : undefined, orders: ckOrders() } });
         if (o.from === o.to && o.from === date) { day.entries[o.cid] = merge(day.entries[o.cid] || {}, { reportSent: { at: r.sentAt, by: me.name } }); refreshValues(); }
         planeOff(b); $('ckDlg').close();
         successBadge('Sent to ' + r.sentTo);

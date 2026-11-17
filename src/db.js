@@ -6,7 +6,9 @@ const cfg = require('./config');
 
 types.setTypeParser(1082, (v) => v); // keep DATE as 'YYYY-MM-DD' strings (no timezone shifts)
 
-const pool = new Pool({ connectionString: cfg.databaseUrl, ssl: cfg.pgSsl ? { rejectUnauthorized: false } : false });
+const pool = new Pool({ connectionString: cfg.databaseUrl, ssl: cfg.pgSsl ? { rejectUnauthorized: false } : false, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, statement_timeout: 60000 });
+// an idle client that errors (e.g. Postgres restarts) must not crash the process
+pool.on('error', (e) => console.error('[db] idle client error:', e.message));
 const q = (text, params) => pool.query(text, params);
 
 async function init() {

@@ -66,7 +66,7 @@ async function summary({ month, getTeams, dayTasks, clientMoney }) {
   const kpiRows = [];
   await Promise.all(people.map(async (p) => {
     let rs = []; try { rs = await kpi.results(p.id, ym, p.buyer); } catch (_) {}
-    for (const k of rs) if (k.target > 0) kpiRows.push({ person: p.name, personId: p.id, buyer: p.buyer, team: p.team, name: k.name, target: k.target, unit: k.unit, result: k.result, score: k.score });
+    for (const k of rs) if (k.target > 0) kpiRows.push({ person: p.name, personId: p.id, buyer: p.buyer, team: p.team, name: k.name, target: k.target, unit: k.unit, result: k.result, score: k.score, due: k.due, done: k.done });
   }));
   const kpiAvg = kpiRows.length ? Math.round(kpiRows.reduce((t, k) => t + Math.min(k.score, 150), 0) / kpiRows.length) : null;
   const kpiHit = kpiRows.filter((k) => k.score >= 100).length;

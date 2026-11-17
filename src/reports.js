@@ -19,10 +19,10 @@ function routes(c, skip = []) {
 }
 
 // The report text for each route (rest / extra routes with no spend are left out).
-async function preview(owner, c, from, to, { kind = '', parts = null, skip = [] } = {}) {
+async function preview(owner, c, from, to, { kind = '', parts = null, skip = [], orders = true } = {}) {
   const list = routes(c, skip), out = [];
   for (const r of list) {
-    const rep = await sync.clientReport(owner, c.id, from, to, kind, parts, r.scope);
+    const rep = await sync.clientReport(owner, c.id, from, to, kind, parts, r.scope, { orders });
     if (list.length > 1 && !(rep.spend > 0)) continue;
     out.push({ key: r.key, label: r.label, chat: r.chat, title: r.title, text: rep.text, spend: rep.spend });
   }
@@ -30,13 +30,13 @@ async function preview(owner, c, from, to, { kind = '', parts = null, skip = [] 
 }
 
 // Send. `only` = one route key (from the report dialog, with text the user may have edited).
-async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '', skip = [], track = null } = {}) {
+async function send(user, c, from, to, { kind = '', parts = null, withImage = true, only = null, text = '', skip = [], track = null, orders = true } = {}) {
   const list = routes(c, skip);
   const pick = only != null ? list.filter((r) => r.key === only) : list;
   if (!pick.length) throw Object.assign(new Error('That Page has no Telegram topic any more.'), { status: 400 });
   const sent = [];
   for (const r of pick) {
-    const rep = await sync.clientReport(user.fb_id, c.id, from, to, kind, parts, r.scope);
+    const rep = await sync.clientReport(user.fb_id, c.id, from, to, kind, parts, r.scope, { orders });
     if (list.length > 1 && only == null && !(rep.spend > 0)) continue; // a Page with nothing to report
     if (!r.chat) {
       if (list.length === 1 || only != null) throw Object.assign(new Error(`${c.name} has no Telegram ${r.rest || list.length === 1 ? 'group' : 'topic'} for ${r.label} yet. Pick one in the Clients tab.`), { status: 400 });

@@ -2551,6 +2551,24 @@
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  async function mtSuggest({ host, d, kpis, body, reload, fresh = false, auto = false }) {
+    if (!host) return; host.hidden = false; host.dataset.loaded = '1';
+    host.innerHTML = `<div class="mt-sug"><div class="mt-sug-h"><b>✨ Top 5 for today, from your KPIs</b><span class="hint">Thinking…</span></div><div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading ${kpis.length} KPI${kpis.length === 1 ? '' : 's'} and the menu</div></div>`;
+    let r; try { r = await api('/menu/suggest', { method: 'POST', body: { as: body.as, lang: aiLang || 'km', fresh } }); }
+    catch (e) { if (auto) { host.hidden = true; return; } /* by itself: stay quiet when AI or KPIs are not set up */ host.innerHTML = `<div class="mt-sug"><div class="mt-sug-h"><b>✨ Suggest from KPI</b><button type="button" class="ghost sm" data-sugx>✕</button></div><div class="hint">${esc(e.message)}</div></div>`; host.querySelector('[data-sugx]').onclick = () => { host.hidden = true; }; return; }
+    const kName = (id) => { const k = kpis.find((x) => x.id === id); return k ? k.name : ''; };
+    host.innerHTML = `<div class="mt-sug"><div class="mt-sug-h"><b>✨ Top 5 for today, from your KPIs</b><span class="hint">Tick the ones you want — they join the menu for every day, linked to their KPI.</span><button type="button" class="ghost sm" data-sugx aria-label="Close">✕</button></div>
+      <div class="mt-sug-list">${r.tasks.map((t, i) => `<label class="mt-sug-it"><input type="checkbox" checked data-sugi="${i}"><span class="mt-ix">${i + 1}</span><span class="mt-sug-t"><b>${esc(t.title)}</b>${t.kpi ? `<span class="chip kpi">📊 ${esc(kName(t.kpi) || t.kpiName)}</span>` : ''}<span class="hint">${esc(t.how)}</span></span></label>`).join('')}</div>
+      <div class="mt-sug-f"><button type="button" class="primary sm" data-sugadd>Add selected to the menu</button><button type="button" class="ghost sm" data-sugre title="Ask again">↻ Regenerate</button><span class="hint">${r.cached ? 'Same answer as earlier today' : `${aiLang === 'en' ? 'English' : 'ខ្មែរ'} · ${new Date(r.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`}</span></div></div>`;
+    host.querySelector('[data-sugx]').onclick = () => { host.hidden = true; };
+    host.querySelector('[data-sugre]').onclick = () => mtSuggest({ host, d, kpis, body, reload, fresh: true });
+    host.querySelector('[data-sugadd]').onclick = async (ev) => {
+      const picks = [...host.querySelectorAll('[data-sugi]:checked')].map((c) => r.tasks[Number(c.dataset.sugi)]); if (!picks.length) return toast('Tick at least one task.');
+      ev.target.disabled = true; let n = 0;
+      for (const t of picks) { try { await api('/menu/item', { method: 'POST', body: { ...body, text: t.title, kpi: t.kpi || undefined } }); n++; } catch (e) { toast(e.message); break; } }
+      if (n) successBadge(`${n} task${n === 1 ? '' : 's'} added to the menu`); reload();
+    };
+  }
   async function loadMtMenu() {
     const host = $('mtMenu'); if (!host || !me) return;
     const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
@@ -2573,18 +2591,23 @@
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '2'}</span><div><b>Work</b><span class="hint">${closed ? `${d.done} of ${d.total} done` : 'Tick each item as you finish it'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '3'}</span><div><b>Result</b><span class="hint">${closed ? `Submitted ${hhmm(d.result.at)}${d.result.note ? ' · ' + esc(d.result.note) : ''}` : 'Submit before you leave'}</span></div></div>
       <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length && (d.plan || d.done) ? '' : 'disabled'} title="${d.plan || d.done ? 'Close the day and send the result to Telegram' : 'Submit the plan first (or tick at least one task)'}">Submit result</button>`}</div></div>`;
-    host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span></div>
+    host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span>${!closed && !d.plan && kpis.length ? '<button type="button" class="sm mt-sugbtn" id="mtSugBtn" title="Top 5 daily tasks from this month\'s KPIs">✨ Suggest from KPI</button>' : ''}</div>
       ${steps}
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
       <div class="mt-items ${closed ? 'closed' : ''}">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
         <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${it.done}" data-mtmenu="${esc(it.id)}" aria-label="Done" ${closed ? 'disabled' : ''}>${box}</button>
         <div class="mt-it"><span class="mt-ix${it.pm ? ' pm' : ''}">${i + 1}</span>${it.pm || d.plan || closed ? `<b>${esc(it.text)}</b>` : `<input class="mt-edit" type="text" maxlength="160" value="${esc(it.text)}" data-mtedit="${esc(it.id)}" aria-label="Task ${i + 1}">`}${it.pm ? `<span class="chip post">📌 ${esc(it.client)}${it.by && !it.done ? '' : ''} · from PM</span>${it.late ? '<span class="is-danger">late</span>' : ''}` : ''}${it.once ? '<span class="chip meta">this day only</span>' : ''}${kpiChip(it)}${it.done ? `<span class="hint">✅ ${hhmm(it.at)}${it.amount != null && it.kpi && kpiOf(it.kpi) ? ` · +${fmtN(it.amount)} ${esc(kpiOf(it.kpi).unit)}` : ''}${it.by && it.by !== myName ? ' · ' + esc(it.by) : ''}</span>` : ''}</div>
         ${it.pm || d.plan || closed ? '' : `<button type="button" class="ghost sm mt-own-x" data-mtdel="${esc(it.id)}" aria-label="Remove this item" title="Remove">✕</button>`}</div>`).join('') : '<div class="hl-empty">The menu is empty — add your first task below.</div>'}</div>
+      <div id="mtSug" hidden></div>
       ${d.pct === 100 && !closed ? '<div class="mt-done-all">🎉 Everything is done — submit the result when you leave.</div>' : ''}
       ${d.plan && !closed ? '<div class="hint">The plan is submitted, so the list is fixed for this day. You can still add a task for this day only.</div>' : ''}
       ${closed ? '' : `<form class="mt-own" id="mtOwnForm"><input type="text" id="mtOwnText" maxlength="160" placeholder="+ Add a task to the menu" aria-label="New task"><select id="mtOwnWhen" aria-label="How often">${d.plan ? '' : '<option value="">Every day</option>'}<option value="once">${isToday ? 'Today only' : 'This day only'}</option></select><button type="submit" class="sm primary">Add</button></form>`}
       ${closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
+    // ✨ top 5 menu tasks from the KPIs: on demand, and by itself the first time a day's menu is empty
+    const sugKey = `mtSug:${kpiPerson}:${d.day}`, sugBtn = $('mtSugBtn');
+    if (sugBtn) sugBtn.onclick = () => mtSuggest({ host: $('mtSug'), d, kpis, body, reload, fresh: !!$('mtSug').dataset.loaded });
+    if (sugBtn && !d.items.length && isToday) { let seen = false; try { seen = !!localStorage.getItem(sugKey); } catch (_) {} if (!seen) { try { localStorage.setItem(sugKey, '1'); } catch (_) {} mtSuggest({ host: $('mtSug'), d, kpis, body, reload, auto: true }); } }
     const post = async (path, extra, okMsg) => { try { await api(path, { method: 'POST', body: { ...body, day: d.day, ...extra } }); if (okMsg) successBadge(okMsg); } catch (e) { toast(e.message); } reload(); };
     host.querySelectorAll('[data-mtmenu]').forEach((b) => b.onclick = () => {
       const done = b.getAttribute('aria-checked') !== 'true', it = d.items.find((x) => x.id === b.dataset.mtmenu), k = it && it.kpi ? kpiOf(it.kpi) : null;

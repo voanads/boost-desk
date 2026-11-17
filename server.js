@@ -1840,6 +1840,16 @@ api.post('/menu/tick', wrap(async (req, res) => {
   await MENU().tick(who.person, day, b.id, !!b.done, byName, b.amount);
   res.json(await withClientItems(who, await MENU().dayOf(who.person, who.role, day)));
 }));
+// Top 5 menu tasks from the person's KPIs (AI) — shown when a day's menu is empty, or on demand.
+api.post('/menu/suggest', wrap(async (req, res) => {
+  const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const month = /^\d{4}-\d{2}$/.test(b.month) ? b.month : sync.todayIn().slice(0, 7);
+  let kpis = [], menu = [];
+  try { kpis = (await KPI().getList(who.person, month)).filter((k) => String(k.name || '').trim()).map((k) => ({ id: k.id, name: k.name, target: k.target, unit: k.unit })); } catch (_) {}
+  try { menu = (await MENU().listOf(who.person, who.role)).map((x) => x.text); } catch (_) {}
+  try { res.json(await AI().menuSuggest(req.user.fb_id, { kpis, menu, role: who.role, lang: b.lang === 'en' ? 'en' : 'km', fresh: !!b.fresh })); }
+  catch (e) { res.status(e.status || 500).json({ error: e.message, notSetUp: !!e.notSetUp }); }
+}));
 api.post('/menu/item', wrap(async (req, res) => {
   const b = req.body || {}, who = await menuPerson(req, b.as); if (!who) return res.status(404).json({ error: 'Person not found.' });
   const day = b.once ? (isDay(b.day) ? b.day : sync.todayIn()) : null;

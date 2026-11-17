@@ -3435,3 +3435,12 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .co-attn button.ca.mid{border-top-color:var(--warn)}.co-attn button.ca.bad{border-top-color:var(--danger)}
 table.co-tt tbody tr th{text-transform:none;letter-spacing:0;font-size:var(--fs-md);color:var(--ink);background:transparent;font-weight:400}
 table.co-tt tbody tr th b{font-weight:600}
+
+/* Boost plan — ad account per post */
+.bp-acct{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;font-size:var(--fs-2xs);font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.bp-acct select{min-width:0;width:100%;max-width:420px;text-transform:none;letter-spacing:0;font-weight:500}
+.bp-ac{font-weight:600;color:var(--brand-text,inherit)}
+@media (max-width:760px){.bp-acct{grid-template-columns:1fr;gap:3px}.bp-acct select{max-width:none}}
+/* Boost plan editor on phones: fields stay inside the card */
+@media (max-width:760px){.bp-f{min-width:0}.bp-f2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.bp-f2 input,.bp-f input.bp-link{min-width:0;width:100%;box-sizing:border-box}}
+@media (max-width:560px){.bp-row{grid-template-columns:56px minmax(0,1fr) 32px;grid-template-areas:"pic . x" "f f f";row-gap:8px}.bp-row .bp-pic{grid-area:pic;width:56px;height:56px}.bp-row .bp-pic small{display:none}.bp-row .bp-x{grid-area:x}.bp-row .bp-f{grid-area:f}.bp-f2 label:has([data-f=start]){grid-column:1/-1}.bp-f2 .bp-amt{grid-column:1/-1;padding-top:0;text-align:right}}

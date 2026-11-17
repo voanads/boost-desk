@@ -1132,6 +1132,14 @@
     if (p && p.started) return [p.spent > p.budget * 1.02 ? 'Over plan' : 'Boosting', p.spent > p.budget * 1.02 ? 'bp-bad' : 'bp-run'];
     return c.plan && c.plan.sentAt ? ['Sent ' + shortDay(c.plan.sentAt.slice(0, 10)), 'bp-sent'] : ['Not sent yet', 'bp-draft'];
   }
+  // Ad accounts for the plan's picker: the ticked (working) ones first, then the rest.
+  function planAcctOpts(sel) {
+    const opt = (a) => { const st = (a.info || {}).statusCode, off = st && ![1, 201].includes(st); return `<option value="${esc(a.id)}"${a.id === sel ? ' selected' : ''}>${esc(a.name || a.id)}${off ? ' — not active' : ''}</option>`; };
+    const on = accounts.filter((a) => a.enabled), rest = accounts.filter((a) => !a.enabled);
+    const gone = sel && !accounts.some((a) => a.id === sel) ? `<option value="${esc(sel)}" selected>${esc(sel)}</option>` : '';
+    if (!accounts.length && !gone) return '<option value="">No ad accounts yet — connect Facebook in Ad accounts</option>';
+    return `<option value="">Choose the ad account…</option>${gone}${on.length && rest.length ? `<optgroup label="In use">${on.map(opt).join('')}</optgroup><optgroup label="Other accounts">${rest.map(opt).join('')}</optgroup>` : [...on, ...rest].map(opt).join('')}`;
+  }
   function planEditor(c) {
     const ls = planDraft || [], t = planTotals({ tax: planDraft && planDraft.tax != null ? planDraft.tax : c.plan && c.plan.tax }, ls);
     return `<form class="bp-edit" id="bpForm"><div class="bp-rows">
@@ -1148,6 +1156,7 @@
               <label><span>Start</span><input type="date" data-f="start" value="${esc(l.start || '')}"></label>
               <b class="num bp-amt">${money(r2((Number(l.daily) || 0) * (Number(l.days) || 0)))}</b>
             </div>
+            <label class="bp-acct"><span>Ad account</span><select data-f="account" aria-label="Ad account for post ${i + 1}">${planAcctOpts(l.account)}</select></label>
             ${l.note ? `<span class="hint bp-note">${esc(l.note)}</span>` : ''}
           </div>
           <button type="button" class="ghost sm bp-x" data-bprm="${i}" aria-label="Remove post ${i + 1}">✕</button></div>`).join('')}
@@ -1187,7 +1196,7 @@
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
     return `<section class="bplan ${cls}"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
         <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="ghost sm bp-rm" data-bp="clear" title="Delete this plan">Delete</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
-      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}${(l.extra || []).filter((x) => x.img).slice(0, 3).map((x) => `<img class="bp-th bp-th2" src="/api/post-img/${esc(x.img)}" alt="">`).join('')}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · ' + esc(shortDay(l.start)) + ' – ' + esc(shortDay(addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1))) : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
+      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}${(l.extra || []).filter((x) => x.img).slice(0, 3).map((x) => `<img class="bp-th bp-th2" src="/api/post-img/${esc(x.img)}" alt="">`).join('')}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · ' + esc(shortDay(l.start)) + ' – ' + esc(shortDay(addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1))) : ''}${l.account ? ` · <span class="bp-ac" title="Ad account">${esc(l.accountName || l.account)}</span>` : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
       ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>Post spend since ${esc(shortDay(p.from))}: <b>${money(p.spent)}</b> of <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>Ends ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}</section>`;
   }
@@ -1212,7 +1221,8 @@
   }
   function bindPlan(c) {
     const sec = document.querySelector('#cDetail .bplan'); if (!sec) return;
-    const blank = () => ({ post: '', link: '', img: '', daily: '', days: '', start: '' });
+    const lastAcct = () => { const l = (planDraft || []).slice().reverse().find((x) => x.account); if (l) return l.account; try { const v = localStorage.getItem('bpAcct:' + c.id) || ''; return accounts.some((a) => a.id === v) ? v : ''; } catch (_) { return ''; } };
+    const blank = () => ({ post: '', link: '', img: '', daily: '', days: '', start: '', account: lastAcct() });
     sec.querySelectorAll('[data-bp]').forEach((b) => b.onclick = async () => {
       const k = b.dataset.bp;
       if (k === 'clear') { if (!confirm('Delete this boost plan?')) return; try { await savePlan(c, { lines: [], sentAt: null }); toast('Plan deleted'); } catch (e) { toast(e.message); } return; }
@@ -1221,7 +1231,9 @@
       if (k === 'new' || k === 'edit') {
         planDraft = k === 'new' ? [blank()] : ((c.plan && c.plan.lines) || []).map((l) => ({ ...l }));
         planDraft.tax = c.plan && c.plan.tax; planDraft.isNew = k === 'new'; if (!planDraft.length) planDraft.push(blank());
-        planOpen[c.id] = 'edit'; redrawPlan(c); const f = document.querySelector('#bpForm input[data-f="post"]'); if (f) f.focus(); return;
+        planOpen[c.id] = 'edit'; redrawPlan(c); const f = document.querySelector('#bpForm input[data-f="post"]'); if (f) f.focus();
+        if (!accounts.length) api('/accounts').then((a) => { accounts = a || []; if (accounts.length && planOpen[c.id] === 'edit' && planDraft) { readDraft(); redrawPlan(c); } }).catch(() => {});
+        return;
       }
       if (k === 'close') { planOpen[c.id] = null; planDraft = null; redrawPlan(c); return; }
       if (k === 'send') {
@@ -1274,7 +1286,8 @@
       form.querySelectorAll('[data-bprm]').forEach((b) => b.onclick = () => { readDraft(); planDraft.splice(Number(b.dataset.bprm), 1); if (!planDraft.length) planDraft.push(blank()); redrawPlan(c); });
       form.onsubmit = async (ev) => {
         ev.preventDefault(); readDraft();
-        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: (l.post || '').trim(), link: (l.link || '').trim(), img: l.img || '', extra: (l.extra || []).filter((x) => x.link || x.img).map((x) => ({ link: (x.link || '').trim(), img: x.img || '' })), daily: Number(l.daily), days: Number(l.days) || 1, start: l.start }));
+        const lines = planDraft.filter((l) => Number(l.daily) > 0).map((l) => ({ post: (l.post || '').trim(), link: (l.link || '').trim(), img: l.img || '', extra: (l.extra || []).filter((x) => x.link || x.img).map((x) => ({ link: (x.link || '').trim(), img: x.img || '' })), daily: Number(l.daily), days: Number(l.days) || 1, start: l.start, account: l.account || '' }));
+        try { const a = lines.map((l) => l.account).filter(Boolean).pop(); if (a) localStorage.setItem('bpAcct:' + c.id, a); } catch (_) {}
         if (!lines.length) { toast('Add a $ a day for at least one post'); return; }
         try { await savePlan(c, { lines, tax: !!planDraft.tax, ...(planDraft.isNew ? { sentAt: null } : {}) }); successBadge('Boost plan saved — tap Send plan'); } catch (e) { toast(e.message); }
       };

@@ -2222,7 +2222,7 @@
       const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
       const RN = { full: 'Full admin', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
-      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${[['pm', ''], ['mb', ''], ['ceo', ' — controls everything'], ['coo', ' — controls everything'], ['cmo', ' — controls everything'], ['full', ' — same rights as the owner']].map(([k, t]) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}${t}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
+      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${[['pm', ''], ['mb', ' (Facebook login — rarely needed)'], ['ceo', ' — controls everything'], ['coo', ' — controls everything'], ['cmo', ' — controls everything'], ['full', ' — same rights as the owner']].filter(([k]) => !['mb', 'full'].includes(k) || cr === k).map(([k, t]) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}${t}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
       const login = u.expired ? '<span class="ustat bad">Login expired</span>' : left !== null ? (left < 7 ? `<span class="ustat bad">Login expires in ${left} day${left === 1 ? '' : 's'}</span>` : `<span>Login ok for ${left} days</span>`) : '<span>Login —</span>';
       const sub = [u.team ? esc(u.team) : 'No team', `${u.clients} client${u.clients === 1 ? '' : 's'}`, `${u.accounts} ad account${u.accounts === 1 ? '' : 's'}`].join(' · ');
       return `<article class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
@@ -4560,6 +4560,13 @@ Thank you for working with Ads Box!`,
   (async () => {
     try {
       me = await api('/me');
+      if (me.fbWarn) { // Facebook connection running out: say so on every page, with the way to fix it
+        const w = me.fbWarn, bar = document.createElement('div'); bar.id = 'fbWarn'; bar.className = 'fbwarn' + (w.expired ? ' bad' : ''); bar.setAttribute('role', 'alert');
+        const main = w.days !== null && w.days < 7 ? (w.expired ? '<b>Your Facebook connection has expired</b> — spend is no longer syncing.' : `<b>Your Facebook connection expires in ${w.days} day${w.days === 1 ? '' : 's'}</b> — reconnect so the sync keeps running.`) : '';
+        const ex = w.extras.length ? `${main ? ' ' : ''}<b>${w.extras.map(esc).join(', ')}</b> need${w.extras.length === 1 ? 's' : ''} connecting again (Settings → Facebook account).` : '';
+        bar.innerHTML = `<span>🔑 ${main}${ex}</span>${main ? '<a class="btn" href="/auth/facebook">Reconnect Facebook</a>' : '<a class="btn" href="#settings">Open Settings</a>'}`;
+        const first = document.querySelector('section.wrap'); if (first) first.parentNode.insertBefore(bar, first);
+      }
       if (me.login && me.login.must) setTimeout(() => { location.hash = 'settings'; toast('Welcome — choose your own password in Settings → Username & password.'); }, 1500); // a temporary password must be replaced
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');

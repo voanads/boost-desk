@@ -469,6 +469,9 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: await isFull(req), isAppOwner: (await db.ownerId()) === req.user.fb_id, fullAdmin: await isFull(req),
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
+    fbWarn: await (async () => { if (req.user.buyer || req.user.google) return null; const now = Date.now(), exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, days = exp ? Math.floor((exp - now) / 864e5) : null;
+      const bad = (await sync.extraLogins(req.user.fb_id)).filter((e) => e.error || (e.expires && Date.parse(e.expires) < now)).map((e) => e.name);
+      return (days !== null && days < 7) || bad.length ? { days, expired: days !== null && exp < now, extras: bad } : null; })(),
     login: await (async () => { const L = LOGINS(), r = req.user.buyer ? await L.forMb(req.user.buyer.id) : req.user.google ? null : await L.forFb(req.user.fb_id); return r ? { username: r.username, must: !!r.must } : null; })(),
     profitRole: null, // the Profit panel was removed
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
@@ -1555,6 +1558,19 @@ async function refreshChatsNow() {
       const known = await db.getSetting('tgPmChats', {}); known[st.id] = hit.fb_id; await db.setSetting('tgPmChats', known);
       telegram.send(`✅ Hi ${hit.name}! Boost Desk alerts come here now: when your media buyers submit their plan in the morning and their result in the evening.`, st.id).catch(() => {});
     } catch (e) { console.error('[telegram] pm link:', e.message); }
+  }
+  // /password in a private chat: a new temporary password for the username that belongs to this Telegram (a PM's linked chat, or a media buyer's).
+  for (const ask of fresh.pwAsks || []) {
+    try {
+      const L = LOGINS(), last = (await db.getSetting('pwAskAt', {})) || {};
+      if (last[ask.id] && Date.now() - last[ask.id] < 10 * 60e3) { telegram.send('A new password was sent a few minutes ago. Wait 10 minutes before asking again.', ask.id).catch(() => {}); continue; }
+      const mb = (await MB().list()).find((x) => x.chat === ask.id), pmId = !mb && ((await db.getSetting('tgPmChats', {})) || {})[ask.id];
+      const stillPm = pmId && String(((await db.getUserSetting(pmId, 'tgChat', null)) || {}).id || '') === ask.id; // the link may have been removed since
+      const rec = mb ? await L.forMb(mb.id) : stillPm ? await L.forFb(pmId) : null;
+      if (!rec) { telegram.send(mb || stillPm ? 'You have no Boost Desk username yet. ' + (mb ? 'Ask your PM to make one (Settings → My media buyers → 🔑 Username).' : 'Make one in Boost Desk → Settings → Username & password.') : 'This Telegram is not linked to a Boost Desk person, so I can\'t send a password here.', ask.id).catch(() => {}); continue; }
+      const r = await L.reset(rec.username); last[ask.id] = Date.now(); await db.setSetting('pwAskAt', last);
+      await telegram.send(`🔑 Boost Desk\nUsername: ${r.login.username}\nNew password: ${r.password}\n\nLog in at ${cfg.baseUrl}/login and choose your own password in Settings. Delete this message afterwards.`, ask.id);
+    } catch (e) { console.error('[telegram] password ask:', e.message); }
   }
   const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);

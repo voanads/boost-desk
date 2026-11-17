@@ -3368,3 +3368,9 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .u-wait{display:flex;flex-direction:column;gap:6px}
 .u-wait>div{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--warn-soft);border-radius:var(--r-md)}
 .u-wait .sm{margin-left:6px}
+
+/* Facebook connection running out: one bar on every page */
+.fbwarn{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:var(--s-4) var(--s-5) 0;padding:10px 14px;border-radius:var(--r-lg);background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line));color:var(--ink);font-size:var(--fs-md)}
+.fbwarn.bad{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
+.fbwarn .btn{flex:none;height:34px;display:inline-flex;align-items:center;padding:0 14px;border-radius:var(--r-md);background:var(--brand);color:#fff;font-weight:600;text-decoration:none}
+@media (max-width:640px){.fbwarn{margin:var(--s-3) var(--s-3) 0}}

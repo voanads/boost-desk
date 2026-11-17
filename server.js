@@ -2160,6 +2160,13 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 db.init().then(() => { profit.init().catch((e) => console.log('[profit] init skipped:', e.message)); }).then(() => {
   require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
+  // One time (17 Nov 2026): the company moved — every account's saved invoice address becomes the new one.
+  (async () => {
+    const flag = 'migr:invoiceAddress:2026-11-17'; if (await db.getSetting(flag, null)) return;
+    const rows = (await db.pool.query(`SELECT key, value FROM settings WHERE key LIKE '%:invoiceProfile'`)).rows; let n = 0;
+    for (const r of rows) { const v = r.value || {}; if (v.address1 === invoice.DEFAULT_PROFILE.address1 && v.address2 === invoice.DEFAULT_PROFILE.address2) continue; await db.setSetting(r.key, { ...v, address1: invoice.DEFAULT_PROFILE.address1, address2: invoice.DEFAULT_PROFILE.address2 }); n++; }
+    await db.setSetting(flag, { at: new Date().toISOString(), updated: n }); console.log('[invoice] address updated for', n, 'account(s)');
+  })().catch((e) => console.log('[invoice] address update skipped:', e.message));
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
   jobs.start();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").

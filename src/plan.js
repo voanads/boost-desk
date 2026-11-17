@@ -26,6 +26,9 @@ function clean(b, cur = {}) {
     daily: Math.min(1e5, Math.max(0, round2(l.daily))),
     days: Math.min(365, Math.max(1, parseInt(l.days, 10) || 1)),
     start: isDay(l.start) ? l.start : '',
+    // the ad account this post is boosted from (optional) — for the team, never shown to the client
+    account: /^(act_)?\d{1,20}$/.test(String(l.account || '')) ? String(l.account) : '',
+    accountName: String(l.accountName || '').trim().slice(0, 120),
   })).filter((l) => l.daily > 0);
   if (b.tax != null) p.tax = !!b.tax;
   if (b.hidden != null) p.hidden = !!b.hidden;
@@ -55,17 +58,18 @@ async function progress(owner, c, today = sync.todayIn()) {
 }
 
 // One post's line of the plan: "1. name / $10/day × 7 days = $70 (from 1 Nov) / 🔗 link".
-function lineText(l, i, km) {
+function lineText(l, i, km, team) {
   const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
   const end = l.start ? addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '';
   const when = l.start ? (km ? ` (${dayTxt(l.start, true)} – ${dayTxt(end, true)})` : ` (${dayTxt(l.start)} – ${dayTxt(end)})`) : '';
-  const link = [l.link, ...(l.extra || []).map((x) => x.link)].filter(Boolean).map((u) => `\n    🔗 ${u}`).join('');
+  const link = [l.link, ...(l.extra || []).map((x) => x.link)].filter(Boolean).map((u) => `\n    🔗 ${u}`).join('')
+    + (team && l.account ? `\n    💳 ${l.accountName || l.account}` : '');
   return km ? `${i + 1}. ${name}\n    ${money(l.daily)} / ថ្ងៃ × ${l.days} ថ្ងៃ = ${money(l.daily * l.days)}${when}${link}`
     : `${i + 1}. ${name}\n    ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'} = ${money(l.daily * l.days)}${when}${link}`;
 }
-function message(c, plan, lang = 'en') {
+function message(c, plan, lang = 'en', team = false) {
   const km = lang === 'km', t = totals(plan);
-  const lines = plan.lines.map((l, i) => lineText(l, i, km));
+  const lines = plan.lines.map((l, i) => lineText(l, i, km, team));
   return km ? [
     `🎯 ផែនការ Boost Post — ${c.name}`, '', ...lines, '',
     t.rate ? `ថវិកាផ្សាយ: ${money(t.budget)}` : '', t.rate ? `ពន្ធ ${t.rate}%: ${money(t.tax)}` : '',
@@ -88,7 +92,7 @@ async function send(owner, c, { to = 'client', lang, topic = '' } = {}) {
     chat = topic;
   }
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
-  const lg = lang || c.plan.lang || 'en', km = lg === 'km', text = message(c, c.plan, lg);
+  const lg = lang || c.plan.lang || 'en', km = lg === 'km', team = to === 'team', text = message(c, c.plan, lg, team);
   const imgs = [];
   // Per line: its picture plus the pictures of its extra links (all boosted under that line's budget).
   for (const [i, l] of c.plan.lines.entries()) {
@@ -101,8 +105,8 @@ async function send(owner, c, { to = 'client', lang, topic = '' } = {}) {
     // Every line with pictures goes as its own photo (or album) with its line under it, then the totals.
     const head = km ? `🎯 ផែនការ Boost Post — ${c.name}` : `🎯 Boost plan — ${c.name}`;
     const withPic = new Set(imgs.map((x) => x.i));
-    for (const [n, im] of imgs.entries()) await telegram.sendAlbum(im.pics, (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km), chat);
-    const rest = c.plan.lines.map((l, i) => (withPic.has(i) ? null : lineText(l, i, km))).filter(Boolean);
+    for (const [n, im] of imgs.entries()) await telegram.sendAlbum(im.pics, (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km, team), chat);
+    const rest = c.plan.lines.map((l, i) => (withPic.has(i) ? null : lineText(l, i, km, team))).filter(Boolean);
     const t = totals(c.plan), tail = km
       ? [...rest, rest.length ? '' : null, t.rate ? `ថវិកាផ្សាយ: ${money(t.budget)}` : null, t.rate ? `ពន្ធ ${t.rate}%: ${money(t.tax)}` : null, `💰 សរុបត្រូវបង់: ${money(t.total)}`, '', 'សូមបង់ប្រាក់មុន ដើម្បីចាប់ផ្តើម Boost 🙏']
       : [...rest, rest.length ? '' : null, t.rate ? `Ad budget: ${money(t.budget)}` : null, t.rate ? `Tax ${t.rate}%: ${money(t.tax)}` : null, `💰 Total to pay: ${money(t.total)}`, '', 'Please pay first so we can start boosting 🙏'];

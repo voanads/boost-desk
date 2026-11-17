@@ -1087,7 +1087,13 @@ api.post('/post-preview', wrap(async (req, res) => {
 api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (!c) return res.status(404).json({ error: 'Client not found.' });
-  res.json(await db.updateClient(req.user.fb_id, c.id, { plan: require('./src/plan').clean(req.body || {}, c.plan) }));
+  const plan = require('./src/plan').clean(req.body || {}, c.plan);
+  // The ad account on a line must be one of this workspace's own; its name is taken from our list.
+  if ((plan.lines || []).some((l) => l.account)) {
+    const mine = new Map((await db.listAccounts(req.user.fb_id)).map((a) => [a.id, a.name || a.id]));
+    for (const l of plan.lines) { if (l.account && !mine.has(l.account)) l.account = ''; l.accountName = l.account ? String(mine.get(l.account)).slice(0, 120) : ''; }
+  } else for (const l of plan.lines || []) l.accountName = '';
+  res.json(await db.updateClient(req.user.fb_id, c.id, { plan }));
 }));
 api.get('/clients/:id/boost-plan/message', wrap(async (req, res) => {
   const P = require('./src/plan'), c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));

@@ -2175,11 +2175,28 @@
   const dateShort = (t) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
   // Users
-  let uData = null;
+  let uData = null, uLogins = {}, uLoginList = [];
   async function loadUsers() {
     try { uData = await api('/admin/users'); } catch (e) { $('uList').innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    uLogins = {}; uLoginList = []; try { uLoginList = (await api('/logins')).logins; for (const l of uLoginList) if (l.fbId) uLogins[l.fbId] = l; } catch (_) { /* viewer */ }
     renderUsers();
   }
+  // Usernames: for a person already in Boost Desk, or a brand-new PM who will connect Facebook at first login.
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-ulogin]'), nb = ev.target.closest('#uNewLogin'), wb = ev.target.closest('[data-uwait]');
+    try {
+      if (b) {
+        if (b.dataset.uuser) { if (!confirm(`Give ${b.dataset.uname} a new password? The old one stops working.`)) return; const r = await api(`/logins/${encodeURIComponent(b.dataset.uuser)}/reset`, { method: 'POST' }); showLoginSecret(r.login.username, r.password, b.dataset.uname); }
+        else { const u = askUsername(userSlug(b.dataset.uname)); if (!u) return; const r = await api('/logins', { method: 'POST', body: { role: 'pm', fbId: b.dataset.ulogin, username: u } }); showLoginSecret(r.login.username, r.password, b.dataset.uname); loadUsers(); }
+      } else if (nb) {
+        const name = prompt('Name of the new Project Manager:'); if (!name || !name.trim()) return; const u = askUsername(userSlug(name)); if (!u) return;
+        const r = await api('/logins', { method: 'POST', body: { role: 'pm', name: name.trim(), username: u } }); showLoginSecret(r.login.username, r.password, name.trim()); loadUsers();
+      } else if (wb) {
+        if (wb.dataset.uwait === 'del') { if (!confirm(`Delete the username "${wb.dataset.u}"?`)) return; await api(`/logins/${encodeURIComponent(wb.dataset.u)}`, { method: 'DELETE' }); loadUsers(); }
+        else { const r = await api(`/logins/${encodeURIComponent(wb.dataset.u)}/reset`, { method: 'POST' }); showLoginSecret(r.login.username, r.password, wb.dataset.n || wb.dataset.u); }
+      }
+    } catch (e) { toast(e.message); }
+  });
   function renderUsers() {
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
@@ -2187,6 +2204,10 @@
     $('uHint').innerHTML = `<details class="uhelp"><summary>Which site does each role use?</summary>` + (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b>, <b>COO</b> and <b>CMO</b> use <b>/admin</b> and control everything, like the owner (company view, teams, Admin, settings) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
       + '</details>';
     { let bn = $('uSyncOff'); if (!bn) { bn = document.createElement('div'); bn.id = 'uSyncOff'; bn.className = 'note onote stale'; $('uHint').insertAdjacentElement('beforebegin', bn); } bn.hidden = !!d.autoSyncServer; bn.innerHTML = '⚠ <b>Auto sync is switched off on the server</b> — nobody\'s spend updates by itself until <code>AUTO_SYNC</code> is removed in Railway → Variables. People can still tap <b>Run now</b>.'; }
+    { let box = $('uLoginBar'); if (!box) { box = document.createElement('div'); box.id = 'uLoginBar'; box.className = 'u-loginbar'; $('uList').insertAdjacentElement('beforebegin', box); }
+      const waiting = uLoginList.filter((l) => l.role === 'pm' && !l.fbId);
+      box.hidden = !d.canEdit; box.innerHTML = `<div class="u-lb-h"><span><b>Usernames</b> <span class="hint">People log in with a username and password; Facebook is connected inside their workspace.</span></span><button type="button" class="sm primary" id="uNewLogin">+ New Project Manager</button></div>
+        ${waiting.length ? `<div class="u-wait">${waiting.map((l) => `<div><span>🔑 <b>${esc(l.username)}</b> · ${esc(l.name || '')} <span class="hint">— has not connected Facebook yet${l.lastLogin ? '' : ' · never logged in'}</span></span><span><button type="button" class="sm" data-uwait="reset" data-u="${esc(l.username)}" data-n="${esc(l.name || '')}">New password</button><button type="button" class="sm danger-txt" data-uwait="del" data-u="${esc(l.username)}">Delete</button></span></div>`).join('')}</div>` : ''}`; }
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
     const rows = list.map((u, i) => {
@@ -2209,6 +2230,7 @@
         <div class="uc-meta">${login}<span title="${last}">${st}${u.lastSeen ? ` <span class="hint">· active ${ago(u.lastSeen)}</span>` : ''}</span><span>${u.autoReport && u.autoReport.on ? '⏰ Report ' + esc(u.autoReport.time) : '<span class="hint">Report off</span>'}</span></div>
         ${lr && lr.error ? `<div class="uc-last"><span class="over">${last}</span></div>` : ''}
         ${d.canEdit ? `<div class="uc-acts"><label class="switch" title="Auto sync"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''} aria-label="Auto sync for ${esc(u.name)}"><span></span></label><span class="hint">Auto sync</span><span class="spacer"></span>
+          <button class="sm" data-ulogin="${esc(u.id)}" data-uname="${esc(u.name)}" data-uuser="${esc((uLogins[u.id] || {}).username || '')}" title="${uLogins[u.id] ? 'Username: ' + esc(uLogins[u.id].username) + ' — tap for a new password' : 'Make a username and password for ' + esc(u.name)}">${uLogins[u.id] ? '🔑 ' + esc(uLogins[u.id].username) : '🔑 Username'}</button>
           <button class="sm" data-run="${esc(u.id)}" title="Sync now" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻ Run now</button>
           ${edit && !you ? `<button class="sm danger-t" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>` : ''}</div>` : ''}
       </article>`;
@@ -2520,7 +2542,9 @@
     const alerts = d.buyer ? '' : card('Alerts to my Telegram', sw('stAlOn', al.on, 'Alerts'), `${d.telegram.linked ? '' : '<span class="hint">Link your Telegram above to get these.</span>'}
       ${chk('payment', 'Ad account payment failed or disabled')}${chk('overplan', 'Client spends over plan')}${chk('liveNoBoost', 'A client who boosts every day has no boost yet today')}`);
     const aiCard = d.buyer ? '' : card('AI advice', sw('stAiOn', ai.on !== false, 'AI advice'), `<span class="hint">Show suggestions on each client from this month's numbers, and plan each morning.</span>`);
-    host.innerHTML = `<div class="st-col">${profile}${mbs}</div><div class="st-col">${fb}${tg}${auto}${alerts}${aiCard}</div>`;
+    const lgCard = me.google ? '' : card('Username & password', me.login ? pill(me.login.must ? 'warn' : 'ok', me.login.must ? 'Temporary password' : 'Set') : pill('', 'Not set'), loginCardHtml());
+    host.innerHTML = `<div class="st-col">${profile}${lgCard}${mbs}</div><div class="st-col">${fb}${tg}${auto}${alerts}${aiCard}</div>`;
+    wireLoginCard();
     if (!d.buyer) drawSettingsBuyers();
     // ---- wiring ----
     const put = async (url, body) => { try { return await api(url, { method: 'PUT', body }); } catch (e) { toast(e.message); return null; } };
@@ -2543,13 +2567,20 @@
     const host = $('stMbs'); if (!host) return;
     await loadMb();
     const hhmm2 = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+    let mbLogins = {}; try { for (const l of (await api('/logins')).logins) if (l.mbId) mbLogins[l.mbId] = l; } catch (_) { /* no usernames yet */ }
     let pms = []; if (me && me.canAdmin) { try { pms = ((await api('/admin/users')).users || []).map((u) => ({ id: u.id || u.fb_id, name: u.name })).filter((u) => u.id); } catch (_) {} }
     const pmSel = (b) => pms.length ? `<label class="st-mbpm"><span class="hint">PM</span><select data-mbpm="${esc(b.id)}" aria-label="Which PM ${esc(b.name)} works with"><option value="">— none —</option>${pms.map((u) => `<option value="${esc(u.id)}" ${u.id === b.addedById ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>` : b.addedBy && me && me.canAdmin ? `<span class="hint">PM · ${esc(b.addedBy)}</span>` : '';
     host.innerHTML = mbList.length ? mbList.map((b) => `<div class="st-mb">${mbAvatar(b)}<div class="st-mbn"><b>${esc(b.name)}${b.alias && b.alias !== b.name ? ` <span class="hint">(${esc(b.alias)})</span>` : ''}</b><span class="hint">Media buyer · ${b.linked ? `<span class="is-ok">linked</span>${b.tgName ? ' · ' + esc(b.tgName) : ''}` : '<span class="is-warn">not linked — send the invite link</span>'}</span>${pmSel(b)}</div>
-        <div class="st-mba"><button type="button" class="sm" data-mbkpi2="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set ${esc(b.name)}'s monthly KPIs">📊 KPIs</button>${b.linked ? `<button type="button" class="sm" data-mbsync="${esc(b.id)}" title="Re-read name and picture from Telegram">↻</button>` : ''}${b.link ? `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">${b.linked ? 'Copy link' : 'Invite link'}</button>` : ''}<button type="button" class="sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}">Remove</button></div></div>`).join('')
+        <div class="st-mba"><button type="button" class="sm" data-mbkpi2="${esc(b.id)}" data-mbname="${esc(b.name)}" title="Set ${esc(b.name)}'s monthly KPIs">📊 KPIs</button>${b.linked ? `<button type="button" class="sm" data-mbsync="${esc(b.id)}" title="Re-read name and picture from Telegram">↻</button>` : ''}${b.link ? `<button type="button" class="sm" data-mbcopy="${esc(b.link)}">${b.linked ? 'Copy link' : 'Invite link'}</button>` : ''}<button type="button" class="sm" data-mblogin="${esc(b.id)}" data-mbname="${esc(b.name)}" data-mbuser="${esc((mbLogins[b.id] || {}).username || '')}" title="${mbLogins[b.id] ? 'Username: ' + esc(mbLogins[b.id].username) + ' — tap for a new password' : 'Make a username and password for ' + esc(b.name)}">${mbLogins[b.id] ? '🔑 ' + esc(mbLogins[b.id].username) : '🔑 Username'}</button><button type="button" class="sm" data-mbdel="${esc(b.id)}" aria-label="Remove ${esc(b.name)}">Remove</button></div></div>`).join('')
       : '<div class="hl-empty">No media buyers yet — add one below.</div>';
     host.querySelectorAll('[data-mbcopy]').forEach((x) => x.onclick = async () => { try { await navigator.clipboard.writeText(x.dataset.mbcopy); toast('Invite link copied — send it to them on Telegram'); } catch (_) { prompt('Copy this link', x.dataset.mbcopy); } });
     host.querySelectorAll('[data-mbkpi2]').forEach((x) => x.onclick = () => openBuyerKpis(x.dataset.mbkpi2, x.dataset.mbname));
+    host.querySelectorAll('[data-mblogin]').forEach((x) => x.onclick = async () => {
+      try {
+        if (x.dataset.mbuser) { if (!confirm(`Give ${x.dataset.mbname} a new password? The old one stops working.`)) return; const r = await api(`/logins/${encodeURIComponent(x.dataset.mbuser)}/reset`, { method: 'POST' }); showLoginSecret(r.login.username, r.password, x.dataset.mbname); }
+        else { const u = askUsername(userSlug(x.dataset.mbname)); if (!u) return; const r = await api('/logins', { method: 'POST', body: { role: 'mb', mbId: x.dataset.mblogin, username: u } }); showLoginSecret(r.login.username, r.password, x.dataset.mbname); drawSettingsBuyers(); }
+      } catch (e) { toast(e.message); }
+    });
     host.querySelectorAll('[data-mbpm]').forEach((x) => x.onchange = async () => { if (!x.value) return; try { const r = await api(`/media-buyers/${encodeURIComponent(x.dataset.mbpm)}`, { method: 'PATCH', body: { pm: x.value } }); successBadge(`Moved under ${r.pm.name}`); } catch (e) { toast(e.message); } drawSettingsBuyers(); });
     host.querySelectorAll('[data-mbsync]').forEach((x) => x.onclick = async () => { x.disabled = true; try { await api(`/media-buyers/${encodeURIComponent(x.dataset.mbsync)}/sync`, { method: 'POST' }); toast('Profile refreshed from Telegram'); } catch (e) { toast(e.message); } drawSettingsBuyers(); });
     host.querySelectorAll('[data-mbdel]').forEach((x) => x.onclick = async () => { const b = mbList.find((y) => y.id === x.dataset.mbdel); if (!confirm(`Remove ${b ? b.name : 'this media buyer'}? Their tasks stay on the clients; they just stop getting new ones.`)) return; try { await api(`/media-buyers/${encodeURIComponent(x.dataset.mbdel)}`, { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); });
@@ -2557,6 +2588,36 @@
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  // ---------- Usernames & passwords ----------
+  // A new or reset password is shown once, in a small dialog with Copy.
+  function showLoginSecret(username, password, who) {
+    let d = $('lgDlg'); if (!d) { d = document.createElement('dialog'); d.id = 'lgDlg'; d.className = 'lg-dlg'; document.body.appendChild(d); }
+    const text = `Boost Desk\n${location.origin}/login\nUsername: ${username}\nPassword: ${password}`;
+    d.innerHTML = `<h2>Login for ${esc(who || username)}</h2><p class="hint">Send this to them. The password is shown only now; they choose their own after the first login.</p>
+      <div class="lg-box"><div><span>Website</span><b>${esc(location.origin)}/login</b></div><div><span>Username</span><b>${esc(username)}</b></div><div><span>Password</span><b class="lg-pw">${esc(password)}</b></div></div>
+      <div class="lg-f"><button type="button" class="primary" data-lgcopy>Copy all</button><button type="button" data-lgclose>Done</button></div>`;
+    d.querySelector('[data-lgcopy]').onclick = async (ev) => { try { await navigator.clipboard.writeText(text); ev.target.textContent = 'Copied ✓'; } catch (_) { toast('Select the text and copy it by hand.'); } };
+    d.querySelector('[data-lgclose]').onclick = () => d.close();
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
+  const askUsername = (suggest) => { const u = prompt('Username for this person (letters, numbers, dot, dash — at least 3):', suggest || ''); return u == null ? null : u.trim().toLowerCase(); };
+  const userSlug = (name) => String(name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 24);
+  // Settings card: my username and password.
+  function loginCardHtml() {
+    const lg = me && me.login;
+    if (lg) return `<div class="st-lg">${lg.must ? '<div class="note onote stale">Choose your own password now — the one you were given is temporary.</div>' : ''}
+      <div class="st-lg-u"><span class="hint">Username</span><b>${esc(lg.username)}</b></div>
+      <form id="stPwForm" class="st-lg-f" autocomplete="off"><label><span>Current password</span><input type="password" id="stPwCur" autocomplete="current-password" required></label><label><span>New password (8+ characters)</span><input type="password" id="stPwNew" autocomplete="new-password" minlength="8" required></label><button type="submit" class="sm primary">Change password</button></form></div>`;
+    if (me && me.buyer) return '<div class="hint">You open Boost Desk from the Telegram link. Ask your PM for a username if you want to log in with a password too.</div>';
+    return `<div class="st-lg"><div class="hint">Make a username so you can log in without Facebook. It opens this same workspace — nothing about your clients changes.</div>
+      <form id="stLgNew" class="st-lg-f" autocomplete="off"><label><span>Username</span><input type="text" id="stLgUser" autocapitalize="none" spellcheck="false" minlength="3" maxlength="32" value="${esc(userSlug(me && me.name))}" required></label><label><span>Password (8+ characters)</span><input type="password" id="stLgPass" autocomplete="new-password" minlength="8" required></label><button type="submit" class="sm primary">Create username</button></form></div>`;
+  }
+  function wireLoginCard() {
+    const pf = $('stPwForm'); if (pf) pf.onsubmit = async (ev) => { ev.preventDefault();
+      try { await api('/me/password', { method: 'PUT', body: { current: $('stPwCur').value, next: $('stPwNew').value } }); me.login.must = false; successBadge('Password changed'); loadSettingsPage(); } catch (e) { toast(e.message); } };
+    const nf = $('stLgNew'); if (nf) nf.onsubmit = async (ev) => { ev.preventDefault();
+      try { const r = await api('/me/login', { method: 'POST', body: { username: $('stLgUser').value, password: $('stLgPass').value } }); me.login = { username: r.login.username, must: false }; successBadge(`Username "${r.login.username}" created`); loadSettingsPage(); } catch (e) { toast(e.message); } };
+  }
   // Settings → Facebook account: my 2nd / 3rd Facebook accounts, whose ad accounts sync into this same workspace.
   async function drawFbExtras() {
     const host = $('stFbExtras'); if (!host) return;
@@ -4499,6 +4560,7 @@ Thank you for working with Ads Box!`,
   (async () => {
     try {
       me = await api('/me');
+      if (me.login && me.login.must) setTimeout(() => { location.hash = 'settings'; toast('Welcome — choose your own password in Settings → Username & password.'); }, 1500); // a temporary password must be replaced
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
         document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });

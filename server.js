@@ -94,6 +94,17 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   if ((await db.blockedUsers())[profile.id]) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name}'s access to Boost Desk was removed. Ask the app owner to restore it.`));
   }
+  // A username that has no workspace yet takes this Facebook account as its workspace (existing clients and settings stay as they are).
+  if (req.session.loginId) {
+    const rec = await LOGINS().get(req.session.loginId);
+    if (rec && rec.role === 'pm' && !rec.fbId) {
+      const taken = await LOGINS().forFb(profile.id);
+      if (taken) return res.redirect('/welcome?error=' + encodeURIComponent(`${profile.name} is already connected to the username "${taken.username}". Switch facebook.com to your own account and try again.`));
+      rec.fbId = profile.id; await LOGINS().save(rec);
+    } else if (rec && rec.role === 'pm' && rec.fbId && rec.fbId !== profile.id) {
+      return res.redirect('/?fb=err&fbmsg=' + encodeURIComponent(`That is a different Facebook account (${profile.name}). To add it to your workspace use Settings → Facebook account → Connect another Facebook account.`) + '#settings');
+    }
+  }
   await db.upsertUser(profile.id, profile.name, encrypt(token), expires);
   req.session.fbId = profile.id;
   req.session.name = profile.name;
@@ -103,6 +114,34 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
 }));
 
 app.post('/auth/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
+
+// ---------- Username + password (src/logins.js) ----------
+// The login opens the same session a Facebook login (PM) or a Telegram link (media buyer) would, so everything after it is unchanged.
+const LOGINS = () => require('./src/logins');
+app.post('/auth/login', wrap(async (req, res) => {
+  const b = req.body || {};
+  let rec; try { rec = await LOGINS().verify(b.username, b.password); } catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+  req.session = { loginId: rec.username };
+  if (rec.role === 'mb') {
+    if (!(await MB().get(rec.mbId))) { req.session = null; return res.status(403).json({ error: 'This media buyer was removed from the team. Ask your PM.' }); }
+    req.session.mb = rec.mbId; req.session.mbAt = Date.now();
+    return res.json({ ok: true, next: '/mediabuyer#dashboard', must: !!rec.must });
+  }
+  if (rec.fbId) {
+    if ((await db.blockedUsers())[rec.fbId]) { req.session = null; return res.status(403).json({ error: 'This account\'s access to Boost Desk was removed. Ask the app owner.' }); }
+    const u = await db.getUser(rec.fbId);
+    if (u) { req.session.fbId = u.fb_id; req.session.name = u.name; return res.json({ ok: true, next: '/', must: !!rec.must }); }
+  }
+  res.json({ ok: true, next: '/welcome', must: !!rec.must }); // no workspace yet: connect Facebook once
+}));
+// First login of a new PM: connect the Facebook account that manages their ad accounts.
+app.get('/welcome', wrap(async (req, res) => {
+  const rec = req.session && req.session.loginId ? await LOGINS().get(req.session.loginId) : null;
+  if (!rec) return res.redirect('/login');
+  if (req.session.fbId && (await db.getUser(req.session.fbId))) return res.redirect('/');
+  const err = String(req.query.error || '').slice(0, 300).replace(/[<>&"]/g, '');
+  res.set('Cache-Control', 'no-store').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect Facebook · Ads Box</title><link rel="icon" href="/assets/logo.svg"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;background:#f6f7f9;color:#0f172a}main{background:#fff;border:1px solid #e5e7eb;border-radius:20px;padding:32px 28px;max-width:440px;margin:16px;box-shadow:0 20px 50px rgba(15,23,42,.08)}h1{font-size:22px;margin:0 0 8px}p{color:#475569;line-height:1.5;margin:0 0 16px}ol{color:#334155;line-height:1.6;padding-left:20px;margin:0 0 20px}.fb{display:flex;align-items:center;justify-content:center;min-height:52px;border-radius:12px;background:#1877f2;color:#fff;text-decoration:none;font-weight:700;font-size:16px}.err{background:#fdecee;color:#a51d2f;border-radius:10px;padding:10px 12px;margin:0 0 16px;font-size:14px}a.out{display:block;text-align:center;margin-top:14px;color:#64748b;font-size:14px}</style></head><body><main><h1>Hello ${String(rec.name || rec.username).replace(/[<>&"]/g, '')} — one step left</h1><p>Connect the Facebook account that manages your clients' ad accounts. You do this once; after that you log in with your username and password.</p>${err ? `<div class="err">${err}</div>` : ''}<ol><li>Make sure facebook.com is logged in to the right account.</li><li>Tap the button. If that Facebook account already used Boost Desk, all its clients and settings are here waiting.</li></ol><a class="fb" href="/auth/facebook?claim=1">Connect Facebook</a><a class="out" href="#" onclick="fetch('/auth/logout',{method:'POST'}).then(()=>location.href='/login');return false">Log out</a></main></body></html>`);
+}));
 
 // ---------- Admin website (/admin): Google sign-in for people the owner allows ----------
 // Allowed people live in the setting adminSite.people: { email, name, linkTo (a Boost Desk Facebook ID or ''), addedAt, addedBy, lastLogin }.
@@ -366,6 +405,7 @@ app.use(wrap(async (req, res, next) => {
     }
   }
   if (!user) {
+    if (req.session.loginId && !req.path.startsWith('/api/') && !req.path.startsWith('/admin')) return res.redirect('/welcome');
     if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please log in again.', needsLogin: true });
     return res.redirect(req.path.startsWith('/admin') ? '/admin/login' : '/login');
   }
@@ -429,6 +469,7 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: await isFull(req), isAppOwner: (await db.ownerId()) === req.user.fb_id, fullAdmin: await isFull(req),
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
+    login: await (async () => { const L = LOGINS(), r = req.user.buyer ? await L.forMb(req.user.buyer.id) : req.user.google ? null : await L.forFb(req.user.fb_id); return r ? { username: r.username, must: !!r.must } : null; })(),
     profitRole: null, // the Profit panel was removed
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
     taxRate: sync.TAX_RATE, aiOn: (await db.getUserSetting(req.user.fb_id, 'aiOn', true)) !== false,
@@ -1833,6 +1874,43 @@ api.get('/me/profile', wrap(async (req, res) => {
     telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
     autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
+}));
+// ---------- Usernames (logins) ----------
+// Who may manage which: a full admin → every login; a PM → the logins of their own media buyers.
+const myBuyerIds = async (req) => new Set((await MB().list()).filter((b) => b.addedById === req.user.fb_id || (!b.addedById && b.addedBy === req.user.name)).map((b) => b.id));
+async function canManageLogin(req, rec) { if (req.user.buyer || req.user.google && !(await isFull(req))) return false; if (await isFull(req)) return true; return rec.role === 'mb' && (await myBuyerIds(req)).has(rec.mbId); }
+const loginErr = (res, e) => res.status(e.status || 400).json({ error: e.message });
+api.get('/logins', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
+  const L = LOGINS(), full = await isFull(req), mine = await myBuyerIds(req);
+  res.json({ full, logins: (await L.list()).filter((r) => full || (r.role === 'mb' && mine.has(r.mbId))).map(L.pub) });
+}));
+api.post('/logins', wrap(async (req, res) => {
+  const b = req.body || {}, role = b.role === 'mb' ? 'mb' : 'pm';
+  if (!(await canManageLogin(req, { role, mbId: String(b.mbId || '') }))) return res.status(403).json({ error: role === 'mb' ? 'You can only make usernames for your own media buyers.' : 'Only the owner (or a full admin) can make a username for a Project Manager.' });
+  if (role === 'pm' && b.fbId && !(await db.getUser(String(b.fbId)))) return res.status(400).json({ error: 'That person is not in Boost Desk.' });
+  if (role === 'mb' && !(await MB().get(b.mbId))) return res.status(400).json({ error: 'That media buyer is not on the list.' });
+  const name = b.name || (role === 'mb' ? (await MB().get(b.mbId)).name : b.fbId ? (await db.getUser(String(b.fbId))).name : '');
+  try { res.json(await LOGINS().create({ username: b.username, name, role, fbId: role === 'pm' ? b.fbId : '', mbId: role === 'mb' ? b.mbId : '', by: req.user.name })); } catch (e) { loginErr(res, e); }
+}));
+api.post('/logins/:u/reset', wrap(async (req, res) => {
+  const rec = await LOGINS().get(req.params.u); if (!rec || !(await canManageLogin(req, rec))) return res.status(404).json({ error: 'No such username.' });
+  try { res.json(await LOGINS().reset(rec.username)); } catch (e) { loginErr(res, e); }
+}));
+api.delete('/logins/:u', wrap(async (req, res) => {
+  const rec = await LOGINS().get(req.params.u); if (!rec || !(await canManageLogin(req, rec))) return res.status(404).json({ error: 'No such username.' });
+  await LOGINS().remove(rec.username); res.json({ ok: true });
+}));
+// Me: make my own username (I'm logged in with Facebook, so it opens this same workspace), or change my password.
+api.post('/me/login', wrap(async (req, res) => {
+  if (req.user.buyer || req.user.google) return res.status(403).json({ error: 'Ask your PM for a username.' });
+  const b = req.body || {};
+  try { const r = await LOGINS().create({ username: b.username, name: req.user.name, role: 'pm', fbId: req.user.fb_id, by: req.user.name, password: String(b.password || '') }); req.session.loginId = r.login.username; res.json(r); } catch (e) { loginErr(res, e); }
+}));
+api.put('/me/password', wrap(async (req, res) => {
+  const L = LOGINS(), rec = req.user.buyer ? await L.forMb(req.user.buyer.id) : await L.forFb(req.user.fb_id), b = req.body || {};
+  if (!rec) return res.status(404).json({ error: 'You have no username yet.' });
+  try { await L.verify(rec.username, b.current); await L.setPassword(rec.username, b.next); res.json({ ok: true }); } catch (e) { loginErr(res, e.status === 401 ? Object.assign(e, { message: 'The current password is wrong.', status: 400 }) : e); }
 }));
 // Settings → Facebook accounts: the extra logins connected to my workspace.
 api.get('/fb-accounts', wrap(async (req, res) => {

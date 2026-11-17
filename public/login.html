@@ -76,6 +76,16 @@
   .fb::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.35) 50%,transparent 65%);transform:translateX(-120%)}
   .safe{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--muted);background:var(--tint);border-radius:12px;padding:12px 14px}
   .safe svg{flex:none;margin-top:1px}
+  @media (min-width:901px){.right .feats{display:none}} /* the login card now holds the username form; the feature list no longer fits beside it */
+  .uform{display:flex;flex-direction:column;gap:10px}
+  .uform label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+  .uform input{height:44px;border:1px solid var(--line);border-radius:11px;padding:0 12px;font:inherit;font-size:16px;color:var(--ink);background:#fff}
+  .uform input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .uform button{height:46px;border:0;border-radius:12px;background:var(--ink);color:#fff;font:inherit;font-weight:700;font-size:16px;cursor:pointer}
+  .uform button:disabled{opacity:.6;cursor:default}
+  .or{display:flex;align-items:center;gap:10px;color:var(--soft);font-size:13px;margin:-6px 0}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+  .login .fb{min-height:48px;font-size:16px}
   .err{background:#FDECEE;color:#A51D2F;border-radius:12px;padding:11px 14px;font-size:14.5px;line-height:1.4}
   .feats{display:flex;flex-direction:column;gap:10px}
   .feat{display:flex;gap:14px;align-items:center;background:rgba(255,255,255,.7);border:1px solid var(--line);border-radius:16px;padding:11px 16px}
@@ -180,8 +190,14 @@ Total: <b>$254.16</b></div>
     <aside class="right">
       <div class="login in" style="--d:250">
         <h2>Welcome back</h2>
-        <p class="sub">Log in with the Facebook account that manages your clients' ad accounts.</p>
+        <p class="sub">Log in with your username, or with the Facebook account that manages your clients' ad accounts.</p>
         <div id="err" class="err" role="alert" hidden></div>
+        <form id="uform" class="uform" autocomplete="on">
+          <label><span>Username</span><input id="uName" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+          <label><span>Password</span><input id="uPass" name="password" type="password" autocomplete="current-password" required></label>
+          <button type="submit" id="uGo">Log in</button>
+        </form>
+        <div class="or"><span>or</span></div>
         <a class="fb" href="/auth/facebook">
           <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/></svg>
           Continue with Facebook
@@ -214,6 +230,14 @@ Total: <b>$254.16</b></div>
 <script>
   const e = new URLSearchParams(location.search).get('error');
   if (e) { const el = document.getElementById('err'); el.textContent = e; el.hidden = false; }
+  document.getElementById('uform').addEventListener('submit', async (ev) => {
+    ev.preventDefault(); const el = document.getElementById('err'), go = document.getElementById('uGo'); el.hidden = true; go.disabled = true; go.textContent = 'Logging in…';
+    try {
+      const r = await fetch('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: document.getElementById('uName').value, password: document.getElementById('uPass').value }) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Could not log in. Try again.');
+      location.href = d.next || '/';
+    } catch (x) { el.textContent = x.message; el.hidden = false; go.disabled = false; go.textContent = 'Log in'; }
+  });
 
   // Computers: scale the 1280×760 stage to fit the window.
   function fit() {

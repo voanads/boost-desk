@@ -3342,3 +3342,29 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .st-fbx-add summary{cursor:pointer;display:inline-flex;align-items:center;height:34px;padding:0 12px;border:1px dashed var(--line);border-radius:var(--r-md);font-weight:600;color:var(--brand);list-style:none}
 .st-fbx-add summary::-webkit-details-marker{display:none}
 .st-fbx-add ol{margin:10px 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--ink);font-size:var(--fs-md)}
+
+/* Usernames & passwords */
+.lg-dlg{border:0;border-radius:var(--r-xl);padding:24px;max-width:420px;width:calc(100% - 32px);background:var(--surface);color:var(--ink);box-shadow:0 30px 80px rgba(15,23,42,.25)}
+.lg-dlg::backdrop{background:rgba(15,23,42,.45)}
+.lg-dlg h2{margin:0 0 6px;font-size:var(--fs-h3)}
+.lg-box{margin:14px 0;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden}
+.lg-box>div{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--line)}
+.lg-box>div:first-child{border-top:0}
+.lg-box span{color:var(--muted);font-size:var(--fs-sm)}
+.lg-box b{font-weight:600;word-break:break-all;text-align:right;user-select:all}
+.lg-pw{font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-lg);letter-spacing:.04em}
+.lg-f{display:flex;gap:8px;justify-content:flex-end}
+.st-lg{display:flex;flex-direction:column;gap:10px}
+.st-lg-u{display:flex;align-items:baseline;gap:10px}
+.st-lg-u b{font-size:var(--fs-lg)}
+.st-lg-f{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.st-lg-f label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-sm);color:var(--muted);min-width:0}
+.st-lg-f input{height:36px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--ink);font:inherit;min-width:0}
+.st-lg-f .sm{height:36px}
+@media (max-width:640px){.st-lg-f{grid-template-columns:1fr}}
+.u-loginbar{border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;margin:0 0 12px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
+.u-loginbar[hidden]{display:none}
+.u-lb-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.u-wait{display:flex;flex-direction:column;gap:6px}
+.u-wait>div{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:8px 10px;background:var(--warn-soft);border-radius:var(--r-md)}
+.u-wait .sm{margin-left:6px}

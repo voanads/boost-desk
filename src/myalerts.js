@@ -24,6 +24,11 @@ async function run(pm) {
         if (/disabled|unsettled|closed/.test(st) && once('acct:' + a.id)) lines.push(`💳 Ad account ${a.name}: ${st}${reason ? ' · ' + reason : ''}`);
       }
     }
+    { // Facebook connection about to stop: with a username you stay logged in, so the sync would stop without anyone noticing
+      const exp = u.token_expires ? Date.parse(u.token_expires) : 0, days = exp ? Math.floor((exp - Date.now()) / 864e5) : null;
+      if (days !== null && days < 5 && once('fbexp')) lines.push(`🔑 Your Facebook connection ${exp < Date.now() ? 'has expired — spend is no longer syncing' : `expires in ${days} day${days === 1 ? '' : 's'}`}. Open Boost Desk → Settings → Facebook account → Continue with Facebook.`);
+      for (const e of await sync.extraLogins(u.fb_id)) if ((e.error || (e.expires && Date.parse(e.expires) < Date.now())) && once('fbx:' + e.id)) lines.push(`🔑 Facebook account ${e.name} needs connecting again (Settings → Facebook account).`);
+    }
     if (p.overplan || p.liveNoBoost) {
       let t = { items: [], tips: [] }; try { t = await pm.todo({ fb_id: u.fb_id, name: u.name }); } catch (_) {}
       for (const x of [...(t.items || []), ...(t.tips || [])]) {

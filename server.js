@@ -469,6 +469,9 @@ api.get('/me', wrap(async (req, res) => {
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: await isFull(req), isAppOwner: (await db.ownerId()) === req.user.fb_id, fullAdmin: await isFull(req),
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
+    fbWarn: await (async () => { if (req.user.buyer || req.user.google) return null; const now = Date.now(), exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, days = exp ? Math.floor((exp - now) / 864e5) : null;
+      const bad = (await sync.extraLogins(req.user.fb_id)).filter((e) => e.error || (e.expires && Date.parse(e.expires) < now)).map((e) => e.name);
+      return (days !== null && days < 7) || bad.length ? { days, expired: days !== null && exp < now, extras: bad } : null; })(),
     login: await (async () => { const L = LOGINS(), r = req.user.buyer ? await L.forMb(req.user.buyer.id) : req.user.google ? null : await L.forFb(req.user.fb_id); return r ? { username: r.username, must: !!r.must } : null; })(),
     profitRole: null, // the Profit panel was removed
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
@@ -1556,6 +1559,19 @@ async function refreshChatsNow() {
       telegram.send(`✅ Hi ${hit.name}! Boost Desk alerts come here now: when your media buyers submit their plan in the morning and their result in the evening.`, st.id).catch(() => {});
     } catch (e) { console.error('[telegram] pm link:', e.message); }
   }
+  // /password in a private chat: a new temporary password for the username that belongs to this Telegram (a PM's linked chat, or a media buyer's).
+  for (const ask of fresh.pwAsks || []) {
+    try {
+      const L = LOGINS(), last = (await db.getSetting('pwAskAt', {})) || {};
+      if (last[ask.id] && Date.now() - last[ask.id] < 10 * 60e3) { telegram.send('A new password was sent a few minutes ago. Wait 10 minutes before asking again.', ask.id).catch(() => {}); continue; }
+      const mb = (await MB().list()).find((x) => x.chat === ask.id), pmId = !mb && ((await db.getSetting('tgPmChats', {})) || {})[ask.id];
+      const stillPm = pmId && String(((await db.getUserSetting(pmId, 'tgChat', null)) || {}).id || '') === ask.id; // the link may have been removed since
+      const rec = mb ? await L.forMb(mb.id) : stillPm ? await L.forFb(pmId) : null;
+      if (!rec) { telegram.send(mb || stillPm ? 'You have no Boost Desk username yet. ' + (mb ? 'Ask your PM to make one (Settings → My media buyers → 🔑 Username).' : 'Make one in Boost Desk → Settings → Username & password.') : 'This Telegram is not linked to a Boost Desk person, so I can\'t send a password here.', ask.id).catch(() => {}); continue; }
+      const r = await L.reset(rec.username); last[ask.id] = Date.now(); await db.setSetting('pwAskAt', last);
+      await telegram.send(`🔑 Boost Desk\nUsername: ${r.login.username}\nNew password: ${r.password}\n\nLog in at ${cfg.baseUrl}/login and choose your own password in Settings. Delete this message afterwards.`, ask.id);
+    } catch (e) { console.error('[telegram] password ask:', e.message); }
+  }
   const all = [...byId.values()].sort((a, b) => String(a.title).localeCompare(String(b.title)));
   await db.setSetting('telegramChats', all);
   if (fresh.next && fresh.next !== offset) await db.setSetting('telegramOffset', fresh.next); // only after everything above is saved
@@ -1874,6 +1890,22 @@ api.get('/me/profile', wrap(async (req, res) => {
     telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
     autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
+}));
+// Getting started: what a new Project Manager still has to set up (shown on the Dashboard until every step is done).
+api.get('/onboarding', wrap(async (req, res) => {
+  if (req.user.buyer || req.user.google) return res.json({ show: false });
+  const me = req.user.fb_id, accts = await db.listAccounts(me), clients = (await db.listClients(me)).filter((c) => !c.archived), month = sync.todayIn().slice(0, 7);
+  const login = await LOGINS().forFb(me), chat = await db.getUserSetting(me, 'tgChat', null);
+  let kpis = 0; try { kpis = (await KPI().getList(me, month)).filter((k) => String(k.name || '').trim()).length; } catch (_) {}
+  const steps = [
+    { key: 'login', done: !!login && !login.must, title: 'Choose your username and password', hint: 'So you can log in without Facebook.', go: '#settings', cta: 'Open Settings' },
+    { key: 'accounts', done: accts.some((a) => a.enabled), title: 'Tick the ad accounts you boost with', hint: `${accts.length} ad account${accts.length === 1 ? '' : 's'} found on your Facebook. Have a second Facebook account? Add it in Settings.`, go: '#accounts', cta: 'Open Ad accounts' },
+    { key: 'clients', done: clients.length > 0, title: 'Add your first client', hint: 'A client is matched to spend by its Facebook Page.', go: '#clients', cta: 'Open Clients' },
+    { key: 'telegram', done: !!(chat && chat.id), title: 'Link your Telegram', hint: 'For alerts, and so reports can go to your clients\' groups.', go: '#settings', cta: 'Open Settings' },
+    { key: 'groups', done: clients.length > 0 && clients.every((c) => reports.routes(c).some((r) => r.chat)), title: 'Give every client a Telegram group', hint: clients.length ? `${clients.filter((c) => !reports.routes(c).some((r) => r.chat)).length} client(s) have no group yet — their report can't be sent.` : 'After you add clients.', go: '#reports', cta: 'Open Reports' },
+    { key: 'kpi', done: kpis > 0, title: 'Set this month\'s KPIs and your daily menu', hint: 'My Task → Monthly KPI, then ✨ Suggest from KPI.', go: '#mytasks', cta: 'Open My Task' },
+  ];
+  res.json({ show: steps.some((x) => !x.done), done: steps.filter((x) => x.done).length, total: steps.length, steps });
 }));
 // ---------- Usernames (logins) ----------
 // Who may manage which: a full admin → every login; a PM → the logins of their own media buyers.

@@ -3295,3 +3295,6 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 /* Media buyer site: Ad accounts page is read-only (PM syncs, ticks, connects the extension) */
 html.asbuyer body[data-site=mb] #refreshAccts,html.asbuyer body[data-site=mb] #extBtn,html.asbuyer body[data-site=mb] #extBox,html.asbuyer body[data-site=mb] .smit-td-chk,html.asbuyer body[data-site=mb] #smitAccountsTable th:first-child,html.asbuyer body[data-site=mb] .smit-banner-row,html.asbuyer body[data-site=mb] [data-av=share],html.asbuyer body[data-site=mb] [data-av=pixel]{display:none!important}
 html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-only here — your PM syncs and ticks accounts.';color:var(--muted)}
+.as-full{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);font-weight:600;margin:0 10px;white-space:nowrap}
+.as-full input{width:16px;height:16px;accent-color:var(--brand)}
+.rolechip.full{background:var(--brand);color:var(--on-brand)}

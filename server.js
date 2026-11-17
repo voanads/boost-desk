@@ -408,7 +408,7 @@ api.use(wrap(async (req, res, next) => {
 api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
-    isOwner: (await db.ownerId()) === req.user.fb_id,
+    isOwner: await isFull(req), isAppOwner: (await db.ownerId()) === req.user.fb_id, fullAdmin: await isFull(req),
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
     profitRole: null, // the Profit panel was removed
     google: req.session.gEmail ? { email: req.session.gEmail, picture: req.session.gPic || '' } : null, viewOnly: !!req.user.google,
@@ -422,8 +422,18 @@ api.get('/me', wrap(async (req, res) => {
 // Profit panel removed (Nov 2026): the router stays in src/profit.js and its tables are kept, but nothing is mounted.
 
 // Auto sync control — only the app owner can see or change it, for every account that logged in.
+// Full admin = the app owner, a Facebook account the owner marked "Full admin" (setting fullAdmins), or a Gmail person on the
+// admin website with the Full admin tick. They can do everything the owner can in Admin, except change the owner's own role.
+const fullAdmins = async () => new Set((await db.getSetting('fullAdmins', [])) || []);
+async function isFull(req) {
+  if (!req.user || req.user.buyer) return false;
+  if ((await db.ownerId()) === req.user.fb_id) return true;
+  if ((await fullAdmins()).has(req.user.fb_id)) return true;
+  if (req.session && req.session.gEmail) { const p = await sitePerson(req.session.gEmail); if (p && p.full) return true; }
+  return false;
+}
 const ownerOnly = wrap(async (req, res, next) => {
-  if ((await db.ownerId()) !== req.user.fb_id) return res.status(403).json({ error: 'Only the app owner can manage auto sync.' });
+  if (!(await isFull(req))) return res.status(403).json({ error: 'Only the app owner (or a full admin) can do this.' });
   next();
 });
 api.get('/auto-sync', ownerOnly, wrap(async (req, res) => res.json({ on: process.env.AUTO_SYNC !== 'off', users: await jobs.statusAll() })));
@@ -694,16 +704,19 @@ api.get('/admin/users', adminOnly, wrap(async (req, res) => {
       lastSeen: await db.getUserSetting(st.id, 'lastSeen', null), autoReport: await db.getUserSetting(st.id, 'autoReport', null) });
   }
   out.sort((a, b) => ({ owner: 0, admin: 1, member: 2 }[a.role] - { owner: 0, admin: 1, member: 2 }[b.role]) || String(a.name).localeCompare(String(b.name)));
-  res.json({ users: out, canEdit: owner === req.user.fb_id, me: req.user.fb_id, autoSyncServer: process.env.AUTO_SYNC !== 'off', blocked: owner === req.user.fb_id ? await db.blockedUsers() : {} });
+  const full = await isFull(req), fa = await fullAdmins(); for (const u of out) if (u.role !== 'owner' && fa.has(u.id)) u.company = 'full';
+  res.json({ users: out, canEdit: full, me: req.user.fb_id, autoSyncServer: process.env.AUTO_SYNC !== 'off', blocked: full ? await db.blockedUsers() : {} });
 }));
 api.put('/admin/role/:id', ownerOnly, wrap(async (req, res) => {
-  const id = req.params.id; if (id === req.user.fb_id) return res.status(400).json({ error: 'You are the owner.' });
+  const id = req.params.id; if (id === req.user.fb_id) return res.status(400).json({ error: 'You can\'t change your own role.' });
+  if (id === (await db.ownerId())) return res.status(400).json({ error: 'The app owner\'s role can\'t be changed.' });
   if (!(await db.getUser(id))) return res.status(404).json({ error: 'Account not found.' });
   const role = String((req.body || {}).role || ''), map = await roleMap();
-  // ceo / coo see everything (admin viewers); pm and the older "member" see only their own clients.
-  const v = await adminViewers(); if (role === 'admin' || role === 'ceo' || role === 'coo') v.add(id); else v.delete(id);
-  if (ROLES.includes(role)) map[id] = role; else delete map[id];
-  await db.setSetting('roles', map); await db.setSetting('adminViewers', [...v]); res.json({ ok: true, role: await roleOf(id) });
+  // ceo / coo see everything (admin viewers); pm and the older "member" see only their own clients; full = everything the owner can do.
+  const v = await adminViewers(); if (role === 'admin' || role === 'ceo' || role === 'coo' || role === 'full') v.add(id); else v.delete(id);
+  const fa = await fullAdmins(); if (role === 'full') fa.add(id); else fa.delete(id); await db.setSetting('fullAdmins', [...fa]);
+  if (ROLES.includes(role)) map[id] = role; else if (role === 'full') map[id] = 'ceo'; else delete map[id];
+  await db.setSetting('roles', map); await db.setSetting('adminViewers', [...v]); res.json({ ok: true, role: role === 'full' ? 'full' : await roleOf(id) });
 }));
 // Everything that needs attention, worst first.
 api.get('/admin/health', adminOnly, wrap(async (req, res) => {
@@ -745,7 +758,7 @@ api.get('/admin/health', adminOnly, wrap(async (req, res) => {
 // System health (server, database, jobs, outside services, errors) and owner alerts.
 api.get('/admin/system', adminOnly, wrap(async (req, res) => {
   const snap = await health.snapshot(db);
-  const chat = await db.getSetting('alertChat', null), isOwner = (await db.ownerId()) === req.user.fb_id;
+  const chat = await db.getSetting('alertChat', null), isOwner = await isFull(req);
   res.json({ ...snap, problems: health.problems(snap), alerts: { on: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, bot: await telegram.username(), code: isOwner ? await linkCode(req.user.fb_id) : '', canEdit: isOwner } });
 }));
 api.delete('/admin/alerts', ownerOnly, wrap(async (req, res) => { await db.setSetting('alertChat', null); res.json({ ok: true }); }));
@@ -865,8 +878,9 @@ api.post('/admin/site-access', ownerOnly, wrap(async (req, res) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Type a full email address, like name@gmail.com.' });
   if (linkTo && !(await db.getUser(linkTo))) return res.status(400).json({ error: 'That Boost Desk account was not found.' });
   const site = await siteCfg(), old = site.people.find((p) => p.email === email);
-  if (old) Object.assign(old, { linkTo, name: String((req.body || {}).name || old.name || '').slice(0, 80) });
-  else site.people.push({ email, name: String((req.body || {}).name || '').slice(0, 80), linkTo, addedAt: new Date().toISOString(), addedBy: req.user.name, lastLogin: null });
+  const full = (req.body || {}).full == null ? (old ? !!old.full : false) : !!(req.body || {}).full;
+  if (old) Object.assign(old, { linkTo, full, name: String((req.body || {}).name || old.name || '').slice(0, 80) });
+  else site.people.push({ email, name: String((req.body || {}).name || '').slice(0, 80), linkTo, full, addedAt: new Date().toISOString(), addedBy: req.user.name, lastLogin: null });
   await db.setSetting('adminSite', site); res.json({ people: site.people });
 }));
 api.delete('/admin/site-access/:email', ownerOnly, wrap(async (req, res) => {
@@ -896,7 +910,7 @@ api.get('/admin/settings', adminOnly, wrap(async (req, res) => {
     orders: await orders.publicConfig(),
     invoice: { company: prof.company, bankName: prof.bankName, accountName: prof.accountName, accountNo: prof.accountNo, qr: prof.qr },
     autoSyncServer: process.env.AUTO_SYNC !== 'off', tz: cfg.tz, taxRate: sync.TAX_RATE,
-    canEdit: (await db.ownerId()) === req.user.fb_id,
+    canEdit: await isFull(req),
     ai: await require('./src/ai').publicConfig(),
   });
 }));
@@ -1151,12 +1165,12 @@ api.put('/invoice-profile', wrap(async (req, res) => {
   for (const k of ['logo', 'qr', 'sign']) if (b[k] != null) { if (b[k] !== '' && (!IMG.test(b[k]) || b[k].length > 450000)) return res.status(400).json({ error: 'Pictures must be PNG or JPG, up to about 300 KB each.' }); next[k] = b[k]; }
   if (b.message != null) { const m = String(b.message).replace(/\r/g, '').slice(0, 900); next.message = m.trim() && m !== invoice.DEFAULT_MESSAGE ? m : ''; }
   await db.setUserSetting(req.user.fb_id, 'invoiceProfile', next);
-  if (b.nextNumber != null && (await db.ownerId()) === req.user.fb_id) { const n = parseInt(b.nextNumber, 10); if (n > 0 && n < 1e7) await db.setSetting('invoiceSeq', n - 1); }
+  if (b.nextNumber != null && (await isFull(req))) { const n = parseInt(b.nextNumber, 10); if (n > 0 && n < 1e7) await db.setSetting('invoiceSeq', n - 1); }
   res.json(await withMessage(req.user.fb_id));
 }));
 const autoNumber = async (date) => `IN${String(date || sync.todayIn()).slice(2, 4)}-${String((Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1).padStart(4, '0')}`;
 const cleanNumber = (v) => String(v == null ? '' : v).replace(/[^\p{L}\p{N} ._/#-]+/gu, '').trim().slice(0, 30);
-api.get('/invoice-next', wrap(async (req, res) => res.json({ next: (Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1, number: await autoNumber(isDay(req.query.date) ? req.query.date : ''), canSet: (await db.ownerId()) === req.user.fb_id })));
+api.get('/invoice-next', wrap(async (req, res) => res.json({ next: (Number(await db.getSetting('invoiceSeq', 0)) || 0) + 1, number: await autoNumber(isDay(req.query.date) ? req.query.date : ''), canSet: await isFull(req) })));
 function cleanInvoice(b, c) {
   const str = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
   const items = (Array.isArray(b.items) ? b.items : []).slice(0, 6).map((it) => ({ description: str(it.description, 160), qty: Math.max(0, Number(it.qty) || 0), price: Math.max(0, Number(it.price) || 0) })).filter((it) => it.description || it.price);

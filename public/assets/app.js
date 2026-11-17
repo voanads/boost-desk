@@ -284,7 +284,7 @@
     ['main', 'board', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
-    if (name === 'dashboard') { loadDash(); }
+    if (name === 'dashboard') { loadDash(); loadOnboarding(); }
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') { showAdm(admSec); if (admSec !== 'health') loadHealth(); }
     if (name === 'lives') loadLives();
@@ -2588,6 +2588,17 @@
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  // ---------- Getting started (Dashboard): the steps a new PM still has to do ----------
+  async function loadOnboarding() {
+    const host = $('onb'); if (!host || !me || me.buyer || document.body.dataset.site === 'admin') return;
+    let hid = false; try { hid = sessionStorage.getItem('onbHide') === '1'; } catch (_) {}
+    let d; try { d = await api('/onboarding'); } catch (_) { host.hidden = true; return; }
+    host.hidden = !d.show || hid; if (host.hidden) return;
+    const next = d.steps.find((x) => !x.done);
+    host.innerHTML = `<div class="onb-h"><div><b>Getting started</b> <span class="hint">${d.done} of ${d.total} done</span></div><div class="onb-bar" aria-hidden="true"><i style="width:${Math.round(d.done / d.total * 100)}%"></i></div><button type="button" class="ghost sm" id="onbHide" title="Hide until you log in again">Hide</button></div>
+      <ol class="onb-l">${d.steps.map((x, i) => `<li class="${x.done ? 'done' : x === next ? 'next' : ''}"><span class="onb-n" aria-hidden="true">${x.done ? '✓' : i + 1}</span><span class="onb-t"><b>${esc(x.title)}</b>${x.done ? '' : `<span class="hint">${esc(x.hint)}</span>`}</span>${x.done ? '' : `<a class="sm ${x === next ? 'primary' : ''} onb-go" href="${esc(x.go)}">${esc(x.cta)}</a>`}</li>`).join('')}</ol>`;
+    $('onbHide').onclick = () => { try { sessionStorage.setItem('onbHide', '1'); } catch (_) {} host.hidden = true; };
+  }
   // ---------- Usernames & passwords ----------
   // A new or reset password is shown once, in a small dialog with Copy.
   function showLoginSecret(username, password, who) {

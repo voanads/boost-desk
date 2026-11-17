@@ -3374,3 +3374,23 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .fbwarn.bad{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 35%,var(--line))}
 .fbwarn .btn{flex:none;height:34px;display:inline-flex;align-items:center;padding:0 14px;border-radius:var(--r-md);background:var(--brand);color:#fff;font-weight:600;text-decoration:none}
 @media (max-width:640px){.fbwarn{margin:var(--s-3) var(--s-3) 0}}
+
+/* Getting started card on the Dashboard */
+.onb{background:var(--surface);border:1px solid color-mix(in srgb,var(--brand) 30%,var(--line));border-radius:var(--r-lg);padding:14px 16px;margin:0 0 var(--s-4);display:flex;flex-direction:column;gap:10px}
+.onb[hidden]{display:none}
+.onb-h{display:flex;align-items:center;gap:14px}
+.onb-bar{flex:1;height:6px;border-radius:3px;background:var(--bg-2);overflow:hidden}
+.onb-bar i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.onb-l{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px}
+.onb-l li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-md);min-width:0}
+.onb-l li.next{background:var(--brand-soft)}
+.onb-n{width:24px;height:24px;flex:none;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:700;border:1.5px solid var(--line);color:var(--muted)}
+.onb-l li.done .onb-n{background:var(--ok);border-color:var(--ok);color:#fff}
+.onb-l li.next .onb-n{background:var(--brand);border-color:var(--brand);color:#fff}
+.onb-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.onb-t b{font-weight:600}
+.onb-l li.done .onb-t b{color:var(--muted);font-weight:500;text-decoration:line-through}
+.onb-t .hint{font-size:var(--fs-xs)}
+.onb-go{flex:none;height:30px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line);text-decoration:none;color:var(--ink);font-weight:600;font-size:var(--fs-sm);background:var(--surface)}
+.onb-go.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+@media (max-width:760px){.onb-l{grid-template-columns:1fr}}

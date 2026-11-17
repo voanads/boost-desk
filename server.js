@@ -1891,6 +1891,22 @@ api.get('/me/profile', wrap(async (req, res) => {
     autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
 }));
+// Getting started: what a new Project Manager still has to set up (shown on the Dashboard until every step is done).
+api.get('/onboarding', wrap(async (req, res) => {
+  if (req.user.buyer || req.user.google) return res.json({ show: false });
+  const me = req.user.fb_id, accts = await db.listAccounts(me), clients = (await db.listClients(me)).filter((c) => !c.archived), month = sync.todayIn().slice(0, 7);
+  const login = await LOGINS().forFb(me), chat = await db.getUserSetting(me, 'tgChat', null);
+  let kpis = 0; try { kpis = (await KPI().getList(me, month)).filter((k) => String(k.name || '').trim()).length; } catch (_) {}
+  const steps = [
+    { key: 'login', done: !!login && !login.must, title: 'Choose your username and password', hint: 'So you can log in without Facebook.', go: '#settings', cta: 'Open Settings' },
+    { key: 'accounts', done: accts.some((a) => a.enabled), title: 'Tick the ad accounts you boost with', hint: `${accts.length} ad account${accts.length === 1 ? '' : 's'} found on your Facebook. Have a second Facebook account? Add it in Settings.`, go: '#accounts', cta: 'Open Ad accounts' },
+    { key: 'clients', done: clients.length > 0, title: 'Add your first client', hint: 'A client is matched to spend by its Facebook Page.', go: '#clients', cta: 'Open Clients' },
+    { key: 'telegram', done: !!(chat && chat.id), title: 'Link your Telegram', hint: 'For alerts, and so reports can go to your clients\' groups.', go: '#settings', cta: 'Open Settings' },
+    { key: 'groups', done: clients.length > 0 && clients.every((c) => reports.routes(c).some((r) => r.chat)), title: 'Give every client a Telegram group', hint: clients.length ? `${clients.filter((c) => !reports.routes(c).some((r) => r.chat)).length} client(s) have no group yet — their report can't be sent.` : 'After you add clients.', go: '#reports', cta: 'Open Reports' },
+    { key: 'kpi', done: kpis > 0, title: 'Set this month\'s KPIs and your daily menu', hint: 'My Task → Monthly KPI, then ✨ Suggest from KPI.', go: '#mytasks', cta: 'Open My Task' },
+  ];
+  res.json({ show: steps.some((x) => !x.done), done: steps.filter((x) => x.done).length, total: steps.length, steps });
+}));
 // ---------- Usernames (logins) ----------
 // Who may manage which: a full admin → every login; a PM → the logins of their own media buyers.
 const myBuyerIds = async (req) => new Set((await MB().list()).filter((b) => b.addedById === req.user.fb_id || (!b.addedById && b.addedBy === req.user.name)).map((b) => b.id));

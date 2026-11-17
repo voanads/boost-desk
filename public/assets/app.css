@@ -3256,3 +3256,22 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .uhelp summary::before{content:"ⓘ ";font-weight:400}
 .uhelp[open] summary{margin-bottom:6px}
 .co-rv small{white-space:nowrap}
+
+/* My Task: ✨ top-5 menu suggestions from the month's KPIs */
+.mt-sugbtn{margin-left:auto;background:var(--brand-soft);color:var(--brand);border-color:transparent;font-weight:600}
+#mtMenu .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mt-sug{border:1.5px solid color-mix(in srgb,var(--brand) 35%,var(--line));background:color-mix(in srgb,var(--brand) 4%,var(--surface));border-radius:var(--r-lg);padding:12px 14px;display:flex;flex-direction:column;gap:10px;margin:4px 0}
+.mt-sug-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mt-sug-h b{font-weight:700;color:var(--brand)}
+.mt-sug-h .hint{flex:1;min-width:200px}
+.mt-sug-list{display:flex;flex-direction:column;gap:6px}
+.mt-sug-it{display:grid;grid-template-columns:22px 26px minmax(0,1fr);gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);cursor:pointer}
+.mt-sug-it:has(input:checked){border-color:color-mix(in srgb,var(--brand) 45%,var(--line));background:color-mix(in srgb,var(--brand) 6%,var(--surface))}
+.mt-sug-it input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--brand)}
+.mt-sug-it .mt-ix{margin-top:1px}
+.mt-sug-t{display:flex;flex-direction:column;gap:3px;min-width:0}
+.mt-sug-t b{font-weight:600;font-size:var(--fs-lg)}
+.mt-sug-t .chip.kpi{align-self:flex-start;font-size:var(--fs-2xs)}
+.mt-sug-t .hint{line-height:1.4}
+.mt-sug-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mt-sug-f .hint{margin-left:auto;font-size:var(--fs-xs)}

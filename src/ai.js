@@ -306,4 +306,33 @@ async function kpiSuggest(ownerId, { name, target, unit, role = 'pm', menu = [],
   kpiCache.set(ck, { at: Date.now(), out: result }); for (const [k, v] of kpiCache) if (Date.now() - v.at > 6 * 3600e3) kpiCache.delete(k);
   return result;
 }
-module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest };
+// Top 5 daily menu tasks from ALL of a person's monthly KPIs — the "what should my day look like" list.
+const MENU_SYSTEM = `You coach the staff of Ads Box, a Facebook ads agency in Cambodia (project managers and media buyers who boost client lives and posts, send daily reports, collect payments and keep clients).
+You get one person's monthly KPIs (name, target, unit) and the daily task menu they already have. Propose the 5 best DAILY tasks for their menu so that doing them every day moves the KPIs. Every KPI with a target must be covered by at least one task when there are 5 or fewer KPIs; order by impact.
+Answer ONLY with JSON: {"tasks":[{"title":"short imperative task, max 60 characters","how":"one sentence: how to do it / what to check","kpi":"the exact KPI name this task moves"}]}
+Rules: concrete things one person ticks off each day, tied to Pages, lives, boosted posts, reports, Telegram, orders, payments, clients; no generic advice; do not repeat a task that is already on their menu (suggest something different for that KPI instead); "kpi" must be copied exactly from the KPI list.`;
+const menuCache = new Map();
+async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 'km', fresh = false }) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  if (!kpis.length) throw Object.assign(new Error('Add this month\'s KPIs first — the suggestions come from them.'), { status: 400 });
+  const ck = crypto.createHash('sha1').update(JSON.stringify([kpis.map((k) => [k.name, k.target, k.unit]), menu, role, lang])).digest('hex');
+  const hit = menuCache.get(ck); if (!fresh && hit && Date.now() - hit.at < 6 * 3600e3) return { ...hit.out, cached: true };
+  const today = sync.todayIn(), useKey = `aiUse:${today}`, used = Number(await db.getUserSetting(ownerId, useKey, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const langLine = lang === 'km' ? 'Write title and how in Khmer (ខ្មែរ); keep product words like Boost, Live, Page, Ad account, Telegram in English. The "kpi" field stays exactly as given.' : 'Write title and how in simple English. The "kpi" field stays exactly as given.';
+  const user = `${langLine}\n\nRole: ${role === 'mb' ? 'media buyer' : 'project manager'}\nKPIs this month:\n${kpis.map((k) => `- ${k.name} — target ${k.target} ${k.unit || ''}`.trim()).join('\n')}\nTheir daily menu now: ${menu.length ? menu.map((m) => '- ' + m).join('\n') : '(empty)'}`;
+  const out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, MENU_SYSTEM, [{ role: 'user', content: user }]);
+  await db.setUserSetting(ownerId, useKey, used + 1);
+  let tasks = [];
+  try { const m = out.text.match(/\{[\s\S]*\}/); tasks = (JSON.parse(m ? m[0] : out.text).tasks || []); } catch (_) { throw new Error('The AI answer could not be read. Try again.'); }
+  const norm = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  tasks = tasks.slice(0, 6).map((t) => { const name = norm(t && t.kpi); const k = kpis.find((x) => norm(x.name) === name) || kpis.find((x) => name && (norm(x.name).includes(name) || name.includes(norm(x.name))));
+    return { title: String((t && t.title) || '').trim().slice(0, 160), how: String((t && t.how) || '').trim().slice(0, 300), kpi: k ? k.id : '', kpiName: k ? k.name : '' }; }).filter((t) => t.title).slice(0, 5);
+  if (!tasks.length) throw new Error('The AI gave no tasks. Try again.');
+  const result = { tasks, at: new Date().toISOString() };
+  menuCache.set(ck, { at: Date.now(), out: result }); for (const [k, v] of menuCache) if (Date.now() - v.at > 6 * 3600e3) menuCache.delete(k);
+  return result;
+}
+
+module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest };

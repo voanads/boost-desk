@@ -2498,7 +2498,8 @@
     // ---- Facebook ----
     const fb = d.buyer ? '' : card('Facebook account', d.facebook.expired ? pill('bad', 'Login expired') : d.facebook.daysLeft !== null && d.facebook.daysLeft < 7 ? pill('warn', `Expires in ${d.facebook.daysLeft} day${d.facebook.daysLeft === 1 ? '' : 's'}`) : pill('ok', 'Connected'), `
       <div class="st-who">${d.picture ? `<img src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${initials(d.name)}</span>`}<span class="st-pn"><b>${esc(d.name)}</b><span class="hint">${d.facebook.expires ? `Token valid until ${esc(dmy(d.facebook.expires))}` : 'No token'} · ${d.facebook.accounts} ad account${d.facebook.accounts === 1 ? '' : 's'} · ${d.facebook.pages} Page${d.facebook.pages === 1 ? '' : 's'}</span></span></div>
-      <div class="st-btns"><a class="btn fb" href="/auth/facebook">Continue with Facebook</a><button type="button" class="sm danger-txt" id="stFbOff">Disconnect</button></div>`);
+      <div class="st-btns"><a class="btn fb" href="/auth/facebook">Continue with Facebook</a><button type="button" class="sm danger-txt" id="stFbOff">Disconnect</button></div>
+      <div class="st-fbx" id="stFbExtras"></div>`);
     // ---- Telegram ----
     const tgHint = d.buyer
       ? (d.telegram.linked ? 'Tasks from your PM, the 📋 My tasks button and reminders come to your Telegram.' : 'Not linked yet — open the invite link from your PM in Telegram and tap <b>Start</b>.')
@@ -2524,6 +2525,7 @@
     // ---- wiring ----
     const put = async (url, body) => { try { return await api(url, { method: 'PUT', body }); } catch (e) { toast(e.message); return null; } };
     const sv = $('stSave'); if (sv) sv.onclick = async () => { sv.disabled = true; const body = { name: $('stName').value.trim() }; if ($('stTeam')) body.team = $('stTeam').value; const r = await put('/me/profile', body); sv.disabled = false; if (r) { toast('Saved'); me.name = r.name; $('whoName').textContent = r.name; loadSettingsPage(); } };
+    drawFbExtras();
     const fbo = $('stFbOff'); if (fbo) fbo.onclick = () => { if (confirm('Disconnect Facebook? This logs you out of Boost Desk — log in with Facebook again to continue.')) $('logoutBtn').click(); };
     const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { if (!confirm('Unlink your Telegram? Alerts stop until you link it again.')) return; try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
     const tt = $('stTgTest'); if (tt) tt.onclick = async () => { tt.disabled = true; try { await api('/me/telegram/test', { method: 'POST' }); toast('Sent — check your Telegram'); } catch (e) { toast(e.message); } tt.disabled = false; };
@@ -2555,6 +2557,26 @@
   }
   // ---- the task menu for one day: the role's fixed duties, tick as you go ----
   const mtAsQ = () => (mtAs ? `as=${encodeURIComponent(mtAs.id)}` : '');
+  // Settings → Facebook account: my 2nd / 3rd Facebook accounts, whose ad accounts sync into this same workspace.
+  async function drawFbExtras() {
+    const host = $('stFbExtras'); if (!host) return;
+    let d; try { d = await api('/fb-accounts'); } catch (_) { host.innerHTML = ''; return; }
+    host.innerHTML = `<div class="st-fbx-h"><b>More Facebook accounts</b><span class="hint">Your other Facebook accounts — their ad accounts sync into this same workspace.</span></div>
+      ${d.extras.map((e) => `<div class="st-fbx-r"><span class="avatar">${initials(e.name)}</span><span class="st-pn"><b>${esc(e.name)}</b><span class="hint">${e.expired || e.error ? `<span class="is-warn">${esc(e.error || 'Login expired — connect it again')}</span>` : `<span class="is-ok">connected</span> · ${e.accounts} ad account${e.accounts === 1 ? '' : 's'} (${e.syncing} syncing)${e.expires ? ' · valid until ' + esc(new Date(e.expires).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : ''}`}</span></span><button type="button" class="sm danger-txt" data-fbxoff="${esc(e.id)}" data-fbxname="${esc(e.name)}">Remove</button></div>`).join('')}
+      <details class="st-fbx-add"><summary class="sm">+ Connect another Facebook account</summary>
+        <ol><li>In another tab open <b>facebook.com</b> and switch to (or log in as) the <b>other</b> account.</li><li>Come back here and tap <b>Connect</b>. You stay logged in to Boost Desk as yourself.</li><li>Open <b>Ad accounts</b>, tick the new accounts, then <b>Sync from Meta</b>.</li></ol>
+        <a class="btn fb" href="/auth/facebook?link=1">Connect</a></details>`;
+    host.querySelectorAll('[data-fbxoff]').forEach((b) => b.onclick = async () => {
+      if (!confirm(`Remove ${b.dataset.fbxname}? Its ad accounts stop syncing here. Spend already saved on your clients stays.`)) return;
+      try { const r = await api('/fb-accounts/' + encodeURIComponent(b.dataset.fbxoff), { method: 'DELETE' }); successBadge(`Removed — ${r.removedAccounts} ad account${r.removedAccounts === 1 ? '' : 's'} left the workspace`); } catch (e) { toast(e.message); }
+      drawFbExtras();
+    });
+  }
+  (() => { // the answer from Facebook after "Connect": shown once, then cleaned from the address bar
+    const q = new URLSearchParams(location.search), m = q.get('fbmsg'); if (!m) return;
+    const ok = q.get('fb') === 'ok'; history.replaceState(null, '', location.pathname + location.hash);
+    setTimeout(() => { if (ok && typeof successBadge === 'function') successBadge(m); else toast(m); }, 600);
+  })();
   async function mtSuggest({ host, d, kpis, body, reload, fresh = false, auto = false }) {
     if (!host) return; host.hidden = false; host.dataset.loaded = '1';
     host.innerHTML = `<div class="mt-sug"><div class="mt-sug-h"><b>✨ Top 5 for today, from your KPIs</b><span class="hint">Thinking…</span></div><div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading ${kpis.length} KPI${kpis.length === 1 ? '' : 's'} and the menu</div></div>`;

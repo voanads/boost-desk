@@ -3333,3 +3333,12 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .rp-table tbody th,.rp-table tfoot th{text-transform:none;letter-spacing:0;font-size:var(--fs-md);color:var(--ink);background:transparent}
 .rp-table tfoot th{background:var(--bg-2)}
 .rp-table tbody .rp-n b{font-size:var(--fs-lg)}
+
+/* Settings: extra Facebook accounts connected to the same workspace */
+.st-fbx{margin-top:var(--s-3);padding-top:var(--s-3);border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.st-fbx-h{display:flex;flex-direction:column;gap:2px}
+.st-fbx-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r-md)}
+.st-fbx-r .st-pn{flex:1;min-width:0;display:flex;flex-direction:column}
+.st-fbx-add summary{cursor:pointer;display:inline-flex;align-items:center;height:34px;padding:0 12px;border:1px dashed var(--line);border-radius:var(--r-md);font-weight:600;color:var(--brand);list-style:none}
+.st-fbx-add summary::-webkit-details-marker{display:none}
+.st-fbx-add ol{margin:10px 0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--ink);font-size:var(--fs-md)}

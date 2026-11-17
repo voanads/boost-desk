@@ -56,13 +56,13 @@ async function checkNewCampaigns(user) {
     log(`new ad account for ${user.name}: ${added.map((a) => a.name || a.id).join(', ')}`);
     await rangeFor(user, 30, 'new ad account');
   }
-  const accounts = await db.enabledAccountIds(user.fb_id);
+  const accounts = await db.enabledAccountIds(user.fb_id), pick = await sync.tokenPicker(user);
   const known = await db.getUserSetting(user.fb_id, 'activeCampaigns', null);
   const now = {};
   const fresh = [];
   for (const act of accounts) {
     try {
-      now[act] = await meta.activeCampaignIds(token, act);
+      now[act] = await meta.activeCampaignIds(pick(act), act);
     } catch (e) {
       now[act] = known?.[act] || [];
       continue;

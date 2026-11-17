@@ -51,7 +51,11 @@ function stateOk(state) {
 }
 const loggedIn = async (req) => !!(req.session && req.session.fbId && (await db.getUser(req.session.fbId)));
 
-app.get('/auth/facebook', (req, res) => { req.session.next = req.query.next === 'admin' ? '/admin' : null; res.redirect(meta.loginUrl(newState())); });
+app.get('/auth/facebook', (req, res) => {
+  // ?link=1 from Settings: connect ANOTHER Facebook account to the workspace I'm logged in to (my 2nd / 3rd account).
+  req.session.linkFor = req.query.link === '1' && req.session.fbId && !req.session.mb ? req.session.fbId : null;
+  req.session.next = req.query.next === 'admin' ? '/admin' : null; res.redirect(meta.loginUrl(newState()));
+});
 
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
@@ -69,6 +73,21 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
     return res.redirect('/login?error=' + encodeURIComponent('Facebook login did not finish (' + e.message + '). Tap Continue with Facebook again.'));
   }
   const profile = await meta.me(token);
+  // Connecting an extra Facebook account to my workspace: keep me logged in as myself, save the other login beside mine.
+  const linkFor = req.session.linkFor; req.session.linkFor = null;
+  if (linkFor && req.session.fbId === linkFor && (await db.getUser(linkFor))) {
+    const back = (msg, ok) => res.redirect('/?fb=' + (ok ? 'ok' : 'err') + '&fbmsg=' + encodeURIComponent(msg) + '#settings');
+    if (profile.id === linkFor) { await db.upsertUser(profile.id, profile.name, encrypt(token), expires); return back('That is the Facebook account you are already logged in with. On facebook.com switch to your other account first, then tap Connect again.', false); }
+    if ((await db.blockedUsers())[profile.id]) return back(`${profile.name}'s access to Boost Desk was removed, so it can't be connected.`, false);
+    const other = await db.getUser(profile.id);
+    if (other && (await db.listClients(profile.id)).length) return back(`${profile.name} already has its own Boost Desk workspace with clients. Connecting it here would count the same spend twice — ask the owner if the two should be merged.`, false);
+    const list = (await sync.extraLogins(linkFor)).filter((x) => x.id !== profile.id);
+    if (list.length >= 5) return back('You can connect up to 5 extra Facebook accounts.', false);
+    list.push({ id: profile.id, name: profile.name, token_enc: encrypt(token), expires, addedAt: new Date().toISOString() });
+    await db.setUserSetting(linkFor, 'fbExtras', list);
+    let n = 0; try { await sync.refreshAccounts(await db.getUser(linkFor)); n = (await db.listAccounts(linkFor)).filter((a) => (a.info || {}).via === profile.id).length; } catch (e) { console.error('[fb link] account list failed:', e.message); }
+    return back(`${profile.name} connected — ${n} more ad account${n === 1 ? '' : 's'} found. Tick the ones to sync in Ad accounts, then Sync from Meta.`, true);
+  }
   if (cfg.allowedFbIds.length && !cfg.allowedFbIds.includes(profile.id)) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name} is not on this app's team list. Ask the admin to add Facebook ID ${profile.id}.`));
   }
@@ -854,7 +873,10 @@ api.post('/admin/ad-accounts', ownerOnly, wrap(async (req, res) => {
   const act = 'act_' + m[1];
   let acc;
   try { acc = await meta.adAccount(await sync.tokenFor(user), act); }
-  catch (e) { return res.status(400).json({ error: e.needsLogin ? `${user.name}'s Facebook login has expired — they need to log in to Boost Desk again first.` : `${user.name}'s Facebook login can't open ${act} (${e.message}). Give them access to this ad account in Business Manager, then try again.` }); }
+  catch (e0) { let e = e0; // not on their main login: try the extra Facebook accounts connected to their workspace
+    for (const x of await sync.extraLogins(owner)) { try { acc = { ...(await meta.adAccount(require('./src/crypto').decrypt(x.token_enc), act)), via: x.id, viaName: x.name }; break; } catch (e2) { e = e0; } }
+    if (!acc) return res.status(400).json({ error: e.needsLogin ? `${user.name}'s Facebook login has expired — they need to log in to Boost Desk again first.` : `${user.name}'s Facebook login can't open ${act} (${e.message}). Give them access to this ad account in Business Manager, then try again.` }); }
+
   await db.saveAccounts(owner, [acc]);
   await db.pool.query('UPDATE ad_accounts SET enabled=true WHERE owner=$1 AND id=$2', [owner, act]);
   res.json({ ok: true, account: { id: act, name: acc.name, status: acc.status }, owner: user.name });
@@ -1811,6 +1833,21 @@ api.get('/me/profile', wrap(async (req, res) => {
     telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
     autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
+}));
+// Settings → Facebook accounts: the extra logins connected to my workspace.
+api.get('/fb-accounts', wrap(async (req, res) => {
+  const me = req.user.fb_id, accts = await db.listAccounts(me), now = Date.now();
+  res.json({ extras: (await sync.extraLogins(me)).map((e) => ({ id: e.id, name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
+    accounts: accts.filter((a) => (a.info || {}).via === e.id).length, syncing: accts.filter((a) => (a.info || {}).via === e.id && a.enabled).length })) });
+}));
+api.delete('/fb-accounts/:id', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
+  const me = req.user.fb_id, list = await sync.extraLogins(me), next = list.filter((e) => e.id !== String(req.params.id));
+  if (next.length === list.length) return res.status(404).json({ error: 'That Facebook account is not connected.' });
+  await db.setUserSetting(me, 'fbExtras', next);
+  // Its ad accounts leave the workspace (saved spend stays on the clients); the next account refresh would drop them anyway.
+  const gone = (await db.pool.query(`DELETE FROM ad_accounts WHERE owner=$1 AND info->>'via'=$2 RETURNING id`, [me, String(req.params.id)])).rows.length;
+  res.json({ ok: true, removedAccounts: gone });
 }));
 // Settings → Profile: my display name and team.
 api.put('/me/profile', wrap(async (req, res) => {

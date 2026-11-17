@@ -66,11 +66,11 @@ async function setupsFor(user, campaigns, { fetch = true } = {}) {
   const missing = {};
   for (const c of campaigns) if (c.id && !out[c.id] && c.accountId) (missing[c.accountId] = missing[c.accountId] || new Set()).add(c.id);
   if (!Object.keys(missing).length) return out;
-  const token = await sync.tokenFor(user);
+  const pick = await sync.tokenPicker(user);
   const errors = [];
   for (const [act, set] of Object.entries(missing)) {
     try {
-      const got = await meta.campaignSetups(token, act, [...set]);
+      const got = await meta.campaignSetups(pick(act), act, [...set]);
       for (const [id, data] of Object.entries(got)) { out[id] = data; await db.putSetup(user.fb_id, id, data); }
     } catch (e) {
       if (e.needsLogin) throw e;

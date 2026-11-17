@@ -499,6 +499,7 @@ api.get('/main/suggestions', adminOnly, wrap(async (req, res) => {
 // Includes tasks left open from earlier days (only when looking at today) and earlier tasks finished on this day.
 // A task's target for one day: { target, unit, reached } (reached is typed by the person; per day for every-day tasks).
 const tgt = (t, day) => (Number(t.target) > 0 ? { target: Number(t.target), unit: String(t.unit || ''), reached: Number((t.hit || {})[day]) || 0 } : {});
+const AI_TASK_DAYS = 3; // unticked AI plan tasks drop off after this many days
 async function dayTasks(day) {
   const today = sync.todayIn();
   const users = await db.allUsers(), out = {};
@@ -520,6 +521,7 @@ async function dayTasks(day) {
       }
       const late = t.day < day && ((!t.done && day === today) || doneDay === day);
       if (t.day !== day && !late) continue;
+      if (t.from === 'ai' && !t.done && t.day < sync.addDays(day, -AI_TASK_DAYS)) continue; // an AI idea nobody ticked in 3 days has expired
       o.tasks.push({ id: t.id, text: t.text, from: t.from === 'ai' ? 'ai' : 'me', day: t.day, done: !!t.done, doneAt: t.doneAt || null, doneBy: t.doneBy || null, late: t.day < day, client: cName[cid], clientId: Number(cid), ...tgt(t, t.day), to: t.to ? { id: t.to.id, name: t.to.name } : null, sentAt: t.sentAt || null, kpi: t.kpi || '' });
     }
   }

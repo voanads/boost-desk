@@ -32,7 +32,7 @@ async function tasksOf(person, isBuyer) {
     ? (await db.pool.query(`SELECT key, value FROM settings WHERE key ~ '^[^:]+:cwb:[0-9]+$'`)).rows
     : (await db.pool.query(`SELECT key, value FROM settings WHERE key LIKE $1`, [`${person}:cwb:%`])).rows;
   const out = [];
-  for (const r of rows) { const w = r.value || {}; for (const t of w.tasks || []) { if (isBuyer && !(t.to && t.to.id === person)) continue; if (!isBuyer && t.to) continue; out.push({ t, log: w.log || [] }); } }
+  for (const r of rows) { const w = r.value || {}; for (const t of w.tasks || []) { if (isBuyer && !(t.to && t.to.id === person)) continue; if (!isBuyer && t.to) continue; if (t.from === 'ai' && !t.done) continue; /* AI ideas are not duties until ticked */ out.push({ t, log: w.log || [] }); } }
   return out;
 }
 

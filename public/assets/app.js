@@ -1309,7 +1309,7 @@
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
     // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
     const upcoming = (w.tasks || []).filter((t) => !t.done && (t.day || '') > today).sort((a, b) => (a.day || '').localeCompare(b.day || ''));
-    const tasks = (w.tasks || []).filter((t) => (t.day || '') <= today && (t.repeat || !t.done || !t.doneDay || t.doneDay >= today)).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
+    const tasks = (w.tasks || []).filter((t) => (t.day || '') <= today && (t.repeat || !t.done || !t.doneDay || t.doneDay >= today) && !(t.from === 'ai' && !t.done && t.day < addDaysIso(today, -3))).sort((a, b) => (a.done - b.done) || (!!b.repeat - !!a.repeat) || (b.day || '').localeCompare(a.day || ''));
     const open = todo.filter((x) => !tick(x.kind)).length + tasks.filter((t) => !t.done).length;
     const box = '<span class="tbox" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span>';
     const doneN = todo.filter((x) => tick(x.kind)).length + tasks.filter((t) => t.done).length; // ticked items drop out of the list (they're in Done history); "Show" brings them back for a look
@@ -1754,19 +1754,22 @@
   }
   function renderCompany() {
     const d = coData; if (!d || d.month !== coMonth) return;
-    const pc = (v) => (v == null ? '–' : v + '%'), col = (v) => (v == null ? '' : v >= 100 ? 'good' : v >= 60 ? 'mid' : 'bad');
+    // Pace: on day 17 of 30 a KPI at 57% is on track, so colours compare with where the month should be, not with 100%.
+    const dim = new Date(Date.UTC(Number(d.month.slice(0, 4)), Number(d.month.slice(5, 7)), 0)).getUTCDate(), pace = d.isThisMonth ? Math.max(5, Math.round(Number(d.to.slice(8, 10)) / dim * 100)) : 100;
+    const pc = (v) => (v == null ? '–' : v + '%'), col = (v) => (v == null ? '' : v >= pace ? 'good' : v >= pace * 0.6 ? 'mid' : 'bad');
+    const paceTxt = (v) => (v == null || !d.isThisMonth ? '' : v >= pace ? 'on track' : `behind by ${pace - v} pts`);
     $('coSub').textContent = `${nice(d.from)} – ${nice(d.to)} · ${d.people.users} people · ${d.people.teams} teams · ${d.people.buyers} media buyers (${d.people.buyersLinked} on Telegram)`;
     $('coKpis').innerHTML = `
       <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
       <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
       <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>
-      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.kpis.hit} of ${d.kpis.total} KPIs at 100 %+</span></div>
+      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.isThisMonth ? `day ${Number(d.to.slice(8, 10))}/${dim} · expected ${pace}% · ${paceTxt(d.kpis.avg) || '–'}` : `${d.kpis.hit} of ${d.kpis.total} KPIs reached`}</span></div>
       <div class="mk ${d.tasks.overdue ? 'warn' : ''}"><span class="lbl">Today's tasks</span><b class="num">${d.tasks.done}<small> / ${d.tasks.done + d.tasks.open}</small></b><span class="sub">${d.tasks.overdue ? `<span class="is-danger">${d.tasks.overdue} overdue</span>` : 'nothing overdue'} · target ${pc(d.tasks.targetPct)}</span></div>`;
     $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th>Team</th><th>People</th><th class="r">Clients</th><th class="r">Spend</th><th class="r">Revenue</th><th class="r">Tasks today</th><th class="r">Overdue</th><th class="r">Target</th><th class="r">KPI</th></tr></thead><tbody>${d.teams.map((t) => `<tr>
       <td><b>${esc(t.name)}</b></td><td class="hint">${t.people.map((p) => esc(p.name)).join(', ') || '—'}${t.buyers ? ` · ${t.buyers} MB` : ''}</td><td class="r num">${t.clients}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.revenue)}</td>
       <td class="r num">${t.tasks.done} / ${t.tasks.done + t.tasks.open}</td><td class="r num ${t.tasks.overdue ? 'bad' : ''}">${t.tasks.overdue || '–'}</td><td class="r num ${col(t.targetPct)}">${pc(t.targetPct)}</td><td class="r num ${col(t.kpiAvg)}">${pc(t.kpiAvg)}${t.kpis ? `<span class="hint"> · ${t.kpis}</span>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">No teams yet — make them in Admin → Teams.</div>';
     const K = d.kpis.rows; $('coTgHint').textContent = K.length ? `${K.length} KPIs with a target this month` : '';
-    $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small></span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
+    $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.unit === '%' ? `${k.result}%<small> · ${k.done || 0} of ${k.due || 0} done · target ${k.target}%</small>` : `${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small>`}</span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
     $('coAlerts').innerHTML = d.alerts.length ? `<div class="co-list">${d.alerts.map((a) => `<div class="co-row al ${a.level}"><span class="co-dot"></span><div class="co-rt"><b>${esc(a.text)}</b><span class="hint">${esc(a.client)} · ${esc(a.person)}${a.detail ? ' · ' + esc(a.detail) : ''}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No critical alerts right now.</div>';
     $('coOverdue').innerHTML = d.overdue.length ? `<div class="co-list">${d.overdue.map((o) => `<div class="co-row"><div class="co-rt"><b>${esc(o.text)}</b><span class="hint">${esc(o.client)} · ${esc(o.person)}${o.to ? ' → ' + esc(o.to) : ''} · since ${esc(nice(o.day).replace(/ \d{4}$/, ''))}</span></div></div>`).join('')}</div>` : '<div class="empty ok">✅ No overdue tasks.</div>';
     $('coNewHint').textContent = `${d.clients.new} added in ${monLbl(d.month)}`;
@@ -1923,7 +1926,7 @@
     try { bData = await api('/main/board' + (force ? '?fresh=1' : '')); bAt = Date.now(); renderBoard(); }
     catch (e) { if (!bData) $('bDetail').innerHTML = `<div class="cd-empty">${esc(e.message)}</div>`; }
   }
-  const bState = (c) => { const open = c.tasks.filter((t) => !t.done), urgent = open.filter((t) => t.from === 'work' && t.level === 'bad').length; return { total: c.tasks.length, done: c.tasks.length - open.length, open: open.length, urgent }; };
+  const bState = (c) => { const work = c.tasks.filter((t) => t.from !== 'ai'), open = work.filter((t) => !t.done), urgent = open.filter((t) => t.from === 'work' && t.level === 'bad').length, ai = c.tasks.filter((t) => t.from === 'ai' && !t.done).length; return { total: work.length, done: work.length - open.length, open: open.length, urgent, ai }; }; // AI ideas are counted apart: they are suggestions, not duties
   const bCpo = (x) => (x && x.orders > 0 && x.spend > 0 ? (x.ordSpend || x.spend) / x.orders : null);
   const bKey = (c) => c.owner + ':' + c.id;
   function renderBoard() {
@@ -1933,11 +1936,11 @@
     const all = d.clients.map((c) => ({ ...c, st: bState(c), cpo: bCpo(c.month), cpoY: bCpo(c.yest) }));
     const inTeam = (c) => !bTeam || (bTeam === '__none' ? !c.team : c.team === bTeam);
     const scope = all.filter(inTeam), sum = (f) => scope.reduce((a, c) => a + f(c), 0);
-    const tot = { clients: scope.length, total: sum((c) => c.st.total), done: sum((c) => c.st.done), urgent: sum((c) => c.st.urgent), spend: sum((c) => c.month.spend), busy: scope.filter((c) => c.st.open).length };
+    const tot = { clients: scope.length, total: sum((c) => c.st.total), done: sum((c) => c.st.done), urgent: sum((c) => c.st.urgent), spend: sum((c) => c.month.spend), busy: scope.filter((c) => c.st.open).length, ai: sum((c) => c.st.ai) };
     const pct = tot.total ? Math.round(tot.done / tot.total * 100) : 0;
     const ords = scope.filter((c) => c.month.orders > 0), avg = ords.length ? ords.reduce((a, c) => a + (c.month.ordSpend || c.month.spend), 0) / ords.reduce((a, c) => a + c.month.orders, 0) : null;
     $('bKpis').innerHTML = `
-      <div class="bk bk-ring"><span class="ring" style="--p:${pct}"><b class="num">${pct}%</b></span><span><span class="lbl">Done today</span><b class="num">${tot.done}<small>/${tot.total}</small></b><span class="sub">work &amp; tasks</span></span></div>
+      <div class="bk bk-ring"><span class="ring" style="--p:${pct}"><b class="num">${pct}%</b></span><span><span class="lbl">Done today</span><b class="num">${tot.done}<small>/${tot.total}</small></b><span class="sub">menu &amp; tasks${tot.ai ? ` · ✨ ${tot.ai} AI idea${tot.ai === 1 ? '' : 's'}` : ''}</span></span></div>
       <div class="bk"><span class="lbl">Clients</span><b class="num">${tot.clients}</b><span class="sub">${tot.busy} with work left</span></div>
       <div class="bk ${tot.urgent ? 'bad' : ''}"><span class="lbl">Urgent</span><b class="num">${tot.urgent}</b><span class="sub">${tot.urgent ? 'unpaid, overspend…' : 'nothing urgent'}</span></div>
       <div class="bk"><span class="lbl">Spent this month</span><b class="num">${money(tot.spend)}</b><span class="sub">${avg != null ? 'avg ' + money(avg) + ' per order' : esc(nice(d.from).replace(/ \d{4}$/, '')) + ' – today'}</span></div>`;
@@ -2180,8 +2183,9 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
-      + (d.autoSyncServer ? '' : ' <span class="over">Auto sync is switched off on the server (AUTO_SYNC=off).</span>');
+    $('uHint').innerHTML = `<details class="uhelp"><summary>Which site does each role use?</summary>` + (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
+      + '</details>';
+    { let bn = $('uSyncOff'); if (!bn) { bn = document.createElement('div'); bn.id = 'uSyncOff'; bn.className = 'note onote stale'; $('uHint').insertAdjacentElement('beforebegin', bn); } bn.hidden = !!d.autoSyncServer; bn.innerHTML = '⚠ <b>Auto sync is switched off on the server</b> — nobody\'s spend updates by itself until <code>AUTO_SYNC</code> is removed in Railway → Variables. People can still tap <b>Run now</b>.'; }
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
     const day = 864e5;
     const rows = list.map((u, i) => {
@@ -2790,6 +2794,12 @@
     }).join('') || `<div class="empty">${q ? 'Nothing matches your search.' : aaF !== 'all' ? 'No ad account in this view.' : 'No ad accounts yet — tap Refresh from Facebook.'}</div>`;
     const newest = d.accounts.map((a) => a.seenAt).filter(Boolean).sort().pop();
     $('aaUpdated').textContent = newest ? 'From Facebook ' + ago(newest) : '';
+    { // stale data is a warning, not a footnote
+      const hrs = newest ? (Date.now() - Date.parse(newest)) / 36e5 : null, old = hrs == null || hrs > 2;
+      let bn = $('aaStale'); if (!bn) { bn = document.createElement('div'); bn.id = 'aaStale'; bn.className = 'note onote stale'; $('aaKpis').insertAdjacentElement('beforebegin', bn); }
+      bn.hidden = !old; if (old) bn.innerHTML = `⚠ ${newest ? `These numbers are from Facebook <b>${esc(ago(newest))}</b>` : 'Not refreshed from Facebook yet'} — balances and problems may have changed. <button type="button" class="linkish" data-aarefresh>Refresh now</button>${d.autoSyncServer === false ? ' · auto sync is off on the server' : ''}`;
+      const rb = bn.querySelector('[data-aarefresh]'); if (rb) rb.onclick = () => $('aaRefresh').click();
+    }
     // ---- detail
     const a = list.find((x) => x.id === aaSel);
     if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
@@ -3426,6 +3436,7 @@ Notes:
       if (!l) { close(); continue; }
       let m;
       if ((m = l.match(/^#{1,4}\s+(.*)$/))) { close(); out.push(`<h4>${inline(m[1])}</h4>`); }
+      else if (/^[-*•]\s*\d+[.)]?\s*$/.test(l) || /^\d+[.)]?$/.test(l)) continue; // a bullet with only a number is an AI formatting slip, not a task
       else if ((m = l.match(/^[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
       else if ((m = l.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
       else { close(); out.push(`<p>${inline(l)}</p>`); }

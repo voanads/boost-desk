@@ -3243,3 +3243,16 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 @media (max-width:900px){.cd-head{position:static;margin:0;padding:0;border:0;border-radius:0}.cd-head-row{flex-wrap:wrap}.cd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cd-stat:nth-child(3){border-left:0}.cd-stat:nth-child(n+3){border-top:1px solid var(--line)}}
 .histsec.compact .hs-stats>div{padding:8px}
 .histsec.compact .hs-stats span{white-space:nowrap;letter-spacing:.02em;font-size:10px}
+
+/* Admin wave 1: readable names, stale-data and sync-off banners, pace hints */
+.crow .cr-n b,.cr-n b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.crow .cr-n b .cr-badge{display:inline-grid;vertical-align:middle;margin-left:6px}
+.note.stale{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 35%,var(--line));color:var(--ink);border-radius:var(--r-lg);padding:10px 14px;margin:0 0 12px;font-size:var(--fs-md)}
+.note.stale[hidden]{display:none}
+.note.stale code{font-size:var(--fs-sm);background:var(--surface);padding:1px 5px;border-radius:4px}
+.uhelp{margin:0 0 8px}
+.uhelp summary{cursor:pointer;color:var(--brand);font-weight:600;list-style:none}
+.uhelp summary::-webkit-details-marker{display:none}
+.uhelp summary::before{content:"ⓘ ";font-weight:400}
+.uhelp[open] summary{margin-bottom:6px}
+.co-rv small{white-space:nowrap}

@@ -3394,3 +3394,14 @@ html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-o
 .onb-go{flex:none;height:30px;display:inline-flex;align-items:center;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--line);text-decoration:none;color:var(--ink);font-weight:600;font-size:var(--fs-sm);background:var(--surface)}
 .onb-go.primary{background:var(--brand);border-color:var(--brand);color:#fff}
 @media (max-width:760px){.onb-l{grid-template-columns:1fr}}
+
+/* Team scoreboard (Main Dashboard) */
+.co-tt tbody th{text-align:left;font-weight:400;white-space:nowrap}
+.co-light{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--ok);vertical-align:middle}
+.co-light.mid{background:var(--warn)}.co-light.bad{background:var(--danger)}
+.co-team{cursor:pointer}
+.co-team:hover td,.co-team:hover th{background:var(--brand-soft)}
+.co-team:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.co-tt td.good{color:var(--ok)}
+.co-tt tbody th{text-transform:none;letter-spacing:0;font-size:inherit;color:var(--ink);background:transparent;border-bottom:1px solid var(--line)}
+.co-tt tbody th b{font-weight:600}

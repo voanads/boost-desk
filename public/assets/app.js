@@ -284,7 +284,7 @@
     ['main', 'board', 'allrep', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
-    if (name === 'dashboard') { loadDash(); loadOnboarding(); }
+    if (name === 'dashboard') { loadDash(); loadOnboarding(); loadHandoff(); }
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') { showAdm(admSec); if (admSec !== 'health') loadHealth(); }
     if (name === 'lives') loadLives();
@@ -3915,6 +3915,60 @@ Notes:
     $('rpBody').querySelectorAll('[data-rpview],[data-rpsend]').forEach((b) => b.onclick = () => dlg(cidOf(b)));
     $('rpBody').querySelectorAll('[data-rpopen]').forEach((b) => b.onclick = () => { location.hash = 'client:' + cidOf(b); });
   }
+  // ---- Handoff (Dashboard): the media buyer's morning → the PM's evening, and the note each leaves the other ----
+  let hoData = null, hoEdit = false;
+  async function loadHandoff() {
+    const host = $('hoCard'); if (!host || !me) return;
+    if (document.body.dataset.site === 'admin') { host.hidden = true; return; }
+    try { hoData = await api('/handoff'); } catch (_) { host.hidden = true; return; }
+    paintHandoff();
+  }
+  function paintHandoff() {
+    const host = $('hoCard'), d = hoData; if (!host || !d) return;
+    const mb = d.me.kind === 'mb';
+    if (!mb && !d.hasTeam) { host.hidden = true; return; } // a PM working alone has nobody to hand over to
+    host.hidden = false;
+    const noteHtml = (n) => `<div class="ho-note"><div class="ho-nh"><b>${esc(n.by)}</b><span class="hint">${n.today ? 'today' : 'last night'} ${esc(n.time)}</span></div><div class="ho-nt">${esc(n.text).replace(/\n/g, '<br>')}</div></div>`;
+    const tk = (t, done) => `<li class="${done ? 'done' : 'open'}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${t.client ? `<b>${esc(t.client)}</b> ` : ''}${esc(t.text)}</span>${done && t.at ? `<small>${esc(t.at)}</small>` : ''}</li>`;
+    const left = mb
+      ? `<div class="ho-col"><div class="ho-t"><b>📝 Note from ${esc(d.pmName)}</b><span class="hint">their latest note for you</span></div>
+          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">No note from ${esc(d.pmName)} yet. It also comes to your Telegram at ${esc(d.times.brief)}.</div>`}</div>`
+      : `<div class="ho-col"><div class="ho-t"><b>🌅 What your media buyer did today</b><span class="hint">tasks you gave them</span></div>
+          ${d.team.map((b) => `<div class="ho-mb"><div class="ho-mh"><span class="avatar">${initials(b.name)}</span><b>${esc(b.name)}</b><span class="ho-pill ${b.total && b.done === b.total ? 'ok' : b.total ? '' : 'mute'}">${b.total ? `${b.done} / ${b.total} done` : 'no tasks today'}</span>${b.linked ? '' : '<span class="ho-pill warn">Telegram not connected</span>'}</div>
+            ${b.total ? `<ul class="ho-tk">${b.doneList.map((t) => tk(t, true)).join('')}${b.open.map((t) => tk(t, false)).join('')}</ul>` : ''}</div>`).join('')}
+          <div class="ho-t ho-t2"><b>📝 Note for tonight</b></div>
+          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">No note yet. Your media buyer is asked for one on Telegram at ${esc(d.times.remind)}.</div>`}</div>`;
+    const forWho = mb ? esc(d.pmName) : 'your media buyer', when = mb ? 'They see it here at once' + (d.telegram.on ? ' and on Telegram' : '') : `Sent to them on Telegram at ${esc(d.times.brief)} tomorrow`;
+    const right = `<div class="ho-col ho-me"><div class="ho-t"><b>✍ Your note for ${forWho}</b><span class="hint">${mb ? 'before you leave' : 'for tomorrow morning'}</span></div>
+      ${d.mine && !hoEdit ? `${noteHtml({ ...d.mine, by: 'You' })}<div class="ho-act"><span class="hint">✓ Saved · ${when.replace(/^Sent/, 'goes')}</span><button type="button" class="sm" data-ho="edit">Edit</button></div>`
+        : `<form id="hoForm"><textarea id="hoText" rows="4" maxlength="${d.max}" placeholder="${mb ? 'What should the PM know tonight? e.g. LR wants live at 7:00 · CPM high on sneakers post · J.Mey has not answered the plan' : 'What should they do first tomorrow? e.g. top up KHM-01 $50 before 9:00 · boost 2 posts for J.Mey · do not pause sneakers'}">${d.mine ? esc(d.mine.text) : ''}</textarea>
+          <div class="ho-act"><span class="hint">${when}. One line per point.</span>${d.mine ? '<button type="button" class="ghost sm" data-ho="cancel">Cancel</button>' : ''}<button type="submit" class="primary sm">Save note</button></div></form>`}</div>`;
+    host.innerHTML = `<div class="ho-top"><h2>🤝 Handoff</h2><span class="hint">${mb ? 'your morning → the PM\'s evening' : 'media buyer\'s morning → your evening'}</span>
+        <span class="ho-tg">${!d.telegram.bot ? '<span class="hint">Telegram not set up</span>' : !d.telegram.on ? '<span class="ho-pill mute">Telegram messages off</span>' : d.telegram.mine ? `<span class="hint">Telegram: brief ${esc(d.times.brief)} · reminder ${esc(d.times.remind)} · digest ${esc(d.times.digest)}</span>` : '<span class="ho-pill warn">Connect your Telegram in Settings to get the digest</span>'}
+        <button type="button" class="ghost sm" data-ho="preview">See the messages</button>${mb ? '' : `<button type="button" class="ghost sm" data-ho="toggle">${d.telegram.on ? 'Turn off' : 'Turn on'}</button>`}</span></div>
+      <div class="ho-grid">${left}${right}</div>`;
+    const f = $('hoForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const text = $('hoText').value.trim(); if (!text) { toast('Write the note first'); return; }
+      const b = f.querySelector('[type=submit]'); b.disabled = true;
+      try { hoData = await api('/handoff', { method: 'POST', body: { text } }); hoEdit = false; paintHandoff(); successBadge('Note saved'); } catch (e) { toast(e.message); b.disabled = false; } };
+    host.querySelectorAll('[data-ho]').forEach((b) => b.onclick = async () => {
+      const k = b.dataset.ho;
+      if (k === 'edit') { hoEdit = true; paintHandoff(); const t = $('hoText'); if (t) t.focus(); }
+      if (k === 'cancel') { hoEdit = false; paintHandoff(); }
+      if (k === 'toggle') { const on = !d.telegram.on; if (!on && !confirm('Turn off the morning brief, the 16:45 reminder and the evening digest for your team? Notes in Boost Desk keep working.')) return; try { await api('/handoff/prefs', { method: 'PUT', body: { on } }); hoData.telegram.on = on; paintHandoff(); toast(on ? 'Telegram messages on' : 'Telegram messages off'); } catch (e) { toast(e.message); } }
+      if (k === 'preview') openHandoffPreview();
+    });
+  }
+  async function openHandoffPreview() {
+    let dlg = $('hoDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'hoDlg'; dlg.className = 'ho-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-hoclose]')) dlg.close(); }); }
+    dlg.innerHTML = '<div class="ho-dw"><div class="ho-dh"><h2>Telegram messages</h2><button type="button" class="ghost sm" data-hoclose aria-label="Close">✕</button></div><p class="hint">Loading…</p></div>';
+    dlg.showModal();
+    try { const p = await api('/handoff/preview'), box = (time, who, text) => `<div class="ho-ph"><div class="ho-phh"><b>${who}</b><span class="hint">${esc(time)}</span></div><pre>${esc(text)}</pre></div>`;
+      dlg.querySelector('.ho-dw').innerHTML = `<div class="ho-dh"><h2>Telegram messages</h2><button type="button" class="ghost sm" data-hoclose aria-label="Close">✕</button></div>
+        <p class="hint">What the bot would send with today's numbers. Nothing is sent from here.</p>
+        <div class="ho-phs">${box(p.times.brief, '🌅 Morning brief → media buyer', p.brief)}${box(p.times.remind, '⏰ Before leaving → media buyer', p.remind)}${box(p.times.digest, '🌙 Evening digest → PM and media buyer', p.digest)}</div>`; }
+    catch (e) { dlg.querySelector('p').textContent = e.message; }
+  }
+
   // ---- Team reports (leaders): the day's reports of every team, grouped by Project Manager ----
   let arDay = '', arFilter = 'all', arData = null; const arShut = {};
   async function loadAllRep() {

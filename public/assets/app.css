@@ -3162,3 +3162,84 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .bp-xl input{min-width:0} .bp-xadd{align-self:flex-start;font-size:var(--fs-sm)}
 .bp-th2{margin-left:-10px;width:28px;height:28px;border:2px solid var(--surface)}
 .bp-topic{display:flex;align-items:center;gap:8px;margin-left:22px} .bp-topic select{min-width:0;max-width:260px}
+
+/* ---------- Clients v3: a working layout — compact header, one-row numbers, tasks first, history folded ---------- */
+.cwrap{grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:var(--s-4)}
+.clist{gap:2px;padding:6px;border-radius:var(--r-lg)}
+.crow{padding:10px 12px;gap:10px;grid-template-columns:36px minmax(0,1fr) auto;border-radius:var(--r-md)}
+.crow .cr-av{width:36px;height:36px;font-size:var(--fs-md)}
+.crow .cr-n b{font-size:var(--fs-lg)}
+.crow .cr-v b{font-size:var(--fs-lg)}
+.crow .cr-v .hint{font-size:var(--fs-xs)}
+.crow .cr-status{font-size:var(--fs-xs)}
+.crow.on{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.cd-in{gap:var(--s-3);padding:var(--s-4) var(--s-5)}
+.cd-head{position:sticky;top:0;z-index:5;background:var(--surface);margin:calc(-1 * var(--s-4)) calc(-1 * var(--s-5)) 0;padding:12px var(--s-5) 10px;border-bottom:1px solid var(--line);border-radius:var(--r-xl) var(--r-xl) 0 0}
+.cd-head-row{flex-wrap:nowrap;align-items:center}
+.cd-title .cr-av.lg{width:40px;height:40px;font-size:var(--fs-xl)}
+.cd-tw{min-width:0;display:flex;flex-direction:column;gap:3px}
+.cd-tline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.cd-tline h3{margin:0;font-size:var(--fs-h3);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.cd-tw .cd-accts{margin-top:0}
+.cd-acts{display:flex;gap:6px;flex:none;align-items:center}
+.cd-acts .sm{height:34px;padding:0 12px;font-weight:600}
+.cd-per{margin:0;gap:12px}
+.cd-per .hint{font-size:var(--fs-sm)}
+.cd-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+.cd-stat{padding:10px 14px;border-radius:0;background:var(--surface);gap:0;border-left:1px solid var(--line);min-width:0}
+.cd-stat:first-child{border-left:0}
+.cd-stat.hero{background:var(--surface);color:var(--ink);box-shadow:inset 0 3px 0 var(--brand)}
+.cd-stat.hero b{color:var(--brand)}
+.cd-stat .lbl{font-size:var(--fs-2xs);color:var(--muted);opacity:1;font-weight:700}
+.cd-stat b{font-size:var(--fs-xl);line-height:1.25;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-stat .sub{font-size:var(--fs-xs);color:var(--muted);opacity:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-stat.cpo.good,.cd-stat.cpo.mid,.cd-stat.cpo.bad{background:var(--surface)}
+.cd-stat.cpo.good{box-shadow:inset 0 3px 0 var(--ok)}.cd-stat.cpo.mid{box-shadow:inset 0 3px 0 var(--warn)}.cd-stat.cpo.bad{box-shadow:inset 0 3px 0 var(--danger)}
+.bplan{margin-top:0;padding:8px 12px}
+.bplan.none .bp-top{flex-wrap:nowrap;align-items:center}
+.bplan.none .bp-top .hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bplan.none .bp-top>b{white-space:nowrap}
+.cd-cols{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:var(--s-4)}
+.cd-col{gap:var(--s-3)}
+.cd-sec{padding-top:var(--s-3);gap:8px}
+.cd-sec-h h4{font-size:var(--fs-lg)}
+.worksec .task-new{margin:0 0 2px;gap:6px}
+.worksec .task-new .task-main{display:flex;gap:6px;flex:1 1 100%}
+.worksec .task-new input[type=text]{height:38px;border-radius:var(--r-md)}
+.worksec .task-new .sm{height:38px}
+.worksec .task{padding:8px 10px;gap:8px;border-radius:var(--r-md)}
+.worksec .task .todo-ic{font-size:var(--fs-lg);width:20px}
+.worksec .task .todo-t b{font-size:var(--fs-md)}
+.worksec .task .todo-t .hint{font-size:var(--fs-xs)}
+.worksec .todo-done{padding:12px;border:1.5px dashed var(--line);border-radius:var(--r-md);text-align:center;color:var(--muted)}
+.notesec textarea{min-height:72px;transition:min-height var(--t-fast) var(--ease)}
+.notesec textarea:focus{min-height:140px}
+.histsec.compact{gap:10px}
+.histsec .hs-head h4{font-size:var(--fs-lg)}
+.histsec .hs-ic{width:28px;height:28px}
+.histsec.compact .hs-stats>div{padding:8px 10px}
+.histsec.compact .hs-stats b{font-size:var(--fs-xl)}
+.hs-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.hw-d{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;border-radius:var(--r-sm);background:var(--bg-2);border:1.5px solid transparent;line-height:1}
+.hw-d small{font-size:var(--fs-2xs);color:var(--muted);font-weight:600;text-transform:uppercase}
+.hw-d b{font-size:var(--fs-md);font-weight:700;color:var(--muted)}
+.hw-d.has{background:color-mix(in srgb,var(--brand) 10%,var(--surface))}
+.hw-d.has b{color:var(--brand)}
+.hw-d.today{border-color:var(--brand)}
+.hw-d:hover{background:var(--brand-soft)}
+.hw-d:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.hs-recent{display:flex;flex-direction:column;gap:4px}
+.hs-recent .hl-it{padding:6px 8px;grid-template-columns:34px 26px minmax(0,1fr);gap:8px}
+.hs-recent .hl-tag{width:26px;height:26px}
+.hs-recent .hl-tx b{font-size:var(--fs-sm)}
+.cd-summary{padding-top:var(--s-3)}
+.cd-summary>summary{cursor:pointer;list-style:none;align-items:baseline}
+.cd-summary>summary::-webkit-details-marker{display:none}
+.cd-summary>summary h4::before{content:"▸ ";color:var(--muted)}
+.cd-summary[open]>summary h4::before{content:"▾ "}
+.cd-summary>summary .hint{font-size:var(--fs-sm);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-sum-grid{margin-top:8px}
+@media (max-width:1280px){.cd-cols{grid-template-columns:1fr}}
+@media (max-width:900px){.cd-head{position:static;margin:0;padding:0;border:0;border-radius:0}.cd-head-row{flex-wrap:wrap}.cd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.cd-stat:nth-child(3){border-left:0}.cd-stat:nth-child(n+3){border-top:1px solid var(--line)}}
+.histsec.compact .hs-stats>div{padding:8px}
+.histsec.compact .hs-stats span{white-space:nowrap;letter-spacing:.02em;font-size:10px}

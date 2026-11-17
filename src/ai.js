@@ -155,14 +155,14 @@ async function callGemini(key, system, messages, model = MODEL_FOR('gemini')) {
   if (!text) throw new Error('Gemini gave no answer (it may have blocked the request). Try again.');
   return { text, usage: body.usageMetadata || {} };
 }
-async function callClaude(key, system, messages) {
+async function callClaude(key, system, messages, maxTokens = 1200) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST', signal: ctl.signal,
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL_FOR('claude'), max_tokens: 1200, system, messages }),
+      body: JSON.stringify({ model: MODEL_FOR('claude'), max_tokens: maxTokens, system, messages }),
     });
     body = await res.json().catch(() => ({}));
   } catch (e) { throw new Error(e.name === 'AbortError' ? 'The AI took too long to answer. Try again.' : 'Could not reach the AI: ' + e.message); }
@@ -322,10 +322,15 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
   const langLine = lang === 'km' ? 'Write title and how in Khmer (ខ្មែរ); keep product words like Boost, Live, Page, Ad account, Telegram in English. The "kpi" field stays exactly as given.' : 'Write title and how in simple English. The "kpi" field stays exactly as given.';
   const user = `${langLine}\n\nRole: ${role === 'mb' ? 'media buyer' : 'project manager'}\nKPIs this month:\n${kpis.map((k) => `- ${k.name} — target ${k.target} ${k.unit || ''}`.trim()).join('\n')}\nTheir daily menu now: ${menu.length ? menu.map((m) => '- ' + m).join('\n') : '(empty)'}`;
-  const out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, MENU_SYSTEM, [{ role: 'user', content: user }]);
+  // Khmer needs far more tokens than English: 1200 cut the answer mid-JSON and the request failed.
+  const out = await (cfg.provider === 'gemini' ? callGemini(cfg.key, MENU_SYSTEM, [{ role: 'user', content: user }]) : callClaude(cfg.key, MENU_SYSTEM, [{ role: 'user', content: user }], 3000));
   await db.setUserSetting(ownerId, useKey, used + 1);
   let tasks = [];
-  try { const m = out.text.match(/\{[\s\S]*\}/); tasks = (JSON.parse(m ? m[0] : out.text).tasks || []); } catch (_) { throw new Error('The AI answer could not be read. Try again.'); }
+  try { const m = out.text.match(/\{[\s\S]*\}/); tasks = (JSON.parse(m ? m[0] : out.text).tasks || []); }
+  catch (_) { // an answer cut short still has whole tasks in it — keep those instead of failing
+    tasks = (out.text.match(/\{[^{}]*"title"[^{}]*\}/g) || []).map((x) => { try { return JSON.parse(x); } catch (e) { return null; } }).filter(Boolean);
+    if (!tasks.length) throw new Error('The AI answer could not be read. Try again.');
+  }
   const norm = (x) => String(x || '').toLowerCase().replace(/\s+/g, ' ').trim();
   tasks = tasks.slice(0, 6).map((t) => { const name = norm(t && t.kpi); const k = kpis.find((x) => norm(x.name) === name) || kpis.find((x) => name && (norm(x.name).includes(name) || name.includes(norm(x.name))));
     return { title: String((t && t.title) || '').trim().slice(0, 160), how: String((t && t.how) || '').trim().slice(0, 300), kpi: k ? k.id : '', kpiName: k ? k.name : '' }; }).filter((t) => t.title).slice(0, 5);

@@ -12,7 +12,7 @@ const asset = (f) => { try { return 'data:image/png;base64,' + fs.readFileSync(p
 // Company details printed on every invoice. Each account can change them in Payments → Invoice settings.
 const DEFAULT_PROFILE = {
   company: 'ADS BOX',
-  address1: 'Limcheang Hak Preysor, TL05, Phum Preysor, Sangkat Dangkao,',
+  address1: 'TL05, Phum Preysor, Sangkat Dangkao,',
   address2: 'Khan Dangkao, Phnom Penh.',
   phone: 'Phone : (855) 61 713 148',
   bankName: 'Advanced Bank of Asia Ltd.',

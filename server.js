@@ -2160,6 +2160,16 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 db.init().then(() => { profit.init().catch((e) => console.log('[profit] init skipped:', e.message)); }).then(() => {
   require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
+  // FULL_ADMIN_EMAILS (Railway variable, comma-separated Gmail addresses): on start, each one is put on the Admin website
+  // list as a full admin (same rights as the owner). It only adds or upgrades — removing someone is done in Admin → Settings.
+  (async () => {
+    const want = String(process.env.FULL_ADMIN_EMAILS || '').split(',').map(normEmail).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)); if (!want.length) return;
+    const site = await siteCfg(); let n = 0;
+    for (const email of want) { const cur = site.people.find((x) => x.email === email);
+      if (!cur) { site.people.push({ email, name: '', linkTo: '', full: true, addedAt: new Date().toISOString(), addedBy: 'FULL_ADMIN_EMAILS' }); n++; }
+      else if (!cur.full || cur.linkTo) { cur.full = true; cur.linkTo = ''; n++; } }
+    if (n) { await db.setSetting('adminSite', site); console.log('[admin] full admin by Gmail set for', n, 'address(es)'); }
+  })().catch((e) => console.log('[admin] FULL_ADMIN_EMAILS skipped:', e.message));
   // One time (17 Nov 2026): the company moved — every account's saved invoice address becomes the new one.
   (async () => {
     const flag = 'migr:invoiceAddress:2026-11-17'; if (await db.getSetting(flag, null)) return;

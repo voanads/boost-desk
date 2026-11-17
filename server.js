@@ -2045,6 +2045,13 @@ api.post('/media-buyers/:id/sync', wrap(async (req, res) => { // re-read name + 
 }));
 api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
 api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
+// Admin: move a media buyer under another PM (keeps their Telegram link, KPIs and tasks).
+api.patch('/media-buyers/:id', adminOnly, wrap(async (req, res) => {
+  const B = require('./src/buyers'), pm = String((req.body || {}).pm || '').trim(), users = await db.allUsers(), u = users.find((x) => x.fb_id === pm);
+  if (!u) return res.status(400).json({ error: 'Pick the PM.' });
+  const all = await B.list(), b = all.find((x) => x.id === String(req.params.id)); if (!b) return res.status(404).json({ error: 'Media buyer not found.' });
+  b.addedById = u.fb_id; b.addedBy = u.name; await B.save(all); res.json({ ok: true, pm: { id: u.fb_id, name: u.name } });
+}));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), t = w.tasks.find((x) => x.id === req.params.tid);

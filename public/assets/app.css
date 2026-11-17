@@ -3275,3 +3275,5 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .mt-sug-t .hint{line-height:1.4}
 .mt-sug-f{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mt-sug-f .hint{margin-left:auto;font-size:var(--fs-xs)}
+.st-mbpm{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
+.st-mbpm select{height:30px;padding:0 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);font:inherit;font-size:var(--fs-sm)}

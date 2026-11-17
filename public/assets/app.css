@@ -3277,3 +3277,18 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
 .mt-sug-f .hint{margin-left:auto;font-size:var(--fs-xs)}
 .st-mbpm{display:inline-flex;align-items:center;gap:6px;margin-top:4px}
 .st-mbpm select{height:30px;padding:0 8px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);font:inherit;font-size:var(--fs-sm)}
+
+/* Release check: no sideways scroll on phones */
+@media (max-width:640px){
+  .seg{flex-wrap:wrap;max-width:100%}
+  .seg>button{flex:1 1 auto}
+  .co-teams .tablewrap,.tablewrap{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}
+  .smit-table{display:block;overflow-x:auto;max-width:100%}
+  .co-tt{min-width:640px}
+}
+@media (max-width:640px){
+  #acctViewSeg,#acctViewSeg.seg{display:flex;flex-wrap:wrap}
+  .co-row{flex-wrap:wrap}
+  .co-row .co-rt{flex:1 1 100%}
+  .co-rv{white-space:normal}
+}

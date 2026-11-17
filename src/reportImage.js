@@ -79,7 +79,7 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
 // person who has the same ad account, and if nobody can read it, leave that account's ads out of the picture.
 const denied = (e) => e && !e.needsLogin && !e.rateLimited && ([200, 10, 100, 190].includes(Number(e.code)) || /cannot call api|permission|on behalf of user/i.test(e.message || ''));
 async function insightsAnyToken(user, act, ids, from, to) {
-  const mine = await sync.tokenFor(user);
+  const mine = (await sync.tokenPicker(user))(act);
   try { return await meta.adInsights(mine, act, ids, from, to); }
   catch (e) {
     if (!denied(e)) throw e;

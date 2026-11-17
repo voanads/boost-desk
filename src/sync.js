@@ -143,12 +143,38 @@ async function tokenFor(user) {
   catch (_) { throw new meta.MetaError('Facebook login was saved with the old ENCRYPTION_KEY. Log out and log in with Facebook again (or set ENCRYPTION_KEY_OLD to the old key in Railway).', { needsLogin: true }); }
 }
 
+// Extra Facebook logins a person connected to their OWN workspace (Settings → Facebook accounts), so the ad accounts of
+// their 2nd / 3rd Facebook account sync into the same clients: [{ id, name, token_enc, expires, addedAt, error }].
+const extraLogins = async (owner) => { const v = await db.getUserSetting(owner, 'fbExtras', []); return Array.isArray(v) ? v : []; };
+// Which login reads which ad account: accounts found through an extra login carry info.via = that Facebook ID.
+async function tokenPicker(user) {
+  const main = await tokenFor(user), ex = await extraLogins(user.fb_id);
+  if (!ex.length) return () => main;
+  const toks = {}; for (const e of ex) { try { toks[e.id] = decrypt(e.token_enc); } catch (_) { /* saved with an old key */ } }
+  const via = Object.fromEntries((await db.listAccounts(user.fb_id)).map((a) => [a.id, (a.info || {}).via || '']));
+  return (act) => toks[via[act]] || main;
+}
+
 async function refreshAccounts(user) {
   const token = await tokenFor(user);
   const owner = user.fb_id;
   const list = await meta.adAccounts(token);
+  const keep = new Set(list.map((a) => a.id)), extras = await extraLogins(owner);
+  if (extras.length) {
+    const saved = await db.listAccounts(owner); let dirty = false;
+    for (const e of extras) {
+      const held = () => saved.filter((a) => (a.info || {}).via === e.id).forEach((a) => keep.add(a.id)); // a login that fails keeps its accounts
+      const expired = e.expires && new Date(e.expires) < new Date();
+      let more = null, err = expired ? 'This Facebook login has expired — connect it again.' : '';
+      if (!expired) { try { more = await meta.adAccounts(decrypt(e.token_enc)); } catch (x) { err = x.message || 'Could not read this Facebook account.'; } }
+      if (!more) { held(); if (e.error !== err) { e.error = err; dirty = true; } continue; }
+      if (e.error) { delete e.error; dirty = true; }
+      for (const a of more) { if (keep.has(a.id)) continue; keep.add(a.id); list.push({ ...a, via: e.id, viaName: e.name }); }
+    }
+    if (dirty) await db.setUserSetting(owner, 'fbExtras', extras);
+  }
   await db.saveAccounts(owner, list);
-  const gone = list.length ? await db.pruneAccounts(owner, list.map((a) => a.id)) : []; // removed from the Facebook account → gone from Boost Desk
+  const gone = list.length ? await db.pruneAccounts(owner, [...keep]) : []; // removed from the Facebook account → gone from Boost Desk
   if (gone.length) { console.log(`[accounts] ${user.name}: ${gone.length} ad account(s) no longer on Facebook removed: ${gone.join(', ')}`); exclusive(owner, () => rematch(user)).catch(() => {}); }
   return list;
 }
@@ -180,6 +206,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   try { await refreshAccounts(user); } catch (e) { if (e.needsLogin) throw e; console.error('[sync] could not refresh ad accounts:', e.message); }
   const ids = await db.enabledAccountIds(owner);
   const names = Object.fromEntries((await db.listAccounts(owner)).map((a) => [a.id, a.name]));
+  const pick = await tokenPicker(user); // an ad account found through an extra Facebook login is read with that login
   const items = [];
   const errors = [];
   const checks = [], why = {};
@@ -197,17 +224,17 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       // The total is read FIRST: a live that is running keeps spending during the sync, so reading it
       // afterwards made the account look a dollar or two short when nothing was missing.
       let total = null;
-      try { total = round2(await meta.accountSpendRange(token, id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
-      let rows = await spendRangeSplit(token, id, since, until, names[id]);
+      try { total = round2(await meta.accountSpendRange(pick(id), id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+      let rows = await spendRangeSplit(pick(id), id, since, until, names[id]);
       // The account's total says campaigns are missing: ask again for every campaign status and merge.
       if (total != null && total - rows.reduce((t, r) => t + r.spend, 0) > Math.max(1, rows.length * 0.005)) {
         try {
-          const more = await spendRangeSplit(token, id, since, until, names[id], 0, { loose: true });
+          const more = await spendRangeSplit(pick(id), id, since, until, names[id], 0, { loose: true });
           if (more.reduce((t, r) => t + r.spend, 0) > rows.reduce((t, r) => t + r.spend, 0)) { console.log(`[sync] ${names[id] || id}: found more spend with all campaign statuses`); rows = more; }
           // Still short: Meta sometimes returns a cut-down answer for a long daily breakdown — ask week by week.
           if (total - rows.reduce((t, r) => t + r.spend, 0) > Math.max(1, total * 0.02) && since < until) {
             const weekly = [];
-            for (let d = since; d <= until; d = addDays(d, 7)) { const e = addDays(d, 6) < until ? addDays(d, 6) : until; weekly.push(...await spendRangeSplit(token, id, d, e, names[id], 0, { loose: true })); }
+            for (let d = since; d <= until; d = addDays(d, 7)) { const e = addDays(d, 6) < until ? addDays(d, 6) : until; weekly.push(...await spendRangeSplit(pick(id), id, d, e, names[id], 0, { loose: true })); }
             if (weekly.reduce((t, r) => t + r.spend, 0) > rows.reduce((t, r) => t + r.spend, 0)) { console.log(`[sync] ${names[id] || id}: found more spend week by week`); rows = weekly; }
           }
           if (more.diag) why[id] = Object.entries(more.diag).map(([k, v]) => `${k} ${v}`).join(', ');
@@ -321,9 +348,9 @@ async function untickedToday(user, day) {
   const owner = user.fb_id, enabled = new Set(await db.enabledAccountIds(owner));
   const list = (await db.listAccounts(owner)).filter((a) => !enabled.has(a.id)).map((row) => ({ ...(row.info || {}), id: row.id, name: row.name }));
   if (!list.length) return;
-  const token = await tokenFor(user);
+  const pick = await tokenPicker(user);
   for (const a of list) {
-    try { a.todaySpend = await meta.accountSpend(token, a.id, day); a.todayAt = new Date().toISOString(); delete a.todayError; }
+    try { a.todaySpend = await meta.accountSpend(pick(a.id), a.id, day); a.todayAt = new Date().toISOString(); delete a.todayError; }
     catch (e) { a.todayError = e.message; if (e.rateLimited) break; }
   }
   await db.saveAccounts(owner, list);
@@ -341,9 +368,9 @@ async function freshenToday(user, clientId, day) {
   const rawDays = await db.listRaw(owner, day, day), rows = (rawDays[0] || {}).rows || [];
   const accounts = {}; for (const r of rows) if (r.campaignId && r.accountId && ids.has(String(r.campaignId))) (accounts[r.accountId] = accounts[r.accountId] || new Set()).add(String(r.campaignId));
   if (!Object.keys(accounts).length) return false;
-  const token = await tokenFor(user), fresh = {};
+  const pick = await tokenPicker(user), fresh = {};
   for (const act of Object.keys(accounts)) {
-    try { const by = await meta.adSpendByCampaign(token, act, [...accounts[act]], day, day); for (const [id, v] of Object.entries(by)) fresh[id] = v; }
+    try { const by = await meta.adSpendByCampaign(pick(act), act, [...accounts[act]], day, day); for (const [id, v] of Object.entries(by)) fresh[id] = v; }
     catch (err) { if (err.needsLogin || err.rateLimited) throw err; }
   }
   if (!Object.keys(fresh).length) return false;
@@ -743,4 +770,4 @@ async function unmatchedSpend(owner, from, to) {
   return { spend: round2(spend), pages: Object.values(m).map((x) => ({ page: x.page, pageId: x.pageId, spend: round2(x.spend), camps: Object.entries(x.camps).map(([k, v]) => [String(k), round2(v)]) })).sort((a, b) => b.spend - a.spend) };
 }
 
-module.exports = { freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { extraLogins, tokenPicker, freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

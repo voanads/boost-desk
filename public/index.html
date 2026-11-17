@@ -18,7 +18,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=259">
+<link rel="stylesheet" href="/assets/app.css?v=261">
 <link rel="stylesheet" href="/assets/restyle.css?v=3">
 </head>
 <body>
@@ -32,6 +32,7 @@
       <button role="tab" data-tab="clients" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18.5 14.5A6.5 6.5 0 0 1 21.5 20"/></svg><span class="full">Clients</span><span class="short">Clients</span></button>
       <button role="tab" data-tab="lives" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10 5-3v10l-5-3"/></svg><span class="full">Live videos</span><span class="short">Lives</span></button>
       <button role="tab" data-tab="orders" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="m3.5 7.5 8.5 4.5 8.5-4.5"/><path d="M12 12v9"/></svg><span class="full">Orders</span><span class="short">Orders</span></button>
+      <button role="tab" data-tab="reports" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3 11l6 2 2 6 3-4 5 3Z"/><path d="m9 13 6-5"/></svg><span class="full">Reports</span><span class="short">Reports</span></button>
       <button role="tab" data-tab="payments" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2.5h9l4 4V21l-2.5-1.5L14 21l-2.5-1.5L9 21l-3-1.5Z"/><path d="M9 9h6M9 13h6"/></svg><span class="full">Payments</span><span class="short">Pay</span></button>
       <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">Ad accounts</span><span class="short">Accounts</span></button>
       <button role="tab" data-tab="settings" aria-selected="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span class="full">Settings</span><span class="short">Settings</span></button>
@@ -487,6 +488,21 @@
 
   <!-- PAYMENTS -->
   <!-- ORDERS (adsbox.biz) -->
+  <section id="tab-reports" class="wrap" hidden>
+    <div class="ohead">
+      <div><h1>Reports</h1><div class="hint" id="rpSub">Every client's report for one day — who got it, who didn't.</div></div>
+      <div class="ohead-r">
+        <div class="rp-day"><button type="button" class="ghost sm" id="rpPrev" aria-label="Previous day">‹</button><input type="date" id="rpDay" aria-label="Day"><button type="button" class="ghost sm" id="rpNext" aria-label="Next day">›</button></div>
+        <button type="button" class="primary" id="rpSendAll" disabled>✈ Send all unsent</button>
+      </div>
+    </div>
+    <div class="rp-filters" id="rpFilters" role="group" aria-label="Show"></div>
+    <div id="rpNote" class="note onote stale" hidden></div>
+    <div class="card rp-card"><div class="tablewrap"><table class="rp-table" id="rpTable"><caption class="sr">Client reports for the day</caption>
+      <thead><tr><th scope="col">Client</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Orders</th><th scope="col" class="num">Cost / order</th><th scope="col">Report</th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+      <tbody id="rpBody"><tr><td colspan="6" class="hint">Loading…</td></tr></tbody>
+      <tfoot id="rpFoot"></tfoot></table></div></div>
+  </section>
   <section id="tab-orders" class="wrap" hidden>
     <div class="ohead">
       <div><h1>Orders</h1><div class="hint">What one order costs for each client — boost spend ÷ orders from adsbox.biz.</div></div>
@@ -803,6 +819,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/adscheck-bridge-sdk.js?v=243"></script>
-<script src="/assets/app.js?v=253"></script>
+<script src="/assets/app.js?v=256"></script>
 </body>
 </html>

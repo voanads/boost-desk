@@ -87,7 +87,7 @@ async function listChats(offset = 0) {
     if (list.length) next = list[list.length - 1].update_id + 1;
     if (list.length < 100) break;
   }
-  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], pmStarts = [], taps = [], cmds = [], pwAsks = [];
+  const found = new Map(), links = [], topicNames = {}, moved = [], alerts = [], starts = [], pmStarts = [], taps = [], cmds = [], pwAsks = [], texts = [];
   for (const u of result) {
     // A button under a bot message was tapped (e.g. a media buyer's "Done").
     if (u.callback_query) { const q = u.callback_query; taps.push({ qid: q.id, data: q.data || '', chat: String((q.message && q.message.chat && q.message.chat.id) || (q.from && q.from.id) || ''), msgId: q.message && q.message.message_id, text: (q.message && q.message.text) || '', name: [q.from && q.from.first_name, q.from && q.from.last_name].filter(Boolean).join(' ') }); continue; }
@@ -106,6 +106,8 @@ async function listChats(offset = 0) {
       if (/^\/password(?:@\w+)?\s*$/i.test(((u.message || {}).text || '').trim())) { pwAsks.push({ id: String(chat.id) }); continue; }
       const cm = ((u.message || {}).text || '').trim().match(/^\/(dashboard|start|mytasks|connect)(?:@\w+)?\s*$/i);
       if (cm) cmds.push({ id: String(chat.id), cmd: cm[1].toLowerCase() });
+      // A plain message (not a command): used only when the bot just asked this person for a handoff note.
+      { const tx = ((u.message || {}).text || '').trim(); if (tx && !tx.startsWith('/')) texts.push({ id: String(chat.id), text: tx.slice(0, 1000) }); }
       continue;
     }
     if (!chat) continue;
@@ -129,7 +131,7 @@ async function listChats(offset = 0) {
     if (mm) links.push({ id: where, code: mm[2].toUpperCase(), at: m.date || 0, unlink: mm[1].toLowerCase() === 'unlink', msgId: msg.message_id || (u.channel_post || {}).message_id });
   }
   links.sort((a, b) => a.at - b.at); // the latest /link wins
-  return { chats: [...found.values()], links, moved, alerts, starts, pmStarts, taps, cmds, pwAsks, next };
+  return { chats: [...found.values()], links, moved, alerts, starts, pmStarts, taps, cmds, pwAsks, texts, next };
 }
 
 // A user's Telegram profile photo (smallest size), as a data URL — or '' when they have none / it's hidden.

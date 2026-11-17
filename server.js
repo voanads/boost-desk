@@ -1554,6 +1554,7 @@ async function refreshChatsNow() {
     }
   }
   try { await require('./src/buyers').onTelegram(fresh, AI); } catch (e) { console.error('[telegram] media buyers:', e.message); }
+  try { await require('./src/handoff').onTelegram(fresh); } catch (e) { console.error('[telegram] handoff:', e.message); }
   // PMs / owner connecting their own Telegram (t.me/<bot>?start=pm_CODE) for plan / result alerts from their media buyers.
   for (const st of fresh.pmStarts || []) {
     try {
@@ -1766,6 +1767,17 @@ api.get('/admin/reports', adminOnly, wrap(async (req, res) => {
   const all = teams.flatMap((t) => t.rows);
   res.json({ day, today, bot: telegram.hasBot(), teams, anyOrders: teams.some((t) => t.anyOrders), totals: { ...reportTotals(all), teams: teams.length, teamsDone: teams.filter((t) => !t.totals.unsent).length } });
 }));
+// ---------- Handoff: notes between the media buyer (morning) and the PM (evening), and the Telegram brief / digest ----------
+const HANDOFF_DEPS = { reportStatus, dayTasks };
+api.get('/handoff', wrap(async (req, res) => res.json(await require('./src/handoff').card(req.user, HANDOFF_DEPS))));
+api.post('/handoff', wrap(async (req, res) => {
+  const HO = require('./src/handoff'), b = req.user.buyer;
+  const note = await HO.addNote(req.user.fb_id, { kind: b ? 'mb' : 'pm', by: b ? b.name : req.user.name, byId: b ? b.id : req.user.fb_id, text: (req.body || {}).text });
+  if (b) HO.pingPm(req.user.fb_id, note); // the PM hears about it on Telegram straight away
+  res.json(await HO.card(req.user, HANDOFF_DEPS));
+}));
+api.get('/handoff/preview', wrap(async (req, res) => res.json(await require('./src/handoff').preview(req.user, HANDOFF_DEPS))));
+api.put('/handoff/prefs', wrap(async (req, res) => { if (req.user.buyer) return res.status(403).json({ error: 'Your PM switches these messages on or off.' }); res.json(await require('./src/handoff').savePrefs(req.user.fb_id, req.body || {})); }));
 api.post('/auto-report/run', wrap(async (req, res) => {
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.' });
   const today = sync.todayIn(), pick = (req.body || {}).day;
@@ -2374,7 +2386,7 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
     await db.setSetting(flag, { at: new Date().toISOString(), updated: n }); console.log('[invoice] address updated for', n, 'account(s)');
   })().catch((e) => console.log('[invoice] address update skipped:', e.message));
   app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
-  jobs.start();
+  jobs.start({ handoff: HANDOFF_DEPS });
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

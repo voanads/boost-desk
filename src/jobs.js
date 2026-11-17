@@ -113,7 +113,7 @@ async function sendDailyReport(day = sync.todayIn()) {
   return sent;
 }
 
-function start() {
+function start(deps = {}) {
   const opts = { timezone: cfg.tz };
   const H = require('./health'), T = (name, fn) => () => H.track(name, fn).catch(() => {});
   if (process.env.AUTO_SYNC !== 'off') {
@@ -152,6 +152,14 @@ function start() {
   H.register('Personal alerts', 60, 'every hour at :25');
   cron.schedule('25 * * * *', () => H.track('Personal alerts', () => require('./myalerts').run(require('./pm'))).then((n) => { if (n) log('personal alerts sent:', n); }).catch((e) => log('personal alerts failed:', e.message)), opts);
 
+  // Handoff between media buyers (morning) and PMs (evening): brief 08:00, "before you leave" 16:45, digest 20:45.
+  if (deps.handoff) {
+    const HO = require('./handoff'), at = (t) => { const [h, m] = t.split(':').map(Number); return `${m} ${h} * * *`; };
+    H.register('Morning brief', 1440, 'daily at ' + HO.TIMES.brief); H.register('Leave reminder', 1440, 'daily at ' + HO.TIMES.remind); H.register('Evening digest', 1440, 'daily at ' + HO.TIMES.digest);
+    cron.schedule(at(HO.TIMES.brief), () => H.track('Morning brief', () => HO.morningBrief(deps.handoff, log)).then((n) => { if (n) log('morning briefs sent:', n); }).catch((e) => log('morning brief failed:', e.message)), opts);
+    cron.schedule(at(HO.TIMES.remind), () => H.track('Leave reminder', () => HO.leaveReminder(deps.handoff, log)).then((n) => { if (n) log('leave reminders sent:', n); }).catch((e) => log('leave reminder failed:', e.message)), opts);
+    cron.schedule(at(HO.TIMES.digest), () => H.track('Evening digest', () => HO.eveningDigest(deps.handoff, log)).then((n) => { if (n) log('evening digests sent:', n); }).catch((e) => log('evening digest failed:', e.message)), opts);
+  }
   H.register('Health check', 5, 'every 5 minutes');
   cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
   const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);

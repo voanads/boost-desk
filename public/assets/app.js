@@ -281,7 +281,7 @@
     if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit') name = 'dashboard'; // the Profit panel was removed
     if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    ['main', 'board', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); }
@@ -290,6 +290,7 @@
     if (name === 'lives') loadLives();
     if (name === 'payments') loadPayments();
     if (name === 'orders') loadOrders();
+    if (name === 'reports') loadReports();
     if (name === 'main') loadMain();
     if (name === 'board') loadBoard();
     if (name === 'adaccts') loadAdAccounts();
@@ -3750,6 +3751,53 @@ Notes:
   const ckOrders = () => { const el = $('ckOrders'); return el ? el.checked : true; };
   try { const v = localStorage.getItem('bd:ckOrders'); if (v === '0' && $('ckOrders')) $('ckOrders').checked = false; } catch (_) {}
   if ($('ckOrders')) $('ckOrders').onchange = () => { try { localStorage.setItem('bd:ckOrders', ckOrders() ? '1' : '0'); } catch (_) {} if (ckTarget && ckTarget.kind === 'client') openReportDlg({ ...ckTarget }); };
+  // ---------- Reports page: every client's report for one day ----------
+  let rpDay = '', rpFilter = 'all', rpData = null;
+  async function loadReports() {
+    const body = $('rpBody'); if (!body) return;
+    try { rpData = await api('/reports/status' + (rpDay ? '?day=' + rpDay : '')); } catch (e) { body.innerHTML = `<tr><td colspan="6" class="hint">${esc(e.message)}</td></tr>`; return; }
+    rpDay = rpData.day; paintReports();
+  }
+  function paintReports() {
+    const d = rpData, t = d.totals, isToday = d.day === d.today, hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    $('rpDay').value = d.day; $('rpDay').max = d.today; $('rpNext').disabled = isToday;
+    $('rpSub').textContent = `${nice(d.day)} · sent ${t.sent} of ${t.sent + t.unsent} with spend${t.unsent ? ` · ${t.unsent} still to send` : t.sent ? ' · all sent ✓' : ''}`;
+    const F = [['all', 'All', t.clients, ''], ['unsent', 'Not sent', t.unsent, 'bad'], ['sent', 'Sent', t.sent, 'ok'], ['nogroup', 'No Telegram group', t.nogroup, 'warn'], ['nospend', 'No spend', t.nospend, '']];
+    $('rpFilters').innerHTML = F.filter((f) => f[0] === 'all' || f[2]).map(([k, l, n, c]) => `<button type="button" class="rp-f ${c}" data-rpf="${k}" aria-pressed="${rpFilter === k}">${l} <b>${n}</b></button>`).join('') + `<span class="hint rp-auto">${d.auto.on ? `Auto report on · ${esc(d.auto.time)}` : 'Auto report off — turn it on in Settings'}</span>`;
+    $('rpFilters').querySelectorAll('[data-rpf]').forEach((b) => b.onclick = () => { rpFilter = b.dataset.rpf; paintReports(); });
+    const note = $('rpNote'); note.hidden = d.bot; if (!d.bot) note.innerHTML = '⚠ Telegram is not set up on the server, so reports cannot be sent from here yet.';
+    const sa = $('rpSendAll'); sa.disabled = !t.unsent || !d.bot; sa.textContent = t.unsent ? `✈ Send all ${t.unsent} unsent` : '✓ Nothing to send';
+    const rows = d.rows.filter((r) => rpFilter === 'all' || r.status === rpFilter);
+    const ST = { sent: (r) => `<span class="rp-st ok">✓ Sent ${hm(r.sent.at)}${r.sent.by ? ' · ' + esc(r.sent.by) : ''}</span>`, unsent: () => '<span class="rp-st bad">● Not sent</span>', nogroup: (r) => `<span class="rp-st warn">⚠ No Telegram group</span>${r.spend > 0 ? '<small class="hint">has spend — link a group first</small>' : ''}`, nospend: () => '<span class="rp-st mute">No spend — nothing to report</span>' };
+    $('rpBody').innerHTML = rows.length ? rows.map((r) => `<tr class="rp-r ${r.status}" data-rpc="${r.id}">
+      <th scope="row"><span class="rp-cl"><span class="cr-av" aria-hidden="true">${esc(String(r.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(r.page, 'av')}</span><span class="rp-n"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="hint">${typeTags(r.type)}${r.group ? ` ✈ ${esc(r.group)}` : ''}${r.lives ? ` · ${r.lives} live${r.lives === 1 ? '' : 's'}` : ''}</span></span></span></th>
+      <td class="num"><b>${r.spend > 0 ? money(r.spend) : '–'}</b></td>
+      <td class="num">${r.orders != null ? r.orders : '–'}</td>
+      <td class="num">${r.cpo != null ? money(r.cpo) : '–'}</td>
+      <td>${ST[r.status](r)}</td>
+      <td class="rp-act">${r.status === 'nogroup' ? '<button type="button" class="sm" data-rpopen>Open client</button>' : `<button type="button" class="sm" data-rpview>${r.status === 'sent' ? 'Send again' : 'Preview'}</button>${r.status === 'unsent' ? '<button type="button" class="sm primary" data-rpsend>✈ Send</button>' : ''}`}</td></tr>`).join('')
+      : `<tr><td colspan="6" class="hint rp-empty">${d.rows.length ? 'Nothing in this filter.' : 'No clients yet — add one in Clients.'}</td></tr>`;
+    $('rpFoot').innerHTML = d.rows.length ? `<tr><th scope="row">Total · ${t.clients} client${t.clients === 1 ? '' : 's'}</th><td class="num"><b>${money(t.spend)}</b></td><td class="num">${d.anyOrders ? t.orders : '–'}</td><td class="num">${t.cpo != null ? money(t.cpo) : '–'}</td><td colspan="2" class="hint">${t.sent} sent · ${t.unsent} not sent${t.nogroup ? ` · ${t.nogroup} no group` : ''}</td></tr>` : '';
+    const cidOf = (el) => Number(el.closest('[data-rpc]').dataset.rpc), dlg = (cid) => openReportDlg({ kind: 'client', cid, from: d.day, to: d.day, label: nice(d.day) });
+    $('rpBody').querySelectorAll('[data-rpview],[data-rpsend]').forEach((b) => b.onclick = () => dlg(cidOf(b)));
+    $('rpBody').querySelectorAll('[data-rpopen]').forEach((b) => b.onclick = () => { location.hash = 'client:' + cidOf(b); });
+  }
+  (() => { // controls are wired once; the report dialog closing refreshes the list
+    const go = (n) => { rpDay = addDaysIso(rpDay || (rpData && rpData.day) || me.today, n); loadReports(); };
+    document.addEventListener('click', async (ev) => {
+      if (ev.target.closest('#rpPrev')) return go(-1);
+      if (ev.target.closest('#rpNext')) return go(1);
+      const sa = ev.target.closest('#rpSendAll'); if (!sa || !rpData) return;
+      const n = rpData.totals.unsent; if (!n || !confirm(`Send ${n} report${n === 1 ? '' : 's'} for ${nice(rpData.day)} to the clients' Telegram groups now?`)) return;
+      sa.disabled = true; sa.textContent = 'Sending…';
+      try { const r = await api('/auto-report/run', { method: 'POST', body: { day: rpData.day } }); const f = (r.failed || []).length;
+        if (f) toast(`${(r.sent || []).length} sent · ${f} failed: ${r.failed.map((x) => x.name + ' — ' + x.error).join('; ')}`); else successBadge(`${(r.sent || []).length} report${(r.sent || []).length === 1 ? '' : 's'} sent`); }
+      catch (e) { toast(e.message); }
+      loadReports();
+    });
+    document.addEventListener('change', (ev) => { if (ev.target.id === 'rpDay' && ev.target.value) { rpDay = ev.target.value; loadReports(); } });
+    const ck = document.getElementById('ckDlg'); if (ck) ck.addEventListener('close', () => { const s = document.getElementById('tab-reports'); if (s && !s.hidden) loadReports(); });
+  })();
   async function openReportDlg(o) {
     const dlg = $('ckDlg'); ckTarget = o; $('ckOrdersLbl').hidden = o.kind !== 'client';
     $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
@@ -4469,7 +4517,7 @@ Thank you for working with Ads Box!`,
         nav.appendChild(mk('/admin#main', 'Admin site'));
       }
       if (ADMIN_SITE) { // /admin: only the Admin group — Main Dashboard, Clients Board, All ad accounts, Target, Profit, Admin
-        ['dashboard', 'clients', 'lives', 'orders', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
+        ['dashboard', 'clients', 'lives', 'orders', 'reports', 'payments', 'accounts'].forEach((k) => { const b = document.querySelector(`nav.tabs [data-tab=${k}]`); if (b) b.hidden = true; });
         $('navGrpWork').hidden = true; document.documentElement.classList.add('adminsite');
         const mt = document.querySelector('nav.tabs [data-tab=mytasks]'), tg = document.querySelector('nav.tabs [data-tab=target]'); if (mt && tg) tg.insertAdjacentElement('afterend', mt); // My Task sits with the Admin pages here
         const stb = document.querySelector('nav.tabs [data-tab=settings]'), adb = document.querySelector('nav.tabs [data-tab=admin]'); if (stb && adb) adb.insertAdjacentElement('afterend', stb);
@@ -4479,7 +4527,7 @@ Thank you for working with Ads Box!`,
       if (showAdmin) $('navGrpAdmin').hidden = false;
       const adminTabs = ['main', 'board', 'adaccts', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
-      else showTab(['clients', 'accounts', 'lives', 'orders', 'payments', 'team', 'mytasks', 'settings', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
+      else showTab(['clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'team', 'mytasks', 'settings', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);
     } catch (e) { $('list').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
   })();

@@ -1640,9 +1640,32 @@ api.post('/report/:day/send', wrap(async (req, res) => {
 // ---------- auto daily report ----------
 api.get('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.autoSettings(req.user.fb_id)), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null), bot: telegram.hasBot(), tz: cfg.tz })));
 api.put('/auto-report', wrap(async (req, res) => res.json({ ...(await extras.saveAutoSettings(req.user.fb_id, req.body || {})), last: await db.getUserSetting(req.user.fb_id, 'autoReportLast', null) })));
+// Reports page: every client of this account for one day — spend, orders, and whether the report went out.
+api.get('/reports/status', wrap(async (req, res) => {
+  const owner = req.user.fb_id, today = sync.todayIn(), day = isDay(req.query.day) && req.query.day <= today ? req.query.day : today;
+  const clients = (await db.listClients(owner)).filter((c) => !c.archived), set = await extras.autoSettings(owner);
+  let oc = { clients: {} }; try { oc = await require('./src/orders').byClient(owner, day, day); } catch (_) { /* orders not connected */ }
+  const live = (c) => c.type === 'live' || c.type === 'both', post = (c) => c.type === 'post' || c.type === 'both' || !c.type;
+  const rows = [];
+  for (const c of clients) {
+    const e = await db.getEntry(day, c.id), lives = live(c) ? Object.values(e.lives || {}).filter((l) => Number(l && l.spend) > 0) : [];
+    const liveSpend = lives.reduce((t, l) => t + Number(l.spend), 0), postSpend = post(c) ? Number((e.post || {}).spend) || 0 : 0, spend = Math.round((liveSpend + postSpend) * 100) / 100;
+    const routes = reports.routes(c), chat = routes.find((r) => r.chat), o = (oc.clients || {})[c.id], orders = o ? o.orders : null;
+    const sent = e.reportSent && e.reportSent.at ? { at: e.reportSent.at, by: e.reportSent.by || '' } : null;
+    rows.push({ id: c.id, name: c.name, type: c.type || 'post', page: (c.pages || []).find((p) => /^\d{5,20}$/.test(String(p))) || '', group: chat ? (chat.title || c.telegram_title || 'Telegram group') : '', hasGroup: !!chat,
+      spend, lives: lives.length, orders, cpo: orders > 0 && spend > 0 ? Math.round(spend / orders * 100) / 100 : null, sent, auto: !set.skip.includes(c.id),
+      status: sent ? 'sent' : !chat ? 'nogroup' : spend > 0 ? 'unsent' : 'nospend' });
+  }
+  const rank = { unsent: 0, nogroup: 1, sent: 2, nospend: 3 }; rows.sort((a, b) => rank[a.status] - rank[b.status] || b.spend - a.spend || a.name.localeCompare(b.name));
+  const cnt = (k) => rows.filter((r) => r.status === k).length, tot = (k) => rows.reduce((t, r) => t + (Number(r[k]) || 0), 0), spend = Math.round(tot('spend') * 100) / 100, orders = tot('orders');
+  res.json({ day, today, rows, bot: telegram.hasBot(), auto: { on: !!set.on, time: set.time }, anyOrders: rows.some((r) => r.orders != null),
+    totals: { clients: rows.length, spend, orders, cpo: orders > 0 && spend > 0 ? Math.round(spend / orders * 100) / 100 : null, sent: cnt('sent'), unsent: cnt('unsent'), nogroup: cnt('nogroup'), nospend: cnt('nospend') } });
+}));
 api.post('/auto-report/run', wrap(async (req, res) => {
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.' });
-  const r = await extras.sendClientReports(req.user, sync.todayIn());
+  const today = sync.todayIn(), pick = (req.body || {}).day;
+  if (isDay(pick) && pick < today) return res.json(await extras.sendClientReports(req.user, pick, { refresh: false })); // an earlier day from the Reports page: send what is saved, keep "last auto run" as it was
+  const r = await extras.sendClientReports(req.user, today);
   await db.setUserSetting(req.user.fb_id, 'autoReportLast', r);
   res.json(r);
 }));

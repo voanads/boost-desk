@@ -2183,7 +2183,7 @@
     const d = uData; if (!d) return;
     const q = ($('uSearch').value || '').trim().toLowerCase();
     $('admUsersN').textContent = d.users.length || '';
-    $('uHint').innerHTML = `<details class="uhelp"><summary>Which site does each role use?</summary>` + (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b> and <b>COO</b> use <b>/admin</b> (company view, teams, Admin) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
+    $('uHint').innerHTML = `<details class="uhelp"><summary>Which site does each role use?</summary>` + (d.canEdit ? 'The role picks the website and the task menu: the app owner uses <b>/owner</b> (every page) · <b>CEO</b>, <b>COO</b> and <b>CMO</b> use <b>/admin</b> and control everything, like the owner (company view, teams, Admin, settings) · <b>Project Manager</b> uses <b>/projectmanager</b> (own clients, team, media buyers) · <b>Media buyer</b> (a buyer who logs in with Facebook) uses <b>/mediabuyer</b> and gets the media buyer task menu; buyers from the Telegram bot are media buyers too. The front page sends each person to their site.' : 'Only the app owner can change roles or remove people.')
       + '</details>';
     { let bn = $('uSyncOff'); if (!bn) { bn = document.createElement('div'); bn.id = 'uSyncOff'; bn.className = 'note onote stale'; $('uHint').insertAdjacentElement('beforebegin', bn); } bn.hidden = !!d.autoSyncServer; bn.innerHTML = '⚠ <b>Auto sync is switched off on the server</b> — nobody\'s spend updates by itself until <code>AUTO_SYNC</code> is removed in Railway → Variables. People can still tap <b>Run now</b>.'; }
     const list = d.users.filter((u) => !q || String(u.name).toLowerCase().includes(q) || String(u.team).toLowerCase().includes(q));
@@ -2199,8 +2199,8 @@
       else st = '<span class="ustat ok">Running</span>';
       const lr = u.lastRun, last = !lr ? 'Never synced' : lr.error ? `Failed ${ago(lr.at)}: ${esc(lr.error)}` : `Synced ${ago(lr.at)} · ${lr.campaigns} campaigns${lr.errors ? ` · ${lr.errors} account errors` : ''}`;
       const you = u.id === d.me, edit = d.canEdit && u.role !== 'owner';
-      const RN = { full: 'Full admin', ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
-      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${['pm', 'mb', 'coo', 'ceo', 'full'].map((k) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}${k === 'full' ? ' — same rights as the owner' : ''}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
+      const RN = { full: 'Full admin', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' }, cr = u.company || (u.role === 'admin' ? 'coo' : 'pm');
+      const role = u.role === 'owner' ? '<span class="rolechip owner">CEO · Owner</span>' : edit ? `<select class="rolesel" data-role="${esc(u.id)}" aria-label="Role for ${esc(u.name)}">${[['pm', ''], ['mb', ''], ['ceo', ' — controls everything'], ['coo', ' — controls everything'], ['cmo', ' — controls everything'], ['full', ' — same rights as the owner']].map(([k, t]) => `<option value="${k}" ${cr === k ? 'selected' : ''}>${RN[k]}${t}</option>`).join('')}</select>` : `<span class="rolechip ${u.role}">${RN[cr]}</span>`;
       const login = u.expired ? '<span class="ustat bad">Login expired</span>' : left !== null ? (left < 7 ? `<span class="ustat bad">Login expires in ${left} day${left === 1 ? '' : 's'}</span>` : `<span>Login ok for ${left} days</span>`) : '<span>Login —</span>';
       const sub = [u.team ? esc(u.team) : 'No team', `${u.clients} client${u.clients === 1 ? '' : 's'}`, `${u.accounts} ad account${u.accounts === 1 ? '' : 's'}`].join(' · ');
       return `<article class="ucard${u.expired ? ' expired' : ''}" style="--i:${Math.min(i, 12)}">
@@ -2225,7 +2225,7 @@
   });
   $('uList').addEventListener('change', async (ev) => {
     const r = ev.target.dataset.role;
-    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge({ full: 'Now a full admin — can do everything the owner can', ceo: 'Now CEO — sees everything', coo: 'Now COO — sees everything', pm: 'Now a Project Manager — own team only', mb: 'Now a media buyer — /mediabuyer site and the media buyer task menu' }[ev.target.value] || 'Role saved'); } catch (e) { toast(e.message); } return loadUsers(); }
+    if (r) { try { await api('/admin/role/' + encodeURIComponent(r), { method: 'PUT', body: { role: ev.target.value } }); successBadge({ full: 'Now a full admin — can do everything the owner can', ceo: 'Now CEO — controls everything, like the owner', coo: 'Now COO — controls everything, like the owner', cmo: 'Now CMO — controls everything, like the owner', pm: 'Now a Project Manager — own team only', mb: 'Now a media buyer — /mediabuyer site and the media buyer task menu' }[ev.target.value] || 'Role saved'); } catch (e) { toast(e.message); } return loadUsers(); }
     const id = ev.target.dataset.auto; if (!id) return;
     try { await api('/auto-sync/' + encodeURIComponent(id), { method: 'PUT', body: { enabled: ev.target.checked } }); toast('Auto sync ' + (ev.target.checked ? 'on' : 'off')); } catch (e) { toast(e.message); }
     loadUsers();
@@ -4391,7 +4391,7 @@ Thank you for working with Ads Box!`,
     $('teamNewForm').hidden = !canEdit;
     $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Main Dashboard then shows spend, orders and suggestions per team. Each person can be in one team.' : 'Teams set up by the app owner.';
     const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
-    const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' };
+    const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' };
     const memberRows = (t) => t.members.map((m) => { const u = users.find((x) => x.id === m) || {}; return `<div class="tc-row"><span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span><span class="hint">· ${RN[u.role] || 'Project Manager'}</span></div>${(u.buyers || []).map((b) => `<div class="tc-row mb"><span>${esc(b)}</span><span class="hint">· media buyer</span></div>`).join('')}`; }).join('');
     const inTeam = new Set(teams.flatMap((t) => t.members));
     $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">
@@ -4452,7 +4452,7 @@ Thank you for working with Ads Box!`,
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();
       const h = location.hash.slice(1), cm = h.match(/^client:(\d+)$/);
-      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = OWNER_SITE ? 'Owner' : ADMIN_SITE ? (me.role === 'coo' ? 'COO' : 'CEO · Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
+      const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = OWNER_SITE ? 'Owner' : ADMIN_SITE ? ({ coo: 'COO', cmo: 'CMO', ceo: 'CEO · Admin' }[me.role] || 'Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
       if (SITE) document.querySelector('.brand').setAttribute('href', OWNER_SITE ? '/owner#main' : ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
       if (MB_SITE) { // the media buyer site: no sync, no ad accounts, no Profit, no client settings or delete, no task options; a My tasks link
         document.documentElement.classList.add('asbuyer'); me.profitRole = null;

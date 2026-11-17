@@ -25,6 +25,16 @@ const { encrypt } = require('./src/crypto');
 
 const app = express();
 app.set('trust proxy', 1);
+// Smaller pages on slow connections: text responses are compressed (the app script goes from ~530 KB to ~130 KB).
+app.use(require('compression')({ threshold: 1024 }));
+// Basic browser protections on every response. Frames are allowed from this site only.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (cfg.baseUrl.startsWith('https')) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  next();
+});
 app.use(express.json({ limit: '8mb' })); // room for the invoice logo / QR / signature pictures
 app.use(cookieSession({
   name: 'bd_session', secret: cfg.sessionSecret, maxAge: 30 * 864e5,
@@ -1489,7 +1499,10 @@ async function linkCode(fbId) {
 let chatsBusy = Promise.resolve();
 // Read new Telegram messages every minute, so /link works without opening the website and nothing expires.
 if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(() => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 15000).unref(); } // every 15 s so "Done" taps show quickly
-function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow); chatsBusy = run.catch(() => {}); return run; }
+let chatsAt = 0; // when Telegram was last read
+function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow).then((r) => { chatsAt = Date.now(); return r; }); chatsBusy = run.catch(() => {}); return run; }
+// The saved list is at most ~15 s old (background check), so pages use it instead of waiting 3 s on Telegram every time.
+const chatsNow = async () => (Date.now() - chatsAt < 25000 ? db.getSetting('telegramChats', []) : refreshChats());
 async function refreshChatsNow() {
   const saved = await db.getSetting('telegramChats', []);
   const byId = new Map(saved.map((c) => [c.id, c]));
@@ -1585,7 +1598,7 @@ async function refreshChatsNow() {
   return all;
 }
 async function myChats(fbId) {
-  const all = await refreshChats();
+  const all = await chatsNow();
   const used = new Set((await db.listClients(fbId)).map((c) => c.telegram).filter(Boolean));
   for (const c of await db.listClients(fbId)) for (const v of Object.values(c.topics || {})) used.add(v.id);
   return all.filter((c) => (c.owners || [c.owner]).includes(fbId) || used.has(c.id)).map(({ id, title, type, chat, topic }) => ({ id, title, type, chat, topic }));

@@ -429,6 +429,7 @@ async function isFull(req) {
   if (!req.user || req.user.buyer) return false;
   if ((await db.ownerId()) === req.user.fb_id) return true;
   if ((await fullAdmins()).has(req.user.fb_id)) return true;
+  if (LEAD.has((await roleMap())[req.user.fb_id])) return true; // CEO / COO / CMO set in Admin → Users control everything
   if (req.session && req.session.gEmail) { const p = await sitePerson(req.session.gEmail); if (p && p.full) return true; }
   return false;
 }
@@ -450,7 +451,8 @@ api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
 const adminViewers = async () => new Set(await db.getSetting('adminViewers', []));
 // Company roles: ceo (the app owner, or anyone given it), coo (sees everything, like an admin), pm (own clients).
 // Stored in the setting roles = { fbId: 'ceo'|'coo'|'pm' }; ceo/coo are also admin viewers so every older check holds.
-const ROLES = ['ceo', 'coo', 'pm', 'mb']; // mb = a media buyer who logs in with Facebook: /mediabuyer site, media buyer task menu
+const ROLES = ['ceo', 'coo', 'cmo', 'pm', 'mb']; // mb = a media buyer who logs in with Facebook: /mediabuyer site, media buyer task menu
+const LEAD = new Set(['ceo', 'coo', 'cmo']); // top leadership: control everything, like the owner
 const roleMap = async () => (await db.getSetting('roles', {})) || {};
 async function roleOf(id) {
   if ((await db.ownerId()) === id) return 'ceo';
@@ -704,7 +706,7 @@ api.get('/admin/users', adminOnly, wrap(async (req, res) => {
       lastSeen: await db.getUserSetting(st.id, 'lastSeen', null), autoReport: await db.getUserSetting(st.id, 'autoReport', null) });
   }
   out.sort((a, b) => ({ owner: 0, admin: 1, member: 2 }[a.role] - { owner: 0, admin: 1, member: 2 }[b.role]) || String(a.name).localeCompare(String(b.name)));
-  const full = await isFull(req), fa = await fullAdmins(); for (const u of out) if (u.role !== 'owner' && fa.has(u.id)) u.company = 'full';
+  const full = await isFull(req), fa = await fullAdmins(); for (const u of out) if (u.role !== 'owner' && fa.has(u.id) && !LEAD.has(u.company)) u.company = 'full'; // CEO/COO/CMO keep their title; 'full' is for others with owner rights
   res.json({ users: out, canEdit: full, me: req.user.fb_id, autoSyncServer: process.env.AUTO_SYNC !== 'off', blocked: full ? await db.blockedUsers() : {} });
 }));
 api.put('/admin/role/:id', ownerOnly, wrap(async (req, res) => {
@@ -713,8 +715,8 @@ api.put('/admin/role/:id', ownerOnly, wrap(async (req, res) => {
   if (!(await db.getUser(id))) return res.status(404).json({ error: 'Account not found.' });
   const role = String((req.body || {}).role || ''), map = await roleMap();
   // ceo / coo see everything (admin viewers); pm and the older "member" see only their own clients; full = everything the owner can do.
-  const v = await adminViewers(); if (role === 'admin' || role === 'ceo' || role === 'coo' || role === 'full') v.add(id); else v.delete(id);
-  const fa = await fullAdmins(); if (role === 'full') fa.add(id); else fa.delete(id); await db.setSetting('fullAdmins', [...fa]);
+  const v = await adminViewers(); if (role === 'admin' || LEAD.has(role) || role === 'full') v.add(id); else v.delete(id);
+  const fa = await fullAdmins(); if (role === 'full' || LEAD.has(role)) fa.add(id); else fa.delete(id); await db.setSetting('fullAdmins', [...fa]);
   if (ROLES.includes(role)) map[id] = role; else if (role === 'full') map[id] = 'ceo'; else delete map[id];
   await db.setSetting('roles', map); await db.setSetting('adminViewers', [...v]); res.json({ ok: true, role: role === 'full' ? 'full' : await roleOf(id) });
 }));
@@ -1718,7 +1720,7 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   const people = [];
   for (const u of users) {
     const ts = ((dt.users[u.fb_id] || {}).tasks || []).filter((t) => t.from !== 'work' && t.from !== 'ai');
-    const RN = { ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
+    const RN = { ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' }, role = u.fb_id === owner ? 'CEO · Owner' : RN[ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'];
     const isMb = ROLES.includes(roles[u.fb_id]) && roles[u.fb_id] === 'mb', mn = await MENU().dayOf(u.fb_id, isMb ? 'mb' : 'pm', today);
     people.push({ id: u.fb_id, name: u.name, kind: isMb ? 'Media buyer' : 'PM', role, team: teamOf[u.fb_id] || '', done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(u.fb_id, false), buyers: bl.filter((b) => (b.addedById || byName[b.addedBy]) === u.fb_id).length });
   }
@@ -1772,7 +1774,7 @@ api.get('/me/profile', wrap(async (req, res) => {
       team: (teams.find((t) => t.members.includes(req.user.fb_id)) || {}).name || '', telegram: { linked: !!(b && b.chat), bot: telegram.hasBot() ? await telegram.username() : '', link: b && telegram.hasBot() ? `https://t.me/${await telegram.username()}?start=mb_${b.code}` : '' }, roleName: 'Media buyer', site: '/mediabuyer' });
   }
   const me = req.user.fb_id, owner = (await db.ownerId()) === me, role = owner ? 'owner' : await roleOf(me);
-  const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', pm: 'Project Manager', mb: 'Media buyer' }, SITE = { owner: '/owner', ceo: '/admin', coo: '/admin', pm: '/projectmanager', mb: '/mediabuyer' };
+  const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' }, SITE = { owner: '/owner', ceo: '/admin', coo: '/admin', cmo: '/admin', pm: '/projectmanager', mb: '/mediabuyer' };
   const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, left = exp ? Math.round((exp - Date.now()) / 864e5) : null;
   const accounts = (await db.listAccounts(me)).length, clients = (await db.listClients(me)).filter((c) => !c.archived).length;
   const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!b.chat }));

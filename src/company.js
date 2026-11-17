@@ -71,6 +71,17 @@ async function summary({ month, getTeams, dayTasks, clientMoney }) {
   const kpiAvg = kpiRows.length ? Math.round(kpiRows.reduce((t, k) => t + Math.min(k.score, 150), 0) / kpiRows.length) : null;
   const kpiHit = kpiRows.filter((k) => k.score >= 100).length;
 
+  // ---- today per person: reports sent / due (clients with spend today), and when they were last active ----
+  const typeOf = Object.fromEntries(cl.map((c) => [c.id, c.type || 'post'])), repOf = {}, seenOf = {};
+  await Promise.all(users.map(async (u) => {
+    const r = repOf[u.fb_id] = { due: 0, sent: 0 };
+    try { for (const row of await db.monthEntries(u.fb_id, today, today)) { const e = row.data || {}, ty = typeOf[row.client_id]; if (!ty || !active.some((c) => c.id === row.client_id)) continue;
+      const spend = (ty === 'live' || ty === 'both' ? Object.values(e.lives || {}).reduce((t, l) => t + (Number(l && l.spend) || 0), 0) : 0) + (ty === 'post' || ty === 'both' ? Number((e.post || {}).spend) || 0 : 0);
+      if (spend > 0) { r.due++; if (e.reportSent && e.reportSent.at) r.sent++; } } } catch (_) {}
+    try { seenOf[u.fb_id] = await db.getUserSetting(u.fb_id, 'lastSeen', null); } catch (_) {}
+  }));
+  const hourNow = Number(new Intl.DateTimeFormat('en-GB', { timeZone: require('./config').tz, hour: '2-digit', hour12: false }).format(new Date()));
+
   // ---- teams ----
   const teamRows = [...teams.map((t) => ({ id: t.id, name: t.name, members: t.members })), { id: null, name: 'No team', members: users.map((u) => u.fb_id).filter((id) => !teamOf[id]) }]
     .map((t) => {
@@ -78,7 +89,13 @@ async function summary({ month, getTeams, dayTasks, clientMoney }) {
       const agg = { done: 0, open: 0, overdue: 0, target: 0, reached: 0 };
       for (const id of m) { const p = perUser[id]; if (!p) continue; agg.done += p.done; agg.open += p.open; agg.overdue += p.overdue; agg.target += p.target; agg.reached += p.reached; }
       const ks = kpiRows.filter((k) => k.team === t.id);
-      return { id: t.id, name: t.name, people: m.map((id) => ({ id, name: uName[id] })), buyers: bl.filter((b) => buyerTeam(b) === t.id).length,
+      const rep = m.reduce((a, id) => ({ due: a.due + ((repOf[id] || {}).due || 0), sent: a.sent + ((repOf[id] || {}).sent || 0) }), { due: 0, sent: 0 });
+      const last = m.map((id) => ({ id, name: uName[id], at: seenOf[id] })).filter((x) => x.at).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0] || null;
+      const total = agg.done + agg.open;
+      // One light per team: red = overdue work, or reports still unsent after 21:00; amber = under half the tasks done after 15:00; green otherwise.
+      const health = agg.overdue > 0 || (hourNow >= 21 && rep.due > rep.sent) ? 'bad' : (hourNow >= 15 && total > 0 && agg.done / total < 0.5) || (rep.due > rep.sent && hourNow >= 20) ? 'mid' : 'good';
+      return { id: t.id, name: t.name, people: m.map((id) => ({ id, name: uName[id] })), buyers: bl.filter((b) => buyerTeam(b) === t.id).length, buyerNames: bl.filter((b) => buyerTeam(b) === t.id).map((b) => b.name),
+        reports: rep, lastActive: last, health,
         clients: active.filter((c) => m.includes(c.owner)).length, spend: r2(m.reduce((s, id) => s + (spendOf[id] || 0), 0)), orders: m.reduce((s, id) => s + (ordersOf[id] || 0), 0), revenue: r2(m.reduce((s, id) => s + (revByUser[id] || 0), 0)),
         tasks: agg, targetPct: agg.target ? Math.round(agg.reached / agg.target * 100) : null, kpiAvg: ks.length ? Math.round(ks.reduce((s, k) => s + Math.min(k.score, 150), 0) / ks.length) : null, kpis: ks.length };
     }).filter((t) => t.id || t.people.length);
@@ -90,6 +107,12 @@ async function summary({ month, getTeams, dayTasks, clientMoney }) {
     money: { spend, revenue, profit },
     clients: { active: active.length, new: newClients.length, paused: cl.length - active.length, newList: newClients.slice(0, 12).map((c) => ({ id: c.id, name: c.name, owner: uName[c.owner] })) },
     people: { users: users.length, buyers: bl.length, buyersLinked: bl.filter((b) => b.linked).length, teams: teams.length },
+    // What the top of the page should point at first.
+    attention: { teamsBad: teamRows.filter((t) => t.health === 'bad').length, teamsMid: teamRows.filter((t) => t.health === 'mid').length, teams: teamRows.length,
+      reportsDue: teamRows.reduce((a, t) => a + t.reports.due, 0), reportsSent: teamRows.reduce((a, t) => a + t.reports.sent, 0),
+      fbExpired: users.filter((u) => u.token_expires && new Date(u.token_expires) < new Date()).map((u) => u.name),
+      fbSoon: users.filter((u) => u.token_expires && new Date(u.token_expires) >= new Date() && new Date(u.token_expires) - Date.now() < 7 * 864e5).map((u) => u.name),
+      buyersUnlinked: bl.filter((b) => !b.linked).map((b) => b.name), hour: hourNow },
     tasks: { ...tasks, targetPct: tasks.target ? Math.round(tasks.reached / tasks.target * 100) : null },
     kpis: { rows: kpiRows.sort((a, b) => b.score - a.score), avg: kpiAvg, hit: kpiHit, total: kpiRows.length },
     teams: teamRows, overdue: overdue.slice(0, 40), alerts: alerts.slice(0, 40),

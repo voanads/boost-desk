@@ -107,6 +107,12 @@ async function summary({ month, getTeams, dayTasks, clientMoney }) {
     money: { spend, revenue, profit },
     clients: { active: active.length, new: newClients.length, paused: cl.length - active.length, newList: newClients.slice(0, 12).map((c) => ({ id: c.id, name: c.name, owner: uName[c.owner] })) },
     people: { users: users.length, buyers: bl.length, buyersLinked: bl.filter((b) => b.linked).length, teams: teams.length },
+    // What the top of the page should point at first.
+    attention: { teamsBad: teamRows.filter((t) => t.health === 'bad').length, teamsMid: teamRows.filter((t) => t.health === 'mid').length, teams: teamRows.length,
+      reportsDue: teamRows.reduce((a, t) => a + t.reports.due, 0), reportsSent: teamRows.reduce((a, t) => a + t.reports.sent, 0),
+      fbExpired: users.filter((u) => u.token_expires && new Date(u.token_expires) < new Date()).map((u) => u.name),
+      fbSoon: users.filter((u) => u.token_expires && new Date(u.token_expires) >= new Date() && new Date(u.token_expires) - Date.now() < 7 * 864e5).map((u) => u.name),
+      buyersUnlinked: bl.filter((b) => !b.linked).map((b) => b.name), hour: hourNow },
     tasks: { ...tasks, targetPct: tasks.target ? Math.round(tasks.reached / tasks.target * 100) : null },
     kpis: { rows: kpiRows.sort((a, b) => b.score - a.score), avg: kpiAvg, hit: kpiHit, total: kpiRows.length },
     teams: teamRows, overdue: overdue.slice(0, 40), alerts: alerts.slice(0, 40),

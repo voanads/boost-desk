@@ -2045,6 +2045,13 @@ api.post('/media-buyers/:id/sync', wrap(async (req, res) => { // re-read name + 
 }));
 api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
 api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
+// Admin: move a media buyer under another PM (keeps their Telegram link, KPIs and tasks).
+api.patch('/media-buyers/:id', adminOnly, wrap(async (req, res) => {
+  const B = require('./src/buyers'), pm = String((req.body || {}).pm || '').trim(), users = await db.allUsers(), u = users.find((x) => x.fb_id === pm);
+  if (!u) return res.status(400).json({ error: 'Pick the PM.' });
+  const all = await B.list(), b = all.find((x) => x.id === String(req.params.id)); if (!b) return res.status(404).json({ error: 'Media buyer not found.' });
+  b.addedById = u.fb_id; b.addedBy = u.name; await B.save(all); res.json({ ok: true, pm: { id: u.fb_id, name: u.name } });
+}));
 api.patch('/clients/:id/tasks/:tid', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), t = w.tasks.find((x) => x.id === req.params.tid);
@@ -2117,6 +2124,11 @@ api.put('/kind-override', wrap(async (req, res) => {
 // The bigger live/post window (a day or less = live): recount saved days once.
 app.use('/api', api);
 
+// A page nobody has: a small branded 404 with a way back (API paths keep their JSON 404).
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found.' });
+  res.status(404).type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page not found · Ads Box</title><link rel="icon" href="/favicon.ico"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Inter,system-ui,sans-serif;background:#f6f7f9;color:#0f172a}main{text-align:center;padding:32px;max-width:420px}h1{font-size:22px;margin:0 0 8px}p{color:#64748b;margin:0 0 20px;line-height:1.5}a{display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:10px}</style></head><body><main><h1>This page doesn't exist</h1><p>The link may be old or mistyped. Go back to Boost Desk and pick a page from the menu.</p><a href="/">Open Boost Desk</a></main></body></html>`);
+});
 // Errors → JSON with a clear message.
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   if (!err.status || err.status >= 500) console.error('[' + req.method + ' ' + req.path.slice(0, 40) + ']', err.message || err); else console.log('[' + req.path + ']', err.message);

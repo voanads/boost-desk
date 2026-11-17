@@ -278,10 +278,10 @@
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
+    if (['admin', 'main', 'board', 'allrep', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit') name = 'dashboard'; // the Profit panel was removed
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
-    ['main', 'board', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'allrep', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
+    ['main', 'board', 'allrep', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadOnboarding(); }
@@ -293,6 +293,7 @@
     if (name === 'reports') loadReports();
     if (name === 'main') loadMain();
     if (name === 'board') loadBoard();
+    if (name === 'allrep') loadAllRep();
     if (name === 'adaccts') loadAdAccounts();
     if (name === 'target') loadTargets();
     if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
@@ -3914,6 +3915,53 @@ Notes:
     $('rpBody').querySelectorAll('[data-rpview],[data-rpsend]').forEach((b) => b.onclick = () => dlg(cidOf(b)));
     $('rpBody').querySelectorAll('[data-rpopen]').forEach((b) => b.onclick = () => { location.hash = 'client:' + cidOf(b); });
   }
+  // ---- Team reports (leaders): the day's reports of every team, grouped by Project Manager ----
+  let arDay = '', arFilter = 'all', arData = null; const arShut = {};
+  async function loadAllRep() {
+    const host = $('arList'); if (!arData) host.innerHTML = '<div class="card hint">Loading…</div>';
+    try { arData = await api('/admin/reports' + (arDay ? '?day=' + arDay : '')); } catch (e) { host.innerHTML = `<div class="card hint">${esc(e.message)}</div>`; return; }
+    arDay = arData.day; paintAllRep();
+  }
+  function paintAllRep() {
+    const d = arData, t = d.totals, isToday = d.day === d.today, hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), due = t.sent + t.unsent;
+    $('arDay').value = d.day; $('arDay').max = d.today; $('arNext').disabled = isToday;
+    $('arSub').textContent = `${nice(d.day)} · ${t.teams} team${t.teams === 1 ? '' : 's'} · ${t.clients} clients`;
+    const nb = $('allRepN'); if (nb) nb.textContent = isToday && t.unsent ? t.unsent : '';
+    const tile = (k, cls, big, lab, sub) => `<button type="button" class="ca ${cls}" data-arf="${k}"${k === 'all' ? '' : ` aria-pressed="${arFilter === k}"`}><span class="ca-l">${lab}</span><b>${big}</b><small>${sub}</small></button>`;
+    $('arTiles').innerHTML = tile('sent', due && t.sent === due ? '' : 'mid', `${t.sent} / ${due}`, 'Reports sent', due ? `${Math.round(t.sent / due * 100)}% of clients with spend` : 'no spend yet')
+      + tile('unsent', t.unsent ? 'bad' : '', t.unsent, 'Not sent yet', t.unsent ? `in ${d.teams.filter((x) => x.totals.unsent).length} team${d.teams.filter((x) => x.totals.unsent).length === 1 ? '' : 's'}` : 'all done ✓')
+      + tile('nogroup', t.nogroup ? 'mid' : '', t.nogroup, 'No Telegram group', t.nogroup ? 'cannot get a report' : 'every client linked')
+      + tile('all', '', `${t.teamsDone} / ${t.teams}`, 'Teams finished', 'no report left to send')
+      + tile('all', '', money(t.spend), 'Spend', d.anyOrders ? `${t.orders} orders${t.cpo != null ? ' · ' + money(t.cpo) + '/order' : ''}` : 'all teams');
+    const F = [['all', 'All', t.clients, ''], ['unsent', 'Not sent', t.unsent, 'bad'], ['sent', 'Sent', t.sent, 'ok'], ['nogroup', 'No Telegram group', t.nogroup, 'warn'], ['nospend', 'No spend', t.nospend, '']];
+    $('arFilters').innerHTML = F.filter((f) => f[0] === 'all' || f[2]).map(([k, l, n, c]) => `<button type="button" class="rp-f ${c}" data-arf="${k}" aria-pressed="${arFilter === k}">${l} <b>${n}</b></button>`).join('') + '<span class="hint rp-auto">View only — each Project Manager sends from their own Reports page</span>';
+    const ST = { sent: (r) => `<span class="rp-st ok">✓ Sent ${hm(r.sent.at)}${r.sent.by ? ' · ' + esc(r.sent.by) : ''}</span>`, unsent: () => '<span class="rp-st bad">● Not sent</span>', nogroup: (r) => `<span class="rp-st warn">⚠ No Telegram group</span>${r.spend > 0 ? '<small class="hint">has spend</small>' : ''}`, nospend: () => '<span class="rp-st mute">No spend</span>' };
+    const groups = d.teams.map((g) => ({ g, rows: g.rows.filter((r) => arFilter === 'all' || r.status === arFilter) })).filter((x) => x.rows.length);
+    $('arList').innerHTML = groups.length ? groups.map(({ g, rows }) => {
+      const gt = g.totals, gd = gt.sent + gt.unsent, pct = gd ? Math.round(gt.sent / gd * 100) : 100, cls = gt.unsent ? 'bad' : gt.nogroup ? 'mid' : 'ok', shut = arShut[g.owner] != null ? arShut[g.owner] : (arFilter === 'all' && !gt.unsent && !gt.nogroup);
+      return `<section class="card ar-g ${cls}${shut ? ' shut' : ''}" data-arg="${esc(g.owner)}">
+        <button type="button" class="ar-h" aria-expanded="${!shut}"><span class="avatar">${initials(g.name)}</span>
+          <span class="ar-who"><b>${esc(g.name)}</b><span class="hint">${[g.team ? esc(g.team) : '', g.buyers.length ? 'MB ' + g.buyers.map(esc).join(', ') : 'no media buyer', g.auto.on ? 'auto ' + esc(g.auto.time) : 'auto report off'].filter(Boolean).join(' · ')}</span></span>
+          <span class="ar-bar" aria-hidden="true"><i style="width:${pct}%"></i></span>
+          <span class="ar-cnt"><b>${gt.sent} / ${gd}</b><small>${gt.unsent ? gt.unsent + ' not sent' : gd ? 'all sent ✓' : 'no spend'}${gt.nogroup ? ` · ${gt.nogroup} no group` : ''}</small></span>
+          <span class="ar-sp num"><b>${money(gt.spend)}</b><small>${gt.orders ? gt.orders + ' orders' : gt.clients + ' clients'}</small></span>
+          <span class="ar-chev" aria-hidden="true">▾</span></button>
+        <div class="tablewrap ar-body"><table class="rp-table"><caption class="sr">${esc(g.name)} — client reports</caption>
+          <thead><tr><th scope="col">Client</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Orders</th><th scope="col" class="num">Cost / order</th><th scope="col">Report</th></tr></thead>
+          <tbody>${rows.map((r) => `<tr class="rp-r ${r.status}"><th scope="row"><span class="rp-cl"><span class="cr-av" aria-hidden="true">${esc(String(r.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(r.page, 'av')}</span><span class="rp-n"><b title="${esc(r.name)}">${esc(r.name)}</b><span class="hint">${typeTags(r.type)}${r.group ? ` ✈ ${esc(r.group)}` : ''}${r.lives ? ` · ${r.lives} live${r.lives === 1 ? '' : 's'}` : ''}</span><span class="ar-mst">${ST[r.status](r)}</span></span></span></th>
+            <td class="num"><b>${r.spend > 0 ? money(r.spend) : '–'}</b></td><td class="num">${r.orders != null ? r.orders : '–'}</td><td class="num">${r.cpo != null ? money(r.cpo) : '–'}</td><td>${ST[r.status](r)}</td></tr>`).join('')}</tbody></table></div></section>`;
+    }).join('') : `<div class="card hint rp-empty">${d.teams.length ? 'Nothing in this filter.' : 'No team has clients yet.'}</div>`;
+  }
+  (() => {
+    const go = (n) => { arDay = addDaysIso(arDay || (arData && arData.day) || me.today, n); loadAllRep(); };
+    document.addEventListener('click', (ev) => {
+      if (ev.target.closest('#arPrev')) return go(-1);
+      if (ev.target.closest('#arNext')) return go(1);
+      const f = ev.target.closest('#tab-allrep [data-arf]'); if (f && arData) { arFilter = arFilter === f.dataset.arf ? 'all' : f.dataset.arf; for (const k of Object.keys(arShut)) delete arShut[k]; paintAllRep(); return; }
+      const h = ev.target.closest('#arList .ar-h'); if (h) { const s = h.closest('[data-arg]'), shut = !s.classList.contains('shut'); arShut[s.dataset.arg] = shut; s.classList.toggle('shut', shut); h.setAttribute('aria-expanded', String(!shut)); }
+    });
+    document.addEventListener('change', (ev) => { if (ev.target.id === 'arDay' && ev.target.value) { arDay = ev.target.value; loadAllRep(); } });
+  })();
   (() => { // controls are wired once; the report dialog closing refreshes the list
     const go = (n) => { rpDay = addDaysIso(rpDay || (rpData && rpData.day) || me.today, n); loadReports(); };
     document.addEventListener('click', async (ev) => {
@@ -4619,7 +4667,7 @@ Thank you for working with Ads Box!`,
       if (me.login && me.login.must) setTimeout(() => { location.hash = 'settings'; toast('Welcome — choose your own password in Settings → Username & password.'); }, 1500); // a temporary password must be replaced
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'allrep', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -4628,7 +4676,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'adaccts', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'allrep', 'adaccts', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -4663,9 +4711,9 @@ Thank you for working with Ads Box!`,
         const stb = document.querySelector('nav.tabs [data-tab=settings]'), adb = document.querySelector('nav.tabs [data-tab=admin]'); if (stb && adb) adb.insertAdjacentElement('afterend', stb);
       }
       if (showAdmin) $('navGrpManage').hidden = false;
-      if (showAdmin) ['admin', 'main', 'board', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+      if (showAdmin) ['admin', 'main', 'board', 'allrep', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
-      const adminTabs = ['main', 'board', 'adaccts', 'admin'];
+      const adminTabs = ['main', 'board', 'allrep', 'adaccts', 'admin'];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
       else showTab(['clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'team', 'mytasks', 'settings', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);

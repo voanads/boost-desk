@@ -18,7 +18,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=266">
+<link rel="stylesheet" href="/assets/app.css?v=267">
 <link rel="stylesheet" href="/assets/restyle.css?v=3">
 </head>
 <body>
@@ -39,6 +39,7 @@
       <span class="navgrp" id="navGrpAdmin" hidden>Admin</span>
       <button role="tab" data-tab="main" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7.5" height="9" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="5" rx="1.8"/><rect x="13.5" y="11" width="7.5" height="10" rx="1.8"/><rect x="3" y="15" width="7.5" height="6" rx="1.8"/></svg><span class="full">Main Dashboard</span><span class="short">Main</span></button>
       <button role="tab" data-tab="board" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="5" height="17" rx="1.6"/><rect x="9.5" y="3.5" width="5" height="11" rx="1.6"/><rect x="16" y="3.5" width="5" height="14" rx="1.6"/></svg><span class="full">Clients Board</span><span class="short">Board</span></button>
+      <button role="tab" data-tab="allrep" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3 11l6 2 2 6 3-4 5 3Z"/><path d="m9 13 5-4"/></svg><span class="full">Team reports</span><span class="short">Reports</span><span class="navbadge" id="allRepN"></span></button>
       <button role="tab" data-tab="adaccts" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/><path d="M6.5 15h4"/></svg><span class="full">All ad accounts</span><span class="short">All ads</span><span class="navbadge" id="admAccN"></span></button>
       <button role="tab" data-tab="target" aria-selected="false" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg><span class="full">Target</span><span class="short">Target</span></button>
       <span class="navgrp" id="navGrpManage" hidden>Manage</span>
@@ -153,6 +154,15 @@
 
 
   <!-- AD ACCOUNTS (admins): every ad account of every person -->
+  <section id="tab-allrep" class="wrap" hidden>
+    <div class="ohead">
+      <div><h1>Team reports</h1><div class="hint" id="arSub">Every team's client reports for one day — who sent, who didn't.</div></div>
+      <div class="ohead-r"><div class="rp-day"><button type="button" class="ghost sm" id="arPrev" aria-label="Previous day">‹</button><input type="date" id="arDay" aria-label="Day"><button type="button" class="ghost sm" id="arNext" aria-label="Next day">›</button></div></div>
+    </div>
+    <div class="ar-tiles" id="arTiles"></div>
+    <div class="rp-filters" id="arFilters" role="group" aria-label="Show"></div>
+    <div id="arList" class="ar-list"><div class="card hint">Loading…</div></div>
+  </section>
   <section id="tab-adaccts" class="wrap" hidden>
     <div class="bhead">
       <div><h1>Ad accounts</h1><div class="hint">Every ad account of every team — status, spend, balance and who syncs it.</div></div>
@@ -824,6 +834,6 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/adscheck-bridge-sdk.js?v=243"></script>
-<script src="/assets/app.js?v=261"></script>
+<script src="/assets/app.js?v=262"></script>
 </body>
 </html>

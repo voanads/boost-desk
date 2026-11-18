@@ -2611,7 +2611,7 @@
     if (!me) return;
     const pp = $('mtPeople');
     if (mtAdminPick() || mtPmPick()) {
-      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; } else mtPeople = await loadPmPeople(); } catch (_) { mtPeople = []; } }
+      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; mtClock = { hour: r.hour, shift: r.shift || {} }; } else mtPeople = await loadPmPeople(); } catch (_) { mtPeople = []; } }
       if (mtPmPick() && !mtPeople.length) { pp.hidden = true; document.body.classList.remove('mt-admin'); } // a PM with no media buyers: plain page
       else { pp.hidden = false; document.body.classList.add('mt-admin'); renderMtPeople(); }
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
@@ -2971,6 +2971,10 @@
   }
   // ---- Leader board: every team side by side (today), and every person KPI by KPI (this month) ----
   let mtView = null, mtMonthData = null;
+  let mtClock = { hour: null, shift: {} };
+  // Before a person's working day starts (media buyers 8:00, PMs 13:00) and for the two hours after it, an untouched
+  // menu is "Not started", not "Behind".
+  const lbFresh = (p) => { const st = mtClock.shift[p.kind === 'Media buyer' ? 'mb' : 'pm']; return mtClock.hour != null && st != null && p.done === 0 && !p.planAt && !p.resultAt && mtClock.hour < st + 2; };
   const lbTime = (at) => { try { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' }).replace(' ', '').toLowerCase(); } catch (_) { return ''; } };
   const lbCls = (p) => (p == null ? 'none' : p >= 85 ? 'ok' : p >= 50 ? 'mid' : 'bad');
   const lbStatus = (p) => (p == null ? '<span class="pill">No menu</span>' : p >= 85 ? '<span class="pill ok">On track</span>' : p >= 50 ? '<span class="pill warn">On the way</span>' : '<span class="pill bad">Behind</span>');
@@ -2985,6 +2989,18 @@
     const wire = () => {
       host.querySelectorAll('[data-lbv]').forEach((b) => b.onclick = () => { mtView = b.dataset.lbv; try { localStorage.setItem('bd-mtview', mtView); } catch (_) {} if (mtView === 'today') mtPeople = null; if (mtView === 'month') mtMonthData = null; loadMyTaskPage(); });
       host.querySelectorAll('[data-lbp]').forEach((b) => b.onclick = () => { const p = (mtPeople || []).find((x) => x.id === b.dataset.lbp); if (!p) return; mtView = 'person'; mtAs = p.id === me.id ? null : { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null, team: p.team || '' }; mtClients = null; mtDay = null; if (mtAs && mtAs.team) mtShut[mtAs.team] = false; renderMtPeople(); loadMyTaskPage(); window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); });
+      const na = $('lbNudgeAll'); if (na) na.onclick = async () => {
+        na.disabled = true;
+        try {
+          const d = await api('/nudge/no-plan?dry=1', { method: 'POST', body: {} });
+          if (!d.due.length) { toast(d.early ? `Nobody to remind yet — ${d.early} ${d.early === 1 ? 'person has' : 'people have'} not started their working day.` : 'Everyone has sent a plan.'); na.disabled = false; return; }
+          if (!confirm(`Send a Telegram reminder to ${d.due.length} ${d.due.length === 1 ? 'person' : 'people'}?\n\n${d.due.join(', ')}`)) { na.disabled = false; return; }
+          const r = await api('/nudge/no-plan', { method: 'POST', body: {} });
+          const bits = [`Sent to ${r.sent.length}`]; if (r.noTelegram.length) bits.push(`no Telegram: ${r.noTelegram.join(', ')}`); if (r.waiting.length) bits.push(`reminded a moment ago: ${r.waiting.join(', ')}`); if (r.failed.length) bits.push(`failed: ${r.failed.join(', ')}`);
+          if (r.sent.length) successBadge(bits.join(' · ')); else toast(bits.join(' · '));
+        } catch (e) { toast(e.message); }
+        na.disabled = false;
+      };
       host.querySelectorAll('[data-lbteam]').forEach((b) => b.onclick = () => { lbShut[b.dataset.lbteam] = b.getAttribute('aria-expanded') === 'true'; renderMtBoard(); });
     };
     if (mtView === 'person') { host.innerHTML = `<div class="lb-head">${seg}</div>`; wire(); return false; }
@@ -3004,15 +3020,15 @@
     const loose = all.filter((p) => !p.team); if (loose.length) groups.push({ name: 'No team yet', loose: true, ms: loose, ...sum(loose) });
     groups.sort((a, b) => (a.pct == null) - (b.pct == null) || a.pct - b.pct || a.name.localeCompare(b.name));
     const T = sum(all), withMenu = all.filter((p) => p.done + p.open > 0), plans = withMenu.filter((p) => p.planAt || p.resultAt).length;
-    const scored = groups.filter((g) => g.pct != null && !g.loose), level = scored.length > 1 && scored[0].pct === scored[scored.length - 1].pct, low = level ? null : scored[0], high = !level && scored.length > 1 ? scored[scored.length - 1] : null, none = level ? 'all teams are level' : 'nothing to compare yet';
+    const scored = groups.filter((g) => g.pct != null && !g.loose && !g.ms.filter((p) => p.done + p.open > 0).every(lbFresh)), level = scored.length > 1 && scored[0].pct === scored[scored.length - 1].pct, low = level ? null : scored[0], high = !level && scored.length > 1 ? scored[scored.length - 1] : null, none = level ? 'all teams are level' : 'nothing to compare yet';
     const kpiOf = (ms) => { const v = ms.map((p) => p.kpi).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
     const tile = (lab, big, sub, cls) => `<div class="panel lb-tile"><span class="lb-lab">${lab}</span><b class="${cls || ''}">${big}</b><span class="hint">${sub}</span></div>`;
     const person = (p) => { const total = p.done + p.open;
       return `<tr class="lb-p"><td><button type="button" class="lb-who" data-lbp="${esc(p.id)}">${lbAv(p)}<span>${esc(p.name)}</span></button></td><td class="lb-hide">${p.kind === 'Media buyer' ? 'Media buyer' : 'Project Manager'}</td>
         <td class="lb-hide2">${!total ? '<span class="hint">–</span>' : p.planAt ? 'Sent ' + lbTime(p.planAt) : p.resultAt ? 'Sent' : '<span class="is-danger">Not sent</span>'}</td><td>${lbBar(p.done, total, p.pct)}</td>
-        <td class="lb-hide">${p.resultAt ? '<span class="is-ok">Sent ' + lbTime(p.resultAt) + '</span>' : '<span class="hint">–</span>'}</td><td class="num r lb-hide2">${p.kpi == null ? '<span class="hint">–</span>' : p.kpi + '%'}</td><td>${lbStatus(total ? p.pct : null)}</td></tr>`; };
+        <td class="lb-hide">${p.resultAt ? '<span class="is-ok">Sent ' + lbTime(p.resultAt) + '</span>' : '<span class="hint">–</span>'}</td><td class="num r lb-hide2">${p.kpi == null ? '<span class="hint">–</span>' : p.kpi + '%'}</td><td>${total && lbFresh(p) ? '<span class="pill">Not started</span>' : lbStatus(total ? p.pct : null)}</td></tr>`; };
     const team = (g) => { const open = !lbShut[g.name], k = kpiOf(g.ms.filter((p) => p.kind !== 'Media buyer')), hasMb = g.ms.some((p) => p.kind === 'Media buyer'), hasPm = g.ms.some((p) => p.kind !== 'Media buyer');
-      return `<tr class="lb-t"><td><button type="button" class="lb-who" data-lbteam="${esc(g.name)}" aria-expanded="${open}"><span class="avatar lb-tav">${initials(g.name)}</span><span>${esc(g.name)}</span><span class="mt-chev" aria-hidden="true">▾</span></button></td><td class="lb-hide hint">${g.ms.length} ${g.ms.length === 1 ? 'person' : 'people'}</td><td class="lb-hide2"></td><td>${lbBar(g.done, g.total, g.pct)}</td><td class="lb-hide"></td><td class="num r lb-hide2">${k == null ? '<span class="hint">–</span>' : k + '%'}</td><td>${lbStatus(g.pct)}</td></tr>
+      return `<tr class="lb-t"><td><button type="button" class="lb-who" data-lbteam="${esc(g.name)}" aria-expanded="${open}"><span class="avatar lb-tav">${initials(g.name)}</span><span>${esc(g.name)}</span><span class="mt-chev" aria-hidden="true">▾</span></button></td><td class="lb-hide hint">${g.ms.length} ${g.ms.length === 1 ? 'person' : 'people'}</td><td class="lb-hide2"></td><td>${lbBar(g.done, g.total, g.pct)}</td><td class="lb-hide"></td><td class="num r lb-hide2">${k == null ? '<span class="hint">–</span>' : k + '%'}</td><td>${g.total && g.ms.filter((p) => p.done + p.open > 0).every(lbFresh) ? '<span class="pill">Not started</span>' : lbStatus(g.pct)}</td></tr>
         ${open ? g.ms.map(person).join('') + (g.loose ? '' : !hasPm ? '<tr class="lb-p"><td colspan="7" class="hint lb-none">No Project Manager in this team yet.</td></tr>' : !hasMb ? '<tr class="lb-p"><td colspan="7" class="hint lb-none">No media buyer in this team yet.</td></tr>' : '') : ''}`; };
     if (!all.length) return '<div class="panel"><div class="hl-empty">No teams yet. Make them in Admin › Teams.</div></div>';
     return `<div class="lb-tiles">
@@ -3020,7 +3036,7 @@
         ${tile('Plans sent', `${plans} of ${withMenu.length}`, withMenu.length - plans ? `${withMenu.length - plans} ${withMenu.length - plans === 1 ? 'person has' : 'people have'} no plan yet` : 'everyone sent a plan', '')}
         ${tile('Furthest behind', low ? esc(low.name) : '–', low ? `${low.done} of ${low.total} done` : none, low && low.pct < 50 ? 'is-danger' : '')}
         ${tile('Furthest ahead', high ? esc(high.name) : '–', high ? `${high.done} of ${high.total} done` : none, high && high.pct >= 85 ? 'is-ok' : '')}</div>
-      <div class="panel lb-card"><div class="lb-ch"><h2>Who is where</h2><span class="hint">needs attention first · tap a person to open their day</span><span class="spacer"></span><span class="pill bad">Behind · under 50%</span><span class="pill warn">On the way · 50–84%</span><span class="pill ok">On track · 85%+</span></div>
+      <div class="panel lb-card"><div class="lb-ch"><h2>Who is where</h2><span class="hint">needs attention first · tap a person to open their day</span><span class="spacer"></span>${withMenu.length - plans ? '<button type="button" class="sm" id="lbNudgeAll" title="Send a Telegram reminder to everyone whose day has started and who has not sent a plan">🔔 Remind no-plan</button>' : ''}<span class="pill bad">Behind · under 50%</span><span class="pill warn">On the way · 50–84%</span><span class="pill ok">On track · 85%+</span></div>
         <div class="lb-scroll"><table class="lb-table"><thead><tr><th>Team / person</th><th class="lb-hide">Role</th><th class="lb-hide2">Plan</th><th class="lb-w">Today's tasks</th><th class="lb-hide">Result</th><th class="r lb-hide2">KPI this month</th><th>Status</th></tr></thead><tbody>${groups.map(team).join('')}</tbody></table></div></div>`;
   }
   function lbMonth(d) {
@@ -3081,7 +3097,7 @@
       refreshMtPeople(); loadMtCal();
     };
   }
-  async function refreshMtPeople() { if (!mtAdminPick() && !mtPmPick()) return; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; } else mtPeople = await loadPmPeople(); if (mtPeople.length) renderMtPeople(); } catch (_) {} }
+  async function refreshMtPeople() { if (!mtAdminPick() && !mtPmPick()) return; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; mtClock = { hour: r.hour, shift: r.shift || {} }; } else mtPeople = await loadPmPeople(); if (mtPeople.length) renderMtPeople(); } catch (_) {} }
   async function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
     if (me.buyer && !d) { try { d = await api('/mb/me'); } catch (_) { return; } }

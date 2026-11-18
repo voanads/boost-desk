@@ -498,7 +498,7 @@ const AUDIT = [
   [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
   [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
   [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
-  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'],
+  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
   [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
   [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
   [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
@@ -1983,7 +1983,7 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
     const mn = await MENU().dayOf(b.id, 'mb', today);
     people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!(b.linked || b.chat), photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
-  res.json({ today, month: ym, people, teams: teams.map((t) => t.name) });
+  res.json({ today, month: ym, people, teams: teams.map((t) => t.name), hour: hourNow(), shift: SHIFT });
 }));
 // Leader's "This month" board: every Project Manager and media buyer with each KPI's score, and how many days
 // they sent a plan and a result and how much of the daily menu they ticked. Read only; no personal data of clients.
@@ -2011,23 +2011,17 @@ api.get('/admin/audit', adminOnly, wrap(async (req, res) => { await auditFlush()
 // 🔔 Nudge: a short Telegram reminder with today's progress. A PM nudges their own media buyers; leaders nudge anyone.
 // One nudge per person every 10 minutes, so nobody gets flooded.
 const nudged = new Map();
-api.post('/nudge', wrap(async (req, res) => {
-  if (req.user.buyer) return res.status(403).json({ error: 'Only a PM or a leader can send a reminder.' });
-  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
-  const p = String((req.body || {}).person || ''), today = sync.todayIn(); let chat = null, name = '', day = null, site = '/projectmanager#mytasks';
-  if (p.startsWith('mb:')) {
-    if (!(await ownsBuyer(req, p.slice(3)))) return res.status(403).json({ error: 'Only this media buyer\'s PM or a leader can do this.' });
-    const b = await MB().get(p.slice(3)); if (!b) return res.status(404).json({ error: 'Person not found.' });
-    chat = b.chat || null; name = b.name; day = await MENU().dayOf(b.id, 'mb', today); site = '/mediabuyer#mytasks';
-  } else {
-    if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only a leader can remind a Project Manager.' });
-    const u = await db.getUser(p); if (!u) return res.status(404).json({ error: 'Person not found.' });
-    chat = (await db.getUserSetting(u.fb_id, 'tgChat', null) || {}).id || null; name = u.name; day = await MENU().dayOf(u.fb_id, (await roleOf(u.fb_id)) === 'mb' ? 'mb' : 'pm', today);
-  }
-  if (!chat) return res.status(400).json({ error: `${name} has not connected Telegram yet.` });
-  const last = nudged.get(p) || 0, wait = Math.ceil((last + 10 * 60e3 - Date.now()) / 60e3);
-  if (wait > 0) return res.status(429).json({ error: `${name} was reminded a moment ago. Try again in ${wait} minute${wait === 1 ? '' : 's'}.` });
-  const open = day.items.filter((x) => !x.done), lines = [`🔔 ${req.user.name} សូមរំលឹក`, ''];
+// Working day starts (Phnom Penh time): media buyers in the morning, Project Managers in the afternoon.
+const SHIFT = { mb: 8, pm: 13 };
+const hourNow = () => Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' })) % 24;
+// Send one reminder. Returns { ok, name } or { ok:false, name, why: 'telegram' | 'wait' | 'missing', wait }.
+async function nudgeOne(fromName, p) {
+  const today = sync.todayIn(); let chat = null, name = '', day = null, site = '/projectmanager#mytasks';
+  if (p.startsWith('mb:')) { const b = await MB().get(p.slice(3)); if (!b) return { ok: false, why: 'missing' }; chat = b.chat || null; name = b.name; day = await MENU().dayOf(b.id, 'mb', today); site = '/mediabuyer#mytasks'; }
+  else { const u = await db.getUser(p); if (!u) return { ok: false, why: 'missing' }; chat = (await db.getUserSetting(u.fb_id, 'tgChat', null) || {}).id || null; name = u.name; day = await MENU().dayOf(u.fb_id, (await roleOf(u.fb_id)) === 'mb' ? 'mb' : 'pm', today); }
+  if (!chat) return { ok: false, name, why: 'telegram' };
+  const wait = Math.ceil(((nudged.get(p) || 0) + 10 * 60e3 - Date.now()) / 60e3); if (wait > 0) return { ok: false, name, why: 'wait', wait };
+  const open = day.items.filter((x) => !x.done), lines = [`🔔 ${fromName} សូមរំលឹក`, ''];
   if (!day.total) lines.push('ថ្ងៃនេះមិនទាន់មាន Task menu ទេ។ សូមបើក Boost Desk ហើយរៀបចំ។');
   else {
     lines.push(`Task ថ្ងៃនេះ៖ រួច ${day.done} / ${day.total} (${day.pct}%)`);
@@ -2036,8 +2030,33 @@ api.post('/nudge', wrap(async (req, res) => {
     else if (!day.result) lines.push('Task រួចអស់ហើយ ✅ សូមផ្ញើ Result។');
   }
   lines.push('', `${cfg.baseUrl}${site}`);
-  try { await telegram.send(lines.join('\n'), chat); } catch (e) { return res.status(502).json({ error: 'Telegram did not take the message: ' + e.message }); }
-  nudged.set(p, Date.now()); res.json({ ok: true, name });
+  await telegram.send(lines.join('\n'), chat); nudged.set(p, Date.now());
+  return { ok: true, name };
+}
+api.post('/nudge', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Only a PM or a leader can send a reminder.' });
+  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
+  const p = String((req.body || {}).person || '');
+  if (p.startsWith('mb:')) { if (!(await ownsBuyer(req, p.slice(3)))) return res.status(403).json({ error: 'Only this media buyer\'s PM or a leader can do this.' }); }
+  else if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only a leader can remind a Project Manager.' });
+  let r; try { r = await nudgeOne(req.user.name, p); } catch (e) { return res.status(502).json({ error: 'Telegram did not take the message: ' + e.message }); }
+  if (r.ok) return res.json(r);
+  if (r.why === 'telegram') return res.status(400).json({ error: `${r.name} has not connected Telegram yet.` });
+  if (r.why === 'wait') return res.status(429).json({ error: `${r.name} was reminded a moment ago. Try again in ${r.wait} minute${r.wait === 1 ? '' : 's'}.` });
+  res.status(404).json({ error: 'Person not found.' });
+}));
+// Leaders: remind everyone whose working day has started and who has not sent today's plan. ?dry=1 only counts.
+api.post('/nudge/no-plan', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn(), h = hourNow(), owner = await db.ownerId(), roles = await roleMap(), av = await adminViewers(), list = [];
+  for (const u of await db.allUsers()) { const r = ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'; if (u.fb_id === owner || LEAD.has(r)) continue; list.push({ p: u.fb_id, id: u.fb_id, role: r === 'mb' ? 'mb' : 'pm', name: u.name }); }
+  for (const b of await MB().all()) list.push({ p: 'mb:' + b.id, id: b.id, role: 'mb', name: b.name });
+  const due = []; let early = 0;
+  for (const x of list) { const d = await MENU().dayOf(x.id, x.role, today); if (!d.total || d.plan || d.result) continue; if (h < SHIFT[x.role]) { early++; continue; } due.push(x); }
+  if (req.query.dry || (req.body || {}).dry) return res.json({ dry: true, due: due.map((x) => x.name), early });
+  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
+  const sent = [], noTelegram = [], waiting = [], failed = [];
+  for (const x of due) { try { const r = await nudgeOne(req.user.name, x.p); (r.ok ? sent : r.why === 'telegram' ? noTelegram : r.why === 'wait' ? waiting : failed).push(r.name || x.name); } catch (_) { failed.push(x.name); } }
+  res.json({ sent, noTelegram, waiting, failed, early });
 }));
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)

@@ -4978,14 +4978,24 @@ Thank you for working with Ads Box!`,
       if (v.lead || (!m && !v.mem.length)) return `<div class="teamcard tt-card${v.lead ? ' lead' : ''}" data-team="${esc(t.id)}">${head(t, v.lead ? pill('', 'Leaders') : pill('warn', 'Empty'))}
         ${v.lead ? row('Leaders', v.leads.map((u) => chip(u) + ` <span class="hint">${RN[u.role]}</span>`).join(' ')) + '<span class="hint">Leaders keep their own sign-in and see every team. This is not a working team.</span>' : '<span class="hint">No one yet.</span>'}${addSel(t)}</div>`;
       return `<div class="teamcard tt-card" data-team="${esc(t.id)}">${head(t, v.fix.length ? pill('warn', `${v.fix.length} to fix`) : pill('ok', 'Ready'))}
-        ${m ? row('Account', `${chip(m)} <span class="hint">${m.username ? 'signs in as <b>' + esc(m.username) + '</b>' : 'Facebook sign-in only'} · ${pl(m.clients, 'client')}</span>`) : ''}
+        ${m ? row('Account', `${chip(m)}${canEdit ? ` <button type="button" class="ghost sm" data-urename="${esc(m.id)}" data-name="${esc(m.name)}" title="Change this account's name — the Facebook account keeps its own name">Rename</button>` : ''} <span class="hint">${m.username ? 'signs in as <b>' + esc(m.username) + '</b>' : 'Facebook sign-in only'} · ${pl(m.clients, 'client')}</span>`) : ''}
         ${v.extra.length ? row('Also here', v.extra.map(chip).join(' '), pill('warn', 'second account')) : ''}
         ${v.leads.length ? row('Leader', v.leads.map((u) => chip(u) + ` <span class="hint">${RN[u.role]}</span>`).join(' ')) : ''}
-        ${m ? row('Media buyer', v.mbs.length ? v.mbs.map((b2) => `${esc(b2.name)} <span class="hint">${b2.linked ? '· Telegram ✓' : '· no Telegram'}</span>`).join(', ') : '<span class="hint">none yet</span>', v.mbs.length === 1 ? pill('ok', '1') : v.mbs.length ? pill('warn', String(v.mbs.length)) : '') : ''}
+        ${m ? row('Media buyer', v.mbs.length ? v.mbs.map((b2) => `${esc(b2.name)} <span class="hint">${b2.linked ? '· Telegram ✓' : '· no Telegram'}</span>${canEdit && b2.linked && b2.id ? ` <button type="button" class="ghost sm" data-tmbpm="${esc(b2.id)}" data-name="${esc(b2.name)}" title="This person is the team's Project Manager, not a media buyer">This is the PM</button>` : ''}`).join(', ') : '<span class="hint">none yet</span>', v.mbs.length === 1 ? pill('ok', '1') : v.mbs.length ? pill('warn', String(v.mbs.length)) : '') : ''}
         ${m ? row('Facebook', v.fbs.map((f) => esc(f.name) + (f.shared ? ' <span class="hint">(shared)</span>' : '')).join(', '), v.fbs.some((f) => f.expired) ? pill('bad', 'Login expired') : pill('ok', `${v.fbs.length} connected`)) + `<span class="hint tt-sub">${pl(m.adAccounts, 'ad account')}</span>` : ''}
         ${m ? row('Telegram', m.telegram.linked ? `PM's chat${m.telegram.name ? ' · ' + esc(m.telegram.name) : ''}` : '<span class="hint">not connected</span>', m.telegram.linked ? pill('ok', 'Connected') : pill('warn', 'Not yet')) : ''}
         ${v.fix.map((f) => `<div class="tt-fix"><span>${f.t}</span>${f.btn || ''}</div>`).join('')}${addSel(t)}</div>`; };
     $('teamGrid').innerHTML = [...work, ...teams.filter((t) => V[t.id].lead)].map(card).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
+    document.querySelectorAll('#teamGrid [data-urename]').forEach((b2) => b2.onclick = async () => {
+      const n = prompt(`New name for this account (now “${b2.dataset.name}”).\nUse the Project Manager's own name. The Facebook account keeps its name.`, b2.dataset.name); if (!n || !n.trim() || n.trim() === b2.dataset.name) return;
+      try { const r = await api(`/admin/users/${encodeURIComponent(b2.dataset.urename)}/rename`, { method: 'POST', body: { name: n.trim() } }); successBadge(`Renamed to ${r.name}`); mtPeople = null; loadUsers(); loadTeams(); } catch (e) { toast(e.message); }
+    });
+    document.querySelectorAll('#teamGrid [data-tmbpm]').forEach((b2) => b2.onclick = async () => {
+      const n = b2.dataset.name;
+      if (!confirm(`${n} is the Project Manager of this team, not a media buyer?\n\n• ${n}'s Telegram becomes the PM's Telegram for this team.\n• ${n} leaves the media buyer list; tasks given to ${n} become the PM's own.\n\nIf the team already had a PM Telegram, it is replaced.`)) return;
+      b2.disabled = true;
+      try { const r = await api(`/media-buyers/${encodeURIComponent(b2.dataset.tmbpm)}/make-pm`, { method: 'POST' }); successBadge(`${r.name} is now the PM's Telegram`); mtPeople = null; mtBuyers = null; loadUsers(); loadTeams(); } catch (e) { toast(e.message); b2.disabled = false; }
+    });
     document.querySelectorAll('#teamGrid [data-tmerge]').forEach((b2) => b2.onclick = () => openMerge(b2.dataset.tmerge, b2.dataset.name, b2.dataset.into));
     document.querySelectorAll('#teamGrid [data-tshare]').forEach((b2) => b2.onclick = async () => {
       if (!confirm(`Add ${b2.dataset.name}'s Facebook login to ${b2.dataset.intoname}?\n\n${b2.dataset.name} keeps their own sign-in. ${b2.dataset.intoname} will see ${b2.dataset.name}'s ad accounts under Ad accounts and can tick the ones the team works on.\n\nTick each ad account in one place only, so its spend is not shown in two accounts.`)) return;

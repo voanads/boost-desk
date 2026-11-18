@@ -502,7 +502,7 @@ const AUDIT = [
   [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
   [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
   [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
-  [/^(POST|PUT|PATCH|DELETE) \/admin\/teams/, 'Changed teams'], [/^(POST|PUT|PATCH|DELETE) \/admin\/users/, 'Changed a user or a role'], [/^(POST|PUT|PATCH|DELETE) \/admin\//, 'Changed an Admin setting'],
+  [/^(POST|PUT|PATCH|DELETE) \/admin\/teams/, 'Changed teams'], [/^POST \/admin\/users\/[^/]+\/rename$/, 'Renamed an account'], [/^(POST|PUT|PATCH|DELETE) \/admin\/users/, 'Changed a user or a role'], [/^(POST|PUT|PATCH|DELETE) \/admin\//, 'Changed an Admin setting'],
   [/^POST \/invoices$/, 'Made an invoice'], [/^POST \/invoices\/\d+\/send$/, 'Sent an invoice'], [/^PUT \/invoice-profile$/, 'Changed invoice settings'], [/^PUT \/handoff\/prefs$/, 'Changed handoff messages'],
 ];
 let auditBuf = [], auditBusy = false;
@@ -605,7 +605,7 @@ const saveTeams = (t) => db.setSetting('teams', t);
 api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
   const owner = await db.ownerId(), bl = await MB().all(), byName = {};
   const users = await db.allUsers(); for (const u of users) byName[u.name] = u.fb_id;
-  const mbs = bl.map((b) => ({ name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!(b.linked || b.chat) })); // all() gives the public shape: `linked`, never the chat id
+  const mbs = bl.map((b) => ({ id: b.id, name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!(b.linked || b.chat) })); // all() gives the public shape: `linked`, never the chat id
   const roles = await roleMap(), av = await adminViewers(), now = Date.now(), logins = await LOGINS().list();
   const counts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*) FILTER (WHERE NOT archived)::int AS n FROM clients GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
   const accts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*)::int AS n FROM ad_accounts GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
@@ -613,7 +613,7 @@ api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
   for (const u of users) {
     const exp = u.token_expires ? Date.parse(u.token_expires) : 0, chat = await db.getUserSetting(u.fb_id, 'tgChat', null), lg = logins.find((l) => l.fbId === u.fb_id);
     out.push({ id: u.fb_id, name: u.name, role: u.fb_id === owner ? 'owner' : ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm',
-      buyers: mbs.filter((m) => m.pm === u.fb_id).map((m) => m.name), mbs: mbs.filter((m) => m.pm === u.fb_id).map((m) => ({ name: m.name, linked: m.linked })),
+      buyers: mbs.filter((m) => m.pm === u.fb_id).map((m) => m.name), mbs: mbs.filter((m) => m.pm === u.fb_id).map((m) => ({ id: m.id, name: m.name, linked: m.linked })),
       clients: counts[u.fb_id] || 0, adAccounts: accts[u.fb_id] || 0, username: lg ? lg.username : '',
       facebook: { name: await fbNameOf(u), expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null },
       extras: (await sync.extraLogins(u.fb_id)).map((e) => ({ id: e.id, name: e.name, expired: !!(e.error || (e.expires && Date.parse(e.expires) < now)), shared: !!e.shared })),
@@ -2057,6 +2057,20 @@ api.post('/nudge/no-plan', adminOnly, wrap(async (req, res) => {
   const sent = [], noTelegram = [], waiting = [], failed = [];
   for (const x of due) { try { const r = await nudgeOne(req.user.name, x.p); (r.ok ? sent : r.why === 'telegram' ? noTelegram : r.why === 'wait' ? waiting : failed).push(r.name || x.name); } catch (_) { failed.push(x.name); } }
   res.json({ sent, noTelegram, waiting, failed, early });
+}));
+// Leaders rename a team account (the person's own name, e.g. the PM's — not the Facebook account's name, which is kept).
+api.post('/admin/users/:id/rename', ownerOnly, wrap(async (req, res) => {
+  const u = await db.getUser(String(req.params.id)); if (!u) return res.status(404).json({ error: 'Account not found.' });
+  const name = String((req.body || {}).name || '').trim().replace(/\s+/g, ' ').slice(0, 80); if (!name) return res.status(400).json({ error: 'Type the name.' });
+  if (name === u.name) return res.json({ ok: true, name });
+  if (!(await db.getUserSetting(u.fb_id, 'fbName', ''))) await db.setUserSetting(u.fb_id, 'fbName', u.name); // remember the Facebook account's own name
+  // media buyers that were tied to this account by its old name keep their PM
+  const B = MB(), all = await B.list(); let touched = false;
+  for (const b of all) if (b.addedById === u.fb_id || (!b.addedById && b.addedBy === u.name)) { b.addedById = u.fb_id; b.addedBy = name; touched = true; }
+  if (touched) await B.save(all);
+  await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [u.fb_id, name]);
+  const lg = await LOGINS().forFb(u.fb_id); if (lg) { lg.name = name; await LOGINS().save(lg); }
+  res.json({ ok: true, name, was: u.name });
 }));
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)

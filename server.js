@@ -573,7 +573,7 @@ const saveTeams = (t) => db.setSetting('teams', t);
 api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
   const owner = await db.ownerId(), bl = await MB().all(), byName = {};
   const users = await db.allUsers(); for (const u of users) byName[u.name] = u.fb_id;
-  const mbs = bl.map((b) => ({ name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!b.chat }));
+  const mbs = bl.map((b) => ({ name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!(b.linked || b.chat) })); // all() gives the public shape: `linked`, never the chat id
   const roles = await roleMap(), av = await adminViewers(), now = Date.now(), logins = await LOGINS().list();
   const counts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*) FILTER (WHERE NOT archived)::int AS n FROM clients GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
   const accts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*)::int AS n FROM ad_accounts GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
@@ -1945,7 +1945,7 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   for (const b of bl) {
     const pm = b.addedById || byName[b.addedBy] || null, ts = pm ? ((dt.users[pm] || {}).tasks || []).filter((t) => t.to && t.to.id === b.id) : [];
     const mn = await MENU().dayOf(b.id, 'mb', today);
-    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
+    people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!(b.linked || b.chat), photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
   res.json({ today, month: ym, people, teams: teams.map((t) => t.name) });
 }));
@@ -2029,7 +2029,7 @@ api.get('/me/profile', wrap(async (req, res) => {
   const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' }, SITE = { owner: '/owner', ceo: '/admin', coo: '/admin', cmo: '/admin', pm: '/projectmanager', mb: '/mediabuyer' };
   const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, left = exp ? Math.round((exp - Date.now()) / 864e5) : null;
   const accounts = (await db.listAccounts(me)).length, clients = (await db.listClients(me)).filter((c) => !c.archived).length;
-  const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!b.chat }));
+  const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!(b.linked || b.chat) }));
   let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = newCode(); await db.setUserSetting(me, 'tgCode', code); }
   const chat = await db.getUserSetting(me, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
   let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}

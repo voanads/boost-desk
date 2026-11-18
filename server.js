@@ -1916,7 +1916,21 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
     const mn = await MENU().dayOf(b.id, 'mb', today);
     people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!b.chat, photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
-  res.json({ today, month: ym, people });
+  res.json({ today, month: ym, people, teams: teams.map((t) => t.name) });
+}));
+// A team's KPI is its Project Manager's KPI. In a team with several PM accounts, this copies one PM's KPI list for the
+// month to the others (replacing theirs), so the whole team works to the same targets.
+api.post('/kpis/copy-team', adminOnly, wrap(async (req, res) => {
+  const b = req.body || {}, who = await kpiPerson(req, b.person); if (!who || who.buyer) return res.status(404).json({ error: 'Choose a Project Manager.' });
+  const month = /^\d{4}-\d{2}$/.test(b.month) ? b.month : sync.todayIn().slice(0, 7);
+  const team = (await getTeams()).find((t) => t.members.includes(who.id)); if (!team) return res.status(400).json({ error: `${who.name} is not in a team yet.` });
+  const roles = await roleMap(), owner = await db.ownerId(), users = await db.allUsers();
+  const others = team.members.filter((m) => m !== who.id && m !== owner && !LEAD.has(roles[m]) && roles[m] !== 'mb' && users.some((u) => u.fb_id === m));
+  if (!others.length) return res.status(400).json({ error: `${team.name} has no other Project Manager.` });
+  const list = await KPI().getList(who.id, month);
+  if (!list.length) return res.status(400).json({ error: 'Set the KPIs first, then copy them.' });
+  for (const m of others) await KPI().putList(m, month, list);
+  res.json({ ok: true, team: team.name, to: others.map((m) => (users.find((u) => u.fb_id === m) || {}).name || m) });
 }));
 // My target tasks for a day: every task of mine with a target, with what I reached.
 api.get('/targets/mine', wrap(async (req, res) => {

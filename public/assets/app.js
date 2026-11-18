@@ -2565,7 +2565,7 @@
     if (!me) return;
     const pp = $('mtPeople');
     if (mtAdminPick() || mtPmPick()) {
-      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { mtPeople = mtAdminPick() ? (await api('/admin/people-today')).people : await loadPmPeople(); } catch (_) { mtPeople = []; } }
+      if (!mtPeople) { pp.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>'; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; } else mtPeople = await loadPmPeople(); } catch (_) { mtPeople = []; } }
       if (mtPmPick() && !mtPeople.length) { pp.hidden = true; document.body.classList.remove('mt-admin'); } // a PM with no media buyers: plain page
       else { pp.hidden = false; document.body.classList.add('mt-admin'); renderMtPeople(); }
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
@@ -2859,6 +2859,7 @@
         <span class="mt-pv"><b class="num ${total && p.open === 0 ? 'is-ok' : p.pct != null && p.pct < 50 ? 'is-danger' : ''}">${total ? `${p.done}/${total}` : '–'}</b><span class="hint">${p.resultAt ? '<span class="is-ok">result sent</span>' : p.planAt ? 'plan sent' : total ? 'no plan yet' : 'no menu'}</span></span>
         <span class="kpi-score ${p.pct == null ? 'none' : scoreCls(p.pct)}" title="Menu done today">${p.pct == null ? '–' : p.pct + '%'}</span></button>`; };
     const pms = list.filter((p) => p.kind !== 'Media buyer'), mbs = list.filter((p) => p.kind === 'Media buyer');
+    if (mtAdminPick()) return renderMtTeams(pp, list, meRow, row, q);
     pp.innerHTML = `<div class="top"><h2>${mtPmPick() ? 'My media buyers' : 'People'}</h2><span class="hint">${mtPmPick() ? 'tap one to see and edit their menu' : (mtPeople || []).length + ' · tap one to see their day'}</span></div>
       <input type="search" id="mtSearch" placeholder="Search people" aria-label="Search people" value="${esc(mtQ)}">
       <div class="mt-plist">${!q ? row(meRow, true) : ''}${pms.length ? `<div class="mt-pgrp">People</div>${pms.map((p) => row(p, false)).join('')}` : ''}${mbs.length ? `<div class="mt-pgrp">Media buyers</div>${mbs.map((p) => row(p, false)).join('')}` : ''}${!pms.length && !mbs.length && q ? '<div class="hl-empty">No one matches.</div>' : ''}</div>`;
@@ -2870,8 +2871,42 @@
       if (!matchMedia('(min-width: 1100px)').matches) $('mtAdd').scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' });
     });
   }
+  // Leaders see teams, not a flat list of people: one group per team with its PM first, then the media buyers.
+  // A team's KPI is its Project Manager's KPI, so tapping a team opens that PM's day and KPIs.
+  const mtShut = {};
+  const mtLead = (members) => members.find((p) => p.kind !== 'Media buyer' && p.role === 'Project Manager') || members.find((p) => p.kind !== 'Media buyer') || null;
+  function renderMtTeams(pp, list, meRow, row, q) {
+    const all = (mtPeople || []), names = [...(mtTeams || [])]; for (const p of all) if (p.team && !names.includes(p.team)) names.push(p.team);
+    const groups = names.map((n) => ({ name: n, members: list.filter((p) => p.team === n), every: all.filter((p) => p.team === n) })).filter((g) => (q ? g.members.length : g.every.length));
+    const loose = list.filter((p) => !p.team);
+    const sum = (ms) => { const done = ms.reduce((t, p) => t + p.done, 0), total = ms.reduce((t, p) => t + p.done + p.open, 0); return { done, total, pct: total ? Math.round(done / total * 100) : null, plans: ms.filter((p) => p.planAt || p.resultAt).length }; };
+    const grp = (g) => { const lead = mtLead(g.every), s = sum(g.every), sel = !!(mtAs && g.every.some((p) => p.id === mtAs.id)), open = q ? true : mtShut[g.name] != null ? !mtShut[g.name] : sel;
+      const order = [...g.members.filter((p) => p.kind !== 'Media buyer'), ...g.members.filter((p) => p.kind === 'Media buyer')];
+      return `<section class="mt-team${open ? ' open' : ''}${sel ? ' sel' : ''}">
+        <button type="button" class="mt-th" data-mtteam="${esc(g.name)}" aria-expanded="${open}">
+          <span class="avatar mt-tav">${initials(g.name)}</span>
+          <span class="mt-pn"><b>${esc(g.name)}</b><span class="hint">${lead ? 'PM ' + esc(lead.name) : 'no Project Manager yet'} · ${g.every.length} ${g.every.length === 1 ? 'person' : 'people'}</span>
+            <span class="hint"><b class="num ${s.total && s.done === s.total ? 'is-ok' : s.pct != null && s.pct < 50 ? 'is-danger' : ''}">${s.total ? `${s.done}/${s.total} done` : 'no menu'}</b> · ${s.plans}/${g.every.length} plan${g.every.length === 1 ? '' : 's'} sent</span></span>
+          <span class="kpi-score ${s.pct == null ? 'none' : scoreCls(s.pct)}" title="Team menu done today">${s.pct == null ? '–' : s.pct + '%'}</span>
+          <span class="mt-chev" aria-hidden="true">▾</span></button>
+        <div class="mt-tm">${order.map((p) => row(p, false)).join('')}</div></section>`; };
+    pp.innerHTML = `<div class="top"><h2>Teams</h2><span class="hint">${groups.length} team${groups.length === 1 ? '' : 's'} · ${all.length} people · tap a team to see its PM's day and KPI</span></div>
+      <input type="search" id="mtSearch" placeholder="Search a team or a person" aria-label="Search a team or a person" value="${esc(mtQ)}">
+      <div class="mt-plist">${!q ? row(meRow, true) : ''}${groups.map(grp).join('')}${loose.length ? `<div class="mt-pgrp">No team yet</div>${loose.map((p) => row(p, false)).join('')}` : ''}${!groups.length && !loose.length && q ? '<div class="hl-empty">No team or person matches.</div>' : ''}</div>`;
+    $('mtSearch').oninput = () => { mtQ = $('mtSearch').value; const pos = $('mtSearch').selectionStart; renderMtPeople(); const i = $('mtSearch'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (_) {} };
+    const pick = (p) => { mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null, team: p.team || '' } : null; mtClients = null; mtDay = null; renderMtPeople(); loadMyTaskPage();
+      if (!matchMedia('(min-width: 1100px)').matches) $('mtAdd').scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' }); };
+    pp.querySelectorAll('[data-mtp]').forEach((b) => b.onclick = () => pick(mtPeople.find((x) => x.id === b.dataset.mtp)));
+    pp.querySelectorAll('[data-mtteam]').forEach((b) => b.onclick = () => {
+      const name = b.dataset.mtteam, every = all.filter((p) => p.team === name), lead = mtLead(every), isOpen = b.getAttribute('aria-expanded') === 'true', sel = !!(mtAs && every.some((p) => p.id === mtAs.id));
+      if (isOpen && (sel || !lead)) { mtShut[name] = true; renderMtPeople(); return; } // second tap folds it
+      mtShut[name] = false;
+      if (lead && lead.id !== me.id && !(mtAs && mtAs.id === lead.id)) return pick(lead);
+      renderMtPeople();
+    });
+  }
   // Add a task from the My Task page: pick the client, type the task, (PM) who does it, today or tomorrow.
-  let mtBuyers = null, mtClients = null;
+  let mtBuyers = null, mtClients = null, mtTeams = null;
   async function renderMyTaskAdd() {
     const host = $('mtAdd'); if (!host) return;
     const owner = mtAs ? (mtAs.buyer ? mtAs.pm : mtAs.id) : null, asQ = owner ? `?as=${encodeURIComponent(owner)}` : '';
@@ -2902,11 +2937,22 @@
       refreshMtPeople(); loadMtCal();
     };
   }
-  async function refreshMtPeople() { if (!mtAdminPick() && !mtPmPick()) return; try { mtPeople = mtAdminPick() ? (await api('/admin/people-today')).people : await loadPmPeople(); if (mtPeople.length) renderMtPeople(); } catch (_) {} }
+  async function refreshMtPeople() { if (!mtAdminPick() && !mtPmPick()) return; try { if (mtAdminPick()) { const r = await api('/admin/people-today'); mtPeople = r.people; mtTeams = r.teams || []; } else mtPeople = await loadPmPeople(); if (mtPeople.length) renderMtPeople(); } catch (_) {} }
   async function loadMyKpiPage(d) {
     const host = $('mtKpi'); if (!host) return;
     if (me.buyer && !d) { try { d = await api('/mb/me'); } catch (_) { return; } }
-    if (!me.buyer) { host.innerHTML = `<div class="top"><h2>📊 Monthly KPI${mtAs ? ' · ' + esc(mtAs.name) : ''}</h2><span class="hint">Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div><div id="mtKpiBody"></div>`; kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); return; }
+    if (!me.buyer) {
+      // A team's KPI is its Project Manager's KPI: for a PM in a team the panel is titled with the team.
+      const team = mtAs && !mtAs.buyer && mtAs.team && mtAdminPick() ? mtAs.team : '';
+      const mates = team ? (mtPeople || []).filter((p) => p.team === team && p.kind !== 'Media buyer' && p.role === 'Project Manager' && p.id !== mtAs.id) : [];
+      const isPm = team && ((mtPeople || []).find((p) => p.id === mtAs.id) || {}).role === 'Project Manager';
+      host.innerHTML = `<div class="top"><h2>📊 ${isPm ? 'Team KPI · ' + esc(team) : 'Monthly KPI' + (mtAs ? ' · ' + esc(mtAs.name) : '')}</h2><span class="hint">${isPm ? `The team's KPI is set on its Project Manager, ${esc(mtAs.name)}. ` : ''}Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div>
+        ${isPm && mates.length ? `<div class="mt-kcopy"><span class="hint">${esc(team)} has ${mates.length} more Project Manager${mates.length === 1 ? '' : 's'}: ${mates.map((p) => esc(p.name)).join(', ')}.</span><button type="button" class="sm" id="mtKCopy">Copy these KPIs to ${mates.length === 1 ? 'them' : 'all ' + mates.length}</button></div>` : ''}<div id="mtKpiBody"></div>`;
+      kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id);
+      const cp = $('mtKCopy'); if (cp) cp.onclick = async () => {
+        if (!confirm(`Copy ${mtAs.name}'s KPIs for this month to ${mates.map((p) => p.name).join(', ')}?\n\nThis replaces the KPIs they have now for this month.`)) return;
+        cp.disabled = true; try { const r = await api('/kpis/copy-team', { method: 'POST', body: { person: mtAs.id } }); successBadge(`Copied to ${r.to.join(', ')}`); refreshMtPeople(); } catch (e) { toast(e.message); } cp.disabled = false; };
+      return; }
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.source === 'all' ? 'all daily tasks' : `${k.tasks} task${k.tasks === 1 ? '' : 's'}`}${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
   }

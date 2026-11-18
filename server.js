@@ -140,6 +140,10 @@ async function saveFbLogin(profile, tokenEnc, expires) {
   const name = cur && cur.name && cur.name !== prevFb ? cur.name : profile.name;
   await db.upsertUser(profile.id, name, tokenEnc, expires);
   await db.setUserSetting(profile.id, 'fbName', profile.name);
+  for (const r of (await db.pool.query(`SELECT key, value FROM settings WHERE key LIKE '%:fbExtras'`)).rows) {
+    const list = Array.isArray(r.value) ? r.value : []; if (!list.some((e) => e.id === profile.id && e.shared)) continue;
+    await db.setSetting(r.key, list.map((e) => (e.id === profile.id && e.shared ? { ...e, name: profile.name, token_enc: tokenEnc, expires, error: '' } : e)));
+  }
 }
 const fbNameOf = async (u) => (await db.getUserSetting(u.fb_id, 'fbName', '')) || u.name;
 
@@ -570,8 +574,35 @@ api.get('/admin/teams', adminOnly, wrap(async (req, res) => {
   const owner = await db.ownerId(), bl = await MB().all(), byName = {};
   const users = await db.allUsers(); for (const u of users) byName[u.name] = u.fb_id;
   const mbs = bl.map((b) => ({ name: b.name, pm: b.addedById || byName[b.addedBy] || null, linked: !!b.chat }));
-  const roles = await roleMap(), av = await adminViewers();
-  res.json({ teams: await getTeams(), users: users.map((u) => ({ id: u.fb_id, name: u.name, role: u.fb_id === owner ? 'owner' : ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm', buyers: mbs.filter((m) => m.pm === u.fb_id).map((m) => m.name) })), canEdit: owner === req.user.fb_id });
+  const roles = await roleMap(), av = await adminViewers(), now = Date.now(), logins = await LOGINS().list();
+  const counts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*) FILTER (WHERE NOT archived)::int AS n FROM clients GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
+  const accts = Object.fromEntries((await db.pool.query(`SELECT owner, count(*)::int AS n FROM ad_accounts GROUP BY owner`)).rows.map((r) => [r.owner, r.n]));
+  const out = [];
+  for (const u of users) {
+    const exp = u.token_expires ? Date.parse(u.token_expires) : 0, chat = await db.getUserSetting(u.fb_id, 'tgChat', null), lg = logins.find((l) => l.fbId === u.fb_id);
+    out.push({ id: u.fb_id, name: u.name, role: u.fb_id === owner ? 'owner' : ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm',
+      buyers: mbs.filter((m) => m.pm === u.fb_id).map((m) => m.name), mbs: mbs.filter((m) => m.pm === u.fb_id).map((m) => ({ name: m.name, linked: m.linked })),
+      clients: counts[u.fb_id] || 0, adAccounts: accts[u.fb_id] || 0, username: lg ? lg.username : '',
+      facebook: { name: await fbNameOf(u), expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null },
+      extras: (await sync.extraLogins(u.fb_id)).map((e) => ({ id: e.id, name: e.name, expired: !!(e.error || (e.expires && Date.parse(e.expires) < now)), shared: !!e.shared })),
+      telegram: { linked: !!(chat && chat.id), name: chat ? chat.name || '' : '' } });
+  }
+  res.json({ teams: await getTeams(), users: out, canEdit: await isFull(req), bot: telegram.hasBot() });
+}));
+// A leader (owner / CEO / COO / CMO) keeps their own sign-in, and their Facebook login is ALSO used by a team to reach
+// its ad accounts: it is added to that team's Facebook accounts. (An ordinary second account is merged instead.)
+api.post('/admin/teams/share-fb', ownerOnly, wrap(async (req, res) => {
+  const b = req.body || {}, from = String(b.from || ''), into = String(b.into || '');
+  const src = await db.getUser(from), dst = await db.getUser(into); if (!src || !dst || from === into) return res.status(404).json({ error: 'Choose two different accounts.' });
+  const roles = await roleMap(), lead = from === (await db.ownerId()) || LEAD.has(roles[from]) || (await fullAdmins()).has(from);
+  if (!lead) return res.status(400).json({ error: `${src.name} is an ordinary account — use Merge into… so its clients move too.` });
+  const list = (await sync.extraLogins(into)).filter((x) => x.id !== from);
+  if (list.length + 2 > require('./src/merge').MAX_FB) return res.status(400).json({ error: `${dst.name} already has the most Facebook accounts a workspace can hold.` });
+  list.push({ id: from, name: await fbNameOf(src), token_enc: src.token_enc, expires: src.token_expires, addedAt: new Date().toISOString(), shared: true });
+  await db.setUserSetting(into, 'fbExtras', list);
+  let n = 0; try { await sync.refreshAccounts(dst); n = (await db.listAccounts(into)).filter((a) => (a.info || {}).via === from).length; } catch (e) { console.error('[share fb] account list failed:', e.message); }
+  console.log('[teams]', await fbNameOf(src), 'Facebook shared with', dst.name, 'by', req.user.name);
+  res.json({ ok: true, name: await fbNameOf(src), into: dst.name, found: n });
 }));
 api.post('/admin/teams', ownerOnly, wrap(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 60);

@@ -15,6 +15,7 @@ async function make({ skip = [] } = {}) {
   for (const t of await tables()) {
     if (skip.includes(t)) { counts[t] = 'skipped'; continue; }
     const rows = (await db.pool.query(`SELECT * FROM "${t}"`)).rows;
+    for (const r of rows) for (const k of Object.keys(r)) if (Buffer.isBuffer(r[k])) r[k] = '\\x' + r[k].toString('hex'); // pictures (bytea) as Postgres hex text, so restore can read them
     out.tables[t] = rows; counts[t] = rows.length;
   }
   const gz = zlib.gzipSync(Buffer.from(JSON.stringify(out)), { level: 9 });

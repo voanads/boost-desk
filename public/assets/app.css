@@ -3648,3 +3648,16 @@ body.mt-over .mt-layout{display:none}
 #mtBoard .lb-who{border:0;background:transparent;box-shadow:none}
 #mtBoard .lb-who:hover{background:color-mix(in srgb,var(--brand) 8%,transparent)}
 .lb-table{min-width:0}
+
+/* Shorter menu: grouped pages hide their own menu item and switch with a strip at the top of the page */
+nav.tabs button.nav-sub{display:none!important}
+.subnav{display:inline-flex;max-width:100%;margin:0 0 14px;border:1px solid var(--line);border-radius:var(--r-md,8px);overflow:hidden;background:var(--surface)}
+.wrap .subnav button{min-height:40px;padding:0 14px;border:0;border-left:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;color:var(--ink);font:inherit;font-weight:600;font-size:var(--fs-sm);white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.wrap .subnav button:first-child{border-left:0}
+.wrap .subnav button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-text)}
+.subnav-n{font-size:var(--fs-2xs);font-weight:700;padding:1px 7px;border-radius:999px;background:var(--danger-soft);color:var(--danger)}
+@media (max-width:560px){.subnav{display:flex;width:100%}.wrap .subnav button{flex:1;justify-content:center;padding:0 6px;min-width:0;overflow:hidden;text-overflow:ellipsis}}
+.wrap .subnav button{border:0!important;border-left:1px solid var(--line)!important;background:transparent!important}.wrap .subnav button:first-child{border-left:0!important}.wrap .subnav button[aria-pressed=true]{background:var(--brand-soft)!important;color:var(--brand-text)!important}
+.mt-nudge{margin-left:auto}.mt-nudge+.mt-sugbtn{margin-left:0}
+#actQ{min-height:36px;min-width:220px}
+.subnav{width:fit-content;justify-self:start;align-self:flex-start}

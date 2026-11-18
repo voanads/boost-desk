@@ -2031,11 +2031,21 @@ api.put('/me/password', wrap(async (req, res) => {
   try { await L.verify(rec.username, b.current); await L.setPassword(rec.username, b.next); res.json({ ok: true }); } catch (e) { loginErr(res, e.status === 401 ? Object.assign(e, { message: 'The current password is wrong.', status: 400 }) : e); }
 }));
 // Settings → Facebook accounts: the extra logins connected to my workspace.
+// A Facebook account's profile picture (asked with that account's own token), remembered for an hour.
+const fbPics = new Map();
+async function fbPicture(id, token) {
+  const hit = fbPics.get(id); if (hit && Date.now() - hit.at < 3600e3) return hit.url;
+  let url = '';
+  try { const r = await Promise.race([meta.get(`/${id}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, token), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); url = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) { /* no picture: the initials show */ }
+  fbPics.set(id, { at: Date.now(), url }); return url;
+}
 api.get('/fb-accounts', wrap(async (req, res) => {
   const me = req.user.fb_id, accts = await db.listAccounts(me), now = Date.now();
   const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, mine = accts.filter((a) => !(a.info || {}).via);
-  res.json({ max: require('./src/merge').MAX_FB, main: { id: me, name: await fbNameOf(req.user), expires: req.user.token_expires || null, expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null, accounts: mine.length, syncing: mine.filter((a) => a.enabled).length, pages: (await db.listPagesSeen(me)).length },
-    extras: (await sync.extraLogins(me)).map((e) => ({ id: e.id, name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
+  const xs = await sync.extraLogins(me), pics = {};
+  await Promise.all([(async () => { try { pics[me] = await fbPicture(me, await sync.tokenFor(req.user)); } catch (_) {} })(), ...xs.map(async (e) => { try { pics[e.id] = await fbPicture(e.id, require('./src/crypto').decrypt(e.token_enc)); } catch (_) {} })]);
+  res.json({ max: require('./src/merge').MAX_FB, main: { id: me, picture: pics[me] || '', name: await fbNameOf(req.user), expires: req.user.token_expires || null, expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null, accounts: mine.length, syncing: mine.filter((a) => a.enabled).length, pages: (await db.listPagesSeen(me)).length },
+    extras: xs.map((e) => ({ id: e.id, picture: pics[e.id] || '', name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
     accounts: accts.filter((a) => (a.info || {}).via === e.id).length, syncing: accts.filter((a) => (a.info || {}).via === e.id && a.enabled).length })) });
 }));
 api.delete('/fb-accounts/:id', wrap(async (req, res) => {

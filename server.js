@@ -1983,7 +1983,10 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
     const mn = await MENU().dayOf(b.id, 'mb', today);
     people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', role: 'Media buyer', pm, pmName: pm ? (users.find((u) => u.fb_id === pm) || {}).name || '' : '', team: pm ? teamOf[pm] || '' : '', linked: !!(b.linked || b.chat), photo: !!b.photo, done: mn.done, open: mn.total - mn.done, late: 0, pct: mn.pct, planAt: mn.plan ? mn.plan.at : null, resultAt: mn.result ? mn.result.at : null, tasks: count(ts), kpi: await kpiAvg(b.id, true) });
   }
-  res.json({ today, month: ym, people, teams: teams.map((t) => t.name), hour: hourNow(), shift: SHIFT });
+  // yesterday's menu result of the same people, for the calm "before the working day" view
+  const yd = sync.addDays(today, -1), yest = { done: 0, total: 0 };
+  for (const p of people) { if (p.role !== 'Project Manager' && p.kind !== 'Media buyer') continue; try { const d = await MENU().dayOf(p.id.startsWith('mb:') ? p.id.slice(3) : p.id, p.kind === 'Media buyer' ? 'mb' : 'pm', yd); yest.done += d.done; yest.total += d.total; } catch (_) {} }
+  res.json({ today, month: ym, people, teams: teams.map((t) => t.name), hour: hourNow(), shift: SHIFT, yesterday: yest });
 }));
 // Leader's "This month" board: every Project Manager and media buyer with each KPI's score, and how many days
 // they sent a plan and a result and how much of the daily menu they ticked. Read only; no personal data of clients.

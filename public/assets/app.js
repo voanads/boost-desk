@@ -2299,7 +2299,7 @@
     setTimeout(() => { if (!$('tab-admin').hidden) { if (admSec === 'users') loadUsers(); if (admSec === 'health') loadHealth(); } }, 15000);
   }
   // Merge one account into another (two workspaces of one team become one). Shows exactly what will move before anything happens.
-  async function openMerge(fromId, fromName) {
+  async function openMerge(fromId, fromName, intoId) {
     let dlg = $('mergeDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'mergeDlg'; dlg.className = 'ho-dlg mg-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-mgclose]')) dlg.close(); }); }
     const users = (uData && uData.users) || [];
     const others = users.filter((u) => u.id !== fromId && !/^g:/.test(u.id));
@@ -2309,6 +2309,7 @@
       <div id="mgPlan" class="mg-plan"></div></div>`;
     dlg.showModal();
     const sel = dlg.querySelector('#mgInto'), box = dlg.querySelector('#mgPlan');
+    if (intoId && others.some((u) => u.id === intoId)) setTimeout(() => { sel.value = intoId; sel.onchange(); }, 0);
     sel.onchange = async () => {
       if (!sel.value) { box.innerHTML = ''; return; }
       box.innerHTML = '<p class="hint">Counting…</p>';
@@ -2330,7 +2331,7 @@
       go.onclick = async () => {
         go.disabled = true; go.textContent = 'Merging…';
         try { const r = await api('/admin/merge', { method: 'POST', body: { from: fromId, into: sel.value, confirm: box.querySelector('#mgConfirm').value, noBackup: box.querySelector('#mgNoBkC').checked } });
-          dlg.close(); successBadge(`Merged — ${r.clients} client${r.clients === 1 ? '' : 's'} and ${r.adAccounts} ad account${r.adAccounts === 1 ? '' : 's'} moved into ${p.into.name}`); loadUsers(); }
+          dlg.close(); successBadge(`Merged — ${r.clients} client${r.clients === 1 ? '' : 's'} and ${r.adAccounts} ad account${r.adAccounts === 1 ? '' : 's'} moved into ${p.into.name}`); loadUsers(); if (typeof loadTeams === 'function') loadTeams(); }
         catch (e) { toast(e.message); if (/backup/i.test(e.message)) box.querySelector('#mgNoBk').hidden = false; go.disabled = false; go.textContent = `Merge ${p.from.name} into ${p.into.name}`; }
       };
     };
@@ -4789,16 +4790,56 @@ Thank you for working with Ads Box!`,
   function renderTeams() {
     const { teams, users, canEdit } = aTeams;
     $('teamNewForm').hidden = !canEdit;
-    $('teamHint').textContent = canEdit ? 'Group people into teams (e.g. a PM and their media buyers). The Main Dashboard then shows spend, orders and suggestions per team. Each person can be in one team.' : 'Teams set up by the app owner.';
+    $('teamHint').textContent = canEdit ? 'One team = one account with its Project Manager, one media buyer, the team\'s Facebook accounts and Telegram. Each card shows what is left to fix.' : 'Teams set up by the app owner.';
     const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || 'Unknown';
     const RN = { owner: 'CEO · Owner', ceo: 'CEO', coo: 'COO', cmo: 'CMO', pm: 'Project Manager', mb: 'Media buyer' };
-    const memberRows = (t) => t.members.map((m) => { const u = users.find((x) => x.id === m) || {}; return `<div class="tc-row"><span class="pchip">${esc(nameOf(m))}${canEdit ? `<button type="button" data-removemember="${esc(m)}" aria-label="Remove">×</button>` : ''}</span><span class="hint">· ${RN[u.role] || 'Project Manager'}</span></div>${(u.buyers || []).map((b) => `<div class="tc-row mb"><span>${esc(b)}</span><span class="hint">· media buyer</span></div>`).join('')}`; }).join('');
+    const LEADS = ['owner', 'ceo', 'coo', 'cmo'], isLead = (u) => LEADS.includes(u.role);
     const inTeam = new Set(teams.flatMap((t) => t.members));
-    $('teamGrid').innerHTML = teams.map((t) => `<div class="teamcard" data-team="${esc(t.id)}">
-      <div class="tc-head"><b class="tc-name">${esc(t.name)}</b><span class="hint">${t.members.length} ${t.members.length === 1 ? 'person' : 'people'}</span><span class="spacer"></span>${canEdit ? '<button class="ghost" data-rename>Rename</button><button class="ghost danger-t" data-deleteteam>Delete</button>' : ''}</div>
-      <div class="tc-members">${memberRows(t) || '<span class="hint">No one yet</span>'}</div>
-      ${canEdit ? (() => { const free = users.filter((u) => !t.members.includes(u.id) && !inTeam.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)), taken = users.filter((u) => !t.members.includes(u.id) && inTeam.has(u.id)).sort((a, b) => a.name.localeCompare(b.name)); const o = (u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`; return `<select data-addmember aria-label="Add a person to ${esc(t.name)}"><option value="">+ Add person…</option>${free.length ? `<optgroup label="Not in a team yet">${free.map(o).join('')}</optgroup>` : ''}${taken.length ? `<optgroup label="Move from another team">${taken.map(o).join('')}</optgroup>` : ''}</select>`; })() : ''}
-    </div>`).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
+    const pill = (c, t) => `<span class="pill ${c}">${t}</span>`, pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    // One team = one account. What a team has, and what is still to fix.
+    const view = (t) => {
+      const mem = t.members.map((m) => users.find((x) => x.id === m)).filter(Boolean), pms = mem.filter((u) => !isLead(u)), leads = mem.filter(isLead);
+      const main = pms.slice().sort((a, b) => (b.username ? 1 : 0) - (a.username ? 1 : 0) || b.clients - a.clients)[0] || null, extra = pms.filter((u) => u !== main);
+      const mbs = main ? main.mbs || [] : [], fbs = main ? [{ name: main.facebook.name, expired: main.facebook.expired }, ...main.extras] : [];
+      const fix = [];
+      for (const u of extra) fix.push({ t: `<b>${esc(u.name)}</b> is a second account in this team (${pl(u.clients, 'client')}, ${pl(u.adAccounts, 'ad account')}).`, btn: canEdit ? `<button type="button" class="sm primary" data-tmerge="${esc(u.id)}" data-name="${esc(u.name)}" data-into="${esc(main.id)}">Merge into ${esc(main.name)}</button>` : '' });
+      if (main) for (const u of leads) { if (u.adAccounts && !main.extras.some((e) => e.id === u.id)) fix.push({ t: `<b>${esc(u.name)}</b> (${RN[u.role]}) works in this team with their own sign-in (${pl(u.adAccounts, 'ad account')}).`, btn: canEdit ? `<button type="button" class="sm primary" data-tshare="${esc(u.id)}" data-name="${esc(u.name)}" data-into="${esc(main.id)}" data-intoname="${esc(main.name)}">Add their Facebook to the team</button>` : '' }); }
+      if (!main) fix.push({ t: leads.length ? 'Only leaders are in this team — add its Project Manager account.' : 'No account in this team yet — add its Project Manager.' });
+      if (main && !mbs.length) fix.push({ t: 'No media buyer yet — the PM adds one in Settings.' });
+      if (mbs.length > 1) fix.push({ t: `${mbs.length} media buyers (${mbs.map((b) => esc(b.name)).join(', ')}) — the plan is one per team. The PM removes the one who left in Settings.` });
+      for (const b of mbs) if (!b.linked) fix.push({ t: `Media buyer <b>${esc(b.name)}</b> has not connected Telegram.` });
+      if (main && !main.telegram.linked) fix.push({ t: 'The PM has not connected Telegram — digests and notes cannot be sent.' });
+      for (const f of fbs) if (f.expired) fix.push({ t: `Facebook login of <b>${esc(f.name)}</b> expired — reconnect it in Settings.` });
+      return { mem, main, extra, leads, mbs, fbs, fix, lead: !pms.length && leads.length > 0 };
+    };
+    const V = Object.fromEntries(teams.map((t) => [t.id, view(t)])), work = teams.filter((t) => !V[t.id].lead);
+    const merges = work.reduce((n, t) => n + V[t.id].extra.length + V[t.id].fix.filter((f) => /data-tshare/.test(f.btn || '')).length, 0);
+    const tiles = $('teamTiles'); if (tiles) tiles.innerHTML = work.length ? [
+      ['Teams ready', `${work.filter((t) => !V[t.id].fix.length).length} of ${work.length}`, 'nothing left to fix', work.every((t) => !V[t.id].fix.length) ? '' : 'mid'],
+      ['Accounts to bring in', merges, merges ? 'second accounts and leaders\' Facebook' : 'every team has one account', merges ? 'mid' : ''],
+      ['Media buyers', work.reduce((n, t) => n + V[t.id].mbs.length, 0), `${work.filter((t) => V[t.id].mbs.length === 1).length} of ${work.length} teams have exactly one`, ''],
+      ['Telegram connected', `${work.filter((t) => V[t.id].main && V[t.id].main.telegram.linked).length} of ${work.length}`, 'the PM\'s own chat', ''],
+    ].map(([l, b2, sub, c]) => `<div class="ca tt ${c}"><span class="ca-l">${l}</span><b>${b2}</b><small>${sub}</small></div>`).join('') : '';
+    const chip = (u) => `<span class="pchip">${esc(u.name)}${canEdit ? `<button type="button" data-removemember="${esc(u.id)}" aria-label="Remove ${esc(u.name)} from the team">×</button>` : ''}</span>`;
+    const row = (k, v, r) => `<div class="tt-row"><span class="tt-k">${k}</span><span class="tt-v">${v}</span>${r || ''}</div>`;
+    const addSel = (t) => { if (!canEdit) return ''; const free = users.filter((u) => !t.members.includes(u.id) && !inTeam.has(u.id)).sort((a, b2) => a.name.localeCompare(b2.name)), taken = users.filter((u) => !t.members.includes(u.id) && inTeam.has(u.id)).sort((a, b2) => a.name.localeCompare(b2.name)); const o = (u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`; return `<select data-addmember aria-label="Add a person to ${esc(t.name)}"><option value="">+ Add person…</option>${free.length ? `<optgroup label="Not in a team yet">${free.map(o).join('')}</optgroup>` : ''}${taken.length ? `<optgroup label="Move from another team">${taken.map(o).join('')}</optgroup>` : ''}</select>`; };
+    const head = (t, right) => `<div class="tc-head"><span class="avatar tt-av">${initials(t.name)}</span><b class="tc-name">${esc(t.name)}</b>${right}<span class="spacer"></span>${canEdit ? '<button class="ghost" data-rename>Rename</button><button class="ghost danger-t" data-deleteteam>Delete</button>' : ''}</div>`;
+    const card = (t) => { const v = V[t.id], m = v.main;
+      if (v.lead || (!m && !v.mem.length)) return `<div class="teamcard tt-card${v.lead ? ' lead' : ''}" data-team="${esc(t.id)}">${head(t, v.lead ? pill('', 'Leaders') : pill('warn', 'Empty'))}
+        ${v.lead ? row('Leaders', v.leads.map((u) => chip(u) + ` <span class="hint">${RN[u.role]}</span>`).join(' ')) + '<span class="hint">Leaders keep their own sign-in and see every team. This is not a working team.</span>' : '<span class="hint">No one yet.</span>'}${addSel(t)}</div>`;
+      return `<div class="teamcard tt-card" data-team="${esc(t.id)}">${head(t, v.fix.length ? pill('warn', `${v.fix.length} to fix`) : pill('ok', 'Ready'))}
+        ${m ? row('Account', `${chip(m)} <span class="hint">${m.username ? 'signs in as <b>' + esc(m.username) + '</b>' : 'Facebook sign-in only'} · ${pl(m.clients, 'client')}</span>`) : ''}
+        ${v.extra.length ? row('Also here', v.extra.map(chip).join(' '), pill('warn', 'second account')) : ''}
+        ${v.leads.length ? row('Leader', v.leads.map((u) => chip(u) + ` <span class="hint">${RN[u.role]}</span>`).join(' ')) : ''}
+        ${m ? row('Media buyer', v.mbs.length ? v.mbs.map((b2) => `${esc(b2.name)} <span class="hint">${b2.linked ? '· Telegram ✓' : '· no Telegram'}</span>`).join(', ') : '<span class="hint">none yet</span>', v.mbs.length === 1 ? pill('ok', '1') : v.mbs.length ? pill('warn', String(v.mbs.length)) : '') : ''}
+        ${m ? row('Facebook', v.fbs.map((f) => esc(f.name) + (f.shared ? ' <span class="hint">(shared)</span>' : '')).join(', '), v.fbs.some((f) => f.expired) ? pill('bad', 'Login expired') : pill('ok', `${v.fbs.length} connected`)) + `<span class="hint tt-sub">${pl(m.adAccounts, 'ad account')}</span>` : ''}
+        ${m ? row('Telegram', m.telegram.linked ? `PM's chat${m.telegram.name ? ' · ' + esc(m.telegram.name) : ''}` : '<span class="hint">not connected</span>', m.telegram.linked ? pill('ok', 'Connected') : pill('warn', 'Not yet')) : ''}
+        ${v.fix.map((f) => `<div class="tt-fix"><span>${f.t}</span>${f.btn || ''}</div>`).join('')}${addSel(t)}</div>`; };
+    $('teamGrid').innerHTML = [...work, ...teams.filter((t) => V[t.id].lead)].map(card).join('') || `<div class="empty">${canEdit ? 'No teams yet. Type a name above and tap <b>+ New team</b>.' : 'No teams yet.'}</div>`;
+    document.querySelectorAll('#teamGrid [data-tmerge]').forEach((b2) => b2.onclick = () => openMerge(b2.dataset.tmerge, b2.dataset.name, b2.dataset.into));
+    document.querySelectorAll('#teamGrid [data-tshare]').forEach((b2) => b2.onclick = async () => {
+      if (!confirm(`Add ${b2.dataset.name}'s Facebook login to ${b2.dataset.intoname}?\n\n${b2.dataset.name} keeps their own sign-in. ${b2.dataset.intoname} will see ${b2.dataset.name}'s ad accounts under Ad accounts and can tick the ones the team works on.\n\nTick each ad account in one place only, so its spend is not shown in two accounts.`)) return;
+      b2.disabled = true; try { const r = await api('/admin/teams/share-fb', { method: 'POST', body: { from: b2.dataset.tshare, into: b2.dataset.into } }); successBadge(`${r.name} added to ${r.into} — ${r.found} ad account${r.found === 1 ? '' : 's'} found`); await loadTeams(); } catch (e) { toast(e.message); b2.disabled = false; } });
     document.querySelectorAll('#teamGrid .teamcard').forEach((card) => {
       const id = card.dataset.team, patch = async (body) => { try { await api('/admin/teams/' + id, { method: 'PATCH', body }); await loadTeams(); mData = null; } catch (e) { toast(e.message); } };
       const add = card.querySelector('[data-addmember]'); if (add) add.onchange = () => add.value && patch({ add: add.value }).then(() => toast('Added to team'));

@@ -3525,3 +3525,25 @@ table.co-tt tbody tr th b{font-weight:600}
 .ho-phh b{font-size:var(--fs-md)}
 .ho-ph pre{margin:0;background:var(--bg-2);border-radius:14px 14px 14px 4px;padding:10px 12px;font:inherit;font-size:var(--fs-sm,13.5px);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
 @media (max-width:900px){.ho-grid{grid-template-columns:1fr}.ho-me{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:14px}.ho-tg{margin-left:0}.ho-phs{grid-template-columns:1fr}}
+
+/* Settings — My account + Team Facebook accounts */
+.st-fbteam{box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)}
+.st-fbteam .st-fbx{margin-top:var(--s-2);padding-top:0;border-top:0}
+.st-fbx-r{flex-wrap:wrap;padding:12px 14px;border-radius:var(--r-lg)}
+.st-fbx-r.bad{background:var(--danger-soft);border-color:transparent}
+.st-fbx-r .avatar{width:40px;height:40px;flex:none}
+.st-fbx-r .st-pn{flex:1 1 220px}
+.st-fbn{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.st-fbx-r a.btn.sm{display:inline-flex;align-items:center;height:34px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--ink);font-weight:600;font-size:var(--fs-lg);text-decoration:none}
+.st-fbx-r a.btn.sm.primary{background:var(--brand-fill);color:var(--on-brand);border-color:transparent}
+.st-fbteam .st-fbx-add summary{display:flex;justify-content:center;gap:8px;height:auto;min-height:56px;padding:0 16px;border:1.5px dashed var(--brand);border-radius:var(--r-lg);background:var(--brand-soft);color:var(--brand-text);font-size:var(--fs-base)}
+.st-fbteam .st-fbx-add summary .ic{width:20px;height:20px}
+/* Admin — merge two accounts */
+.mg-dlg{max-width:min(620px,94vw)}
+.mg-plan{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.mg-flow{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg-2);border-radius:var(--r-lg)}
+.mg-flow span{display:flex;flex-direction:column;min-width:0;flex:1}
+.mg-flow small{color:var(--muted);font-size:var(--fs-xs)}
+.mg-flow i{font-style:normal;font-size:1.2rem;color:var(--brand)}
+.mg-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:var(--fs-md)}
+.mg-warn{margin:0;padding:8px 12px;border-radius:var(--r-md);background:var(--warn-soft);color:var(--warn);font-size:var(--fs-md)}

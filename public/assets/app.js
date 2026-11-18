@@ -2271,6 +2271,7 @@
         ${d.canEdit ? `<div class="uc-acts"><label class="switch" title="Auto sync"><input type="checkbox" data-auto="${esc(u.id)}" ${u.enabled ? 'checked' : ''} aria-label="Auto sync for ${esc(u.name)}"><span></span></label><span class="hint">Auto sync</span><span class="spacer"></span>
           <button class="sm" data-ulogin="${esc(u.id)}" data-uname="${esc(u.name)}" data-uuser="${esc((uLogins[u.id] || {}).username || '')}" title="${uLogins[u.id] ? 'Username: ' + esc(uLogins[u.id].username) + ' — tap for a new password' : 'Make a username and password for ' + esc(u.name)}">${uLogins[u.id] ? '🔑 ' + esc(uLogins[u.id].username) : '🔑 Username'}</button>
           <button class="sm" data-run="${esc(u.id)}" title="Sync now" ${u.expired || u.busy || !u.synced ? 'disabled' : ''}>↻ Run now</button>
+          ${edit && !you ? `<button class="sm" data-merge="${esc(u.id)}" data-name="${esc(u.name)}" title="Move this account's clients, ad accounts and Facebook login into another account of the same team">Merge into…</button>` : ''}
           ${edit && !you ? `<button class="sm danger-t" data-remove="${esc(u.id)}" data-name="${esc(u.name)}">Remove</button>` : ''}</div>` : ''}
       </article>`;
     }).join('');
@@ -2297,6 +2298,43 @@
     try { await api('/auto-sync/' + encodeURIComponent(id) + '/run', { method: 'POST' }); toast('Sync started — refreshing today and yesterday'); } catch (e) { toast(e.message); }
     setTimeout(() => { if (!$('tab-admin').hidden) { if (admSec === 'users') loadUsers(); if (admSec === 'health') loadHealth(); } }, 15000);
   }
+  // Merge one account into another (two workspaces of one team become one). Shows exactly what will move before anything happens.
+  async function openMerge(fromId, fromName) {
+    let dlg = $('mergeDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'mergeDlg'; dlg.className = 'ho-dlg mg-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-mgclose]')) dlg.close(); }); }
+    const users = (uData && uData.users) || [];
+    const others = users.filter((u) => u.id !== fromId && !/^g:/.test(u.id));
+    dlg.innerHTML = `<div class="ho-dw"><div class="ho-dh"><h2>Merge ${esc(fromName)} into another account</h2><button type="button" class="ghost sm" data-mgclose aria-label="Close">✕</button></div>
+      <p class="hint">For a team that has two Boost Desk accounts. Everything of <b>${esc(fromName)}</b> moves into the account you choose, and ${esc(fromName)}'s Facebook login becomes one of that team's Facebook accounts. The account you choose keeps its name, role, team and username.</p>
+      <label class="fld">Merge into<select id="mgInto"><option value="">Choose the account that stays…</option>${others.map((u) => `<option value="${esc(u.id)}">${esc(u.name)}${u.team ? ' · ' + esc(u.team) : ''}</option>`).join('')}</select></label>
+      <div id="mgPlan" class="mg-plan"></div></div>`;
+    dlg.showModal();
+    const sel = dlg.querySelector('#mgInto'), box = dlg.querySelector('#mgPlan');
+    sel.onchange = async () => {
+      if (!sel.value) { box.innerHTML = ''; return; }
+      box.innerHTML = '<p class="hint">Counting…</p>';
+      let p; try { p = await api(`/admin/merge/plan?from=${encodeURIComponent(fromId)}&into=${encodeURIComponent(sel.value)}`); } catch (e) { box.innerHTML = `<p class="mg-warn">${esc(e.message)}</p>`; return; }
+      const li = (n, t) => `<li><b>${n}</b> ${t}</li>`, warn = [];
+      if (p.sameName.length) warn.push(`${p.sameName.length} client${p.sameName.length === 1 ? ' has' : 's have'} the same name in both accounts (${p.sameName.slice(0, 6).map(esc).join(', ')}${p.sameName.length > 6 ? '…' : ''}). Both copies are kept — archive the one you do not need afterwards.`);
+      if (p.sharedAccounts.length) warn.push(`${p.sharedAccounts.length} ad account${p.sharedAccounts.length === 1 ? ' is' : 's are'} in both; ${esc(p.into.name)}'s copy is kept so spend is not counted twice.`);
+      if (p.settingsKept.length) warn.push(`${esc(p.into.name)} keeps its own settings where both have them (${p.settingsKept.slice(0, 6).map(esc).join(', ')}).`);
+      if (p.tooManyFacebook) warn.push(`Together they would have ${p.facebookAfter} Facebook accounts — more than a workspace can hold. Remove one first.`);
+      if (p.busy) warn.push('One of the two is syncing right now. Wait a minute before merging.');
+      box.innerHTML = `<div class="mg-flow"><span><b>${esc(p.from.name)}</b><small>Facebook: ${esc(p.from.facebook)}</small></span><i aria-hidden="true">→</i><span><b>${esc(p.into.name)}</b><small>Facebook: ${esc(p.into.facebook)}</small></span></div>
+        <ul class="mg-list">${li(p.clients, `client${p.clients === 1 ? '' : 's'} (${p.clientsActive} active) with ${p.days} saved day${p.days === 1 ? '' : 's'}`)}${li(p.adAccounts, `ad account${p.adAccounts === 1 ? '' : 's'}`)}${li(p.invoices, `invoice${p.invoices === 1 ? '' : 's'}`)}${li(p.buyers.length, `media buyer${p.buyers.length === 1 ? '' : 's'}${p.buyers.length ? ' (' + p.buyers.map(esc).join(', ') + ')' : ''}`)}${li(p.usernames.length, `username${p.usernames.length === 1 ? '' : 's'}${p.usernames.length ? ' (' + p.usernames.map(esc).join(', ') + ') — will open ' + esc(p.into.name) : ''}`)}${li(p.facebookAfter, `Facebook accounts in ${esc(p.into.name)} afterwards`)}</ul>
+        ${warn.map((w) => `<p class="mg-warn">${w}</p>`).join('')}
+        <p class="hint">A backup is sent to the owner's Telegram first. After the merge, ${esc(p.from.name)} no longer exists as its own account; this cannot be undone from Boost Desk.</p>
+        <label class="fld"><span>Type <b>${esc(p.from.name)}</b> to confirm</span><input type="text" id="mgConfirm" autocomplete="off"></label>
+        <label class="st-chk" id="mgNoBk" hidden><input type="checkbox" id="mgNoBkC"> I downloaded a backup myself (Admin → Settings)</label>
+        <div class="st-end"><button type="button" class="ghost" data-mgclose>Cancel</button><button type="button" class="primary" id="mgGo" ${p.tooManyFacebook || p.busy ? 'disabled' : ''}>Merge ${esc(p.from.name)} into ${esc(p.into.name)}</button></div>`;
+      const go = box.querySelector('#mgGo');
+      go.onclick = async () => {
+        go.disabled = true; go.textContent = 'Merging…';
+        try { const r = await api('/admin/merge', { method: 'POST', body: { from: fromId, into: sel.value, confirm: box.querySelector('#mgConfirm').value, noBackup: box.querySelector('#mgNoBkC').checked } });
+          dlg.close(); successBadge(`Merged — ${r.clients} client${r.clients === 1 ? '' : 's'} and ${r.adAccounts} ad account${r.adAccounts === 1 ? '' : 's'} moved into ${p.into.name}`); loadUsers(); }
+        catch (e) { toast(e.message); if (/backup/i.test(e.message)) box.querySelector('#mgNoBk').hidden = false; go.disabled = false; go.textContent = `Merge ${p.from.name} into ${p.into.name}`; }
+      };
+    };
+  }
   $('uList').addEventListener('click', async (ev) => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.remove) {
@@ -2305,6 +2343,7 @@
       try { await api('/users/' + encodeURIComponent(b.dataset.remove), { method: 'DELETE' }); toast(name + ' removed'); } catch (e) { toast(e.message); }
       return loadUsers();
     }
+    if (b.dataset.merge) return openMerge(b.dataset.merge, b.dataset.name);
     if (b.dataset.run) { await runSync(b.dataset.run, b); loadUsers(); }
   });
 
@@ -2548,19 +2587,21 @@
     const avatar = d.buyer ? (d.photo ? `<img class="st-pic" src="/mb-pic/${esc(d.id)}" alt="">` : `<span class="avatar st-av">${initials(d.name)}</span>`) : (d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
     const dmy = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
     const teamOpts = (d.teams || []).map((t) => `<option value="${esc(t)}" ${t === d.team ? 'selected' : ''}>${esc(t)}</option>`).join('');
-    // ---- Profile ----
-    const profile = card('Profile', '', `
-      <div class="st-prof">${avatar}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${esc(d.roleName)}${d.buyer && d.pm ? ' · PM ' + esc(d.pm) : ''}</span></div></div>
+    // ---- My account: the person (PM / media buyer). The Facebook accounts are the team's, in their own card. ----
+    const ownFace = !d.buyer && !d.google && d.facebook && d.facebook.name === d.name; // only show the Facebook photo when it really is this person
+    const acctAv = d.buyer ? avatar : (ownFace && d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
+    const signs = d.buyer ? (me.login ? `signs in as <b>${esc(me.login.username)}</b>` : 'signs in from Telegram') : d.google ? esc(d.google.email) : d.username ? `signs in as <b>${esc(d.username)}</b>` : 'signs in with Facebook';
+    const profile = card('My account', pill('brand', esc(d.roleName)), `
+      <div class="st-prof">${acctAv}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${[d.team ? esc(d.team) : '', d.buyer && d.pm ? 'PM ' + esc(d.pm) : '', signs].filter(Boolean).join(' · ')}</span></div></div>
       ${fld('Name', `<input type="text" id="stName" value="${esc(d.name)}" maxlength="80" ${d.buyer ? 'readonly' : ''}>`)}
-      ${fld('Login', `<input type="text" value="${esc(d.buyer ? 'Telegram · ' + (d.tgName || d.name) : d.google ? d.google.email : 'Facebook · ' + d.facebook.id)}" readonly>`)}
-      ${fld('Team', d.isAdmin ? `<select id="stTeam"><option value="">No team</option>${teamOpts}</select>` : `<input type="text" value="${esc(d.team || 'No team yet')}" readonly>`)}
-      <div class="hint">${d.buyer ? 'Your name and picture follow your Telegram profile.' : d.isAdmin ? 'Your picture comes from Facebook. Roles are set in Admin → Users.' : 'Your picture comes from Facebook. Teams and roles are set by the app owner in Admin.'}</div>
+      <div class="st-2">${fld('Username', `<input type="text" value="${esc(d.buyer ? (me.login ? me.login.username : 'Telegram · ' + (d.tgName || d.name)) : d.google ? d.google.email : d.username || 'Not set yet — make one below')}" readonly>`)}
+      ${fld('Team', d.isAdmin ? `<select id="stTeam"><option value="">No team</option>${teamOpts}</select>` : `<input type="text" value="${esc(d.team || 'No team yet')}" readonly>`)}</div>
+      <div class="hint">${d.buyer ? 'Your name and picture follow your Telegram profile.' : 'This is you in Boost Desk. Your name is your own — it does not change when the team\'s Facebook accounts change.'}</div>
       ${d.buyer ? '' : '<div class="st-end"><button type="button" class="primary" id="stSave">Save</button></div>'}`);
-    // ---- Facebook ----
-    const fb = d.buyer ? '' : card('Facebook account', d.facebook.expired ? pill('bad', 'Login expired') : d.facebook.daysLeft !== null && d.facebook.daysLeft < 7 ? pill('warn', `Expires in ${d.facebook.daysLeft} day${d.facebook.daysLeft === 1 ? '' : 's'}`) : pill('ok', 'Connected'), `
-      <div class="st-who">${d.picture ? `<img src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${initials(d.name)}</span>`}<span class="st-pn"><b>${esc(d.name)}</b><span class="hint">${d.facebook.expires ? `Token valid until ${esc(dmy(d.facebook.expires))}` : 'No token'} · ${d.facebook.accounts} ad account${d.facebook.accounts === 1 ? '' : 's'} · ${d.facebook.pages} Page${d.facebook.pages === 1 ? '' : 's'}</span></span></div>
-      <div class="st-btns"><a class="btn fb" href="/auth/facebook">Continue with Facebook</a><button type="button" class="sm danger-txt" id="stFbOff">Disconnect</button></div>
-      <div class="st-fbx" id="stFbExtras"></div>`);
+    // ---- Team Facebook accounts ----
+    const fb = d.buyer || d.google ? '' : `<div class="panel st-card st-fbteam"><div class="st-h"><h2>Team Facebook accounts</h2><span id="stFbCount"></span></div>
+      <span class="hint st-txt">Facebook accounts ${d.team ? esc(d.team) : 'your team'} uses to run ads. Their ad accounts and Pages all sync into this one workspace.</span>
+      <div class="st-fbx" id="stFbExtras"><div class="sk"></div></div></div>`;
     // ---- Telegram ----
     const tgHint = d.buyer
       ? (d.telegram.linked ? 'Tasks from your PM, the 📋 My tasks button and reminders come to your Telegram.' : 'Not linked yet — open the invite link from your PM in Telegram and tap <b>Start</b>.')
@@ -2589,7 +2630,6 @@
     const put = async (url, body) => { try { return await api(url, { method: 'PUT', body }); } catch (e) { toast(e.message); return null; } };
     const sv = $('stSave'); if (sv) sv.onclick = async () => { sv.disabled = true; const body = { name: $('stName').value.trim() }; if ($('stTeam')) body.team = $('stTeam').value; const r = await put('/me/profile', body); sv.disabled = false; if (r) { toast('Saved'); me.name = r.name; $('whoName').textContent = r.name; loadSettingsPage(); } };
     drawFbExtras();
-    const fbo = $('stFbOff'); if (fbo) fbo.onclick = () => { if (confirm('Disconnect Facebook? This logs you out of Boost Desk — log in with Facebook again to continue.')) $('logoutBtn').click(); };
     const off2 = $('stTgOff'); if (off2) off2.onclick = async () => { if (!confirm('Unlink your Telegram? Alerts stop until you link it again.')) return; try { await api('/me/telegram', { method: 'DELETE' }); } catch (e) { toast(e.message); } loadSettingsPage(); };
     const tt = $('stTgTest'); if (tt) tt.onclick = async () => { tt.disabled = true; try { await api('/me/telegram/test', { method: 'POST' }); toast('Sent — check your Telegram'); } catch (e) { toast(e.message); } tt.disabled = false; };
     const ck = $('stTgCheck'); if (ck) ck.onclick = () => loadSettingsPage();
@@ -2672,11 +2712,21 @@
   async function drawFbExtras() {
     const host = $('stFbExtras'); if (!host) return;
     let d; try { d = await api('/fb-accounts'); } catch (_) { host.innerHTML = ''; return; }
-    host.innerHTML = `<div class="st-fbx-h"><b>More Facebook accounts</b><span class="hint">Your other Facebook accounts — their ad accounts sync into this same workspace.</span></div>
-      ${d.extras.map((e) => `<div class="st-fbx-r"><span class="avatar">${initials(e.name)}</span><span class="st-pn"><b>${esc(e.name)}</b><span class="hint">${e.expired || e.error ? `<span class="is-warn">${esc(e.error || 'Login expired — connect it again')}</span>` : `<span class="is-ok">connected</span> · ${e.accounts} ad account${e.accounts === 1 ? '' : 's'} (${e.syncing} syncing)${e.expires ? ' · valid until ' + esc(new Date(e.expires).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : ''}`}</span></span><button type="button" class="sm danger-txt" data-fbxoff="${esc(e.id)}" data-fbxname="${esc(e.name)}">Remove</button></div>`).join('')}
-      <details class="st-fbx-add"><summary class="sm">+ Connect another Facebook account</summary>
-        <ol><li>In another tab open <b>facebook.com</b> and switch to (or log in as) the <b>other</b> account.</li><li>Come back here and tap <b>Connect</b>. You stay logged in to Boost Desk as yourself.</li><li>Open <b>Ad accounts</b>, tick the new accounts, then <b>Sync from Meta</b>.</li></ol>
-        <a class="btn fb" href="/auth/facebook?link=1">Connect</a></details>`;
+    const day = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }), pill = (c, t) => `<span class="pill ${c}">${t}</span>`, pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    const m = d.main, mBad = m.expired, mSoon = !mBad && m.daysLeft !== null && m.daysLeft < 7, total = 1 + d.extras.length, bad = (mBad ? 1 : 0) + d.extras.filter((e) => e.expired || e.error).length;
+    const cnt = $('stFbCount'); if (cnt) cnt.innerHTML = bad ? pill('warn', `${total - bad} of ${total} connected`) : pill('ok', `${total} connected`);
+    const row = (o) => `<div class="st-fbx-r${o.bad ? ' bad' : ''}"><span class="avatar">${initials(o.name)}</span><span class="st-pn"><span class="st-fbn"><b>${esc(o.name)}</b>${o.first ? pill('', 'First account') : ''}${o.bad ? pill('bad', 'Login expired') : o.soon ? pill('warn', `Expires in ${pl(o.days, 'day')}`) : pill('ok', 'Connected')}</span>
+        <span class="hint">${o.bad ? esc(o.error || 'Its ad accounts stay in the list but stop syncing until someone logs in again.') : `${pl(o.accounts, 'ad account')} (${o.syncing} syncing)${o.pages != null ? ' · ' + pl(o.pages, 'Page') : ''}${o.expires ? ' · valid until ' + esc(day(o.expires)) : ''}`}</span></span>
+        <a class="btn sm${o.bad || o.soon ? ' primary' : ''}" href="${o.first ? '/auth/facebook' : '/auth/facebook?link=1'}" ${o.first ? '' : `data-fbxre="${esc(o.name)}"`}>${o.bad ? 'Log in again' : 'Reconnect'}</a>
+        ${o.first ? '' : `<button type="button" class="sm danger-txt" data-fbxoff="${esc(o.id)}" data-fbxname="${esc(o.name)}">Remove</button>`}</div>`;
+    const full = total >= d.max;
+    host.innerHTML = row({ ...m, first: true, bad: mBad, soon: mSoon, days: m.daysLeft })
+      + d.extras.map((e) => { const left = e.expires ? Math.floor((Date.parse(e.expires) - Date.now()) / 864e5) : null; return row({ ...e, bad: e.expired || !!e.error, soon: !e.expired && !e.error && left !== null && left < 7, days: left }); }).join('')
+      + (full ? `<span class="hint">${d.max} Facebook accounts is the most one workspace can hold.</span>` : `<details class="st-fbx-add"><summary><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add a Facebook account to the team</summary>
+        <ol><li>In another tab open <b>facebook.com</b> and switch to (or log in as) the account you want to add.</li><li>Come back here and tap <b>Connect</b>. You stay signed in to Boost Desk as yourself.</li><li>Open <b>Ad accounts</b>, tick the new accounts, then <b>Sync from Meta</b>.</li></ol>
+        <a class="btn fb" href="/auth/facebook?link=1">Connect</a></details>`)
+      + `<span class="hint">The first account is the one this workspace was started with, so it cannot be removed here. Removing another account takes its ad accounts out of this workspace; clients, plans and reports stay.</span>`;
+    host.querySelectorAll('[data-fbxre]').forEach((a) => a.onclick = (ev) => { if (!confirm(`Reconnect ${a.dataset.fbxre}?\n\nFirst make sure facebook.com in this browser is logged in as ${a.dataset.fbxre}, then press OK.`)) ev.preventDefault(); });
     host.querySelectorAll('[data-fbxoff]').forEach((b) => b.onclick = async () => {
       if (!confirm(`Remove ${b.dataset.fbxname}? Its ad accounts stop syncing here. Spend already saved on your clients stays.`)) return;
       try { const r = await api('/fb-accounts/' + encodeURIComponent(b.dataset.fbxoff), { method: 'DELETE' }); successBadge(`Removed — ${r.removedAccounts} ad account${r.removedAccounts === 1 ? '' : 's'} left the workspace`); } catch (e) { toast(e.message); }

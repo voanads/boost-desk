@@ -2572,6 +2572,7 @@
     } else { pp.hidden = true; document.body.classList.remove('mt-admin'); }
     document.body.classList.toggle('mt-pm', mtPmPick() && !pp.hidden);
     $('mtWho').textContent = (mtAs ? `${mtAs.name}${mtAs.buyer ? ' · media buyer' : ''}` : me.buyer ? `${me.buyer.name} · media buyer` : me.name) + ' · ' + nice(me.today || iso(new Date())).replace(/ \d{4}$/, '');
+    if (renderMtBoard()) return; // leaders on an overview: the board replaces the one-person page
     // Menu only: the fixed daily duties (ticked here), the month calendar of them, and the KPIs. Client tasks stay on the Clients page.
     $('mtAdd').hidden = true;
     if (ADMIN_SITE || mtAs || me.buyer) $('mtTasks').hidden = true; else { $('mtTasks').hidden = false; loadMyTasks('mtTasks'); } // a PM's own Clients Task for the day (a media buyer's PM tasks sit inside the menu)
@@ -2911,7 +2912,7 @@
       <input type="search" id="mtSearch" placeholder="Search a team or a person" aria-label="Search a team or a person" value="${esc(mtQ)}">
       <div class="mt-plist">${!q ? row(meRow, true) : ''}${groups.map(grp).join('')}${loose.length ? `<div class="mt-pgrp">No team yet</div>${loose.map((p) => row(p, false)).join('')}` : ''}${!groups.length && !loose.length && q ? '<div class="hl-empty">No team or person matches.</div>' : ''}</div>`;
     $('mtSearch').oninput = () => { mtQ = $('mtSearch').value; const pos = $('mtSearch').selectionStart; renderMtPeople(); const i = $('mtSearch'); i.focus(); try { i.setSelectionRange(pos, pos); } catch (_) {} };
-    const pick = (p) => { mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null, team: p.team || '' } : null; mtClients = null; mtDay = null; renderMtPeople(); loadMyTaskPage();
+    const pick = (p) => { mtView = 'person'; mtAs = p ? { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null, team: p.team || '' } : null; mtClients = null; mtDay = null; renderMtPeople(); loadMyTaskPage();
       if (!matchMedia('(min-width: 1100px)').matches) $('mtAdd').scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' }); };
     pp.querySelectorAll('[data-mtp]').forEach((b) => b.onclick = () => pick(mtPeople.find((x) => x.id === b.dataset.mtp)));
     pp.querySelectorAll('[data-mtteam]').forEach((b) => b.onclick = () => {
@@ -2921,6 +2922,86 @@
       if (lead && lead.id !== me.id && !(mtAs && mtAs.id === lead.id)) return pick(lead);
       renderMtPeople();
     });
+  }
+  // ---- Leader board: every team side by side (today), and every person KPI by KPI (this month) ----
+  let mtView = null, mtMonthData = null;
+  const lbTime = (at) => { try { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' }).replace(' ', '').toLowerCase(); } catch (_) { return ''; } };
+  const lbCls = (p) => (p == null ? 'none' : p >= 85 ? 'ok' : p >= 50 ? 'mid' : 'bad');
+  const lbStatus = (p) => (p == null ? '<span class="pill">No menu</span>' : p >= 85 ? '<span class="pill ok">On track</span>' : p >= 50 ? '<span class="pill warn">On the way</span>' : '<span class="pill bad">Behind</span>');
+  const lbBar = (done, total, pct) => (total ? `<span class="lb-prog"><span class="lb-bar"><i class="${lbCls(pct)}" style="width:${Math.max(pct, 2)}%"></i></span><span class="num">${done} / ${total}</span></span>` : '<span class="hint">no menu</span>');
+  const lbAv = (p) => (p.kind === 'Media buyer' && p.photo && p.id.startsWith('mb:') ? `<span class="avatar"><img src="/mb-pic/${esc(p.id.slice(3))}" alt="" loading="lazy"></span>` : `<span class="avatar">${initials(p.name)}</span>`);
+  function renderMtBoard() {
+    const host = $('mtBoard'); if (!host) return false;
+    if (!mtAdminPick()) { host.hidden = true; document.body.classList.remove('mt-over'); return false; }
+    if (!mtView) { try { mtView = localStorage.getItem('bd-mtview') || 'today'; } catch (_) { mtView = 'today'; } if (!['today', 'month', 'person'].includes(mtView)) mtView = 'today'; }
+    const over = mtView !== 'person'; host.hidden = false; document.body.classList.toggle('mt-over', over);
+    const seg = `<div class="lb-seg" role="group" aria-label="View">${[['today', 'Teams today'], ['month', 'This month'], ['person', mtAs ? esc(mtAs.name) : 'My own tasks']].map(([k, t]) => `<button type="button" data-lbv="${k}" aria-pressed="${mtView === k}">${t}</button>`).join('')}</div>`;
+    const wire = () => {
+      host.querySelectorAll('[data-lbv]').forEach((b) => b.onclick = () => { mtView = b.dataset.lbv; try { localStorage.setItem('bd-mtview', mtView); } catch (_) {} if (mtView === 'today') mtPeople = null; if (mtView === 'month') mtMonthData = null; loadMyTaskPage(); });
+      host.querySelectorAll('[data-lbp]').forEach((b) => b.onclick = () => { const p = (mtPeople || []).find((x) => x.id === b.dataset.lbp); if (!p) return; mtView = 'person'; mtAs = p.id === me.id ? null : { id: p.id, name: p.name, buyer: p.kind === 'Media buyer', pm: p.pm || null, team: p.team || '' }; mtClients = null; mtDay = null; if (mtAs && mtAs.team) mtShut[mtAs.team] = false; renderMtPeople(); loadMyTaskPage(); window.scrollTo({ top: 0, behavior: calm ? 'auto' : 'smooth' }); });
+      host.querySelectorAll('[data-lbteam]').forEach((b) => b.onclick = () => { lbShut[b.dataset.lbteam] = b.getAttribute('aria-expanded') === 'true'; renderMtBoard(); });
+    };
+    if (mtView === 'person') { host.innerHTML = `<div class="lb-head">${seg}</div>`; wire(); return false; }
+    if (mtView === 'today') { host.innerHTML = `<div class="lb-head">${seg}</div>` + lbToday(); wire(); return true; }
+    if (!mtMonthData) {
+      host.innerHTML = `<div class="lb-head">${seg}</div><div class="panel"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>`; wire();
+      api('/admin/people-month').then((r) => { mtMonthData = r; if (mtView === 'month' && !$('tab-mytasks').hidden) renderMtBoard(); }).catch((e) => { host.querySelector('.panel').innerHTML = `<div class="muted">${esc(e.message)}</div>`; });
+      return true;
+    }
+    host.innerHTML = `<div class="lb-head">${seg}</div>` + lbMonth(mtMonthData); wire(); return true;
+  }
+  const lbShut = {};
+  function lbToday() {
+    const all = (mtPeople || []).filter((p) => p.role === 'Project Manager' || p.kind === 'Media buyer'), names = [...(mtTeams || [])]; for (const p of all) if (p.team && !names.includes(p.team)) names.push(p.team);
+    const sum = (ms) => { const done = ms.reduce((t, p) => t + p.done, 0), total = ms.reduce((t, p) => t + p.done + p.open, 0); return { done, total, pct: total ? Math.round(done / total * 100) : null }; };
+    const groups = names.map((n) => { const ms = all.filter((p) => p.team === n); return { name: n, ms: [...ms.filter((p) => p.kind !== 'Media buyer'), ...ms.filter((p) => p.kind === 'Media buyer')], ...sum(ms) }; }).filter((g) => g.ms.length);
+    const loose = all.filter((p) => !p.team); if (loose.length) groups.push({ name: 'No team yet', loose: true, ms: loose, ...sum(loose) });
+    groups.sort((a, b) => (a.pct == null) - (b.pct == null) || a.pct - b.pct || a.name.localeCompare(b.name));
+    const T = sum(all), withMenu = all.filter((p) => p.done + p.open > 0), plans = withMenu.filter((p) => p.planAt || p.resultAt).length;
+    const scored = groups.filter((g) => g.pct != null && !g.loose), level = scored.length > 1 && scored[0].pct === scored[scored.length - 1].pct, low = level ? null : scored[0], high = !level && scored.length > 1 ? scored[scored.length - 1] : null, none = level ? 'all teams are level' : 'nothing to compare yet';
+    const kpiOf = (ms) => { const v = ms.map((p) => p.kpi).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    const tile = (lab, big, sub, cls) => `<div class="panel lb-tile"><span class="lb-lab">${lab}</span><b class="${cls || ''}">${big}</b><span class="hint">${sub}</span></div>`;
+    const person = (p) => { const total = p.done + p.open;
+      return `<tr class="lb-p"><td><button type="button" class="lb-who" data-lbp="${esc(p.id)}">${lbAv(p)}<span>${esc(p.name)}</span></button></td><td class="lb-hide">${p.kind === 'Media buyer' ? 'Media buyer' : 'Project Manager'}</td>
+        <td class="lb-hide2">${!total ? '<span class="hint">–</span>' : p.planAt ? 'Sent ' + lbTime(p.planAt) : p.resultAt ? 'Sent' : '<span class="is-danger">Not sent</span>'}</td><td>${lbBar(p.done, total, p.pct)}</td>
+        <td class="lb-hide">${p.resultAt ? '<span class="is-ok">Sent ' + lbTime(p.resultAt) + '</span>' : '<span class="hint">–</span>'}</td><td class="num r lb-hide2">${p.kpi == null ? '<span class="hint">–</span>' : p.kpi + '%'}</td><td>${lbStatus(total ? p.pct : null)}</td></tr>`; };
+    const team = (g) => { const open = !lbShut[g.name], k = kpiOf(g.ms.filter((p) => p.kind !== 'Media buyer')), hasMb = g.ms.some((p) => p.kind === 'Media buyer'), hasPm = g.ms.some((p) => p.kind !== 'Media buyer');
+      return `<tr class="lb-t"><td><button type="button" class="lb-who" data-lbteam="${esc(g.name)}" aria-expanded="${open}"><span class="avatar lb-tav">${initials(g.name)}</span><span>${esc(g.name)}</span><span class="mt-chev" aria-hidden="true">▾</span></button></td><td class="lb-hide hint">${g.ms.length} ${g.ms.length === 1 ? 'person' : 'people'}</td><td class="lb-hide2"></td><td>${lbBar(g.done, g.total, g.pct)}</td><td class="lb-hide"></td><td class="num r lb-hide2">${k == null ? '<span class="hint">–</span>' : k + '%'}</td><td>${lbStatus(g.pct)}</td></tr>
+        ${open ? g.ms.map(person).join('') + (g.loose ? '' : !hasPm ? '<tr class="lb-p"><td colspan="7" class="hint lb-none">No Project Manager in this team yet.</td></tr>' : !hasMb ? '<tr class="lb-p"><td colspan="7" class="hint lb-none">No media buyer in this team yet.</td></tr>' : '') : ''}`; };
+    if (!all.length) return '<div class="panel"><div class="hl-empty">No teams yet. Make them in Admin › Teams.</div></div>';
+    return `<div class="lb-tiles">
+        ${tile('Tasks done today', T.total ? `${T.done} of ${T.total}` : '–', T.total ? `${T.pct}% across ${groups.filter((g) => !g.loose).length} teams` : 'no menu today', '')}
+        ${tile('Plans sent', `${plans} of ${withMenu.length}`, withMenu.length - plans ? `${withMenu.length - plans} ${withMenu.length - plans === 1 ? 'person has' : 'people have'} no plan yet` : 'everyone sent a plan', '')}
+        ${tile('Furthest behind', low ? esc(low.name) : '–', low ? `${low.done} of ${low.total} done` : none, low && low.pct < 50 ? 'is-danger' : '')}
+        ${tile('Furthest ahead', high ? esc(high.name) : '–', high ? `${high.done} of ${high.total} done` : none, high && high.pct >= 85 ? 'is-ok' : '')}</div>
+      <div class="panel lb-card"><div class="lb-ch"><h2>Who is where</h2><span class="hint">needs attention first · tap a person to open their day</span><span class="spacer"></span><span class="pill bad">Behind · under 50%</span><span class="pill warn">On the way · 50–84%</span><span class="pill ok">On track · 85%+</span></div>
+        <div class="lb-scroll"><table class="lb-table"><thead><tr><th>Team / person</th><th class="lb-hide">Role</th><th class="lb-hide2">Plan</th><th class="lb-w">Today's tasks</th><th class="lb-hide">Result</th><th class="r lb-hide2">KPI this month</th><th>Status</th></tr></thead><tbody>${groups.map(team).join('')}</tbody></table></div></div>`;
+  }
+  function lbMonth(d) {
+    const pms = d.people.filter((p) => p.kind !== 'Media buyer'), mbs = d.people.filter((p) => p.kind === 'Media buyer');
+    // counted targets grow through the month, so they are judged against the month's pace; "%" targets are rates, judged as they are
+    const cls = (k) => (k.unit === '%' ? (k.score >= 85 ? 'ok' : k.score >= 60 ? 'mid' : 'bad') : (k.score >= d.pace ? 'ok' : k.score >= d.pace - 15 ? 'mid' : 'bad'));
+    const avgCls = (v) => (v == null ? '' : v >= d.pace ? 'is-ok' : v >= d.pace - 15 ? 'is-warn' : 'is-danger');
+    const nm = (x) => String(x || '').trim().toLowerCase(), cols = [];
+    for (const p of pms) for (const k of p.kpis) { const c = cols.find((x) => x.key === nm(k.name)); if (c) c.n++; else cols.push({ key: nm(k.name), name: k.name, n: 1 }); }
+    cols.sort((a, b) => b.n - a.n); const show = cols.slice(0, 8);
+    const who = (p) => `<button type="button" class="lb-who" data-lbp="${esc(p.id)}">${lbAv(p)}<span class="lb-n2"><span>${esc(p.name)}</span><small class="hint">${esc(p.team || 'no team yet')}</small></span></button>`;
+    const sorted = (list) => [...list].sort((a, b) => (b.avg == null ? -1 : b.avg) - (a.avg == null ? -1 : a.avg) || a.name.localeCompare(b.name));
+    const pmRow = (p) => `<tr><td>${who(p)}</td>${show.map((c) => { const k = p.kpis.find((x) => nm(x.name) === c.key); return `<td class="c">${k ? `<span class="lb-cell ${cls(k)}" title="${esc(`${k.result} of ${k.target} ${k.unit}`)}">${k.score}%</span>` : '<span class="hint">–</span>'}</td>`; }).join('')}<td class="num r"><b class="${avgCls(p.avg)}">${p.avg == null ? '–' : p.avg + '%'}</b></td></tr>`;
+    const colAvg = (c) => { const v = pms.map((p) => p.kpis.find((x) => nm(x.name) === c.key)).filter(Boolean).map((k) => Math.min(k.score, 100)); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    const allAvg = (() => { const v = pms.map((p) => p.avg).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; })();
+    const weak = show.map((c) => ({ c, v: colAvg(c) })).filter((x) => x.v != null).sort((a, b) => a.v - b.v)[0];
+    const pmTable = !pms.length ? '<div class="hl-empty">No Project Managers yet.</div>' : !show.length ? '<div class="hl-empty">No KPIs set for this month yet. Open a Project Manager, set the KPIs, then “Copy to every Project Manager”.</div>'
+      : `<div class="lb-scroll"><table class="lb-table lb-matrix"><thead><tr><th>Project Manager</th>${show.map((c) => `<th class="c">${esc(c.name)}</th>`).join('')}<th class="r">Average</th></tr></thead><tbody>${sorted(pms).map(pmRow).join('')}
+          <tr class="lb-t"><td>All Project Managers</td>${show.map((c) => { const v = colAvg(c); return `<td class="c num"><b class="${weak && weak.c === c && show.length > 1 ? 'is-danger' : ''}">${v == null ? '–' : v + '%'}</b></td>`; }).join('')}<td class="num r"><b>${allAvg == null ? '–' : allAvg + '%'}</b></td></tr></tbody></table></div>
+        ${weak && show.length > 1 ? `<p class="lb-say"><b>Weakest for the whole company:</b> <span class="hint">${esc(weak.c.name)} — ${weak.v}% on average. Read down a column to find a company problem, across a row to find a person who needs help.</span></p>` : ''}`;
+    const weakest = (p) => { const k = [...p.kpis].sort((a, b) => a.score - b.score)[0]; return k ? `${esc(k.name)} · ${k.score}%` : '–'; };
+    const mbRow = (p, i) => `<tr><td><span class="lb-rk">${i + 1}</span></td><td>${who(p)}</td><td>${p.avg == null ? '<span class="hint">no KPIs set</span>' : `<span class="lb-prog"><span class="lb-bar"><i class="${avgCls(p.avg).replace('is-', '').replace('warn', 'mid').replace('danger', 'bad')}" style="width:${Math.max(Math.min(p.avg, 100), 2)}%"></i></span><b class="num">${p.avg}%</b></span>`}</td>
+      <td class="num r">${p.days ? `${p.plans} / ${p.days}` : '–'}</td><td class="num r">${p.days ? `${p.results} / ${p.days}` : '–'}</td><td class="num r lb-hide">${p.menuPct == null ? '–' : p.menuPct + '%'}</td><td class="lb-hide hint">${weakest(p)}</td></tr>`;
+    return `<div class="panel lb-card"><div class="lb-ch"><h2>Project Managers · KPIs</h2><span class="hint">${esc(monthLabel(d.month))} · day ${d.dayNo} of ${d.daysInMonth} · pace today about ${d.pace}%</span><span class="spacer"></span><span class="pill bad">Behind pace</span><span class="pill warn">Close</span><span class="pill ok">On pace</span></div>${pmTable}</div>
+      <div class="panel lb-card"><div class="lb-ch"><h2>Media buyers · ranking</h2><span class="hint">average of each media buyer's own KPIs · days counted are days with a task menu</span></div>
+        ${mbs.length ? `<div class="lb-scroll"><table class="lb-table"><thead><tr><th style="width:44px">#</th><th>Media buyer</th><th class="lb-w">KPI this month</th><th class="r">Plans sent</th><th class="r">Results sent</th><th class="r lb-hide">Tasks done</th><th class="lb-hide">Weakest KPI</th></tr></thead><tbody>${sorted(mbs).map(mbRow).join('')}</tbody></table></div>` : '<div class="hl-empty">No media buyers yet.</div>'}</div>
+      <p class="hint lb-foot">Counted targets (clients, cases, days) are coloured against the month's pace. “%” targets are coloured as they stand: 85%+ green, 60%+ amber.</p>`;
   }
   // Add a task from the My Task page: pick the client, type the task, (PM) who does it, today or tomorrow.
   let mtBuyers = null, mtClients = null, mtTeams = null;

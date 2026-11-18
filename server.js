@@ -1949,6 +1949,28 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   }
   res.json({ today, month: ym, people, teams: teams.map((t) => t.name) });
 }));
+// Leader's "This month" board: every Project Manager and media buyer with each KPI's score, and how many days
+// they sent a plan and a result and how much of the daily menu they ticked. Read only; no personal data of clients.
+api.get('/admin/people-month', adminOnly, wrap(async (req, res) => {
+  const today = sync.todayIn(), month = /^\d{4}-\d{2}$/.test(req.query.month) && req.query.month <= today.slice(0, 7) ? req.query.month : today.slice(0, 7);
+  const owner = await db.ownerId(), roles = await roleMap(), av = await adminViewers(), users = await db.allUsers(), byName = Object.fromEntries(users.map((u) => [u.name, u.fb_id]));
+  const bl = await MB().all(), teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const K = KPI(), [y, m] = month.split('-').map(Number), last = new Date(Date.UTC(y, m, 0)).getUTCDate(), dayNo = month === today.slice(0, 7) ? Number(today.slice(8)) : last;
+  const one = async (id, buyer) => {
+    let kpis = []; try { kpis = (await K.results(id, month, buyer)).filter((k) => k.target > 0).map((k) => ({ name: k.name, unit: k.unit, target: k.target, result: k.result, score: Math.round(k.score) })); } catch (_) {}
+    let days = 0, plans = 0, results = 0, pctSum = 0;
+    try { const mo = await MENU().monthOf(id, buyer ? 'mb' : 'pm', month); for (const d of Object.values(mo.days)) { if (!d.total) continue; days++; pctSum += d.pct || 0; if (d.planAt || d.resultAt) plans++; if (d.resultAt) results++; } } catch (_) {}
+    return { kpis, avg: kpis.length ? Math.round(kpis.reduce((t, k) => t + Math.min(k.score, 100), 0) / kpis.length) : null, days, plans, results, menuPct: days ? Math.round(pctSum / days) : null };
+  };
+  const people = [];
+  for (const u of users) {
+    const r = ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm';
+    if (u.fb_id === owner || LEAD.has(r)) continue; // leaders compare the teams; they are not compared
+    people.push({ id: u.fb_id, name: u.name, kind: r === 'mb' ? 'Media buyer' : 'PM', team: teamOf[u.fb_id] || '', ...(await one(u.fb_id, false)) });
+  }
+  for (const b of bl) { const pm = b.addedById || byName[b.addedBy] || null; people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', pm, team: pm ? teamOf[pm] || '' : '', photo: !!b.photo, ...(await one(b.id, true)) }); }
+  res.json({ today, month, dayNo, daysInMonth: last, pace: Math.round(dayNo / last * 100), people });
+}));
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)
 //   scope 'pms'  — every Project Manager;   scope 'mbs' — every media buyer (from a media buyer's list)

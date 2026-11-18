@@ -246,7 +246,15 @@
   }
 
   // ---------- tabs ----------
-  document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
+  // Every page has its own address (#clients, #mytasks…), so the browser's Back and Forward buttons move between pages.
+  const TAB_NAMES = ['main', 'board', 'allrep', 'adaccts', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'];
+  let tabHash = '';
+  document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => { if (b.dataset.tab) location.hash = b.dataset.tab; showTab(b.dataset.tab); });
+  window.addEventListener('hashchange', () => {
+    const h = location.hash.slice(1); if (!me || h === tabHash) return;
+    const open = document.querySelector('dialog[open]'); if (open && open.close) open.close(); // Back closes what is open first
+    if (TAB_NAMES.includes(h)) { tabHash = h; showTab(h); window.scrollTo(0, 0); }
+  });
   const ink = document.createElement('span'); ink.className = 'tab-ink'; document.querySelector('nav.tabs').appendChild(ink);
   function moveInk() {
     const b = document.querySelector('nav.tabs button[aria-selected=true]'); if (!b) return;
@@ -276,6 +284,7 @@
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     if (name === 'target') name = 'mytasks'; // the Target page was removed; daily targets and KPIs live on My Task
     document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    tabHash = name;
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
     if (['admin', 'main', 'board', 'allrep', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
@@ -2436,6 +2445,7 @@
     if (!dlg.open) dlg.showModal();
     load(false);
   }
+  const myKpiId = () => (me && me.buyer ? 'mb:' + me.buyer.id : me.id); // a media buyer's KPIs are their own, never their PM's
   async function kpiPanel(hostId, person, month) {
     const host = $(hostId); if (!host) return;
     const st = kpiState[hostId] = kpiState[hostId] || {}; st.person = person; st.month = month || st.month || ym((me && me.today) || iso(new Date()));
@@ -2586,12 +2596,12 @@
     const sw = (id, on, label) => `<label class="switch st-sw" title="${esc(label)}"><input type="checkbox" id="${id}" ${on ? 'checked' : ''} aria-label="${esc(label)}"><i></i></label>`;
     const pill = (cls, t) => `<span class="pill ${cls}">${t}</span>`;
     const fld = (label, inner) => `<label class="fld">${label}${inner}</label>`;
-    const avatar = d.buyer ? (d.photo ? `<img class="st-pic" src="/mb-pic/${esc(d.id)}" alt="">` : `<span class="avatar st-av">${initials(d.name)}</span>`) : (d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
+    const avatar = d.buyer ? (d.photo ? `<img class="st-pic" src="/mb-pic/${esc(d.id)}" alt="">` : `<span class="avatar st-av">${initials(d.name)}</span>`) : (d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar st-av&quot;>${initials(d.name)}</span>'">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
     const dmy = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
     const teamOpts = (d.teams || []).map((t) => `<option value="${esc(t)}" ${t === d.team ? 'selected' : ''}>${esc(t)}</option>`).join('');
     // ---- My account: the person (PM / media buyer). The Facebook accounts are the team's, in their own card. ----
     const ownFace = !d.buyer && !d.google && d.facebook && d.facebook.name === d.name; // only show the Facebook photo when it really is this person
-    const acctAv = d.buyer ? avatar : (ownFace && d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
+    const acctAv = d.buyer ? avatar : (ownFace && d.picture ? `<img class="st-pic" src="${esc(d.picture)}" alt="" referrerpolicy="no-referrer" onerror="this.outerHTML='<span class=&quot;avatar st-av&quot;>${initials(d.name)}</span>'">` : `<span class="avatar st-av">${initials(d.name)}</span>`);
     const signs = d.buyer ? (me.login ? `signs in as <b>${esc(me.login.username)}</b>` : 'signs in from Telegram') : d.google ? esc(d.google.email) : d.username ? `signs in as <b>${esc(d.username)}</b>` : 'signs in with Facebook';
     const profile = card('My account', pill('brand', esc(d.roleName)), `
       <div class="st-prof">${acctAv}<div class="st-pn"><b class="st-name">${esc(d.name)}</b><span class="hint">${[d.team ? esc(d.team) : '', d.buyer && d.pm ? 'PM ' + esc(d.pm) : '', signs].filter(Boolean).join(' · ')}</span></div></div>
@@ -2770,7 +2780,7 @@
     const q = [mtAsQ(), mtDay ? 'day=' + mtDay : ''].filter(Boolean).join('&');
     let d; try { d = await api('/menu' + (q ? '?' + q : '')); } catch (e) { host.innerHTML = `<div class="hint">${esc(e.message)}</div>`; return; }
     // this month's KPIs of the person, so an item can be linked to one and a tick can carry an amount
-    const kpiPerson = mtAs ? mtAs.id : me.id; let kpis = [];
+    const kpiPerson = mtAs ? mtAs.id : myKpiId(); let kpis = [];
     try { kpis = (await api(`/kpis?person=${encodeURIComponent(kpiPerson)}&month=${ym(me.today || iso(new Date()))}`)).kpis || []; } catch (_) {}
     const kpiOf = (id) => kpis.find((k) => k.id === id);
     const kpiChip = (it) => { if (it.pm) return ''; const k = it.kpi ? kpiOf(it.kpi) : null;
@@ -2799,7 +2809,7 @@
       ${d.plan && !closed ? '<div class="hint">The plan is submitted, so the list is fixed for this day. You can still add a task for this day only.</div>' : ''}
       ${closed ? '' : `<form class="mt-own" id="mtOwnForm"><input type="text" id="mtOwnText" maxlength="160" placeholder="+ Add a task to the menu" aria-label="New task"><select id="mtOwnWhen" aria-label="How often">${d.plan ? '' : '<option value="">Every day</option>'}<option value="once">${isToday ? 'Today only' : 'This day only'}</option></select><button type="submit" class="sm primary">Add</button></form>`}
       ${closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
-    const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id); else if (me.buyer) loadMyKpiPage(); };
+    const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : myKpiId()); else if (me.buyer) loadMyKpiPage(); };
     // ✨ top 5 menu tasks from the KPIs: on demand, and by itself the first time a day's menu is empty
     const sugKey = `mtSug:${kpiPerson}:${d.day}`, sugBtn = $('mtSugBtn');
     if (sugBtn) sugBtn.onclick = () => mtSuggest({ host: $('mtSug'), d, kpis, body, reload, fresh: !!$('mtSug').dataset.loaded });
@@ -3053,7 +3063,7 @@
           ${mates.length ? `<button type="button" class="sm" data-kcp="team">Copy to ${esc(team)} (${mates.length})</button>` : ''}
           ${allPms.length ? `<button type="button" class="sm" data-kcp="pms">Copy to all Project Managers (${allPms.length})</button>` : ''}
           ${allMbs.length ? `<button type="button" class="sm" data-kcp="mbs">Copy to all media buyers (${allMbs.length})</button>` : ''}</div>` : ''}<div id="mtKpiBody"></div>`;
-      const pid = mtAs ? mtAs.id : me.id; kpiPanel('mtKpiBody', pid);
+      const pid = mtAs ? mtAs.id : myKpiId(); kpiPanel('mtKpiBody', pid);
       const kmonth = () => (kpiState.mtKpiBody || {}).month;
       host.querySelectorAll('[data-kcp]').forEach((cp) => cp.onclick = async () => {
         const scope = cp.dataset.kcp, who = scope === 'team' ? mates : scope === 'pms' ? allPms : allMbs;
@@ -3067,11 +3077,11 @@
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.source === 'all' ? 'all daily tasks' : `${k.tasks} task${k.tasks === 1 ? '' : 's'}`}${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
   }
-  function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', me.id); } }
+  function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', myKpiId()); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
   async function fillTaskKpis() {
     const sel = $('cdTaskKpi'); if (!sel) return;
-    const to = $('cdTaskTo') ? $('cdTaskTo').value : '', person = to && to !== '__manage' ? 'mb:' + to : me.id;
+    const to = $('cdTaskTo') ? $('cdTaskTo').value : '', person = to && to !== '__manage' ? 'mb:' + to : myKpiId();
     try { const d = await api(`/kpis?person=${encodeURIComponent(person)}&month=${ym(me.today)}`); for (const k of d.kpis) kpiNames[k.id] = k.name; const cur = sel.value; sel.innerHTML = '<option value="">— no KPI —</option>' + d.kpis.map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join(''); sel.value = d.kpis.some((k) => k.id === cur) ? cur : ''; sel.closest('label').hidden = !d.kpis.length; } catch (_) { sel.closest('label').hidden = true; }
   }
   // ---------- Target: my target tasks today (Dashboard panel) ----------

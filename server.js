@@ -87,7 +87,7 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const linkFor = req.session.linkFor; req.session.linkFor = null;
   if (linkFor && req.session.fbId === linkFor && (await db.getUser(linkFor))) {
     const back = (msg, ok) => res.redirect('/?fb=' + (ok ? 'ok' : 'err') + '&fbmsg=' + encodeURIComponent(msg) + '#settings');
-    if (profile.id === linkFor) { await db.upsertUser(profile.id, profile.name, encrypt(token), expires); return back('That is the Facebook account you are already logged in with. On facebook.com switch to your other account first, then tap Connect again.', false); }
+    if (profile.id === linkFor) { await saveFbLogin(profile, encrypt(token), expires); return back('That is the Facebook account you are already logged in with. On facebook.com switch to your other account first, then tap Connect again.', false); }
     if ((await db.blockedUsers())[profile.id]) return back(`${profile.name}'s access to Boost Desk was removed, so it can't be connected.`, false);
     const other = await db.getUser(profile.id);
     if (other && (await db.listClients(profile.id)).length) return back(`${profile.name} already has its own Boost Desk workspace with clients. Connecting it here would count the same spend twice — ask the owner if the two should be merged.`, false);
@@ -104,6 +104,16 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   if ((await db.blockedUsers())[profile.id]) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name}'s access to Boost Desk was removed. Ask the app owner to restore it.`));
   }
+  // This Facebook account was merged into another workspace (Admin → Users → Merge): it opens that workspace, and its
+  // fresh token is kept there as one of the team's Facebook accounts.
+  const mergedInto = await require('./src/merge').aliasOf(profile.id);
+  if (mergedInto && (await db.getUser(mergedInto))) {
+    const list = (await sync.extraLogins(mergedInto)).filter((x) => x.id !== profile.id);
+    list.push({ id: profile.id, name: profile.name, token_enc: encrypt(token), expires, addedAt: new Date().toISOString(), merged: true });
+    await db.setUserSetting(mergedInto, 'fbExtras', list);
+    req.session.fbId = mergedInto; req.session.name = (await db.getUser(mergedInto)).name;
+    const nx = req.session.next === '/admin' ? '/admin' : '/'; req.session.next = null; return res.redirect(nx);
+  }
   // A username that has no workspace yet takes this Facebook account as its workspace (existing clients and settings stay as they are).
   if (req.session.loginId) {
     const rec = await LOGINS().get(req.session.loginId);
@@ -115,13 +125,23 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
       return res.redirect('/?fb=err&fbmsg=' + encodeURIComponent(`That is a different Facebook account (${profile.name}). To add it to your workspace use Settings → Facebook account → Connect another Facebook account.`) + '#settings');
     }
   }
-  await db.upsertUser(profile.id, profile.name, encrypt(token), expires);
+  await saveFbLogin(profile, encrypt(token), expires);
   req.session.fbId = profile.id;
   req.session.name = profile.name;
   // Each admin starts with an empty workspace; nothing is loaded until they tap Sync from Meta.
   const next = req.session.next === '/admin' ? '/admin' : '/'; req.session.next = null;
   res.redirect(next);
 }));
+
+// The workspace's name is the PM's own (set in Settings → My account); the Facebook account's name is kept beside it
+// (setting fbName). A Facebook login only renames the workspace while nobody has given it a name of its own.
+async function saveFbLogin(profile, tokenEnc, expires) {
+  const cur = await db.getUser(profile.id), prevFb = cur ? await db.getUserSetting(profile.id, 'fbName', cur.name) : '';
+  const name = cur && cur.name && cur.name !== prevFb ? cur.name : profile.name;
+  await db.upsertUser(profile.id, name, tokenEnc, expires);
+  await db.setUserSetting(profile.id, 'fbName', profile.name);
+}
+const fbNameOf = async (u) => (await db.getUserSetting(u.fb_id, 'fbName', '')) || u.name;
 
 app.post('/auth/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
 
@@ -1007,6 +1027,20 @@ api.delete('/users/:id', ownerOnly, wrap(async (req, res) => {
   await db.setBlocked(id, u.name, true);
   await db.removeUser(id);
   res.json({ ok: true });
+}));
+// Merge two workspaces of one team (src/merge.js). The plan only counts; the merge itself needs the typed name and a fresh backup.
+api.get('/admin/merge/plan', ownerOnly, wrap(async (req, res) => res.json(await require('./src/merge').plan(String(req.query.from || ''), String(req.query.into || '')))));
+api.post('/admin/merge', ownerOnly, wrap(async (req, res) => {
+  const b = req.body || {}, M = require('./src/merge'), p = await M.plan(String(b.from || ''), String(b.into || ''));
+  if (String(b.confirm || '').trim().toLowerCase() !== p.from.name.trim().toLowerCase()) return res.status(400).json({ error: `Type "${p.from.name}" to confirm.` });
+  if (p.from.id === req.user.fb_id) return res.status(400).json({ error: 'You are signed in as the account that would go away. Sign in as the other one, or ask another admin.' });
+  // a backup first, so the merge can be undone by hand: sent to the owner's Telegram like the nightly one
+  const bk = await require('./src/backup').run(telegram);
+  if (!bk.sent && !b.noBackup) return res.status(409).json({ error: 'A backup could not be sent first (' + (bk.error || 'unknown reason') + '). Fix that, or download a backup in Admin → Settings and tick "I have a backup".', needBackup: true });
+  const out = await M.run(p.from.id, p.into.id, req.user.name);
+  console.log('[merge]', p.from.name, '→', p.into.name, 'by', req.user.name, '·', p.clients, 'clients,', p.adAccounts, 'ad accounts');
+  const into = await db.getUser(p.into.id); sync.refreshAccounts(into).catch((e) => console.error('[merge] account refresh:', e.message));
+  res.json(out);
 }));
 api.delete('/blocked/:id', ownerOnly, wrap(async (req, res) => { await db.setBlocked(req.params.id, '', false); res.json({ ok: true }); }));
 api.post('/auto-sync/:id/run', ownerOnly, wrap(async (req, res) => { await jobs.runNow(req.params.id); res.json({ ok: true }); }));
@@ -1937,7 +1971,8 @@ api.get('/me/profile', wrap(async (req, res) => {
   const pages = (await db.listPagesSeen(me)).length, myAlerts = require('./src/myalerts');
   res.json({ buyer: false, id: me, name: req.user.name, picture, role, roleName: RN[role] || 'Project Manager', site: SITE[role] || '/projectmanager', team: (teams.find((t) => t.members.includes(me)) || {}).name || '',
     teams: teams.map((t) => t.name), isAdmin: await canSeeAdmin(me),
-    facebook: { id: me, expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, pages, autoSync: (await db.enabledAccountIds(me)).length },
+    username: ((await LOGINS().forFb(me)) || {}).username || '',
+    facebook: { id: me, name: await fbNameOf(req.user), expires: req.user.token_expires || null, daysLeft: left, expired: left !== null && left <= 0, accounts, clients, pages, autoSync: (await db.enabledAccountIds(me)).length },
     telegram: { linked: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, link: bot ? `https://t.me/${bot}?start=pm_${code}` : '', bot, code }, buyers,
     autoReport: await extras.autoSettings(me), alerts: await myAlerts.prefs(me), ai: { on: (await db.getUserSetting(me, 'aiOn', true)) !== false, lang: (await db.getUserSetting(me, 'aiLang', 'en')) === 'km' ? 'km' : 'en' },
     google: req.session.gEmail ? { email: req.session.gEmail } : null });
@@ -1998,7 +2033,9 @@ api.put('/me/password', wrap(async (req, res) => {
 // Settings → Facebook accounts: the extra logins connected to my workspace.
 api.get('/fb-accounts', wrap(async (req, res) => {
   const me = req.user.fb_id, accts = await db.listAccounts(me), now = Date.now();
-  res.json({ extras: (await sync.extraLogins(me)).map((e) => ({ id: e.id, name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
+  const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, mine = accts.filter((a) => !(a.info || {}).via);
+  res.json({ max: require('./src/merge').MAX_FB, main: { id: me, name: await fbNameOf(req.user), expires: req.user.token_expires || null, expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null, accounts: mine.length, syncing: mine.filter((a) => a.enabled).length, pages: (await db.listPagesSeen(me)).length },
+    extras: (await sync.extraLogins(me)).map((e) => ({ id: e.id, name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
     accounts: accts.filter((a) => (a.info || {}).via === e.id).length, syncing: accts.filter((a) => (a.info || {}).via === e.id && a.enabled).length })) });
 }));
 api.delete('/fb-accounts/:id', wrap(async (req, res) => {
@@ -2014,7 +2051,11 @@ api.delete('/fb-accounts/:id', wrap(async (req, res) => {
 api.put('/me/profile', wrap(async (req, res) => {
   if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM to rename you.' });
   const b = req.body || {}, me = req.user.fb_id, name = String(b.name || '').trim().slice(0, 80);
-  if (name && name !== req.user.name) await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [me, name]);
+  if (name && name !== req.user.name) {
+    if (!(await db.getUserSetting(me, 'fbName', ''))) await db.setUserSetting(me, 'fbName', req.user.name); // remember the Facebook account's own name
+    await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [me, name]);
+    const lg = await LOGINS().forFb(me); if (lg) { lg.name = name; await LOGINS().save(lg); }
+  }
   if (b.team !== undefined) { // moving myself between teams (admins may pick any; others only leave or join by name)
     const teams = await getTeams(), want = String(b.team || '').trim();
     for (const t of teams) t.members = t.members.filter((x) => x !== me);
@@ -2391,6 +2432,17 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
       else if (!cur.full || cur.linkTo) { cur.full = true; cur.linkTo = ''; n++; } }
     if (n) { await db.setSetting('adminSite', site); console.log('[admin] full admin by Gmail set for', n, 'address(es)'); }
   })().catch((e) => console.log('[admin] FULL_ADMIN_EMAILS skipped:', e.message));
+  // One time (18 Nov 2026): a workspace whose username was made for a named PM takes that PM's name; the Facebook
+  // account's name is kept beside it and shown under Team Facebook accounts.
+  (async () => {
+    const flag = 'migr:pmNames:2026-11-18'; if (await db.getSetting(flag, null)) return; let n = 0;
+    for (const l of await LOGINS().list()) {
+      if (l.role !== 'pm' || !l.fbId || !String(l.name || '').trim()) continue;
+      const u = await db.getUser(l.fbId); if (!u || u.name === l.name.trim() || (await db.getUserSetting(u.fb_id, 'fbName', ''))) continue;
+      await db.setUserSetting(u.fb_id, 'fbName', u.name); await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [u.fb_id, l.name.trim()]); n++;
+    }
+    await db.setSetting(flag, { at: new Date().toISOString(), renamed: n }); if (n) console.log('[accounts] workspace named after its PM for', n, 'account(s)');
+  })().catch((e) => console.log('[accounts] PM names skipped:', e.message));
   // One time (17 Nov 2026): the company moved — every account's saved invoice address becomes the new one.
   (async () => {
     const flag = 'migr:invoiceAddress:2026-11-17'; if (await db.getSetting(flag, null)) return;

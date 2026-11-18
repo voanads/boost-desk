@@ -3589,3 +3589,8 @@ table.co-tt tbody tr th b{font-weight:600}
 .tt-fix{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 12px;border-radius:var(--r-md);background:var(--warn-soft);font-size:var(--fs-md)}
 .tt-fix span{flex:1 1 220px;min-width:0}
 @media (max-width:520px){.teamgrid:has(.tt-card){grid-template-columns:1fr}.tt-row{grid-template-columns:1fr auto}.tt-k{grid-column:1/-1}.tt-sub{margin-left:0}}
+
+/* Language switch */
+.langbtn{width:auto;min-width:40px;padding:0 10px;font-weight:600;font-size:var(--fs-sm)}
+@media (max-width:760px){.langbtn{min-width:36px;padding:0 8px}}
+@media (max-width:760px){.st-mb{flex-wrap:wrap}.st-mba{flex:1 1 100%;flex-wrap:wrap;justify-content:flex-start;min-width:0}}

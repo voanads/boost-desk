@@ -2555,8 +2555,8 @@
   // ---------- My Task page: today's tasks + this month's KPIs, on every site ----------
   const sc3 = (v) => (v >= 100 ? 'ok' : v >= 60 ? 'mid' : 'bad');
   let mtAs = null, mtPeople = null, mtQ = ''; // admin: whose tasks and KPIs the My Task page shows (null = mine)
-  const mtAdminPick = () => !!(me && me.canAdmin && !me.buyer && !PM_SITE);
-  const mtPmPick = () => !!(me && !me.buyer && PM_SITE && !MB_SITE); // a PM: me + the media buyers I added
+  const mtAdminPick = () => !!(me && me.canAdmin && !me.buyer); // leaders, on any site: every team with its PM and media buyers
+  const mtPmPick = () => !!(me && !me.buyer && !me.canAdmin && PM_SITE && !MB_SITE); // a PM: me + the media buyers I added
   async function loadPmPeople() { // the PM's own media buyers with today's menu progress
     await loadMb();
     const row = async (id, name, kind, extra) => { let d = null; try { d = await api('/menu' + (id.startsWith('mb:') ? '?as=' + encodeURIComponent(id) : '')); } catch (_) {} return { id, name, kind, role: kind === 'PM' ? 'Me' : 'Media buyer', pmName: '', team: '', done: d ? d.done : 0, open: d ? d.total - d.done : 0, late: 0, pct: d ? d.pct : null, planAt: d && d.plan ? d.plan.at : null, resultAt: d && d.result ? d.result.at : null, kpi: null, ...extra }; };

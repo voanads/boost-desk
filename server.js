@@ -2398,6 +2398,29 @@ api.post('/media-buyers/:id/sync', wrap(async (req, res) => { // re-read name + 
 }));
 api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
 api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
+// "This is the PM": a Project Manager who connected Telegram as a media buyer (the old way in). Their Telegram becomes
+// the team's PM chat, the media-buyer entry goes, tasks that were given to it become the PM's own, and a username made
+// for it opens the team account as PM.
+api.post('/media-buyers/:id/make-pm', wrap(async (req, res) => {
+  const B = require('./src/buyers'), b = await B.get(req.params.id); if (!b) return res.status(404).json({ error: 'Media buyer not found.' });
+  const users = await db.allUsers(), owner = b.addedById || (users.find((u) => u.name === b.addedBy) || {}).fb_id || '';
+  if (!owner || !(await db.getUser(owner))) return res.status(400).json({ error: `${b.name} is not under a team account yet — choose the PM first.` });
+  if (req.user.buyer || !((await isFull(req)) || req.user.fb_id === owner)) return res.status(403).json({ error: 'Only this team\'s PM or an admin can do this.' });
+  if (!b.chat) return res.status(400).json({ error: `${b.name} has not connected Telegram yet.` });
+  const prev = await db.getUserSetting(owner, 'tgChat', null);
+  await db.setUserSetting(owner, 'tgChat', { id: String(b.chat), name: b.tgName || b.name, at: new Date().toISOString() });
+  let moved = 0;
+  for (const r of (await db.pool.query(`SELECT key, value FROM settings WHERE key LIKE $1`, [`${owner}:cwb:%`])).rows) {
+    const w = r.value || {}; let ch = false;
+    for (const t of w.tasks || []) if (t.to && t.to.id === b.id) { delete t.to; ch = true; moved++; }
+    if (ch) await db.setSetting(r.key, w);
+  }
+  const L = LOGINS(), lg = await L.forMb(b.id); let username = '';
+  if (lg) { if (await L.forFb(owner)) await L.remove(lg.username); else { lg.role = 'pm'; lg.fbId = owner; lg.mbId = ''; await L.save(lg); username = lg.username; } }
+  await B.remove(b.id);
+  console.log('[teams]', b.name, 'is now the PM Telegram of', (users.find((u) => u.fb_id === owner) || {}).name || owner, 'by', req.user.name);
+  res.json({ ok: true, name: b.tgName || b.name, replaced: prev && prev.id && String(prev.id) !== String(b.chat) ? prev.name || 'another chat' : '', tasks: moved, username });
+}));
 // Admin: move a media buyer under another PM (keeps their Telegram link, KPIs and tasks).
 api.patch('/media-buyers/:id', adminOnly, wrap(async (req, res) => {
   const B = require('./src/buyers'), pm = String((req.body || {}).pm || '').trim(), users = await db.allUsers(), u = users.find((x) => x.fb_id === pm);

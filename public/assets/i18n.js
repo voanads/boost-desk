@@ -51,7 +51,7 @@
     'Send every client\'s report by itself each day.': 'ផ្ញើរបាយការណ៍របស់ភ្ញៀវនីមួយៗដោយស្វ័យប្រវត្តិរៀងរាល់ថ្ងៃ។', 'Your account, your team\'s Facebook accounts, and Telegram.': 'Account របស់អ្នក, Facebook accounts របស់ក្រុម និង Telegram។',
     'Your profile, username and password, Facebook accounts and Telegram.': 'Profile, username និងពាក្យសម្ងាត់, Facebook accounts និង Telegram។', 'No one yet.': 'មិនទាន់មាននរណា។', 'none yet': 'មិនទាន់មាន', 'not connected': 'មិនទាន់ភ្ជាប់',
     'Nothing in this filter.': 'គ្មានអ្វីក្នុង filter នេះ។', 'The menu is empty — add your first task below.': 'បញ្ជីទទេ — បន្ថែមការងារដំបូងខាងក្រោម។', 'Add a task to the menu': 'បន្ថែមការងារទៅបញ្ជី', 'Add a task for today': 'បន្ថែមការងារសម្រាប់ថ្ងៃនេះ',
-    'tap one to see their day': 'ចុចមួយដើម្បីមើលថ្ងៃរបស់ពួកគេ', 'how it works': 'របៀបដំណើរការ', 'Plan': 'ផែនការ', 'Result ': 'លទ្ធផល', 'Leader': 'ថ្នាក់ដឹកនាំ', 'Also here': 'នៅទីនេះដែរ', 'Facebook': 'Facebook', 'Telegram': 'Telegram',
+    'tap one to see their day': 'ចុចមួយដើម្បីមើលថ្ងៃរបស់ពួកគេ', 'how it works': 'របៀបដំណើរការ', 'Plan': 'ផែនការ', 'Result ': 'លទ្ធផល', 'Leader': 'ថ្នាក់ដឹកនាំ', 'This is the PM': 'នេះជា PM', 'Also here': 'នៅទីនេះដែរ', 'Facebook': 'Facebook', 'Telegram': 'Telegram',
   };
   // Phrases with a number in them.
   var P = [

@@ -1918,20 +1918,40 @@ api.get('/admin/people-today', adminOnly, wrap(async (req, res) => {
   }
   res.json({ today, month: ym, people, teams: teams.map((t) => t.name) });
 }));
-// A team's KPI is its Project Manager's KPI. In a team with several PM accounts, this copies one PM's KPI list for the
-// month to the others (replacing theirs), so the whole team works to the same targets.
-api.post('/kpis/copy-team', adminOnly, wrap(async (req, res) => {
-  const b = req.body || {}, who = await kpiPerson(req, b.person); if (!who || who.buyer) return res.status(404).json({ error: 'Choose a Project Manager.' });
-  const month = /^\d{4}-\d{2}$/.test(b.month) ? b.month : sync.todayIn().slice(0, 7);
-  const team = (await getTeams()).find((t) => t.members.includes(who.id)); if (!team) return res.status(400).json({ error: `${who.name} is not in a team yet.` });
+// Copy one person's KPI list for a month to others, replacing theirs:
+//   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)
+//   scope 'pms'  — every Project Manager;   scope 'mbs' — every media buyer (from a media buyer's list)
+// Only name, target and unit travel. A person who already has a KPI of the same name keeps its id (so the tasks
+// linked to it stay linked) and the result they typed; nobody receives someone else's typed result.
+const kpiCopy = wrap(async (req, res) => {
+  const b = req.body || {}, who = await kpiPerson(req, b.person); if (!who) return res.status(404).json({ error: 'Person not found.' });
+  const scope = ['team', 'pms', 'mbs'].includes(b.scope) ? b.scope : 'team';
+  const month = /^\d{4}-\d{2}$/.test(b.month) ? b.month : sync.todayIn().slice(0, 7), K = KPI();
   const roles = await roleMap(), owner = await db.ownerId(), users = await db.allUsers();
-  const others = team.members.filter((m) => m !== who.id && m !== owner && !LEAD.has(roles[m]) && roles[m] !== 'mb' && users.some((u) => u.fb_id === m));
-  if (!others.length) return res.status(400).json({ error: `${team.name} has no other Project Manager.` });
-  const list = await KPI().getList(who.id, month);
-  if (!list.length) return res.status(400).json({ error: 'Set the KPIs first, then copy them.' });
-  for (const m of others) await KPI().putList(m, month, list);
-  res.json({ ok: true, team: team.name, to: others.map((m) => (users.find((u) => u.fb_id === m) || {}).name || m) });
-}));
+  const isPm = (id) => id !== owner && !LEAD.has(roles[id]) && roles[id] !== 'mb';
+  let to = [], label = '';
+  if (scope === 'mbs') {
+    if (!who.buyer) return res.status(400).json({ error: 'Open a media buyer first — their KPIs are copied to the other media buyers.' });
+    to = (await MB().all()).filter((x) => 'mb:' + x.id !== who.id).map((x) => ({ id: x.id, name: x.name })); label = 'media buyers';
+  } else {
+    if (who.buyer) return res.status(400).json({ error: 'Choose a Project Manager.' });
+    if (scope === 'team') {
+      const team = (await getTeams()).find((t) => t.members.includes(who.id)); if (!team) return res.status(400).json({ error: `${who.name} is not in a team yet.` });
+      to = team.members.filter((m) => m !== who.id && isPm(m)).map((m) => users.find((u) => u.fb_id === m)).filter(Boolean).map((u) => ({ id: u.fb_id, name: u.name })); label = team.name;
+    } else { to = users.filter((u) => u.fb_id !== who.id && isPm(u.fb_id)).map((u) => ({ id: u.fb_id, name: u.name })); label = 'Project Managers'; }
+  }
+  if (!to.length) return res.status(400).json({ error: 'There is nobody else to copy to.' });
+  const src = await K.getList(who.buyer ? who.id.slice(3) : who.id, month);
+  if (!src.length) return res.status(400).json({ error: 'Set the KPIs first, then copy them.' });
+  const nm = (x) => String(x || '').trim().toLowerCase();
+  for (const p of to) {
+    const cur = await K.getList(p.id, month);
+    await K.putList(p.id, month, src.map((k) => { const old = cur.find((c) => nm(c.name) === nm(k.name)); return { id: old ? old.id : '', name: k.name, target: k.target, unit: k.unit, manual: old ? old.manual : null }; }));
+  }
+  res.json({ ok: true, scope, label, month, count: src.length, to: to.map((p) => p.name) });
+});
+api.post('/kpis/copy', adminOnly, kpiCopy);
+api.post('/kpis/copy-team', adminOnly, (req, res, next) => { req.body = { ...(req.body || {}), scope: 'team' }; kpiCopy(req, res, next); });
 // My target tasks for a day: every task of mine with a target, with what I reached.
 api.get('/targets/mine', wrap(async (req, res) => {
   const day = isDay(req.query.day) ? req.query.day : sync.todayIn(), out = [];

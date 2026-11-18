@@ -2874,6 +2874,15 @@
   // Leaders see teams, not a flat list of people: one group per team with its PM first, then the media buyers.
   // A team's KPI is its Project Manager's KPI, so tapping a team opens that PM's day and KPIs.
   const mtShut = {};
+  // The recommended monthly KPIs for a media buyer. "%" ones fill in from ticked tasks; the rest from what is typed or ticked.
+  const MB_KPIS = [
+    { name: 'បំពេញ Task ប្រចាំថ្ងៃទាន់ពេល', target: 95, unit: '%' },
+    { name: 'Boost Post / Live ចាប់ផ្តើមទាន់ម៉ោងតាម Plan', target: 98, unit: '%' },
+    { name: 'ដោះស្រាយបញ្ហា Ad account ក្នុងថ្ងៃតែមួយ', target: 100, unit: '%' },
+    { name: 'ភ្ញៀវដែល Cost per order ស្ថិតក្នុងគោលដៅ', target: 80, unit: '%' },
+    { name: 'សរសេរ Handoff note ជូន PM មុនចេញ', target: 24, unit: 'days' },
+    { name: 'សាកល្បងថ្មី (Audience / Creative)', target: 4, unit: 'tests' },
+  ];
   const mtLead = (members) => members.find((p) => p.kind !== 'Media buyer' && p.role === 'Project Manager') || members.find((p) => p.kind !== 'Media buyer') || null;
   function renderMtTeams(pp, list, meRow, row, q) {
     const all = (mtPeople || []), names = [...(mtTeams || [])]; for (const p of all) if (p.team && !names.includes(p.team)) names.push(p.team);
@@ -2943,15 +2952,28 @@
     if (me.buyer && !d) { try { d = await api('/mb/me'); } catch (_) { return; } }
     if (!me.buyer) {
       // A team's KPI is its Project Manager's KPI: for a PM in a team the panel is titled with the team.
-      const team = mtAs && !mtAs.buyer && mtAs.team && mtAdminPick() ? mtAs.team : '';
-      const mates = team ? (mtPeople || []).filter((p) => p.team === team && p.kind !== 'Media buyer' && p.role === 'Project Manager' && p.id !== mtAs.id) : [];
-      const isPm = team && ((mtPeople || []).find((p) => p.id === mtAs.id) || {}).role === 'Project Manager';
+      const adm = mtAdminPick(), ppl = mtPeople || [], cur = mtAs ? ppl.find((p) => p.id === mtAs.id) : ppl.find((p) => p.id === me.id);
+      const isMb = !!(mtAs && mtAs.buyer), team = adm && mtAs && !isMb && mtAs.team ? mtAs.team : '', isPm = !!(team && cur && cur.role === 'Project Manager');
+      const mates = isPm ? ppl.filter((p) => p.team === team && p.kind !== 'Media buyer' && p.role === 'Project Manager' && p.id !== mtAs.id) : [];
+      const allPms = adm && !isMb ? ppl.filter((p) => p.kind !== 'Media buyer' && p.role === 'Project Manager' && p.id !== (mtAs ? mtAs.id : me.id)) : [];
+      const allMbs = adm && isMb ? ppl.filter((p) => p.kind === 'Media buyer' && p.id !== mtAs.id) : [];
+      const src = mtAs ? mtAs.name : 'your';
       host.innerHTML = `<div class="top"><h2>📊 ${isPm ? 'Team KPI · ' + esc(team) : 'Monthly KPI' + (mtAs ? ' · ' + esc(mtAs.name) : '')}</h2><span class="hint">${isPm ? `The team's KPI is set on its Project Manager, ${esc(mtAs.name)}. ` : ''}Targets for this month and how far each one is — results fill in from the tasks linked to a KPI</span></div>
-        ${isPm && mates.length ? `<div class="mt-kcopy"><span class="hint">${esc(team)} has ${mates.length} more Project Manager${mates.length === 1 ? '' : 's'}: ${mates.map((p) => esc(p.name)).join(', ')}.</span><button type="button" class="sm" id="mtKCopy">Copy these KPIs to ${mates.length === 1 ? 'them' : 'all ' + mates.length}</button></div>` : ''}<div id="mtKpiBody"></div>`;
-      kpiPanel('mtKpiBody', mtAs ? mtAs.id : me.id);
-      const cp = $('mtKCopy'); if (cp) cp.onclick = async () => {
-        if (!confirm(`Copy ${mtAs.name}'s KPIs for this month to ${mates.map((p) => p.name).join(', ')}?\n\nThis replaces the KPIs they have now for this month.`)) return;
-        cp.disabled = true; try { const r = await api('/kpis/copy-team', { method: 'POST', body: { person: mtAs.id } }); successBadge(`Copied to ${r.to.join(', ')}`); refreshMtPeople(); } catch (e) { toast(e.message); } cp.disabled = false; };
+        ${mates.length || allPms.length || allMbs.length || (adm && isMb) ? `<div class="mt-kcopy"><span class="hint">${isMb ? 'Use the same KPIs for every media buyer:' : 'Use the same KPIs for other Project Managers:'}</span>
+          ${adm && isMb ? '<button type="button" class="sm" data-krec>✨ Use the recommended KPIs</button>' : ''}
+          ${mates.length ? `<button type="button" class="sm" data-kcp="team">Copy to ${esc(team)} (${mates.length})</button>` : ''}
+          ${allPms.length ? `<button type="button" class="sm" data-kcp="pms">Copy to all Project Managers (${allPms.length})</button>` : ''}
+          ${allMbs.length ? `<button type="button" class="sm" data-kcp="mbs">Copy to all media buyers (${allMbs.length})</button>` : ''}</div>` : ''}<div id="mtKpiBody"></div>`;
+      const pid = mtAs ? mtAs.id : me.id; kpiPanel('mtKpiBody', pid);
+      const kmonth = () => (kpiState.mtKpiBody || {}).month;
+      host.querySelectorAll('[data-kcp]').forEach((cp) => cp.onclick = async () => {
+        const scope = cp.dataset.kcp, who = scope === 'team' ? mates : scope === 'pms' ? allPms : allMbs;
+        if (!confirm(`Copy ${src === 'your' ? 'your' : src + "'s"} KPIs for ${ymLabel(kmonth())} to ${who.length} ${scope === 'mbs' ? 'media buyer' : 'Project Manager'}${who.length === 1 ? '' : 's'}?\n\n${who.map((p) => p.name).join(', ')}\n\nThis replaces the KPIs they have now for that month. Names, targets and units are copied; results are not.`)) return;
+        cp.disabled = true; try { const r = await api('/kpis/copy', { method: 'POST', body: { person: pid, scope, month: kmonth() } }); successBadge(`${r.count} KPI${r.count === 1 ? '' : 's'} copied to ${r.to.length} ${r.to.length === 1 ? 'person' : 'people'}`); refreshMtPeople(); } catch (e) { toast(e.message); } cp.disabled = false; });
+      const rec = host.querySelector('[data-krec]'); if (rec) rec.onclick = async () => {
+        const have = ((kpiState.mtKpiBody || {}).data || {}).kpis || [];
+        if (have.length && !confirm(`Replace ${mtAs.name}'s ${have.length} KPI${have.length === 1 ? '' : 's'} for ${ymLabel(kmonth())} with the 6 recommended media buyer KPIs?`)) return;
+        rec.disabled = true; try { await api('/kpis', { method: 'PUT', body: { person: pid, month: kmonth(), kpis: MB_KPIS.map((k) => ({ ...k, id: '', manual: null })) } }); successBadge('Recommended KPIs added — change any target, then copy to all media buyers'); kpiPanel('mtKpiBody', pid, kmonth()); } catch (e) { toast(e.message); } rec.disabled = false; };
       return; }
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.source === 'all' ? 'all daily tasks' : `${k.tasks} task${k.tasks === 1 ? '' : 's'}`}${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;

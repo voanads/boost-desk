@@ -1888,9 +1888,13 @@ const ownClient = async (req) => (await db.listClients(req.user.fb_id)).find((x)
 // Open tasks and today's ticks for every client (for the badges in the Clients list).
 // Monthly KPIs (per person or media buyer). person = a user id, or mb:<media buyer id>.
 const KPI = () => require('./src/kpi');
+// A media buyer of mine (I added them), or any media buyer for leaders. A media buyer session is never "mine".
+const ownsBuyer = async (req, id) => { if (req.user.buyer) return false; if (await canSeeAdmin(req.user.fb_id)) return true; const b = await MB().get(String(id)); return !!b && (b.addedById === req.user.fb_id || (!b.addedById && b.addedBy === req.user.name)); };
+// Whose KPIs: a media buyer sees only their own; a PM their own and their media buyers'; leaders anyone's.
 const kpiPerson = async (req, raw) => {
+  if (req.user.buyer) { const own = 'mb:' + req.user.buyer.id; if (raw && String(raw) !== own) return null; return { id: own, name: req.user.buyer.name, buyer: true, canEdit: false }; }
   const p = String(raw || req.user.fb_id);
-  if (p.startsWith('mb:')) { const b = await require('./src/buyers').get(p.slice(3)); return b ? { id: p, name: b.name, buyer: true, canEdit: true } : null; }
+  if (p.startsWith('mb:')) { if (!(await ownsBuyer(req, p.slice(3)))) return null; const b = await require('./src/buyers').get(p.slice(3)); return b ? { id: p, name: b.name, buyer: true, canEdit: true } : null; }
   if (p === req.user.fb_id) return { id: p, name: req.user.name, buyer: false, canEdit: true };
   if (!(await canSeeAdmin(req.user.fb_id))) return null;
   const u = await db.getUser(p); return u ? { id: p, name: u.name, buyer: false, canEdit: true } : null;
@@ -2054,7 +2058,7 @@ api.get('/me/profile', wrap(async (req, res) => {
   const buyers = (await MB().all()).filter((b) => b.addedById === me || (!b.addedById && b.addedBy === req.user.name)).map((b) => ({ name: b.name, linked: !!(b.linked || b.chat) }));
   let code = await db.getUserSetting(me, 'tgCode', ''); if (!code) { code = newCode(); await db.setUserSetting(me, 'tgCode', code); }
   const chat = await db.getUserSetting(me, 'tgChat', null), bot = telegram.hasBot() ? await telegram.username() : '';
-  let picture = ''; try { const r = await Promise.race([meta.get(`/${me}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, await sync.tokenFor(req.user)), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); picture = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) {}
+  const picture = req.user.google ? '' : `/api/fb-pic/${me}`; // the browser loads it on its own; the page never waits for Facebook
   const pages = (await db.listPagesSeen(me)).length, myAlerts = require('./src/myalerts');
   res.json({ buyer: false, id: me, name: req.user.name, picture, role, roleName: RN[role] || 'Project Manager', site: SITE[role] || '/projectmanager', team: (teams.find((t) => t.members.includes(me)) || {}).name || '',
     teams: teams.map((t) => t.name), isAdmin: await canSeeAdmin(me),
@@ -2126,11 +2130,19 @@ async function fbPicture(id, token) {
   try { const r = await Promise.race([meta.get(`/${id}/picture`, { redirect: 0, type: 'normal', width: 160, height: 160 }, token), new Promise((_, rej) => setTimeout(() => rej(new Error('slow')), 2500))]); url = (r.data && !r.data.is_silhouette && r.data.url) || ''; } catch (_) { /* no picture: the initials show */ }
   fbPics.set(id, { at: Date.now(), url }); return url;
 }
+// A connected Facebook account's profile picture: mine or one of my team's extra accounts. Redirects to Facebook's
+// picture (cached an hour); 404 when there is none, and the page shows initials instead.
+api.get('/fb-pic/:id', wrap(async (req, res) => {
+  const me = req.user.fb_id, id = String(req.params.id); let token = '';
+  try { if (id === me) token = await sync.tokenFor(req.user); else { const e = (await sync.extraLogins(me)).find((x) => x.id === id); if (e) token = require('./src/crypto').decrypt(e.token_enc); } } catch (_) {}
+  const url = token ? await fbPicture(id, token) : '';
+  if (!url) return res.status(404).end();
+  res.set('Cache-Control', 'private, max-age=3600').redirect(url);
+}));
 api.get('/fb-accounts', wrap(async (req, res) => {
   const me = req.user.fb_id, accts = await db.listAccounts(me), now = Date.now();
   const exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, mine = accts.filter((a) => !(a.info || {}).via);
-  const xs = await sync.extraLogins(me), pics = {};
-  await Promise.all([(async () => { try { pics[me] = await fbPicture(me, await sync.tokenFor(req.user)); } catch (_) {} })(), ...xs.map(async (e) => { try { pics[e.id] = await fbPicture(e.id, require('./src/crypto').decrypt(e.token_enc)); } catch (_) {} })]);
+  const xs = await sync.extraLogins(me), pics = { [me]: `/api/fb-pic/${me}` }; for (const e of xs) pics[e.id] = `/api/fb-pic/${e.id}`; // loaded by the browser, so this list never waits for Facebook
   res.json({ max: require('./src/merge').MAX_FB, main: { id: me, picture: pics[me] || '', name: await fbNameOf(req.user), expires: req.user.token_expires || null, expired: !!(exp && exp < now), daysLeft: exp ? Math.floor((exp - now) / 864e5) : null, accounts: mine.length, syncing: mine.filter((a) => a.enabled).length, pages: (await db.listPagesSeen(me)).length },
     extras: xs.map((e) => ({ id: e.id, picture: pics[e.id] || '', name: e.name, expires: e.expires || null, expired: !!(e.expires && Date.parse(e.expires) < now), addedAt: e.addedAt, error: e.error || '',
     accounts: accts.filter((a) => (a.info || {}).via === e.id).length, syncing: accts.filter((a) => (a.info || {}).via === e.id && a.enabled).length })) });
@@ -2414,12 +2426,17 @@ app.get('/mb-pic/:id', wrap(async (req, res) => {
 api.post('/media-buyers/:id/sync', wrap(async (req, res) => { // re-read name + picture from Telegram now
   const B = require('./src/buyers'), all = await B.list(), b = all.find((x) => x.id === req.params.id);
   if (!b) return res.status(404).json({ error: 'Media buyer not found.' });
+  if (!(await ownsBuyer(req, b.id))) return res.status(403).json({ error: 'Only this media buyer\'s PM or an admin can do this.' });
   if (!b.chat) return res.status(400).json({ error: 'Not connected to Telegram yet.' });
   if (await B.syncProfile(b, '')) await B.save(all);
   res.json({ ok: true, name: b.name, photo: !!b.photo });
 }));
 api.post('/media-buyers', wrap(async (req, res) => { try { res.json(await require('./src/buyers').add((req.body || {}).name, req.user.name, req.user.fb_id)); } catch (e) { res.status(400).json({ error: e.message }); } }));
-api.delete('/media-buyers/:id', wrap(async (req, res) => { await require('./src/buyers').remove(req.params.id); res.json({ ok: true }); }));
+api.delete('/media-buyers/:id', wrap(async (req, res) => {
+  if (!(await MB().get(req.params.id))) return res.status(404).json({ error: 'Media buyer not found.' });
+  if (!(await ownsBuyer(req, req.params.id))) return res.status(403).json({ error: 'Only this media buyer\'s PM or an admin can remove them.' });
+  await require('./src/buyers').remove(req.params.id); res.json({ ok: true });
+}));
 // "This is the PM": a Project Manager who connected Telegram as a media buyer (the old way in). Their Telegram becomes
 // the team's PM chat, the media-buyer entry goes, tasks that were given to it become the PM's own, and a username made
 // for it opens the team account as PM.

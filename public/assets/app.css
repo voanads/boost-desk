@@ -3661,3 +3661,39 @@ nav.tabs button.nav-sub{display:none!important}
 .mt-nudge{margin-left:auto}.mt-nudge+.mt-sugbtn{margin-left:0}
 #actQ{min-height:36px;min-width:220px}
 .subnav{width:fit-content;justify-self:start;align-self:flex-start}
+
+/* Teams today, card look (19 Nov): one summary band, one card per team */
+.lb-head{align-items:center;flex-wrap:wrap;gap:10px}
+#mtBoard .lb-remind{min-height:40px;display:inline-flex;align-items:center;gap:8px;font-weight:600;border-radius:var(--r-md,10px)}
+#mtBoard .lb-remind .ic{width:16px;height:16px}
+#mtBoard .lb-remind:disabled{background:var(--surface);color:var(--muted);opacity:1}
+.panel.lb-sum{display:flex;flex-wrap:wrap;padding:0;overflow:hidden}
+.lb-stat{display:flex;flex-direction:column;gap:2px;padding:16px 20px;min-width:0;flex:1 1 170px;box-shadow:-1px 0 0 var(--line),0 -1px 0 var(--line)}
+.lb-stat b{font-size:var(--fs-2xl,1.5rem);font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-stat-ring,.lb-stat-wide{flex-direction:row;align-items:center;gap:16px}
+.lb-stat-ring{flex-basis:250px} .lb-stat-ring>div,.lb-stat-wide>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.lb-stat-wide{flex:2 1 360px} .lb-stat .lb-msg{font-size:var(--fs-lg);white-space:normal}
+.lb-ring{width:64px;height:64px;flex:none;color:var(--ink)}
+.lb-ico{width:48px;height:48px;border-radius:12px;background:var(--brand-soft);color:var(--brand-text);display:inline-flex;align-items:center;justify-content:center;flex:none} .lb-ico svg{width:24px;height:24px}
+.lb-ch2{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px} .lb-ch2 h2{margin:0;font-size:var(--fs-lg)}
+.lb .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.lb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;align-items:stretch}
+.panel.lb-team{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.lb-th{display:flex;align-items:center;gap:12px;padding:16px 16px 12px}
+.lb-th .lb-tav{width:40px;height:40px;flex:none;font-weight:700}
+.lb-tn{display:flex;flex-direction:column;min-width:0;margin-right:auto;line-height:1.25} .lb-tn b{font-size:var(--fs-md,1.05rem);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .lb-tn .hint{font-size:var(--fs-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-tbar{display:flex;align-items:center;gap:12px;padding:0 16px 14px} .lb-tbar .num{font-weight:600;white-space:nowrap}
+#mtBoard .lbp{display:grid;grid-template-columns:32px minmax(0,1fr) auto 62px;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 16px;border:0;border-top:1px solid var(--line);border-radius:0;background:transparent;box-shadow:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+#mtBoard .lbp:hover{background:var(--bg-2)}
+.lbp .avatar{width:32px;height:32px;font-size:var(--fs-2xs)} .lbp .avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.lbp-n{display:flex;flex-direction:column;min-width:0;line-height:1.25} .lbp-n b{font-weight:600;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .lbp-n .hint{font-size:var(--fs-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbp-v{display:flex;flex-direction:column;align-items:flex-end;gap:4px} .lbp-v .num{font-size:var(--fs-sm);font-weight:600}
+.lb-mini{width:62px;height:6px;border-radius:999px;background:var(--bg-2);overflow:hidden} .lb-mini i{display:block;height:100%;border-radius:999px;background:var(--muted)} .lb-mini i.ok{background:var(--ok)} .lb-mini i.mid{background:var(--warn)} .lb-mini i.bad{background:var(--danger)}
+.lb-team .lb-none{padding:14px 16px;border-top:1px solid var(--line);font-size:var(--fs-sm)}
+.lb-tf{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--bg);font-size:var(--fs-xs);color:var(--muted);margin-top:auto;min-height:44px} .lb-tf b{font-size:var(--fs-sm)}
+.lb .pill.brand{background:var(--brand-soft);color:var(--brand-text)}
+@media (max-width:560px){.lb-grid{grid-template-columns:minmax(0,1fr)}#mtBoard .lbp{grid-template-columns:32px minmax(0,1fr) auto;row-gap:2px}.lbp-v{grid-column:2/-1;flex-direction:row;align-items:center;justify-content:flex-start;gap:8px}.lb-stat{flex-basis:140px;padding:12px 14px}.lb-ch2 .pill{display:none}#mtBoard .lb-remind{width:100%;justify-content:center}}
+#mtBoard .panel.lb-sum{display:flex;flex-direction:row;flex-wrap:wrap;padding:0;gap:0;overflow:hidden}
+#mtBoard .panel.lb-team{padding:0;gap:0;display:flex;flex-direction:column;overflow:hidden}
+#mtBoard .lb-stat{flex:1 1 170px} #mtBoard .lb-stat-ring{flex:1 1 250px} #mtBoard .lb-stat-wide{flex:2 1 360px}
+#mtBoard .panel.lb-sum,#mtBoard .panel.lb-team,#mtBoard .panel.lb-card{padding:0!important;gap:0!important}

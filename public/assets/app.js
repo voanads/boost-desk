@@ -264,7 +264,24 @@
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
   const KEEP = document.body.dataset.site === 'admin' ? ['main', 'board', 'mytasks'] : ['dashboard', 'clients', 'lives', 'payments'];
-  function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !KEEP.includes(b.dataset.tab)); }
+  function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !b.classList.contains('nav-sub') && !KEEP.includes(b.dataset.tab)); }
+  // A shorter menu: pages that belong together share one menu item and switch with a strip at the top of the page.
+  //   Main Dashboard = Overview · Clients Board · Team reports        Ad accounts = My ad accounts · All ad accounts
+  const SUBS = { main: ['main', 'board', 'allrep'], accounts: ['accounts', 'adaccts'] };
+  const SUB_LABEL = { main: 'Overview', board: 'Clients Board', allrep: 'Team reports', accounts: 'My ad accounts', adaccts: 'All ad accounts' };
+  const navBtn = (t) => document.querySelector(`nav.tabs button[data-tab="${t}"]`);
+  const subGroup = (name) => { for (const [p, list] of Object.entries(SUBS)) { if (!list.includes(name)) continue; const on = list.filter((t) => navBtn(t) && !navBtn(t).hidden); if (on.includes(p) && on.length > 1 && on.includes(name)) return { parent: p, tabs: on }; } return null; };
+  function paintSubnav(name) {
+    for (const [p, list] of Object.entries(SUBS)) { const on = list.filter((t) => navBtn(t) && !navBtn(t).hidden), grouped = on.includes(p) && on.length > 1; for (const t of list) if (t !== p && navBtn(t)) navBtn(t).classList.toggle('nav-sub', grouped); }
+    document.querySelectorAll('.subnav').forEach((x) => x.remove());
+    const g = subGroup(name); if (!g) return;
+    if (name !== g.parent) document.querySelectorAll('nav.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === g.parent)));
+    const sec = $('tab-' + name); if (!sec) return;
+    const bar = document.createElement('div'); bar.className = 'subnav'; bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', 'Pages');
+    bar.innerHTML = g.tabs.map((t) => { const bd = navBtn(t).querySelector('.navbadge'), n = bd && !bd.hidden ? bd.textContent.trim() : ''; return `<button type="button" data-sub="${t}" aria-pressed="${t === name}">${SUB_LABEL[t]}${n ? ` <span class="subnav-n">${esc(n)}</span>` : ''}</button>`; }).join('');
+    sec.insertBefore(bar, sec.firstChild);
+    bar.querySelectorAll('[data-sub]').forEach((b) => b.onclick = () => { location.hash = b.dataset.sub; showTab(b.dataset.sub); });
+  }
   function paintMore() { const m = $('navMore'); if (!m) return; const cur = document.body.dataset.tab; m.setAttribute('aria-selected', String(!KEEP.includes(cur) && moreTabs().some((b) => b.dataset.tab === cur))); }
   if ($('navMore')) $('navMore').onclick = () => {
     let d = $('moreDlg');
@@ -274,6 +291,10 @@
     $('moreList').querySelectorAll('[data-go]').forEach((x) => x.onclick = () => { d.close(); location.hash = x.dataset.go; showTab(x.dataset.go); });
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
   };
+  if (document.body.dataset.site === 'mb') { // media buyer: daily pages on top, the rest folded under "More" (still one tap away)
+    const first = document.querySelector('nav.tabs button[data-tab="reports"]');
+    if (first) { const g = document.createElement('span'); g.className = 'navgrp'; g.id = 'navGrpMbMore'; g.textContent = 'More'; first.parentNode.insertBefore(g, first); try { if (localStorage.getItem('bd-grp-navGrpMbMore') === null) localStorage.setItem('bd-grp-navGrpMbMore', '1'); } catch (_) {} }
+  }
   document.querySelectorAll('nav.tabs .navgrp').forEach((g) => {
     const key = 'bd-grp-' + g.id, apply = () => { let closed = false; try { closed = localStorage.getItem(key) === '1'; } catch (_) {} g.classList.toggle('closed', closed); let n = g.nextElementSibling; while (n && !n.classList.contains('navgrp')) { if (n.dataset && n.dataset.tab) n.classList.toggle('grp-hidden', closed); n = n.nextElementSibling; } };
     g.onclick = () => { try { localStorage.setItem(key, g.classList.contains('closed') ? '0' : '1'); } catch (_) {} apply(); };
@@ -292,6 +313,7 @@
     if (document.body.dataset.site === 'admin' && !['main', 'board', 'allrep', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
     ['main', 'board', 'allrep', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
+    paintSubnav(name);
     moveInk();
     if (name === 'dashboard') { loadDash(); loadOnboarding(); loadHandoff(); }
     if (name === 'clients') loadClientMonth();
@@ -2213,12 +2235,25 @@
     admSec = sec; try { localStorage.setItem('admSec', sec); } catch (_) {}
     document.querySelectorAll('#admNav button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.a === sec)));
     if (sec === 'accounts') sec = 'users'; // moved to its own page
-    for (const k of ['overview', 'users', 'health', 'settings']) $('adm-' + k).hidden = k !== sec;
+    for (const k of ['overview', 'users', 'health', 'settings', 'activity']) $('adm-' + k).hidden = k !== sec;
+    if (sec === 'activity') loadActivity();
     if (sec === 'users') { loadUsers(); loadTeams(); }
     if (sec === 'health') loadHealth();
     if (sec === 'settings') loadSettings();
   }
   document.querySelectorAll('#admNav button').forEach((b) => b.onclick = () => showAdm(b.dataset.a));
+  // Admin › Activity: who changed what (name, action, time). Read only.
+  let actLog = null;
+  async function loadActivity() {
+    const host = $('actList'); if (!host) return;
+    host.innerHTML = '<div class="sk"></div><div class="sk"></div><div class="sk"></div>';
+    try { actLog = (await api('/admin/audit')).log; } catch (e) { host.innerHTML = `<div class="muted">${esc(e.message)}</div>`; return; }
+    const paint = () => { const q = ($('actQ').value || '').trim().toLowerCase(), rows = actLog.filter((x) => !q || `${x.by} ${x.what} ${x.where} ${x.for || ''}`.toLowerCase().includes(q));
+      const when = (iso) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' });
+      host.innerHTML = rows.length ? `<div class="lb-scroll"><table class="lb-table"><thead><tr><th>When</th><th>Who</th><th>What</th><th class="lb-hide">Where</th></tr></thead><tbody>${rows.map((x) => `<tr><td class="num" style="white-space:nowrap">${esc(when(x.at))}</td><td><b>${esc(x.by)}</b>${x.role ? ` <span class="hint">· ${esc(x.role)}</span>` : ''}${x.for ? ` <span class="hint">· for ${esc(x.for)}</span>` : ''}</td><td>${esc(x.what)}</td><td class="lb-hide hint">${esc(x.where || '')}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="hl-empty">${actLog.length ? 'Nothing matches.' : 'No changes recorded yet. Changes made from now on appear here.'}</div>`; };
+    $('actQ').oninput = paint; paint();
+  }
   const initials = (n) => esc((n || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase());
   const dateShort = (t) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 
@@ -2797,7 +2832,7 @@
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '2'}</span><div><b>Work</b><span class="hint">${closed ? `${d.done} of ${d.total} done` : 'Tick each item as you finish it'}</span></div></div><i class="mt-sarr" aria-hidden="true"></i>
       <div class="mt-step ${closed ? 'done' : d.plan ? 'now' : ''}"><span class="mt-sn">${closed ? '✓' : '3'}</span><div><b>Result</b><span class="hint">${closed ? `Submitted ${hhmm(d.result.at)}${d.result.note ? ' · ' + esc(d.result.note) : ''}` : 'Submit before you leave'}</span></div></div>
       <div class="mt-sact">${closed ? '<button type="button" class="ghost sm" id="mtReopenBtn">Reopen</button>' : `${d.plan ? '' : `<button type="button" class="primary sm" id="mtPlanBtn" ${d.items.length ? '' : 'disabled'}>Submit plan</button>`}<button type="button" class="sm ${d.plan ? 'primary' : ''}" id="mtResultBtn" ${d.items.length && (d.plan || d.done) ? '' : 'disabled'} title="${d.plan || d.done ? 'Close the day and send the result to Telegram' : 'Submit the plan first (or tick at least one task)'}">Submit result</button>`}</div></div>`;
-    host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span>${!closed && !d.plan && kpis.length ? '<button type="button" class="sm mt-sugbtn" id="mtSugBtn" title="Top 5 daily tasks from this month\'s KPIs">✨ Suggest from KPI</button>' : ''}</div>
+    host.innerHTML = `<div class="top"><h2>📋 ${mtAs ? esc(mtAs.name) + "'s task menu" : 'Task menu'} · ${isToday ? 'today' : esc(nice(d.day).replace(/ \d{4}$/, ''))}</h2><span class="hint">${d.role === 'mb' ? 'Media buyer' : 'Project Manager'}${!isToday ? ` · <button type="button" class="ghost sm" id="mtMenuToday">Back to today</button>` : ''}</span>${mtAs && isToday && !d.result ? '<button type="button" class="sm mt-nudge" id="mtNudge" title="Send a short Telegram reminder with what is still open">🔔 Nudge</button>' : ''}${!closed && !d.plan && kpis.length ? '<button type="button" class="sm mt-sugbtn" id="mtSugBtn" title="Top 5 daily tasks from this month\'s KPIs">✨ Suggest from KPI</button>' : ''}</div>
       ${steps}
       <div class="mt-prog"><div class="tgt-bar"><i class="${cls}" style="width:${d.pct || 0}%"></i></div><b class="num mt-pct ${cls}">${d.pct == null ? '–' : d.pct + '%'}</b><span class="hint">${d.done} of ${d.total} done${closed ? ' · closed' : ''}</span></div>
       <div class="mt-items ${closed ? 'closed' : ''}">${d.items.length ? d.items.map((it, i) => `<div class="mt-item ${it.done ? 'done' : ''}">
@@ -2811,6 +2846,7 @@
       ${closed ? '' : '<div class="mt-foot"><button type="button" class="ghost sm" id="mtResetBtn">Reset to the standard list</button></div>'}`;
     const reload = () => { loadMtMenu(); loadMtCal(); refreshMtPeople(); if ($('mtKpiBody')) kpiPanel('mtKpiBody', mtAs ? mtAs.id : myKpiId()); else if (me.buyer) loadMyKpiPage(); };
     // ✨ top 5 menu tasks from the KPIs: on demand, and by itself the first time a day's menu is empty
+    if ($('mtNudge')) $('mtNudge').onclick = async () => { const b = $('mtNudge'); b.disabled = true; try { const r = await api('/nudge', { method: 'POST', body: { person: mtAs.id } }); successBadge(`Reminder sent to ${r.name}`); } catch (e) { toast(e.message); } b.disabled = false; };
     const sugKey = `mtSug:${kpiPerson}:${d.day}`, sugBtn = $('mtSugBtn');
     if (sugBtn) sugBtn.onclick = () => mtSuggest({ host: $('mtSug'), d, kpis, body, reload, fresh: !!$('mtSug').dataset.loaded });
     if (sugBtn && !d.items.length && isToday) { let seen = false; try { seen = !!localStorage.getItem(sugKey); } catch (_) {} if (!seen) { try { localStorage.setItem(sugKey, '1'); } catch (_) {} mtSuggest({ host: $('mtSug'), d, kpis, body, reload, auto: true }); } }

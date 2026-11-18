@@ -54,36 +54,36 @@ async function setAsk(chat, who) { const a = await asks(), now = Date.now(); for
 
 // ---------- the three messages (text only — also used by the preview in Boost Desk) ----------
 function briefText({ buyer, pmName, day, y, notes, tasks }) {
-  const lines = [`🌅 Good morning ${first(buyer.name)} — ${niceDay(day)}`, ''];
-  lines.push(`Yesterday · ${money(y.spend)}${y.orders ? ` · ${y.orders} orders${y.cpo != null ? ` · ${money(y.cpo)}/order` : ''}` : ''} · ${y.withSpend} client${y.withSpend === 1 ? '' : 's'} with spend`);
-  if (y.unsent) lines.push(`⚠ ${y.unsent} report${y.unsent === 1 ? '' : 's'} from yesterday not sent`);
-  for (const n of notes) lines.push('', `📝 Note from ${n.by} (${n.day === day ? 'today' : 'last night'} ${hm(n.at)})`, bullets(n.text));
-  if (!notes.length) lines.push('', `📝 No note from ${pmName} last night.`);
-  lines.push('', `Today's tasks (${tasks.length})`);
+  const lines = [`🌅 អរុណសួស្ដី ${first(buyer.name)} — ${niceDay(day)}`, ''];
+  lines.push(`ម្សិលមិញ · ${money(y.spend)}${y.orders ? ` · ${y.orders} orders${y.cpo != null ? ` · ${money(y.cpo)}/order` : ''}` : ''} · ភ្ញៀវមានចំណាយ ${y.withSpend}`);
+  if (y.unsent) lines.push(`⚠ របាយការណ៍ម្សិលមិញ ${y.unsent} មិនទាន់ផ្ញើ`);
+  for (const n of notes) lines.push('', `📝 កំណត់ចំណាំពី ${n.by} (${n.day === day ? 'ថ្ងៃនេះ' : 'យប់មិញ'} ${hm(n.at)})`, bullets(n.text));
+  if (!notes.length) lines.push('', `📝 យប់មិញគ្មានកំណត់ចំណាំពី ${pmName} ទេ។`);
+  lines.push('', `Task ថ្ងៃនេះ (${tasks.length})`);
   for (const t of tasks.slice(0, 6)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`);
-  if (tasks.length > 6) lines.push(`… +${tasks.length - 6} more in My Task`);
-  if (!tasks.length) lines.push('Nothing planned yet — your PM can add tasks any time.');
+  if (tasks.length > 6) lines.push(`… +${tasks.length - 6} ទៀត ក្នុង My Task`);
+  if (!tasks.length) lines.push('មិនទាន់មាន Task ទេ — PM អាចបន្ថែមបានគ្រប់ពេល។');
   return lines.join('\n');
 }
 function remindText({ buyer, pmName, open, tonight }) {
-  const lines = ['⏰ 15 minutes before you leave', ''];
-  if (open.length) { lines.push(`${open.length} task${open.length === 1 ? '' : 's'} still open:`); for (const t of open.slice(0, 5)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`); if (open.length > 5) lines.push(`… +${open.length - 5} more`); }
-  else lines.push('All your tasks are done ✅');
-  lines.push('', `✍ Write a note for ${first(pmName)} for tonight — just type it here and send.${tonight ? `\n(${tonight})` : ''}`);
+  const lines = ['⏰ 15 នាទីមុនចេញពីការងារ', ''];
+  if (open.length) { lines.push(`នៅសល់ ${open.length} Task មិនទាន់រួច៖`); for (const t of open.slice(0, 5)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`); if (open.length > 5) lines.push(`… +${open.length - 5} ទៀត`); }
+  else lines.push('Task ទាំងអស់រួចរាល់ហើយ ✅');
+  lines.push('', `✍ សូមសរសេរកំណត់ចំណាំជូន ${first(pmName)} សម្រាប់យប់នេះ — វាយនៅទីនេះ ហើយផ្ញើ។${tonight ? `\n(${tonight})` : ''}`);
   return lines.join('\n');
 }
 function digestText({ day, rep, team, pmName, forPmChat }) {
-  const t = rep.totals, due = t.sent + t.unsent, lines = [`🌙 Digest — ${niceDay(day)}`];
-  lines.push(`Total ${money(t.spend)}${t.orders ? ` · ${t.orders} orders${t.cpo != null ? ` · ${money(t.cpo)}/order` : ''}` : ''}`);
-  lines.push(`Reports ✓ ${t.sent} / ${due}${t.unsent ? ` · ${t.unsent} not sent` : ''}${t.nogroup ? ` · ${t.nogroup} no group` : ''}`, '');
+  const t = rep.totals, due = t.sent + t.unsent, lines = [`🌙 សរុបប្រចាំថ្ងៃ — ${niceDay(day)}`];
+  lines.push(`សរុប ${money(t.spend)}${t.orders ? ` · ${t.orders} orders${t.cpo != null ? ` · ${money(t.cpo)}/order` : ''}` : ''}`);
+  lines.push(`របាយការណ៍ ✓ ${t.sent} / ${due}${t.unsent ? ` · ${t.unsent} មិនទាន់ផ្ញើ` : ''}${t.nogroup ? ` · ${t.nogroup} គ្មាន group` : ''}`, '');
   const rows = rep.rows.filter((r) => r.spend > 0 || r.status !== 'nospend');
-  for (const r of rows.slice(0, 25)) lines.push(`${r.status === 'sent' ? '✓' : r.status === 'unsent' ? '●' : r.status === 'nogroup' ? '⚠' : '·'} ${r.name} — ${r.spend > 0 ? money(r.spend) : 'no spend'}${r.orders ? ` · ${r.orders}${r.cpo != null ? ` · ${money(r.cpo)}` : ''}` : ''}${r.status === 'unsent' ? ' · not sent' : r.status === 'nogroup' ? ' · no group' : ''}`);
-  if (rows.length > 25) lines.push(`… +${rows.length - 25} more`);
-  const skipped = rep.rows.length - rows.length; if (skipped) lines.push(`${skipped} client${skipped === 1 ? '' : 's'} with no spend`);
-  lines.push('', 'Team today');
-  lines.push(team.map((m) => `${first(m.name)} ${m.done}/${m.total}${m.total && m.done === m.total ? ' ✅' : ''}`).join(' · ') || 'No tasks today');
-  if (forPmChat) lines.push('', '✍ Leave a note for your media buyer for tomorrow morning — just type it here and send.');
-  else lines.push('', `Note for tomorrow comes from ${first(pmName)} at 8:00.`);
+  for (const r of rows.slice(0, 25)) lines.push(`${r.status === 'sent' ? '✓' : r.status === 'unsent' ? '●' : r.status === 'nogroup' ? '⚠' : '·'} ${r.name} — ${r.spend > 0 ? money(r.spend) : 'គ្មានចំណាយ'}${r.orders ? ` · ${r.orders}${r.cpo != null ? ` · ${money(r.cpo)}` : ''}` : ''}${r.status === 'unsent' ? ' · មិនទាន់ផ្ញើ' : r.status === 'nogroup' ? ' · គ្មាន group' : ''}`);
+  if (rows.length > 25) lines.push(`… +${rows.length - 25} ទៀត`);
+  const skipped = rep.rows.length - rows.length; if (skipped) lines.push(`ភ្ញៀវគ្មានចំណាយ ${skipped}`);
+  lines.push('', 'ក្រុមថ្ងៃនេះ');
+  lines.push(team.map((m) => `${first(m.name)} ${m.done}/${m.total}${m.total && m.done === m.total ? ' ✅' : ''}`).join(' · ') || 'ថ្ងៃនេះគ្មាន Task');
+  if (forPmChat) lines.push('', '✍ សូមទុកកំណត់ចំណាំជូន Media Buyer សម្រាប់ព្រឹកស្អែក — វាយនៅទីនេះ ហើយផ្ញើ។');
+  else lines.push('', `កំណត់ចំណាំសម្រាប់ស្អែក នឹងមកពី ${first(pmName)} ម៉ោង 8:00។`);
   return lines.join('\n');
 }
 
@@ -161,15 +161,15 @@ async function onTelegram(fresh) {
     try {
       const note = await addNote(ask.owner, { kind: ask.kind, by: ask.by, byId: ask.byId, text: m.text });
       delete a[m.id]; changed = true;
-      if (ask.kind === 'mb') { telegram.send('✓ Note saved — your PM sees it now in Boost Desk.', m.id).catch(() => {}); await pingPm(ask.owner, note); }
-      else telegram.send('✓ Note saved — your media buyer gets it at 8:00 tomorrow.', m.id).catch(() => {});
-    } catch (e) { telegram.send('Could not save the note — try again, or write it in Boost Desk → Dashboard.', m.id).catch(() => {}); }
+      if (ask.kind === 'mb') { telegram.send('✓ បានរក្សាទុកកំណត់ចំណាំ — PM ឃើញឥឡូវនេះក្នុង Boost Desk។', m.id).catch(() => {}); await pingPm(ask.owner, note); }
+      else telegram.send('✓ បានរក្សាទុកកំណត់ចំណាំ — Media Buyer នឹងទទួលនៅម៉ោង 8:00 ព្រឹកស្អែក។', m.id).catch(() => {});
+    } catch (e) { telegram.send('រក្សាទុកកំណត់ចំណាំមិនបាន — សូមសាកម្ដងទៀត ឬសរសេរក្នុង Boost Desk → Dashboard។', m.id).catch(() => {}); }
   }
   if (changed) await db.setSetting('handoffAsks', a);
 }
 // A media buyer's note reaches the PM's Telegram straight away (when the PM connected one).
 async function pingPm(owner, note) {
-  try { const chat = await pmChat(owner); if (chat && telegram.hasBot() && (await prefs(owner)).on) await telegram.send(`📝 Note from ${note.by} (${hm(note.at)})\n${bullets(note.text)}`, chat); } catch (_) { /* the note is saved either way */ }
+  try { const chat = await pmChat(owner); if (chat && telegram.hasBot() && (await prefs(owner)).on) await telegram.send(`📝 កំណត់ចំណាំពី ${note.by} (${hm(note.at)})\n${bullets(note.text)}`, chat); } catch (_) { /* the note is saved either way */ }
 }
 
 // ---------- the Dashboard card ----------

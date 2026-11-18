@@ -1,3 +1,4 @@
+const net = require('./src/net'); // first: time limits on every outside call
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -23,6 +24,8 @@ const telegram = require('./src/telegram');
 const profit = require('./src/profit');
 const { encrypt } = require('./src/crypto');
 
+// A promise nobody caught must not stop the app; it is logged instead.
+process.on('unhandledRejection', (e) => console.error('[unhandled]', e && e.message ? e.message : e));
 const app = express();
 app.set('trust proxy', 1);
 // Smaller pages on slow connections: text responses are compressed (the app script goes from ~530 KB to ~130 KB).
@@ -35,6 +38,10 @@ app.use((req, res, next) => {
   if (cfg.baseUrl.startsWith('https')) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   next();
 });
+// Public addresses: a limit per address, so nobody can hammer the login or the open API.
+app.use(['/auth', '/admin/login', '/mediabuyer/login', '/mb/login'], net.rateLimit(40, 60000, 'auth'));
+app.use(['/public-api', '/hooks'], net.rateLimit(240, 60000, 'pub'));
+app.use('/api', net.sameOrigin);
 app.use(express.json({ limit: '8mb' })); // room for the invoice logo / QR / signature pictures
 app.use(cookieSession({
   name: 'bd_session', secret: cfg.sessionSecret, maxAge: 30 * 864e5,
@@ -328,11 +335,9 @@ app.get(['/mediabuyer', '/mediabuyer/'], wrap(async (req, res) => {
   const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="mb">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Media buyer</title>');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
-app.get(['/mediabuyer/tasks', '/mb', '/mb/'], wrap(async (req, res) => {
-  const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
-  if (!b) return res.status(401).send('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:40px 20px;text-align:center;color:#0F172A"><h2>Media buyer dashboard</h2><p>Open the Boost Desk bot on Telegram and send <b>/dashboard</b> — it replies with your personal link.</p>');
-  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'mb.html'));
-}));
+// The old one-page media buyer dashboard (/mb) was removed: the media buyer site is /mediabuyer. Old links land on My Task.
+app.get(['/mediabuyer/tasks', '/mb', '/mb/'], (req, res) => res.redirect('/mediabuyer#mytasks'));
+
 const mbOnly = wrap(async (req, res, next) => {
   const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
   if (!b) return res.status(401).json({ error: 'Open your dashboard from the Telegram bot (/dashboard).', needsLogin: true });
@@ -487,6 +492,33 @@ app.get(['/admin', '/admin/'], wrap(async (req, res) => {
 
 // ---------- API ----------
 const api = express.Router();
+// ---- Activity log: who changed what (leaders read it in Admin › Activity). Only the action and the person's name are
+// kept — never what was typed, and nothing about a client's customers. The last 400 lines live in one settings row.
+const AUDIT = [
+  [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
+  [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
+  [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
+  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'],
+  [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
+  [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
+  [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
+  [/^(POST|PUT|PATCH|DELETE) \/admin\/teams/, 'Changed teams'], [/^(POST|PUT|PATCH|DELETE) \/admin\/users/, 'Changed a user or a role'], [/^(POST|PUT|PATCH|DELETE) \/admin\//, 'Changed an Admin setting'],
+  [/^POST \/invoices$/, 'Made an invoice'], [/^POST \/invoices\/\d+\/send$/, 'Sent an invoice'], [/^PUT \/invoice-profile$/, 'Changed invoice settings'], [/^PUT \/handoff\/prefs$/, 'Changed handoff messages'],
+];
+let auditBuf = [], auditBusy = false;
+async function auditFlush() {
+  if (auditBusy || !auditBuf.length) return; auditBusy = true; const add = auditBuf; auditBuf = [];
+  try { const cur = await db.getSetting('auditLog', []); await db.setSetting('auditLog', [...(Array.isArray(cur) ? cur : []), ...add].slice(-400)); } catch (_) { auditBuf = [...add, ...auditBuf].slice(-400); }
+  auditBusy = false;
+}
+{ const t = setInterval(auditFlush, 20000); if (t.unref) t.unref(); }
+api.use((req, res, next) => {
+  if (req.method === 'GET' || !req.user) return next();
+  const key = `${req.method} ${req.path}`, hit = AUDIT.find(([re]) => re.test(key)); if (!hit) return next();
+  const by = req.user.buyer ? req.user.buyer.name : req.user.name, role = req.user.buyer ? 'Media buyer' : '';
+  res.on('finish', () => { if (res.statusCode < 400) auditBuf.push({ at: new Date().toISOString(), by, role, what: hit[1], where: req.path.replace(/^\/clients\/(\d+).*/, 'client #$1').replace(/^\/(admin\/)?/, '').slice(0, 60), for: req.user.actingFor || '' }); });
+  next();
+});
 // Admins (CEO / COO / owner) can see and add tasks for any person: ?as=<fbId> on these routes acts on that person's clients and tasks (ticks are signed with the admin's name).
 const AS_ROUTES = /^\/(tasks\/mine|tasks\/month|clients(\/\d+\/(tasks(\/[^/]+)?|tick))?)$/;
 api.use(wrap(async (req, res, next) => {
@@ -1975,6 +2007,38 @@ api.get('/admin/people-month', adminOnly, wrap(async (req, res) => {
   for (const b of bl) { const pm = b.addedById || byName[b.addedBy] || null; people.push({ id: 'mb:' + b.id, name: b.name, kind: 'Media buyer', pm, team: pm ? teamOf[pm] || '' : '', photo: !!b.photo, ...(await one(b.id, true)) }); }
   res.json({ today, month, dayNo, daysInMonth: last, pace: Math.round(dayNo / last * 100), people });
 }));
+api.get('/admin/audit', adminOnly, wrap(async (req, res) => { await auditFlush(); const log = await db.getSetting('auditLog', []); res.json({ log: (Array.isArray(log) ? log : []).slice(-300).reverse() }); }));
+// 🔔 Nudge: a short Telegram reminder with today's progress. A PM nudges their own media buyers; leaders nudge anyone.
+// One nudge per person every 10 minutes, so nobody gets flooded.
+const nudged = new Map();
+api.post('/nudge', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Only a PM or a leader can send a reminder.' });
+  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
+  const p = String((req.body || {}).person || ''), today = sync.todayIn(); let chat = null, name = '', day = null, site = '/projectmanager#mytasks';
+  if (p.startsWith('mb:')) {
+    if (!(await ownsBuyer(req, p.slice(3)))) return res.status(403).json({ error: 'Only this media buyer\'s PM or a leader can do this.' });
+    const b = await MB().get(p.slice(3)); if (!b) return res.status(404).json({ error: 'Person not found.' });
+    chat = b.chat || null; name = b.name; day = await MENU().dayOf(b.id, 'mb', today); site = '/mediabuyer#mytasks';
+  } else {
+    if (!(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only a leader can remind a Project Manager.' });
+    const u = await db.getUser(p); if (!u) return res.status(404).json({ error: 'Person not found.' });
+    chat = (await db.getUserSetting(u.fb_id, 'tgChat', null) || {}).id || null; name = u.name; day = await MENU().dayOf(u.fb_id, (await roleOf(u.fb_id)) === 'mb' ? 'mb' : 'pm', today);
+  }
+  if (!chat) return res.status(400).json({ error: `${name} has not connected Telegram yet.` });
+  const last = nudged.get(p) || 0, wait = Math.ceil((last + 10 * 60e3 - Date.now()) / 60e3);
+  if (wait > 0) return res.status(429).json({ error: `${name} was reminded a moment ago. Try again in ${wait} minute${wait === 1 ? '' : 's'}.` });
+  const open = day.items.filter((x) => !x.done), lines = [`🔔 ${req.user.name} សូមរំលឹក`, ''];
+  if (!day.total) lines.push('ថ្ងៃនេះមិនទាន់មាន Task menu ទេ។ សូមបើក Boost Desk ហើយរៀបចំ។');
+  else {
+    lines.push(`Task ថ្ងៃនេះ៖ រួច ${day.done} / ${day.total} (${day.pct}%)`);
+    if (!day.plan && !day.result) lines.push('⚠ មិនទាន់ផ្ញើ Plan');
+    if (open.length) { lines.push('', 'នៅសល់៖'); for (const x of open.slice(0, 6)) lines.push(`☐ ${x.text}`); if (open.length > 6) lines.push(`… +${open.length - 6} ទៀត`); }
+    else if (!day.result) lines.push('Task រួចអស់ហើយ ✅ សូមផ្ញើ Result។');
+  }
+  lines.push('', `${cfg.baseUrl}${site}`);
+  try { await telegram.send(lines.join('\n'), chat); } catch (e) { return res.status(502).json({ error: 'Telegram did not take the message: ' + e.message }); }
+  nudged.set(p, Date.now()); res.json({ ok: true, name });
+}));
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)
 //   scope 'pms'  — every Project Manager;   scope 'mbs' — every media buyer (from a media buyer's list)
@@ -2587,7 +2651,11 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
     for (const r of rows) { const v = r.value || {}; if (v.address1 === invoice.DEFAULT_PROFILE.address1 && v.address2 === invoice.DEFAULT_PROFILE.address2) continue; await db.setSetting(r.key, { ...v, address1: invoice.DEFAULT_PROFILE.address1, address2: invoice.DEFAULT_PROFILE.address2 }); n++; }
     await db.setSetting(flag, { at: new Date().toISOString(), updated: n }); console.log('[invoice] address updated for', n, 'account(s)');
   })().catch((e) => console.log('[invoice] address update skipped:', e.message));
-  app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
+  const server = app.listen(cfg.port, () => console.log(`Boost Desk running on ${cfg.baseUrl} (port ${cfg.port})`));
+  // A restart (every deploy) lets the requests in flight finish first, then closes the database, at most 10 seconds.
+  let closing = false;
+  const stop = (sig) => { if (closing) return; closing = true; console.log(`[stop] ${sig}: finishing open requests`); const t = setTimeout(() => process.exit(0), 10000); if (t.unref) t.unref(); server.close(() => db.pool.end().catch(() => {}).finally(() => process.exit(0))); };
+  process.on('SIGTERM', () => stop('SIGTERM')); process.on('SIGINT', () => stop('SIGINT'));
   jobs.start({ handoff: HANDOFF_DEPS });
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {

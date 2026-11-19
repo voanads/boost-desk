@@ -3788,3 +3788,9 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
   .dside .ct-mine .ct-list{max-height:min(70vh,760px)}
 }
 .ct-mine .ct-list{max-height:min(46vh,440px)}
+/* Wide desktop (owner's layout, 19 Nov, second version): Clients today, My tasks today and the Handoff side by side in one row. */
+@media (min-width:1400px){
+  #tab-dashboard .dside{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))!important}
+  #tab-dashboard .dside .dside-r{display:contents}
+  .dside .ct-mine .ct-list{max-height:min(52vh,520px)}
+}

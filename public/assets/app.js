@@ -3116,14 +3116,23 @@
     paintCtMine();
   }
   let ctMineTab = 'on';
+  // Dashboard on a desktop (owner's layout, 19 Nov): under the numbers, Clients today on the left; on the right My tasks today
+  // and, under it, the Handoff. On a narrow screen Clients today is first under the page head and the Handoff is back on top.
+  function dashPlace() {
+    try {
+      const wide = matchMedia('(min-width: 1100px)').matches, side = document.querySelector('#tab-dashboard .dside'), head = document.querySelector('#tab-dashboard .phead'), ct = $('ctMine'), ho = $('hoCard'), onb = $('onb'); if (!side || !ct) return;
+      let right = side.querySelector('.dside-r'); if (!right) { right = document.createElement('div'); right.className = 'dside-r'; [...side.children].filter((k) => k !== ct).forEach((k) => right.appendChild(k)); side.appendChild(right); }
+      if (wide) { if (ct.parentElement !== side) side.prepend(ct); if (ho && ho.parentElement !== right) right.appendChild(ho); }
+      else { if (head && ct.previousElementSibling !== head) head.after(ct); if (ho && onb && ho.previousElementSibling !== onb) onb.after(ho); }
+      if (!dashPlace.wired) { dashPlace.wired = true; matchMedia('(min-width: 1100px)').addEventListener('change', dashPlace); }
+    } catch (_) {}
+  }
   function paintCtMine() {
     const host = $('ctMine'), every = (ctMineData && ctMineData.clients) || []; if (!every.length) { host.hidden = true; host.innerHTML = ''; return; }
     const cs = every.filter((c) => c.level !== 'idle'), idle = every.filter((c) => c.level === 'idle');
     const n = ctCount(cs), need = cs.filter((c) => c.level !== 'ok'), unchecked = cs.filter((c) => !c.checked).length, show = ctMineAll ? cs : need;
     if (ctMineTab === 'idle' && !idle.length) ctMineTab = 'on';
-    // beside the clients table on a wide screen; on a narrow one first thing under the page head
-    try { const wide = matchMedia('(min-width: 1100px)').matches, side = document.querySelector('#tab-dashboard .dside'), head = document.querySelector('#tab-dashboard .phead'); if (wide && side && host.parentElement !== side) side.prepend(host); else if (!wide && head && host.previousElementSibling !== head) head.after(host);
-      if (!paintCtMine.wired) { paintCtMine.wired = true; matchMedia('(min-width: 1100px)').addEventListener('change', () => { if (ctMineData) paintCtMine(); }); } } catch (_) {}
+    dashPlace();
     const fol = idle.filter((c) => c.follow).length, sortedIdle = idle.slice().sort((a, b) => (!!b.follow - !!a.follow) || String(b.lastBoost).localeCompare(String(a.lastBoost)));
     host.hidden = false;
     host.innerHTML = `<section class="panel ct-card ct-mine" aria-label="Clients today"><div class="ct-h"><h2>Clients today</h2><span class="spacer"></span>${cs.length ? ctPill(n) : ''}</div>
@@ -4432,6 +4441,7 @@ Notes:
   }
   function paintHandoff() {
     const host = $('hoCard'), d = hoData; if (!host || !d) return;
+    dashPlace();
     const mb = d.me.kind === 'mb';
     if (!mb && !d.hasTeam) { host.hidden = true; return; } // a PM working alone has nobody to hand over to
     host.hidden = false;

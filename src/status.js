@@ -33,7 +33,7 @@ const HOW = {
 };
 
 // A short history per client (newest first, 30 lines): who checked, who took a problem, alerts and when they were solved.
-const note = (s, kind, by, text) => { s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
+const note = (s, kind, by, text) => { const d = sync.todayIn(); if ((kind === 'checked' || kind === 'onIt') && (s.log || []).some((l) => l.kind === kind && l.by === (by || '') && sync.todayIn(undefined, new Date(l.at)) === d)) return; s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
 
 async function forOwner(user) {
   const owner = user.fb_id, today = sync.todayIn(), hour = hourNow();
@@ -154,6 +154,7 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
       if (dirty) { const now = (await db.getUserSetting(u.fb_id, KEY, null)) || {};
         for (const id of touched) { const mine = st[id] || {}, cur = now[id] || (now[id] = {}); if (mine.alert) cur.alert = mine.alert; else delete cur.alert;
           const seen = new Set((cur.log || []).map((l) => l.at + l.kind)); cur.log = [...(mine.log || []).filter((l) => !seen.has(l.at + l.kind)), ...(cur.log || [])].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30); }
+        const live = new Set((await db.listClients(u.fb_id)).map((c) => String(c.id))); for (const id of Object.keys(now)) if (!live.has(String(id))) delete now[id]; // clients that were deleted or merged away
         await db.setUserSetting(u.fb_id, KEY, now); }
     } catch (e) { log('client status failed for', u.name, e.message); }
   }

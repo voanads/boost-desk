@@ -1067,7 +1067,7 @@
   let cdStLoading = false;
   function cdStatusSection(c) {
     if (c.archived) return '';
-    if (!ctMineData && !cdStLoading) { cdStLoading = true; api('/clients-status').then((d) => { ctMineData = d; }).catch(() => {}).finally(() => { cdStLoading = false; const sec = $('cdStSec'); if (sec && ctMineData) { sec.outerHTML = cdStatusSection(c) || '<span id="cdStSec" hidden></span>'; wireCdStatus(c); } else if (sec) sec.remove(); }); }
+    if ((!ctMineData || Date.now() - ctMineAt > 120e3) && !cdStLoading) { cdStLoading = true; api('/clients-status').then((d) => { ctMineData = d; ctMineAt = Date.now(); }).catch(() => {}).finally(() => { cdStLoading = false; const sec = $('cdStSec'); if (sec && ctMineData) { sec.outerHTML = cdStatusSection(c) || '<span id="cdStSec" hidden></span>'; wireCdStatus(c); } else if (sec) sec.remove(); }); }
     const x = ctMineData && (ctMineData.clients || []).find((k) => k.id === c.id);
     if (!x) return ctMineData ? '' : '<section class="cd-st" id="cdStSec"><div class="sk"></div></section>';
     const pill = x.level === 'bad' ? '<span class="pill bad"><i></i>Problem</span>' : x.level === 'warn' ? '<span class="pill warn"><i></i>Watch</span>' : '<span class="pill ok"><i></i>Fine</span>';
@@ -1122,8 +1122,10 @@
     dlg.innerHTML = `<div class="ho-dw"><div class="ho-dh"><h2>Send this strategy to ${esc(c.name)}?</h2><button type="button" class="ghost sm" data-wkclose aria-label="Close">✕</button></div>
       <p class="hint">It goes to the client's Telegram group${c.telegram_title ? ` <b>${esc(c.telegram_title)}</b>` : ''} exactly as shown in Boost Desk. Read it first — the client will act on these numbers.${w.sent ? ` It was already sent on ${esc(new Date(w.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}.` : ''}</p>
       <label class="fld">Language<select id="wkSendLang"><option value="km" ${wkLang === 'km' ? 'selected' : ''}>ខ្មែរ</option><option value="en" ${wkLang === 'en' ? 'selected' : ''}>English</option><option value="both">ខ្មែរ + English</option></select></label>
+      ${(w.editedLangs || []).length === 1 ? `<div class="note" id="wkOneLang" hidden>You edited only the ${w.editedLangs[0] === 'en' ? 'English' : 'Khmer'} text. The ${w.editedLangs[0] === 'en' ? 'Khmer' : 'English'} text is still the AI's — check that both say the same before sending both.</div>` : ''}
       <div class="st-end"><button type="button" class="ghost" data-wkclose>Cancel</button><button type="button" class="primary" id="wkSendGo">Send to the client</button></div></div>`;
     dlg.showModal();
+    const one = $('wkOneLang'), sl = $('wkSendLang'); if (one) { const up = () => { one.hidden = sl.value !== 'both'; }; sl.onchange = up; up(); }
     $('wkSendGo').onclick = async () => { const b = $('wkSendGo'); b.disabled = true; b.textContent = 'Sending…';
       try { const r = await api(`/clients/${c.id}/strategy/send`, { method: 'POST', body: { lang: $('wkSendLang').value } }); st.d.weekly = r.weekly; dlg.close(); successBadge(`Sent to ${c.name}`); redraw(); } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send to the client'; } };
   }
@@ -3092,10 +3094,10 @@
       <div class="ct-v"><b class="num">${money(c.spend)}</b><span class="hint">${ctWho(c)}</span></div>
       ${mine ? `<div class="ct-a">${c.level === 'bad' ? `<button type="button" class="sm${c.onIt ? '' : ' primary'}" data-cton="${c.id}" aria-pressed="${!!c.onIt}">${c.onIt ? 'On it ✓' : 'I’m on it'}</button>` : ''}<button type="button" class="sm" data-ctchk="${c.id}" aria-pressed="${!!c.checked}">${c.checked ? 'Checked ✓' : 'Checked'}</button></div>` : ''}</div>`;
   // My team's clients (PM and media buyer): the ones that need attention on top of the Dashboard.
-  let ctMineAll = false, ctMineData = null;
+  let ctMineAll = false, ctMineData = null, ctMineAt = 0;
   async function loadCtMine() {
     const host = $('ctMine'); if (!host || !me) return;
-    try { ctMineData = await api('/clients-status'); } catch (_) { host.hidden = true; return; }
+    try { ctMineData = await api('/clients-status'); ctMineAt = Date.now(); } catch (_) { host.hidden = true; return; }
     paintCtMine();
   }
   function paintCtMine() {

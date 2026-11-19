@@ -2665,7 +2665,8 @@ api.get('/clients-work', wrap(async (req, res) => {
   const today = sync.todayIn(), out = {};
   for (const c of await db.listClients(req.user.fb_id)) {
     const w = (await db.getUserSetting(req.user.fb_id, `cwb:${c.id}`, null)) || {};
-    out[c.id] = { openTasks: (w.tasks || []).filter((t) => !t.done).length, ticked: Object.keys(w.ticks || {}).filter((k) => k.startsWith(today + ':')).map((k) => k.slice(11)) };
+    out[c.id] = { openTasks: (w.tasks || []).filter((t) => !t.done && (t.day || '') <= today).length, // due today or earlier; tasks planned for later days are not "left" yet
+       ticked: Object.keys(w.ticks || {}).filter((k) => k.startsWith(today + ':')).map((k) => k.slice(11)) };
   }
   res.json({ today, clients: out });
 }));

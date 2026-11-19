@@ -59,6 +59,9 @@ function statusLines(status) {
   const names = (l) => { const a = status.filter((c) => c.level === l); return a.length ? `${a.length} — ${a.slice(0, 5).map((c) => c.name + (c.reasons[0] ? ` (${c.reasons[0].text})` : '')).join(', ')}${a.length > 5 ? ` … +${a.length - 5}` : ''}` : ''; };
   const bad = names('bad'), warn = names('warn'), ok = status.filter((c) => c.level === 'ok').length, out = ['ស្ថានភាពភ្ញៀវព្រឹកនេះ (ភ្ញៀវកំពុង Boost)'];
   if (bad) out.push(`🔴 បន្ទាន់ ${bad}`); if (warn) out.push(`🟡 ត្រូវមើល ${warn}`); out.push(`🟢 ល្អ ${ok}`);
+  // boost plans that end today or within two days: ask the client whether to go on (this was a separate 9:00 message)
+  const ending = status.filter((c) => (c.reasons || []).some((r) => r.kind === 'ending') && c.plan);
+  if (ending.length) out.push(`🔔 Plan ជិតចប់ ${ending.length} — ${ending.slice(0, 6).map((c) => `${c.name} (${c.plan.left <= 0 ? 'ចប់ថ្ងៃនេះ' : `នៅ ${c.plan.left} ថ្ងៃ`} · $${Number(c.plan.budget).toFixed(2)})`).join(', ')}${ending.length > 6 ? ` … +${ending.length - 6}` : ''} · សូមសួរភ្ញៀវថាបន្តឬអត់`);
   const idle = status.filter((c) => c.level === 'idle'), fol = idle.filter((c) => c.follow); // not boosting now: kept apart, never urgent
   if (idle.length) out.push(`⚪ មិនកំពុង Boost ${idle.length}${fol.length ? ` · តាមដាន ${fol.length} — ${fol.slice(0, 4).map((c) => `${c.name} (${c.follow.text})`).join(', ')}${fol.length > 4 ? ` … +${fol.length - 4}` : ''}` : ''}`);
   return out;

@@ -178,17 +178,7 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
       }
       // Sending took time: someone may have tapped "checked" / "I'm on it" meanwhile. Put only the alert and the new
       // history lines of the clients touched here onto the row as it is now.
-      // Renewal reminder: once a day, from 9:00, one message to the PM with the boost plans that end today or within two days.
-      try {
-        const ending = clients.filter((c) => c.reasons.some((r) => r.kind === 'ending')), pc = (await db.getUserSetting(u.fb_id, 'tgChat', null) || {}).id;
-        if (ending.length && pc && hour >= RENEW_FROM && ((await db.getUserSetting(u.fb_id, 'renewLast', null)) || {}).day !== today) {
-          await db.setUserSetting(u.fb_id, 'renewLast', { day: today, n: ending.length }); // claim first: never twice a day
-          const full = Object.fromEntries((await db.listClients(u.fb_id)).map((c) => [c.id, c]));
-          const lines = ending.map((c) => { const t = plan.totals((full[c.id] || {}).plan), left = t.to ? daysBetween(today, t.to) : 0; return `• ${c.name} — ${left <= 0 ? 'ចប់ថ្ងៃនេះ' : `នៅ ${left} ថ្ងៃ`} (${t.to || ''}) · Plan ${money(t.total)}`; });
-          await telegram.sendButtons([`🔔 Boost plan ជិតចប់ (${ending.length})`, '', ...lines.slice(0, 15), ending.length > 15 ? `… +${ending.length - 15} ទៀត` : '', '', 'សូមទាក់ទងភ្ញៀវសួរថាបន្តឬអត់ រួចធ្វើ Plan ថ្មី ឬបន្ថែម post។'].filter((x, i, a) => x !== '' || a[i - 1] !== '').join('\n'), String(pc), [[{ text: '👥 បើក Clients', url: `${cfg.baseUrl}/projectmanager#clients` }]]);
-          sent++;
-        }
-      } catch (e) { log('renewal reminder failed for', u.name, e.message); }
+      // (the renewal reminder is part of the PM's 8:00 message since 20 Nov — see handoff.js; one message fewer)
       if (dirty) { const now = (await db.getUserSetting(u.fb_id, KEY, null)) || {};
         for (const id of touched) { const mine = st[id] || {}, cur = now[id] || (now[id] = {}); if (mine.alert) cur.alert = mine.alert; else delete cur.alert;
           const seen = new Set((cur.log || []).map((l) => l.at + l.kind)); cur.log = [...(mine.log || []).filter((l) => !seen.has(l.at + l.kind)), ...(cur.log || [])].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30); }

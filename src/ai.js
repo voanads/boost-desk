@@ -335,6 +335,10 @@ async function weeklyStrategy(owner, clientId, { force = false } = {}) {
 async function saveWeeklyText(owner, clientId, lang, text) {
   const wb = await workbook(owner, clientId); if (!wb.weekly) throw Object.assign(new Error('There is no weekly strategy yet.'), { status: 400 });
   wb.weekly[lang === 'en' ? 'en' : 'km'] = String(text || '').trim().slice(0, 4000); wb.weekly.edited = true;
+  // the actions follow the PM's wording: the bullets under "This week" (the last heading)
+  const k = lang === 'en' ? 'en' : 'km', last = wb.weekly[k].split(/^##\s.*$/m).pop() || '';
+  const acts = last.split('\n').map((l) => (l.match(/^\s*[-*•]\s*(?:\[\s?\]\s*)?(.+)$/) || [])[1]).filter(Boolean).map((t) => t.trim().slice(0, 200)).slice(0, 5);
+  if (acts.length) { wb.weekly[k === 'en' ? 'actionsEn' : 'actionsKm'] = acts; delete wb.weekly.tasksAt; }
   await saveWorkbook(owner, clientId, wb); return wb.weekly;
 }
 // Plain Telegram text for the client's group.

@@ -127,7 +127,8 @@ async function tick() {
         }
         const tries = last.day === today && last.held ? (last.tries || 1) + 1 : 1;
         await db.setUserSetting(user.fb_id, 'autoReportLast', { day: today, running: true, at: new Date().toISOString() }); // claim the day first, so it can never send twice
-        const r = await sendClientReports(user, today, { hold: true });
+        let r; try { r = await sendClientReports(user, today, { hold: true }); }
+        catch (e) { r = { day: today, at: new Date().toISOString(), sent: [], failed: [], already: [], noGroup: [], differs: [], noSpend: 0, warn: e.message, held: true }; } // never leave the day claimed as "running"
         if (r.held) { r.tries = tries; r.final = tries >= 3; }
         await db.setUserSetting(user.fb_id, 'autoReportLast', r);
         console.log(new Date().toISOString(), `[auto report] ${user.name}: ${r.held ? `held (try ${tries}) — ${r.warn}` : `sent ${r.sent.length}, failed ${r.failed.length}, no group ${r.noGroup.length}, differ ${r.differs.length}`}`);

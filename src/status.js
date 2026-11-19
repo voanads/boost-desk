@@ -17,7 +17,7 @@ const telegram = require('./telegram');
 const buyers = require('./buyers');
 
 const KEY = 'cstatus';
-const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14; // hours, workspace time
+const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14, FRESH_MIN = 120; // hours, workspace time
 // Only problems that stop the client's boost are pushed to Telegram. Money problems (invoice overdue / unpaid) stay red on
 // the page for the PM but are not pushed: on the first day live they produced a burst of messages.
 const PUSH = new Set(['acct-off', 'acct-pay', 'noboost']);
@@ -50,6 +50,9 @@ async function forOwner(user) {
   }
   // 2. today's spend (all, and post boosts)
   const spend = {}; try { const d = await sync.dashboard(owner, today, today); for (const x of d.clients || []) spend[x.id] = { all: x.spend || 0, post: x.postSpend || 0 }; } catch (_) {}
+  // "No spend today" is only believed when today's numbers are fresh: a sync from Meta in the last two hours. Without that
+  // (login expired, Meta busy, auto sync off) a whole team would turn red and be alerted for nothing.
+  let fresh = false; try { const ats = [await db.getUserSetting(owner, 'autoSyncLast', null), await db.getUserSetting(owner, 'lastSyncCheck', null)].map((x) => Date.parse((x && x.at) || 0) || 0); fresh = Date.now() - Math.max(...ats) < FRESH_MIN * 60e3; } catch (_) {}
   // 3. the ad accounts named in the client's boost plan
   const acct = {}; try { for (const a of await db.listAccounts(owner)) acct[String(a.id).replace(/^act_/, '')] = a; } catch (_) {}
   for (const c of clients) {
@@ -62,7 +65,7 @@ async function forOwner(user) {
     const tt = plan.totals(c.plan);
     if (tt.budget && tt.from && tt.from <= today && tt.to && tt.to >= today) {
       const running = lines.some((l) => l.start && l.start <= today && daysBetween(l.start, today) < l.days);
-      if (running && hour >= NO_BOOST_FROM && !((spend[c.id] || {}).post > 0)) add(c.id, 'bad', 'noboost', 'Plan ថា Boost ថ្ងៃនេះ ប៉ុន្តែគ្មានចំណាយ', `Plan ${money(tt.budget)} · ថ្ងៃនេះ ${money(0)}`, 'plan');
+      if (running && fresh && hour >= NO_BOOST_FROM && !((spend[c.id] || {}).post > 0)) add(c.id, 'bad', 'noboost', 'Plan ថា Boost ថ្ងៃនេះ ប៉ុន្តែគ្មានចំណាយ', `Plan ${money(tt.budget)} · ថ្ងៃនេះ ${money(0)}`, 'plan');
       const left = daysBetween(today, tt.to);
       if (left <= 2) add(c.id, 'warn', 'ending', left === 0 ? 'Boost plan ចប់ថ្ងៃនេះ' : `Boost plan នឹងចប់ក្នុង ${left} ថ្ងៃ`, 'សួរភ្ញៀវថាបន្តឬអត់', 'plan');
     }
@@ -101,38 +104,46 @@ function alertText(c, teamName) {
   return lines.join('\n');
 }
 // One pass over every workspace. leaders(): chat ids of the leaders, for the 30-minute escalation.
-async function tick({ leaders = async () => [], log = () => {} } = {}) {
+let ticking = false;
+async function tick(opts = {}) { if (ticking) return 0; ticking = true; try { return await tickOnce(opts); } finally { ticking = false; } }
+async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
   if (!telegram.hasBot()) return 0;
   const hour = hourNow(); if (hour < QUIET[0] || hour >= QUIET[1]) return 0;
   let sent = 0;
   for (const u of await db.allUsers()) {
     try {
       const { today, clients } = await forOwner(u); if (!clients.length) continue;
-      const st = (await db.getUserSetting(u.fb_id, KEY, null)) || {}; let dirty = false;
+      const st = (await db.getUserSetting(u.fb_id, KEY, null)) || {}; let dirty = false; const touched = new Set();
       const chats = await teamChats(u.fb_id);
       for (const c of clients) {
-        const s = st[c.id] || (st[c.id] = {}), push = c.reasons.filter((x) => x.level === 'bad' && PUSH.has(x.kind)), key = push.length ? today + ':' + push.map((x) => x.kind).sort().join(',') : '';
+        const s = st[c.id] || (st[c.id] = {}), had = sent, push = c.reasons.filter((x) => x.level === 'bad' && PUSH.has(x.kind)), key = push.length ? today + ':' + push.map((x) => x.kind).sort().join(',') : '';
         if (s.alert && s.alert.key !== key && s.alert.key.startsWith(today) && !key) { // the problem is gone
           const wasPushed = s.alert.key.slice(today.length + 1).split(',').some((k) => PUSH.has(k)); // an alert about money only is dropped quietly
           if (wasPushed) for (const t of chats) telegram.send(`✅ ${c.name} — ដោះស្រាយហើយ`, t.chat).catch(() => {});
           if (wasPushed) note(s, 'solved');
-          delete s.alert; dirty = true; continue;
+          delete s.alert; dirty = true; touched.add(c.id); continue;
         }
-        if (s.alert && !s.alert.key.startsWith(today)) { delete s.alert; dirty = true; }
+        if (s.alert && !s.alert.key.startsWith(today)) { delete s.alert; dirty = true; touched.add(c.id); }
         if (!key) continue;
         if (!s.alert || s.alert.key !== key) {
           if (!chats.length) continue; // nobody in this team has Telegram: the page still shows it
           const text = alertText(c, u.name);
           for (const t of chats) { try { await telegram.sendButtons(text, t.chat, [[{ text: 'ខ្ញុំកំពុងមើល', data: `cs:on:${c.id}` }, { text: 'បើកភ្ញៀវ', url: t.link || `${cfg.baseUrl}/projectmanager#clients` }]]); sent++; } catch (e) { log('client alert failed:', c.name, e.message); } }
-          s.alert = { key, at: new Date().toISOString(), escalated: false }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
+          if (sent === had) continue; // Telegram took none of them: try again on the next pass
+          touched.add(c.id); s.alert = { key, at: new Date().toISOString(), escalated: false }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
         }
         if (!s.alert.escalated && !c.onIt && Date.now() - Date.parse(s.alert.at) > ESCALATE_MIN * 60e3) {
           const text = alertText(c, u.name) + `\n\n⏱ ${ESCALATE_MIN} នាទីហើយ មិនទាន់មានអ្នកមើល។`;
           for (const chat of await leaders()) { if (chats.some((t) => t.chat === chat)) continue; telegram.send(text, chat).catch(() => {}); }
-          s.alert.escalated = true; note(s, 'escalated'); dirty = true;
+          s.alert.escalated = true; note(s, 'escalated'); dirty = true; touched.add(c.id);
         }
       }
-      if (dirty) await db.setUserSetting(u.fb_id, KEY, st);
+      // Sending took time: someone may have tapped "checked" / "I'm on it" meanwhile. Put only the alert and the new
+      // history lines of the clients touched here onto the row as it is now.
+      if (dirty) { const now = (await db.getUserSetting(u.fb_id, KEY, null)) || {};
+        for (const id of touched) { const mine = st[id] || {}, cur = now[id] || (now[id] = {}); if (mine.alert) cur.alert = mine.alert; else delete cur.alert;
+          const seen = new Set((cur.log || []).map((l) => l.at + l.kind)); cur.log = [...(mine.log || []).filter((l) => !seen.has(l.at + l.kind)), ...(cur.log || [])].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 30); }
+        await db.setUserSetting(u.fb_id, KEY, now); }
     } catch (e) { log('client status failed for', u.name, e.message); }
   }
   return sent;

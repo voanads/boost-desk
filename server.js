@@ -24,6 +24,10 @@ const telegram = require('./src/telegram');
 const profit = require('./src/profit');
 const { encrypt } = require('./src/crypto');
 
+// 19 Nov 2026 — KPIs and the daily task menu moved to GenZ KPI. Boost Desk follows clients: their status, the MB <-> PM
+// handover, reports to clients and AI advice per client. The My Task page, KPI screens and the Telegram messages about
+// daily tasks are switched off here (data and code are kept; KPI_TASKS=on in the environment brings them back).
+const TASKS_OFF = process.env.KPI_TASKS !== 'on';
 // A promise nobody caught must not stop the app; it is logged instead.
 process.on('unhandledRejection', (e) => console.error('[unhandled]', e && e.message ? e.message : e));
 const app = express();
@@ -534,6 +538,7 @@ api.get('/me', wrap(async (req, res) => {
   res.json({
     id: req.user.fb_id, name: req.user.name, tokenExpires: req.user.token_expires,
     isOwner: await isFull(req), isAppOwner: (await db.ownerId()) === req.user.fb_id, fullAdmin: await isFull(req),
+    tasksOff: TASKS_OFF,
     canAdmin: !req.user.buyer && await canSeeAdmin(req.user.fb_id), role: req.user.buyer ? 'buyer' : await roleOf(req.user.fb_id), buyer: req.user.buyer || null,
     fbWarn: await (async () => { if (req.user.buyer || req.user.google) return null; const now = Date.now(), exp = req.user.token_expires ? Date.parse(req.user.token_expires) : 0, days = exp ? Math.floor((exp - now) / 864e5) : null;
       const bad = (await sync.extraLogins(req.user.fb_id)).filter((e) => e.error || (e.expires && Date.parse(e.expires) < now)).map((e) => e.name);
@@ -2037,6 +2042,7 @@ async function nudgeOne(fromName, p) {
   return { ok: true, name };
 }
 api.post('/nudge', wrap(async (req, res) => {
+  if (TASKS_OFF) return res.status(410).json({ error: 'Daily task reminders were moved to GenZ KPI.' });
   if (req.user.buyer) return res.status(403).json({ error: 'Only a PM or a leader can send a reminder.' });
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
   const p = String((req.body || {}).person || '');
@@ -2050,6 +2056,7 @@ api.post('/nudge', wrap(async (req, res) => {
 }));
 // Leaders: remind everyone whose working day has started and who has not sent today's plan. ?dry=1 only counts.
 api.post('/nudge/no-plan', adminOnly, wrap(async (req, res) => {
+  if (TASKS_OFF) return res.status(410).json({ error: 'Daily task reminders were moved to GenZ KPI.' });
   const today = sync.todayIn(), h = hourNow(), owner = await db.ownerId(), roles = await roleMap(), av = await adminViewers(), list = [];
   for (const u of await db.allUsers()) { const r = ROLES.includes(roles[u.fb_id]) ? roles[u.fb_id] : av.has(u.fb_id) ? 'coo' : 'pm'; if (u.fb_id === owner || LEAD.has(r)) continue; list.push({ p: u.fb_id, id: u.fb_id, role: r === 'mb' ? 'mb' : 'pm', name: u.name }); }
   for (const b of await MB().all()) list.push({ p: 'mb:' + b.id, id: b.id, role: 'mb', name: b.name });
@@ -2356,7 +2363,7 @@ api.post('/menu/reset', wrap(async (req, res) => {
 }));
 // Plan / result alerts go to the team Telegram group (TELEGRAM_CHAT_ID); a media buyer without a team group gets it in their own chat.
 async function menuAlert(req, who, d, kind) {
-  if (!telegram.hasBot()) return;
+  if (TASKS_OFF || !telegram.hasBot()) return;
   const roleName = who.role === 'mb' ? 'Media buyer' : 'Project Manager', when = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: cfg.tz });
   const dayLbl = new Date(d.day + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   let text;

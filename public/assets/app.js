@@ -1220,7 +1220,7 @@
   // ---- post boost plan: posts ($/day × days), tax, total to pay — sent to the client before boosting ----
   const planOpen = {}; // client id → 'edit' | 'send'
   const planProg = {}; // client id → progress from the server (post spend since the plan starts)
-  const planSend = { lang: 'en', to: 'client', topic: '', text: '', err: '' };
+  const planSend = { lang: 'en', to: 'client', topic: '', text: '', err: '', only: [] };
   let planDraft = null; // lines being edited
   const hasPostType = (c) => c.type === 'post' || c.type === 'both';
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -1291,7 +1291,8 @@
     if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
     const t = planTotals(c.plan), [st, cls] = planStatus(c), p = planProg[c.id];
     if (open === 'send' && planSend.to === 'client' && !c.telegram) planSend.to = 'copy';
-    const send = open === 'send' ? `<div class="bp-send"><pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
+    const pickPosts = lines.length > 1 ? `<fieldset class="bp-pick"><legend>Posts to send</legend>${lines.map((l, i) => `<label><input type="checkbox" data-bponly="${i}" ${planSend.only.includes(i) ? 'checked' : ''}> <span>${esc(l.post || 'Post ' + (i + 1))} · ${money((Number(l.daily) || 0) * (Number(l.days) || 0))}</span>${l.sent ? `<span class="hint">sent ${esc(new Date(l.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</span>` : '<span class="pill warn">not sent yet</span>'}</label>`).join('')}<span class="hint">The message and the total cover only the posts you tick.</span></fieldset>` : '';
+    const send = open === 'send' ? `<div class="bp-send">${pickPosts}<pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
         <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
           ${(() => { const n = (c.plan.lines || []).filter((l) => l.img).length; return n ? `<span class="hint">📷 ${n} picture${n === 1 ? '' : 's'} — each post is sent as its picture with its line under it, then the total.</span>` : ''; })()}
           <span class="hint">Send to</span>
@@ -1314,7 +1315,8 @@
   function redrawPlan(c) { const sec = document.querySelector('#cDetail .bplan'); if (!sec) return; sec.outerHTML = planStrip(c); bindPlan(c); }
   async function loadPlanMsg(c) {
     planSend.text = ''; planSend.err = '';
-    try { planSend.text = (await api(`/clients/${c.id}/boost-plan/message?lang=${planSend.lang}`)).text; } catch (e) { planSend.err = e.message; }
+    const n = ((c.plan && c.plan.lines) || []).length, part = planSend.only.length && planSend.only.length < n;
+    try { planSend.text = (await api(`/clients/${c.id}/boost-plan/message?lang=${planSend.lang}${part ? '&only=' + planSend.only.join(',') : ''}`)).text; } catch (e) { planSend.err = e.message; }
     const el = $('bpMsg'); if (el && cSel === c.id) el.textContent = planSend.err || planSend.text;
   }
   async function loadPlanProg(c) {
@@ -1351,7 +1353,9 @@
       if (k === 'close') { planOpen[c.id] = null; planDraft = null; redrawPlan(c); return; }
       if (k === 'send') {
         planOpen[c.id] = planOpen[c.id] === 'send' ? null : 'send';
-        if (planOpen[c.id]) { planSend.lang = (c.plan && c.plan.lang) || planSend.lang; planSend.to = c.telegram ? 'client' : 'copy'; redrawPlan(c); loadPlanMsg(c); } else redrawPlan(c);
+        if (planOpen[c.id]) { planSend.lang = (c.plan && c.plan.lang) || planSend.lang; planSend.to = c.telegram ? 'client' : 'copy';
+          const ls = (c.plan && c.plan.lines) || [], fresh = ls.map((l, i) => (l.sent ? -1 : i)).filter((i) => i >= 0); planSend.only = fresh.length && fresh.length < ls.length ? fresh : ls.map((_, i) => i); // the posts the client has not been sent yet are ticked
+          redrawPlan(c); loadPlanMsg(c); } else redrawPlan(c);
       }
     });
     if ($('bpForm')) {
@@ -1405,6 +1409,7 @@
         try { await savePlan(c, { lines, tax: !!planDraft.tax, ...(planDraft.isNew ? { sentAt: null } : {}) }); successBadge('Boost plan saved — tap Send plan'); } catch (e) { toast(e.message); }
       };
     }
+    sec.querySelectorAll('[data-bponly]').forEach((b) => b.onchange = () => { planSend.only = [...sec.querySelectorAll('[data-bponly]:checked')].map((x) => Number(x.dataset.bponly)); const el = $('bpMsg'); if (!planSend.only.length) { if (el) el.textContent = 'Tick at least one post to send.'; return; } loadPlanMsg(c); });
     sec.querySelectorAll('[data-bpl]').forEach((b) => b.onclick = () => { planSend.lang = b.dataset.bpl; sec.querySelectorAll('[data-bpl]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { lang: planSend.lang } }).then((u) => { clients = clients.map((x) => x.id === u.id ? u : x); }).catch(() => {}); loadPlanMsg(c); });
     sec.querySelectorAll('input[name="bpTo"]').forEach((r) => r.onchange = () => { planSend.to = r.value; $('bpGo').textContent = r.value === 'copy' ? 'Copy text' : 'Send now'; });
     if ($('bpTopic')) $('bpTopic').onchange = () => { planSend.topic = $('bpTopic').value; const r = sec.querySelector('input[name="bpTo"][value="client"]'); if (r) { r.checked = true; planSend.to = 'client'; $('bpGo').textContent = 'Send now'; } };
@@ -1414,8 +1419,10 @@
       b.disabled = true; b.textContent = 'Sending…';
       try {
         const tp = $('bpTopic'); planSend.topic = tp ? tp.value : '';
-        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '' } });
-        if (planSend.to === 'client') { const now = new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
+        if (!planSend.only.length) { b.disabled = false; b.textContent = 'Send now'; return toast('Tick at least one post to send.'); }
+        const only = planSend.only.slice();
+        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '', only } });
+        if (planSend.to === 'client') { const now = new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now, lines: x.plan.lines.map((l, i) => (only.includes(i) ? { ...l, sent: now } : l)) } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
         planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : 'Plan sent to ' + c.name);
       } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send now'; }
     };

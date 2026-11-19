@@ -29,7 +29,10 @@ function clean(b, cur = {}) {
     // the ad account this post is boosted from (optional) — for the team, never shown to the client
     account: /^(act_)?\d{1,20}$/.test(String(l.account || '')) ? String(l.account) : '',
     accountName: String(l.accountName || '').trim().slice(0, 120),
+    sent: /^\d{4}-\d{2}-\d{2}T/.test(String(l.sent || '')) ? String(l.sent).slice(0, 24) : '', // when this post was sent to the client
   })).filter((l) => l.daily > 0);
+  // Editing the plan keeps "sent to the client" on the posts that did not change (the form does not carry it).
+  if (Array.isArray(b.lines) && b.sentAt !== null) { const key = (l) => [l.post, l.link, l.daily, l.days, l.start].join('|'), was = new Map(((cur.lines || []).filter((l) => l.sent)).map((l) => [key(l), l.sent])); for (const l of p.lines) if (!l.sent && was.has(key(l))) l.sent = was.get(key(l)); }
   if (b.tax != null) p.tax = !!b.tax;
   if (b.hidden != null) p.hidden = !!b.hidden;
   if (b.lang != null) p.lang = b.lang === 'km' ? 'km' : 'en';
@@ -83,7 +86,10 @@ function message(c, plan, lang = 'en', team = false) {
 
 // to: 'client' (their group) or 'team' (the team group).
 // topic: a destination "<group>:<thread>" inside the client's group (one of its topics) — optional.
-async function send(owner, c, { to = 'client', lang, topic = '' } = {}) {
+// only: indexes of the lines to send (the posts just added, for example); without it the whole plan goes.
+const subset = (plan, only) => { const all = (plan && plan.lines) || [], ix = Array.isArray(only) ? [...new Set(only.map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n < all.length).sort((a, b) => a - b) : null; return ix && ix.length && ix.length < all.length ? { plan: { ...plan, lines: ix.map((n) => all[n]) }, ix } : { plan, ix: all.map((_, n) => n) }; };
+async function send(owner, c, { to = 'client', lang, topic = '', only = null } = {}) {
+  const full = c.plan, sub = subset(full, only); c = { ...c, plan: sub.plan };
   if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
   let chat = to === 'team' ? cfg.telegramChatId : c.telegram;
   if (to === 'client' && topic) {
@@ -112,8 +118,9 @@ async function send(owner, c, { to = 'client', lang, topic = '' } = {}) {
       : [...rest, rest.length ? '' : null, t.rate ? `Ad budget: ${money(t.budget)}` : null, t.rate ? `Tax ${t.rate}%: ${money(t.tax)}` : null, `💰 Total to pay: ${money(t.total)}`, '', 'Please pay first so we can start boosting 🙏'];
     await telegram.send(tail.filter((x) => x !== null).join('\n'), chat);
   }
-  if (to === 'client') await db.updateClient(owner, c.id, { plan: { ...c.plan, sentAt: new Date().toISOString() } });
+  if (to === 'client') { const now = new Date().toISOString(), sentIx = new Set(sub.ix); // remember which posts the client was sent
+    await db.updateClient(owner, c.id, { plan: { ...full, lines: full.lines.map((l, n) => (sentIx.has(n) ? { ...l, sent: now } : l)), sentAt: now } }); }
   return { ok: true };
 }
 
-module.exports = { clean, totals, progress, message, send };
+module.exports = { clean, totals, progress, message, send, subset };

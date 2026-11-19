@@ -574,7 +574,9 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
   const head = `📊 ${c.name}${scope && scope.page ? ' · ' + scope.page : ''} — ${kind === 'post' ? 'Boost post report' : kind === 'live' ? 'Live report' : 'Boost report'}`;
   if (from === to) {
     const e = (rows[0] || {}).data || {};
-    lines.push(head, `🗓 ${niceDay(from)}`, '');
+    // a report for today is a snapshot: say the time, because the day's boosts may still be running
+    const asOf = from === todayIn() ? ` · as of ${new Intl.DateTimeFormat('en-GB', { timeZone: cfg.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}` : '';
+    lines.push(head, `🗓 ${niceDay(from)}${asOf}`, '');
     let total = 0;
     const pick = parts && parts.length ? new Set(parts) : null;
     if (L) {
@@ -770,4 +772,4 @@ async function unmatchedSpend(owner, from, to) {
   return { spend: round2(spend), pages: Object.values(m).map((x) => ({ page: x.page, pageId: x.pageId, spend: round2(x.spend), camps: Object.entries(x.camps).map(([k, v]) => [String(k), round2(v)]) })).sort((a, b) => b.spend - a.spend) };
 }
 
-module.exports = { extraLogins, tokenPicker, freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { scopeEntries, extraLogins, tokenPicker, freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

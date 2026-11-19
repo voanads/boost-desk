@@ -3774,11 +3774,17 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .ct-mine .ct-b{flex-wrap:wrap}
 .ct-idle-list .ct-irow{grid-template-columns:1fr;gap:6px;padding:12px 16px;border-top:1px solid var(--line)}.ct-idle-list .ct-chip{justify-self:start}.ct-idle-list .ct-irow .hint{white-space:normal}
 
-/* Dashboard: on a desktop the side panels (Clients today, My tasks today) sit in a row above the clients table at every
-   width (owner, 19 Nov), so the table always has the full width. */
+/* Dashboard on a desktop (owner's layout, 19 Nov): under the numbers, Clients today on the left; on the right My tasks
+   today and, under it, the Handoff. The clients table follows at full width. */
+.dside-r{display:flex;flex-direction:column;gap:var(--s-4);min-width:0}
+.dside:not(:has(.panel:not([hidden]),.ho:not([hidden]))){display:none}
 @media (min-width:1100px){
   #tab-dashboard .dgrid{grid-template-columns:minmax(0,1fr)!important}
-  #tab-dashboard .dside{position:static!important;order:-1!important;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start}
-  #tab-dashboard .dside:not(:has(.panel:not([hidden]))){display:none}
+  #tab-dashboard .dside{position:static!important;order:-1!important;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}
+  #tab-dashboard .dside:has(#ctMine[hidden]),#tab-dashboard .dside:not(:has(.dside-r .panel:not([hidden]),.dside-r .ho:not([hidden]))){grid-template-columns:minmax(0,1fr)}
+  #tab-dashboard .dside:not(:has(.panel:not([hidden]),.ho:not([hidden]))){display:none}
+  .dside .ho{margin:0;padding:16px}.dside .ho-grid{grid-template-columns:minmax(0,1fr);gap:14px}.dside .ho-me{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:14px}
+  .dside .ho-top h2{font-size:var(--fs-md,1.05rem)}.dside .ho-tg{margin-left:0}
+  .dside .ct-mine .ct-list{max-height:min(70vh,760px)}
 }
 .ct-mine .ct-list{max-height:min(46vh,440px)}

@@ -3736,3 +3736,7 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .cd-st-log{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:var(--fs-sm)}.cd-st-log summary{cursor:pointer;color:var(--muted);font-weight:600;min-height:32px;display:flex;align-items:center}
 .cd-st-l{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;padding:4px 0}
 @media (max-width:600px){.cd-st-h .spacer{display:none}.cd-st-why{grid-template-columns:10px minmax(0,1fr)}.cd-st-why .linkbtn{grid-column:2;justify-self:start}.cd-st-l{grid-template-columns:1fr;gap:0}}
+
+/* Boost plan: past plans */
+.bp-past{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.bp-past summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:var(--fs-sm);min-height:32px;display:flex;align-items:center}
+.bp-pp{padding:8px 0;border-top:1px dashed var(--line)}.bp-pp-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.bp-pp-l{padding-left:2px}

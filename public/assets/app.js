@@ -1276,11 +1276,18 @@
       const k = Math.min(1, 1280 / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k);
       cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); ok(cv.toDataURL('image/jpeg', 0.85)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
   }
+  // Plans made before the current one: kept when a new plan is made or the plan is deleted.
+  function planPast(c) {
+    const past = (c.plan && c.plan.past) || []; if (!past.length) return '';
+    const span = (pl) => { const st = pl.lines.map((l) => l.start).filter(Boolean).sort(), en = pl.lines.filter((l) => l.start).map((l) => addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1)).sort(); return st.length ? `${shortDay(st[0])} – ${shortDay(en[en.length - 1])}` : 'no dates'; };
+    return `<details class="bp-past"><summary>Past plans (${past.length})</summary>${past.map((pl, i) => `<div class="bp-pp"><div class="bp-pp-h"><b>${esc(span(pl))}</b><span class="hint">${money(planTotals(pl).total)} · ${pl.lines.length} post${pl.lines.length === 1 ? '' : 's'}${pl.by ? ' · kept by ' + esc(pl.by) : ''}</span><span class="spacer"></span><button type="button" class="ghost sm" data-bpback="${i}">Bring back</button><button type="button" class="ghost sm bp-rm" data-bpforget="${i}" aria-label="Remove this past plan">✕</button></div>
+      ${pl.lines.map((l, k) => `<div class="hint bp-pp-l">${esc(l.post || 'Post ' + (k + 1))} — ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</div>`).join('')}</div>`).join('')}</details>`;
+  }
   function planStrip(c) {
     if (!hasPostType(c)) return '';
     const open = planOpen[c.id], lines = (c.plan && c.plan.lines) || [];
     if (c.plan && c.plan.hidden && open !== 'edit') return `<section class="bplan bp-hidden"><div class="bp-top"><b>Post boost plan hidden</b><span class="hint">${lines.length ? money(planTotals(c.plan).total) + ' · ' + lines.length + ' post' + (lines.length === 1 ? '' : 's') : 'No plan yet'}</span><button type="button" class="sm" data-bp="show">Show plan</button></div></section>`;
-    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="sm primary" data-bp="new">+ New plan</button></div></section>`;
+    if (!lines.length && open !== 'edit') return `<section class="bplan none"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">Plan the posts to boost and send the client the total to pay before you start.</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="sm primary" data-bp="new">+ New plan</button></div>${planPast(c)}</section>`;
     if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>📣 Post boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
     const t = planTotals(c.plan), [st, cls] = planStatus(c), p = planProg[c.id];
     if (open === 'send' && planSend.to === 'client' && !c.telegram) planSend.to = 'copy';
@@ -1302,7 +1309,7 @@
         <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="ghost sm bp-rm" data-bp="clear" title="Delete this plan">Delete</button><button type="button" class="primary sm" data-bp="send">📤 Send plan</button></div>
       <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}${(l.extra || []).filter((x) => x.img).slice(0, 3).map((x) => `<img class="bp-th bp-th2" src="/api/post-img/${esc(x.img)}" alt="">`).join('')}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · ' + esc(shortDay(l.start)) + ' – ' + esc(shortDay(addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1))) : ''}${l.account ? ` · <span class="bp-ac" title="Ad account">${esc(l.accountName || l.account)}</span>` : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
       <div class="bp-tot"><span>Ad budget <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>Tax ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">Total to pay <b class="num">${money(t.total)}</b></span></div>
-      ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>Post spend since ${esc(shortDay(p.from))}: <b>${money(p.spent)}</b> of <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>Ends ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}</section>`;
+      ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>Post spend since ${esc(shortDay(p.from))}: <b>${money(p.spent)}</b> of <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>Ends ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}${planPast(c)}</section>`;
   }
   function redrawPlan(c) { const sec = document.querySelector('#cDetail .bplan'); if (!sec) return; sec.outerHTML = planStrip(c); bindPlan(c); }
   async function loadPlanMsg(c) {
@@ -1325,11 +1332,13 @@
   }
   function bindPlan(c) {
     const sec = document.querySelector('#cDetail .bplan'); if (!sec) return;
+    sec.querySelectorAll('[data-bpback]').forEach((b) => b.onclick = async () => { const has = ((c.plan && c.plan.lines) || []).length; if (has && !confirm('Bring this plan back? The current plan moves to Past plans.')) return; try { await savePlan(c, { restore: Number(b.dataset.bpback) }); toast('Plan brought back'); } catch (e) { toast(e.message); } });
+    sec.querySelectorAll('[data-bpforget]').forEach((b) => b.onclick = async () => { if (!confirm('Remove this past plan for good?')) return; try { await savePlan(c, { forget: Number(b.dataset.bpforget) }); toast('Past plan removed'); } catch (e) { toast(e.message); } });
     const lastAcct = () => { const l = (planDraft || []).slice().reverse().find((x) => x.account); if (l) return l.account; try { const v = localStorage.getItem('bpAcct:' + c.id) || ''; return accounts.some((a) => a.id === v) ? v : ''; } catch (_) { return ''; } };
     const blank = () => ({ post: '', link: '', img: '', daily: '', days: '', start: '', account: lastAcct() });
     sec.querySelectorAll('[data-bp]').forEach((b) => b.onclick = async () => {
       const k = b.dataset.bp;
-      if (k === 'clear') { if (!confirm('Delete this boost plan?')) return; try { await savePlan(c, { lines: [], sentAt: null }); toast('Plan deleted'); } catch (e) { toast(e.message); } return; }
+      if (k === 'clear') { if (!confirm('Remove this boost plan? It is kept under Past plans.')) return; try { await savePlan(c, { lines: [], sentAt: null }); toast('Plan moved to Past plans'); } catch (e) { toast(e.message); } return; }
       if (k === 'hide' || k === 'show') { try { await savePlan(c, { hidden: k === 'hide' }); toast(k === 'hide' ? 'Plan hidden — Show plan brings it back' : 'Plan shown'); } catch (e) { toast(e.message); } return; }
       if (k === 'addline') { readDraft(); planDraft.push(blank()); redrawPlan(c); const rows = document.querySelectorAll('#bpForm .bp-row[data-i] input[data-f="post"]'); if (rows.length) rows[rows.length - 1].focus(); return; }
       if (k === 'new' || k === 'edit') {

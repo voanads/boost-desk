@@ -53,10 +53,19 @@ const asks = async () => (await db.getSetting('handoffAsks', {})) || {};
 async function setAsk(chat, who) { const a = await asks(), now = Date.now(); for (const k of Object.keys(a)) if (a[k].until < now) delete a[k]; a[String(chat)] = { ...who, until: now + ASK_MS }; await db.setSetting('handoffAsks', a); }
 
 // ---------- the three messages (text only — also used by the preview in Boost Desk) ----------
-function briefText({ buyer, pmName, day, y, notes, tasks }) {
+// The clients to look at first today, from the client status (red, amber, green).
+function statusLines(status) {
+  if (!status || !status.length) return [];
+  const names = (l) => { const a = status.filter((c) => c.level === l); return a.length ? `${a.length} — ${a.slice(0, 5).map((c) => c.name + (c.reasons[0] ? ` (${c.reasons[0].text})` : '')).join(', ')}${a.length > 5 ? ` … +${a.length - 5}` : ''}` : ''; };
+  const bad = names('bad'), warn = names('warn'), ok = status.filter((c) => c.level === 'ok').length, out = ['ស្ថានភាពភ្ញៀវព្រឹកនេះ'];
+  if (bad) out.push(`🔴 មានបញ្ហា ${bad}`); if (warn) out.push(`🟡 ត្រូវមើល ${warn}`); out.push(`🟢 ល្អ ${ok}`);
+  return out;
+}
+function briefText({ buyer, pmName, day, y, notes, tasks, status }) {
   const lines = [`🌅 អរុណសួស្ដី ${first(buyer.name)} — ${niceDay(day)}`, ''];
   lines.push(`ម្សិលមិញ · ${money(y.spend)}${y.orders ? ` · ${y.orders} orders${y.cpo != null ? ` · ${money(y.cpo)}/order` : ''}` : ''} · ភ្ញៀវមានចំណាយ ${y.withSpend}`);
   if (y.unsent) lines.push(`⚠ របាយការណ៍ម្សិលមិញ ${y.unsent} មិនទាន់ផ្ញើ`);
+  const sl = statusLines(status); if (sl.length) lines.push('', ...sl);
   for (const n of notes) lines.push('', `📝 កំណត់ចំណាំពី ${n.by} (${n.day === day ? 'ថ្ងៃនេះ' : 'យប់មិញ'} ${hm(n.at)})`, bullets(n.text));
   if (!notes.length) lines.push('', `📝 យប់មិញគ្មានកំណត់ចំណាំពី ${pmName} ទេ។`);
   lines.push('', `ការងារលើភ្ញៀវថ្ងៃនេះ (${tasks.length})`);
@@ -108,10 +117,14 @@ async function morningBrief(D, log = () => {}) {
   for (const owner of await owners()) {
     try {
       if (!(await prefs(owner)).on) continue;
-      const { day, yest, pm, tasks, mbs } = await dayData(owner, D), linked = mbs.filter((b) => b.chat); if (!linked.length) continue;
+      const { day, yest, pm, tasks, mbs } = await dayData(owner, D), linked = mbs.filter((b) => b.chat);
+      let status = []; try { status = (await require('./status').forOwner({ fb_id: owner, name: pm.name })).clients; } catch (_) {}
+      // the PM gets the client status too, when something needs a look
+      const pc = await pmChat(owner); if (pc && status.some((c) => c.level !== 'ok')) { try { await telegram.sendButtons([`🌅 ${niceDay(day)}`, '', ...statusLines(status)].join('\n'), pc, [[{ text: '👥 បើក Clients today', url: `${cfg.baseUrl}/projectmanager#dashboard` }]]); n++; } catch (e) { log('morning status failed for', pm.name, e.message); } }
+      if (!linked.length) continue;
       const y = await yesterday(owner, yest, D), notes = await latest(owner, 'pm', yest);
       for (const b of linked) {
-        try { await telegram.sendButtons(briefText({ buyer: b, pmName: pm.name, day, y, notes, tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '👥 ភ្ញៀវរបស់ខ្ញុំ', url: buyers.dashLink(b) + '#dashboard' }]]); n++; }
+        try { await telegram.sendButtons(briefText({ buyer: b, pmName: pm.name, day, y, notes, status, tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '👥 ភ្ញៀវរបស់ខ្ញុំ', url: buyers.dashLink(b) + '#dashboard' }]]); n++; }
         catch (e) { log('morning brief failed for', b.name, e.message); }
       }
     } catch (e) { log('morning brief failed:', e.message); }
@@ -191,8 +204,9 @@ async function preview(user, D) {
   const owner = user.fb_id, { day, yest, pm, tasks, mbs } = await dayData(owner, D);
   const b = (user.buyer && mbs.find((x) => x.id === user.buyer.id)) || mbs[0] || { id: '', name: 'Media buyer' };
   const rep = await D.reportStatus(owner, day);
+  let status = []; try { status = (await require('./status').forOwner({ fb_id: owner, name: pm.name })).clients; } catch (_) {}
   return { times: TIMES,
-    brief: briefText({ buyer: b, pmName: pm.name, day, y: await yesterday(owner, yest, D), notes: await latest(owner, 'pm', yest), tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }),
+    brief: briefText({ buyer: b, pmName: pm.name, day, y: await yesterday(owner, yest, D), notes: await latest(owner, 'pm', yest), status, tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }),
     remind: remindText({ buyer: b, pmName: pm.name, open: forBuyer(tasks, b.id).filter((t) => !t.done) }),
     digest: digestText({ day, rep, team: teamCounts(pm, mbs, tasks), pmName: pm.name, forPmChat: true }) };
 }

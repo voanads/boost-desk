@@ -1061,6 +1061,30 @@
   // 📅 Weekly strategy: for clients the PM picks; a draft for the team in Khmer and English; the PM may send it to the client.
   const wkDay = (iso) => { try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); } catch (_) { return iso; } };
   const cdWk = {}; let wkLang = (() => { try { return localStorage.getItem('wkLang') || 'km'; } catch (_) { return 'km'; } })();
+  // The client's status on top of the client page: why it is green / amber / red, who looked today, and a short history.
+  let cdStLoading = false;
+  function cdStatusSection(c) {
+    if (c.archived) return '';
+    if (!ctMineData && !cdStLoading) { cdStLoading = true; api('/clients-status').then((d) => { ctMineData = d; }).catch(() => {}).finally(() => { cdStLoading = false; const sec = $('cdStSec'); if (sec && ctMineData) { sec.outerHTML = cdStatusSection(c) || '<span id="cdStSec" hidden></span>'; wireCdStatus(c); } else if (sec) sec.remove(); }); }
+    const x = ctMineData && (ctMineData.clients || []).find((k) => k.id === c.id);
+    if (!x) return ctMineData ? '' : '<section class="cd-st" id="cdStSec"><div class="sk"></div></section>';
+    const pill = x.level === 'bad' ? '<span class="pill bad"><i></i>Problem</span>' : x.level === 'warn' ? '<span class="pill warn"><i></i>Watch</span>' : '<span class="pill ok"><i></i>Fine</span>';
+    const go = { accounts: ['accounts', 'Open Ad accounts'], plan: ['', 'See the Boost plan below'] };
+    const why = x.reasons.map((r) => `<div class="cd-st-why ${r.level}"><span class="ct-dot" aria-hidden="true"></span><div><b>${esc(r.text)}</b>${r.detail ? `<span class="hint">${esc(r.detail)}</span>` : ''}</div>${go[r.action] && go[r.action][0] ? `<button type="button" class="linkbtn" data-cdstgo="${go[r.action][0]}">${go[r.action][1]}</button>` : ''}</div>`).join('');
+    const LOG = { checked: (l) => `${esc(l.by)} checked this client`, onIt: (l) => `${esc(l.by)} took the problem`, alert: (l) => `Alert sent on Telegram${l.text ? ' — ' + esc(l.text) : ''}`, solved: () => 'Problem solved', escalated: () => 'Nobody took it in 30 minutes — sent to the leaders' };
+    const when = (at) => { try { const d = new Date(at); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Phnom_Penh' }) + ' · ' + ctTime(at); } catch (_) { return ''; } };
+    const log = (x.log || []).filter((l) => LOG[l.kind]);
+    return `<section class="cd-st ${x.level}" id="cdStSec" aria-label="Client status"><div class="cd-st-h"><h4>Status today</h4>${pill}<span class="hint">${x.reasons.length ? '' : 'Nothing needs attention. '}${x.onIt ? `<span class="is-ok">${esc(x.onIt.by)} is on it since ${ctTime(x.onIt.at)}</span>` : x.level === 'bad' ? '<span class="is-danger">Nobody is on it yet</span>' : ''}${x.checked ? `${x.onIt || x.level === 'bad' ? ' · ' : ''}Checked by ${esc(x.checked.by)} at ${ctTime(x.checked.at)}` : `${x.onIt || x.level === 'bad' ? ' · ' : ''}Not checked yet today`}</span><span class="spacer"></span>
+        ${x.level === 'bad' ? `<button type="button" class="sm${x.onIt ? '' : ' primary'}" id="cdStOn" aria-pressed="${!!x.onIt}">${x.onIt ? 'On it ✓' : 'I’m on it'}</button>` : ''}<button type="button" class="sm" id="cdStChk" aria-pressed="${!!x.checked}">${x.checked ? 'Checked ✓' : 'Checked today'}</button></div>
+      ${why}${log.length ? `<details class="cd-st-log"><summary>History (${log.length})</summary>${log.map((l) => `<div class="cd-st-l"><span class="hint num">${when(l.at)}</span><span>${LOG[l.kind](l)}</span></div>`).join('')}</details>` : ''}</section>`;
+  }
+  function wireCdStatus(c) {
+    const x = ctMineData && (ctMineData.clients || []).find((k) => k.id === c.id); if (!x || !$('cdStSec')) return;
+    const post = async (what, on) => { try { const r = await api(`/clients/${c.id}/${what}`, { method: 'POST', body: { on } }); x.checked = r.checked; x.onIt = r.onIt; if (r.log) x.log = r.log; const sec = $('cdStSec'); if (sec) { sec.outerHTML = cdStatusSection(c); wireCdStatus(c); } if ($('ctMine') && !$('ctMine').hidden) paintCtMine(); } catch (e) { toast(e.message); } };
+    const k = $('cdStChk'); if (k) k.onclick = () => post('checked', k.getAttribute('aria-pressed') !== 'true');
+    const o = $('cdStOn'); if (o) o.onclick = () => post('on-it', o.getAttribute('aria-pressed') !== 'true');
+    document.querySelectorAll('#cdStSec [data-cdstgo]').forEach((b) => b.onclick = () => { location.hash = b.dataset.cdstgo; showTab(b.dataset.cdstgo); });
+  }
   function cdWeeklySection(c) {
     if (me && me.aiOn === false) return '';
     const st = cdWk[c.id];
@@ -1146,6 +1170,7 @@
         <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div class="cd-tw"><div class="cd-tline"><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div>${cdAccounts(m)}</div></div>
           <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
+      ${cdStatusSection(c)}
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
@@ -1181,7 +1206,7 @@
     const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
     const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
-    wireWeekly(c);
+    wireWeekly(c); wireCdStatus(c);
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });
     const aiAsk = $('cdAiAsk'); if (aiAsk) aiAsk.onsubmit = (ev) => { ev.preventDefault(); const q = aiAsk.querySelector('input').value.trim(); if (q) cdRunAi(c.id, { question: q }); };
     box.querySelectorAll('[data-cdrep]').forEach((b) => b.onclick = () => cdSendPage(c, b.dataset.cdrep));

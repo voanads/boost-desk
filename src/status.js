@@ -32,6 +32,9 @@ const HOW = {
   noboost: 'ពិនិត្យ Boost របស់ភ្ញៀវ៖ campaign បិទ, budget អស់ ឬ Ad account មានបញ្ហា។', invoice: 'ទាក់ទងភ្ញៀវអំពីការបង់ប្រាក់សេវា។', unpaid: 'ទាក់ទងភ្ញៀវអំពី invoice ដែលមិនទាន់បង់។',
 };
 
+// A short history per client (newest first, 30 lines): who checked, who took a problem, alerts and when they were solved.
+const note = (s, kind, by, text) => { s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
+
 async function forOwner(user) {
   const owner = user.fb_id, today = sync.todayIn(), hour = hourNow();
   const clients = (await db.listClients(owner)).filter((c) => !c.archived);
@@ -71,7 +74,7 @@ async function forOwner(user) {
     const s = st[c.id] || {};
     return { id: c.id, name: c.name, level, reasons, spend: (spend[c.id] || {}).all || 0, telegram: !!c.telegram,
       checked: s.checked && s.checked.day === today ? { by: s.checked.by, at: s.checked.at } : null,
-      onIt: s.onIt && s.onIt.day === today ? { by: s.onIt.by, at: s.onIt.at } : null };
+      onIt: s.onIt && s.onIt.day === today ? { by: s.onIt.by, at: s.onIt.at } : null, log: (s.log || []).slice(0, 12) };
   }).sort((a, b) => rank[a.level] - rank[b.level] || (!!a.onIt - !!b.onIt) || a.name.localeCompare(b.name));
   return { today, clients: out };
 }
@@ -79,10 +82,10 @@ async function forOwner(user) {
 // "checked today" / "I'm on it" — by a PM, a media buyer or a leader. Returns the client's new marks.
 async function mark(owner, clientId, what, by, on = true) {
   const today = sync.todayIn(), st = (await db.getUserSetting(owner, KEY, null)) || {}, s = st[clientId] || (st[clientId] = {});
-  if (what === 'checked') { if (on) s.checked = { day: today, by, at: new Date().toISOString() }; else delete s.checked; }
-  if (what === 'onIt') { if (on) s.onIt = { day: today, by, at: new Date().toISOString() }; else delete s.onIt; }
+  if (what === 'checked') { if (on) { s.checked = { day: today, by, at: new Date().toISOString() }; note(s, 'checked', by); } else delete s.checked; }
+  if (what === 'onIt') { if (on) { s.onIt = { day: today, by, at: new Date().toISOString() }; note(s, 'onIt', by); } else delete s.onIt; }
   await db.setUserSetting(owner, KEY, st);
-  return { checked: s.checked && s.checked.day === today ? s.checked : null, onIt: s.onIt && s.onIt.day === today ? s.onIt : null };
+  return { checked: s.checked && s.checked.day === today ? s.checked : null, onIt: s.onIt && s.onIt.day === today ? s.onIt : null, log: (s.log || []).slice(0, 12) };
 }
 
 // ---- Telegram: red alert -> "I'm on it" -> leaders after 30 minutes -> resolved ----
@@ -112,6 +115,7 @@ async function tick({ leaders = async () => [], log = () => {} } = {}) {
         if (s.alert && s.alert.key !== key && s.alert.key.startsWith(today) && !key) { // the problem is gone
           const wasPushed = s.alert.key.slice(today.length + 1).split(',').some((k) => PUSH.has(k)); // an alert about money only is dropped quietly
           if (wasPushed) for (const t of chats) telegram.send(`✅ ${c.name} — ដោះស្រាយហើយ`, t.chat).catch(() => {});
+          if (wasPushed) note(s, 'solved');
           delete s.alert; dirty = true; continue;
         }
         if (s.alert && !s.alert.key.startsWith(today)) { delete s.alert; dirty = true; }
@@ -120,12 +124,12 @@ async function tick({ leaders = async () => [], log = () => {} } = {}) {
           if (!chats.length) continue; // nobody in this team has Telegram: the page still shows it
           const text = alertText(c, u.name);
           for (const t of chats) { try { await telegram.sendButtons(text, t.chat, [[{ text: 'ខ្ញុំកំពុងមើល', data: `cs:on:${c.id}` }, { text: 'បើកភ្ញៀវ', url: t.link || `${cfg.baseUrl}/projectmanager#clients` }]]); sent++; } catch (e) { log('client alert failed:', c.name, e.message); } }
-          s.alert = { key, at: new Date().toISOString(), escalated: false }; dirty = true; continue;
+          s.alert = { key, at: new Date().toISOString(), escalated: false }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
         }
         if (!s.alert.escalated && !c.onIt && Date.now() - Date.parse(s.alert.at) > ESCALATE_MIN * 60e3) {
           const text = alertText(c, u.name) + `\n\n⏱ ${ESCALATE_MIN} នាទីហើយ មិនទាន់មានអ្នកមើល។`;
           for (const chat of await leaders()) { if (chats.some((t) => t.chat === chat)) continue; telegram.send(text, chat).catch(() => {}); }
-          s.alert.escalated = true; dirty = true;
+          s.alert.escalated = true; note(s, 'escalated'); dirty = true;
         }
       }
       if (dirty) await db.setUserSetting(u.fb_id, KEY, st);

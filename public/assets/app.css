@@ -3764,7 +3764,7 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .cg-h:first-child{padding-top:2px}
 
 /* Dashboard: "Clients today" sits in the side column, beside the clients table, with two tabs */
-.dside .ct{gap:0}.dside:has(#ctMine:not([hidden])){display:flex}
+.dside .ct{gap:0}
 .ct-mine .ct-h{padding:14px 16px 8px}.ct-mine .ct-h h2{font-size:var(--fs-md,1.05rem)}
 .ct-tabs{display:grid!important;grid-template-columns:1fr 1fr;margin:0 16px 10px;width:auto}.ct-tabs button{min-height:40px;font-size:var(--fs-sm);white-space:nowrap}
 #ctMine .ct-tabs{background:var(--bg-2);border-radius:10px;padding:3px;gap:3px}#ctMine .ct-tabs button{border:0!important;background:transparent!important;border-radius:8px!important;color:var(--muted)!important;font-weight:600}#ctMine .ct-tabs button[aria-selected=true]{background:var(--brand-soft)!important;color:var(--brand-text,var(--brand))!important}#ctMine .ct-tabs button:disabled{opacity:.5}
@@ -3773,3 +3773,13 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .ct-mine .ct-row{grid-template-columns:10px minmax(0,1fr) auto;row-gap:8px;padding:12px 16px}.ct-mine .ct-a{grid-column:2/-1;justify-content:flex-start}.ct-mine .ct-n .hint{white-space:normal}
 .ct-mine .ct-b{flex-wrap:wrap}
 .ct-idle-list .ct-irow{grid-template-columns:1fr;gap:6px;padding:12px 16px;border-top:1px solid var(--line)}.ct-idle-list .ct-chip{justify-self:start}.ct-idle-list .ct-irow .hint{white-space:normal}
+
+/* Dashboard side column: beside the table only when the table still has room (1500px up). Between 1100 and 1499px the side
+   panels (Clients today, My tasks today) sit in a row above the table, so no column of the table is cut off. */
+@media (min-width:1100px) and (max-width:1499px){
+  #tab-dashboard .dgrid{grid-template-columns:minmax(0,1fr)!important}
+  #tab-dashboard .dside{position:static!important;order:-1!important;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start}
+  #tab-dashboard .dside:not(:has(.panel:not([hidden]))){display:none}
+}
+@media (min-width:1500px){#tab-dashboard .dgrid{grid-template-columns:minmax(0,1fr) 380px!important}}
+.ct-mine .ct-list{max-height:min(46vh,440px)}

@@ -1,7 +1,7 @@
 // Client status: every client is fine (ok), to watch (warn) or has a problem (bad), worked out from data Boost Desk
 // already has — nobody types the colour.
 //   bad  (red)   — work for the client has stopped or money is at risk: the ad account is disabled or its payment failed,
-//                  the boost plan runs today but nothing was spent by the afternoon, an invoice is overdue.
+//                  the boost plan runs today but nothing was spent by the afternoon.
 //   warn (amber) — something moved and someone should look: report not sent, no Telegram group, spend over the plan,
 //                  far more / no boost compared with the usual, cost per result up, the plan ends in two days.
 // People add two things: "checked today" (I looked at this client) and "I'm on it" (I am handling the problem).
@@ -42,7 +42,7 @@ async function forOwner(user) {
   // 1. what the PM to-do and the suggestions already find (reports, groups, invoices, plan overspend, unusual spend)
   let t = { items: [], tips: [] }; try { t = await pm.todo(user); } catch (_) {}
   for (const x of [...(t.items || []), ...(t.tips || [])]) {
-    if (!x.clientId || x.level === 'good') continue;
+    if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
     add(x.clientId, x.level === 'bad' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
   }
   // 2. today's spend (all, and post boosts)

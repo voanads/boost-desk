@@ -2793,6 +2793,26 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
   const stop = (sig) => { if (closing) return; closing = true; console.log(`[stop] ${sig}: finishing open requests`); const t = setTimeout(() => process.exit(0), 10000); if (t.unref) t.unref(); server.close(() => db.pool.end().catch(() => {}).finally(() => process.exit(0))); };
   process.on('SIGTERM', () => stop('SIGTERM')); process.on('SIGINT', () => stop('SIGINT'));
   jobs.start({ handoff: HANDOFF_DEPS });
+  // One-off repair (19 Nov 2026): a merge left ad accounts the merged account was syncing unticked in the target, so its
+  // sync read nothing. For every workspace merged into since 19 Nov: tick the unticked accounts that have synced rows in
+  // the last 30 days, then pull this month again from Meta. Runs once (setting mergeRepair1).
+  setTimeout(async () => {
+    try {
+      if (await db.getSetting('mergeRepair1', null)) return;
+      const targets = [...new Set(((await db.getSetting('mergeLog', [])) || []).filter((m) => String(m.at) >= '2026-11-19' && m.into && m.into.id).map((m) => String(m.into.id)))];
+      const today = sync.todayIn(), done = [];
+      for (const owner of targets) {
+        const u = await db.getUser(owner); if (!u) continue;
+        const total = (await db.pool.query('SELECT count(*)::int n, count(*) FILTER (WHERE enabled)::int e FROM ad_accounts WHERE owner=$1', [owner])).rows[0];
+        const used = (await db.pool.query(`SELECT DISTINCT regexp_replace(x->>'accountId', '^act_', '') id FROM raw_rows r, jsonb_array_elements(r.rows) x WHERE r.owner=$1 AND r.day >= $2::date AND x->>'accountId' IS NOT NULL`, [owner, sync.addDays(today, -30)])).rows.map((r) => r.id);
+        const fixed = (await db.pool.query(`UPDATE ad_accounts SET enabled=true WHERE owner=$1 AND NOT enabled AND regexp_replace(id, '^act_', '') = ANY($2) RETURNING name`, [owner, used])).rows;
+        console.log(`[merge repair] ${u.name}: ${total.n} ad accounts, ${total.e} ticked before; ${used.length} with synced rows in 30 days; ticked now: ${fixed.length}${fixed.length ? ' — ' + fixed.map((r) => r.name).join(', ') : ''}`);
+        done.push({ owner, name: u.name, before: total, used: used.length, fixed: fixed.length });
+        if (fixed.length) sync.exclusive(owner, () => sync.syncRange(today.slice(0, 8) + '01', today, { ...u, name: 'Auto sync' })).then((r) => console.log(`[merge repair] ${u.name}: month sync ${r ? `done, ${r.campaigns} campaigns, ${r.errors.length} account errors` : 'skipped (another sync is running — the next automatic sync picks it up)'}`)).catch((e) => console.error('[merge repair] month sync failed:', e.message));
+      }
+      await db.setSetting('mergeRepair1', { at: new Date().toISOString(), done });
+    } catch (e) { console.error('[merge repair]', e.message); }
+  }, 20e3).unref();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

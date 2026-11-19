@@ -17,7 +17,7 @@ const telegram = require('./telegram');
 const buyers = require('./buyers');
 
 const KEY = 'cstatus';
-const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14, FRESH_MIN = 120, RENEW_FROM = 9; // hours, workspace time
+const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14, FRESH_MIN = 120, RENEW_FROM = 9, REPORT_FROM = '20:00', CPR_MIN_SPEND = 3; // hours, workspace time
 // Only problems that stop the client's boost are pushed to Telegram. Money problems (invoice overdue / unpaid) stay red on
 // the page for the PM but are not pushed: on the first day live they produced a burst of messages.
 const PUSH = new Set(['acct-off', 'acct-pay', 'noboost']);
@@ -42,14 +42,29 @@ async function forOwner(user) {
   const R = Object.fromEntries(clients.map((c) => [c.id, []]));
   const add = (id, level, kind, text, detail = '', action = '') => { if (R[id] && !R[id].some((x) => x.kind === kind)) R[id].push({ level, kind, text, detail, action }); };
 
-  // 1. what the PM to-do and the suggestions already find (reports, groups, invoices, plan overspend, unusual spend)
+  // today's spend (all, and post boosts)
+  const spend = {}; try { const d = await sync.dashboard(owner, today, today); for (const x of d.clients || []) spend[x.id] = { all: x.spend || 0, post: x.postSpend || 0 }; } catch (_) {}
+  // 1. what the PM to-do and the suggestions already find (groups, plan overspend, unusual spend) — with the owner's rules of 19 Nov:
+  //    · "report not sent" counts only once the auto-report time has passed (20:00 when auto report is off), not all day;
+  //    · "cost per result up" counts only when today's post spend is $3 or more.
   let t = { items: [], tips: [] }; try { t = await pm.todo(user); } catch (_) {}
+  const auto = (await db.getUserSetting(owner, 'autoReport', null)) || {}, reportFrom = auto.on && /^\d\d:\d\d$/.test(String(auto.time || '')) ? auto.time : REPORT_FROM;
+  const nowHM = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' });
   for (const x of [...(t.items || []), ...(t.tips || [])]) {
     if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
+    if (x.kind === 'report' && nowHM < reportFrom) continue;
+    if (x.kind === 'cpr-up' && !((spend[x.clientId] || {}).post >= CPR_MIN_SPEND)) continue;
     add(x.clientId, x.level === 'bad' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
   }
-  // 2. today's spend (all, and post boosts)
-  const spend = {}; try { const d = await sync.dashboard(owner, today, today); for (const x of d.clients || []) spend[x.id] = { all: x.spend || 0, post: x.postSpend || 0 }; } catch (_) {}
+  // 2. yesterday's report was never sent (the client spent and has a Telegram group)
+  try {
+    const yest = sync.addDays(today, -1), byId = Object.fromEntries(clients.map((c) => [c.id, c]));
+    for (const r of await db.monthEntries(owner, yest, yest)) {
+      const c = byId[r.client_id], e = r.data || {}; if (!c || !c.telegram || e.reportSent) continue;
+      const sp = (c.type !== 'post' ? Object.values(e.lives || {}).reduce((a, l) => a + (Number(l && l.spend) || 0), 0) : 0) + (c.type !== 'live' ? Number((e.post || {}).spend) || 0 : 0);
+      if (sp > 0) add(c.id, 'warn', 'report-y', 'របាយការណ៍ម្សិលមិញមិនទាន់ផ្ញើ', `ចំណាយម្សិលមិញ ${money(sp)}`, 'report');
+    }
+  } catch (_) {}
   // "No spend today" is only believed when today's numbers are fresh: a sync from Meta in the last two hours. Without that
   // (login expired, Meta busy, auto sync off) a whole team would turn red and be alerted for nothing.
   let fresh = false; try { const ats = [await db.getUserSetting(owner, 'autoSyncLast', null), await db.getUserSetting(owner, 'lastSyncCheck', null)].map((x) => Date.parse((x && x.at) || 0) || 0); fresh = Date.now() - Math.max(...ats) < FRESH_MIN * 60e3; } catch (_) {}
@@ -130,6 +145,7 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
           const text = alertText(c, u.name);
           for (const t of chats) { try { await telegram.sendButtons(text, t.chat, [[{ text: 'ខ្ញុំកំពុងមើល', data: `cs:on:${c.id}` }, { text: 'បើកភ្ញៀវ', url: t.link || `${cfg.baseUrl}/projectmanager#clients` }]]); sent++; } catch (e) { log('client alert failed:', c.name, e.message); } }
           if (sent === had) continue; // Telegram took none of them: try again on the next pass
+          log(`alert: ${c.name} (${u.name}) — ${push.map((x) => x.kind).join(', ')} → ${sent - had} chat${sent - had === 1 ? '' : 's'}`);
           touched.add(c.id); s.alert = { key, at: new Date().toISOString(), escalated: false }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
         }
         if (!s.alert.escalated && !c.onIt && Date.now() - Date.parse(s.alert.at) > ESCALATE_MIN * 60e3) {

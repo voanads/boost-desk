@@ -44,7 +44,11 @@ async function forOwner(user) {
   const add = (id, level, kind, text, detail = '', action = '') => { if (R[id] && !R[id].some((x) => x.kind === kind)) R[id].push({ level, kind, text, detail, action }); };
 
   // today's spend (all, and post boosts)
-  const spend = {}; try { const d = await sync.dashboard(owner, today, today); for (const x of d.clients || []) spend[x.id] = { all: x.spend || 0, post: x.postSpend || 0 }; } catch (_) {}
+  const spend = {}; try { const d = await sync.dashboard(owner, today, today); for (const x of d.clients || []) spend[x.id] = { all: x.spend || 0, post: x.postSpend || 0, results: x.results || 0, resSpend: x.resSpend || 0, resultType: x.resultType || '' }; } catch (_) {}
+  // the last 30 days, day by day: yesterday's spend and the last day each client boosted
+  const lastDay = {}, yestSpend = {}, yRows = [], postDay = {}, since30 = sync.addDays(today, -30); const yest = sync.addDays(today, -1), byId = Object.fromEntries(clients.map((c) => [c.id, c]));
+  const spentOn = (c, e) => (c.type !== 'post' ? Object.values(e.lives || {}).reduce((a, l) => a + (Number(l && l.spend) || 0), 0) : 0) + (c.type !== 'live' ? Number((e.post || {}).spend) || 0 : 0);
+  try { for (const r of await db.monthEntries(owner, since30, today)) { const c = byId[r.client_id]; if (!c) continue; const day = String(r.day instanceof Date ? sync.todayIn(undefined, r.day) : r.day).slice(0, 10), sp = spentOn(c, r.data || {}); (postDay[c.id] = postDay[c.id] || {})[day] = c.type !== 'live' ? Number(((r.data || {}).post || {}).spend) || 0 : 0; if (day === yest) { yestSpend[c.id] = sp; yRows.push(r); } if (sp > 0 && (!lastDay[c.id] || day > lastDay[c.id])) lastDay[c.id] = day; } } catch (_) {}
   // 1. what the PM to-do and the suggestions already find (groups, plan overspend, unusual spend) — with the owner's rules of 19 Nov:
   //    · "report not sent" counts only once the auto-report time has passed (20:00 when auto report is off), not all day;
   //    · "cost per result up" counts only when today's post spend is $3 or more.
@@ -58,19 +62,13 @@ async function forOwner(user) {
     add(x.clientId, x.level === 'bad' || x.kind === 'plan' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
   }
   // 2. yesterday's report was never sent (the client spent and has a Telegram group)
-  try {
-    const yest = sync.addDays(today, -1), byId = Object.fromEntries(clients.map((c) => [c.id, c]));
-    for (const r of await db.monthEntries(owner, yest, yest)) {
-      const c = byId[r.client_id], e = r.data || {}; if (!c || !c.telegram || e.reportSent) continue;
-      const sp = (c.type !== 'post' ? Object.values(e.lives || {}).reduce((a, l) => a + (Number(l && l.spend) || 0), 0) : 0) + (c.type !== 'live' ? Number((e.post || {}).spend) || 0 : 0);
-      if (sp > 0) add(c.id, 'warn', 'report-y', 'របាយការណ៍ម្សិលមិញមិនទាន់ផ្ញើ', `ចំណាយម្សិលមិញ ${money(sp)}`, 'report');
-    }
-  } catch (_) {}
+  for (const r of yRows) { const c = byId[r.client_id], e = r.data || {}; if (!c || !c.telegram || e.reportSent) continue; const sp = yestSpend[c.id] || 0; if (sp > 0) add(c.id, 'warn', 'report-y', 'របាយការណ៍ម្សិលមិញមិនទាន់ផ្ញើ', `ចំណាយម្សិលមិញ ${money(sp)}`, 'report'); }
   // "No spend today" is only believed when today's numbers are fresh: a sync from Meta in the last two hours. Without that
   // (login expired, Meta busy, auto sync off) a whole team would turn red and be alerted for nothing.
   let fresh = false; try { const ats = [await db.getUserSetting(owner, 'autoSyncLast', null), await db.getUserSetting(owner, 'lastSyncCheck', null)].map((x) => Date.parse((x && x.at) || 0) || 0); fresh = Date.now() - Math.max(...ats) < FRESH_MIN * 60e3; } catch (_) {}
   // 3. the ad accounts named in the client's boost plan
   const acct = {}; try { for (const a of await db.listAccounts(owner)) acct[String(a.id).replace(/^act_/, '')] = a; } catch (_) {}
+  const runs = {}, planOf = {};
   for (const c of clients) {
     const lines = (c.plan && c.plan.lines) || [];
     for (const id of new Set(lines.map((l) => String(l.account || '').replace(/^act_/, '')).filter(Boolean))) {
@@ -78,20 +76,43 @@ async function forOwner(user) {
       add(c.id, st[0], st[1], st[2], `${a.name || 'act_' + id}${(a.info || {}).disableReason ? ' · ' + a.info.disableReason : ''}`, 'accounts');
     }
     // 4. the boost plan: runs today but nothing spent by the afternoon; ends within two days
-    const tt = plan.totals(c.plan);
+    const tt = plan.totals(c.plan); planOf[c.id] = tt;
     if (tt.budget && tt.from && tt.from <= today && tt.to && tt.to >= today) {
-      const running = lines.some((l) => l.start && l.start <= today && daysBetween(l.start, today) < l.days);
+      const running = lines.some((l) => l.start && l.start <= today && daysBetween(l.start, today) < l.days); runs[c.id] = running;
       if (running && fresh && hour >= NO_BOOST_FROM && !((spend[c.id] || {}).post > 0)) add(c.id, 'bad', 'noboost', 'Plan ថា Boost ថ្ងៃនេះ ប៉ុន្តែគ្មានចំណាយ', `Plan ${money(tt.budget)} · ថ្ងៃនេះ ${money(0)}`, 'plan');
       const left = daysBetween(today, tt.to);
       if (left <= 2) add(c.id, 'warn', 'ending', left === 0 ? 'Boost plan ចប់ថ្ងៃនេះ' : `Boost plan នឹងចប់ក្នុង ${left} ថ្ងៃ`, 'សួរភ្ញៀវថាបន្តឬអត់', 'plan');
     }
   }
+  // Boosting now or not (owner, 19 Nov): problems, colours and Telegram alerts are only for clients that are boosting now —
+  // spend today or yesterday, or a plan line that runs today. The others are kept apart as "not boosting now" with at most
+  // one thing to follow up (collect an overspend, ask to continue, offer a new plan); they are never red.
   const st = (await db.getUserSetting(owner, KEY, null)) || {};
-  const rank = { bad: 0, warn: 1, ok: 2 };
+  const rank = { bad: 0, warn: 1, ok: 2, idle: 3 };
+  // post spend since the plan started, from the rows above (a plan older than 30 days is asked for separately)
+  const prog = {}; for (const c of clients) { const tt = planOf[c.id] || {}; if (!tt.budget || !tt.from || tt.from > today) continue; try {
+    if (tt.from < since30) { const p = await plan.progress(owner, c); if (p) prog[c.id] = p; continue; }
+    const end = tt.to && tt.to < today ? tt.to : today, spent = Math.round(Object.entries(postDay[c.id] || {}).filter(([d]) => d >= tt.from && d <= end).reduce((a, [, v]) => a + v, 0) * 100) / 100;
+    prog[c.id] = { spent, budget: tt.budget, pct: Math.round(spent / tt.budget * 100) }; } catch (_) {} }
   const out = clients.map((c) => {
-    const reasons = R[c.id].sort((a, b) => rank[a.level] - rank[b.level]), level = reasons.some((x) => x.level === 'bad') ? 'bad' : reasons.length ? 'warn' : 'ok';
-    const s = st[c.id] || {};
-    return { id: c.id, name: c.name, level, reasons, spend: (spend[c.id] || {}).all || 0, telegram: !!c.telegram,
+    const sp = spend[c.id] || {}, active = sp.all > 0 || yestSpend[c.id] > 0 || !!runs[c.id], tt = planOf[c.id] || {}, p = prog[c.id];
+    let reasons = R[c.id], follow = null;
+    if (active) {
+      // spend over the plan is urgent only while money is still going out today
+      reasons = reasons.map((x) => (x.kind === 'plan' && !(sp.post > 0) ? { ...x, level: 'warn' } : x));
+    } else {
+      const over = reasons.find((x) => x.kind === 'plan'), quiet = reasons.find((x) => x.kind === 'quiet' || x.kind === 'missing');
+      if (over) follow = { kind: 'collect', text: p && p.spent > p.budget ? `ទារប្រាក់ដែលលើស ${money(p.spent - p.budget)}` : 'ទារប្រាក់ដែលលើស Plan', detail: over.detail || '' };
+      else if (tt.budget && tt.to && tt.to < today) follow = { kind: 'newplan', text: 'ស្នើ Plan ថ្មី', detail: `Plan ចប់ ${tt.to}` };
+      else if (quiet || (lastDay[c.id] && daysBetween(lastDay[c.id], today) >= 3)) follow = { kind: 'contact', text: 'ទាក់ទងសួរបន្ត', detail: quiet ? quiet.title : '' };
+      reasons = [];
+    }
+    reasons = reasons.slice().sort((a, b) => rank[a.level] - rank[b.level]);
+    const level = !active ? 'idle' : reasons.some((x) => x.level === 'bad') ? 'bad' : reasons.length ? 'warn' : 'ok', s = st[c.id] || {};
+    return { id: c.id, name: c.name, level, active, reasons, follow, spend: sp.all || 0, telegram: !!c.telegram,
+      cpr: sp.results > 0 && sp.resSpend > 0 ? { cost: Math.round(sp.resSpend / sp.results * 1000) / 1000, results: sp.results, type: sp.resultType || 'result' } : null,
+      plan: tt.budget ? { budget: tt.budget, to: tt.to || '', left: tt.to ? daysBetween(today, tt.to) : null, spent: p ? p.spent : null, pct: p ? p.pct : null } : null,
+      lastBoost: lastDay[c.id] || '',
       checked: s.checked && s.checked.day === today ? { by: s.checked.by, at: s.checked.at } : null,
       onIt: s.onIt && s.onIt.day === today ? { by: s.onIt.by, at: s.onIt.at } : null, log: (s.log || []).slice(0, 12) };
   }).sort((a, b) => rank[a.level] - rank[b.level] || (!!a.onIt - !!b.onIt) || a.name.localeCompare(b.name));

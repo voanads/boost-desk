@@ -57,8 +57,10 @@ async function setAsk(chat, who) { const a = await asks(), now = Date.now(); for
 function statusLines(status) {
   if (!status || !status.length) return [];
   const names = (l) => { const a = status.filter((c) => c.level === l); return a.length ? `${a.length} — ${a.slice(0, 5).map((c) => c.name + (c.reasons[0] ? ` (${c.reasons[0].text})` : '')).join(', ')}${a.length > 5 ? ` … +${a.length - 5}` : ''}` : ''; };
-  const bad = names('bad'), warn = names('warn'), ok = status.filter((c) => c.level === 'ok').length, out = ['ស្ថានភាពភ្ញៀវព្រឹកនេះ'];
-  if (bad) out.push(`🔴 មានបញ្ហា ${bad}`); if (warn) out.push(`🟡 ត្រូវមើល ${warn}`); out.push(`🟢 ល្អ ${ok}`);
+  const bad = names('bad'), warn = names('warn'), ok = status.filter((c) => c.level === 'ok').length, out = ['ស្ថានភាពភ្ញៀវព្រឹកនេះ (ភ្ញៀវកំពុង Boost)'];
+  if (bad) out.push(`🔴 បន្ទាន់ ${bad}`); if (warn) out.push(`🟡 ត្រូវមើល ${warn}`); out.push(`🟢 ល្អ ${ok}`);
+  const idle = status.filter((c) => c.level === 'idle'), fol = idle.filter((c) => c.follow); // not boosting now: kept apart, never urgent
+  if (idle.length) out.push(`⚪ មិនកំពុង Boost ${idle.length}${fol.length ? ` · តាមដាន ${fol.length} — ${fol.slice(0, 4).map((c) => `${c.name} (${c.follow.text})`).join(', ')}${fol.length > 4 ? ` … +${fol.length - 4}` : ''}` : ''}`);
   return out;
 }
 function briefText({ buyer, pmName, day, y, notes, tasks, status }) {
@@ -120,7 +122,7 @@ async function morningBrief(D, log = () => {}) {
       const { day, yest, pm, tasks, mbs } = await dayData(owner, D), linked = mbs.filter((b) => b.chat);
       let status = []; try { status = (await require('./status').forOwner({ fb_id: owner, name: pm.name })).clients; } catch (_) {}
       // the PM gets the client status too, when something needs a look
-      const pc = await pmChat(owner); if (pc && status.some((c) => c.level !== 'ok')) { try { await telegram.sendButtons([`🌅 ${niceDay(day)}`, '', ...statusLines(status)].join('\n'), pc, [[{ text: '👥 បើក Clients today', url: `${cfg.baseUrl}/projectmanager#dashboard` }]]); n++; } catch (e) { log('morning status failed for', pm.name, e.message); } }
+      const pc = await pmChat(owner); if (pc && status.some((c) => c.level === 'bad' || c.level === 'warn' || c.follow)) { try { await telegram.sendButtons([`🌅 ${niceDay(day)}`, '', ...statusLines(status)].join('\n'), pc, [[{ text: '👥 បើក Clients today', url: `${cfg.baseUrl}/projectmanager#dashboard` }]]); n++; } catch (e) { log('morning status failed for', pm.name, e.message); } }
       if (!linked.length) continue;
       const y = await yesterday(owner, yest, D), notes = await latest(owner, 'pm', yest);
       for (const b of linked) {

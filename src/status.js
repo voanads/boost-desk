@@ -1,7 +1,7 @@
 // Client status: every client is fine (ok), to watch (warn) or has a problem (bad), worked out from data Boost Desk
 // already has — nobody types the colour.
 //   bad  (red)   — work for the client has stopped or money is at risk: the ad account is disabled or its payment failed,
-//                  the boost plan runs today but nothing was spent by the afternoon, an invoice is overdue.
+//                  the boost plan runs today but nothing was spent by the afternoon.
 //   warn (amber) — something moved and someone should look: report not sent, no Telegram group, spend over the plan,
 //                  far more / no boost compared with the usual, cost per result up, the plan ends in two days.
 // People add two things: "checked today" (I looked at this client) and "I'm on it" (I am handling the problem).
@@ -18,6 +18,9 @@ const buyers = require('./buyers');
 
 const KEY = 'cstatus';
 const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14; // hours, workspace time
+// Only problems that stop the client's boost are pushed to Telegram. Money problems (invoice overdue / unpaid) stay red on
+// the page for the PM but are not pushed: on the first day live they produced a burst of messages.
+const PUSH = new Set(['acct-off', 'acct-pay', 'noboost']);
 const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hourNow = () => Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' })) % 24;
 const hm = (iso) => { try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: cfg.tz }); } catch (_) { return ''; } };
@@ -39,7 +42,7 @@ async function forOwner(user) {
   // 1. what the PM to-do and the suggestions already find (reports, groups, invoices, plan overspend, unusual spend)
   let t = { items: [], tips: [] }; try { t = await pm.todo(user); } catch (_) {}
   for (const x of [...(t.items || []), ...(t.tips || [])]) {
-    if (!x.clientId || x.level === 'good') continue;
+    if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
     add(x.clientId, x.level === 'bad' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
   }
   // 2. today's spend (all, and post boosts)
@@ -89,7 +92,7 @@ const teamChats = async (owner) => {
   return out.filter((x, i, a) => a.findIndex((y) => y.chat === x.chat) === i);
 };
 function alertText(c, teamName) {
-  const bad = c.reasons.filter((x) => x.level === 'bad'), lines = [`🔴 ${c.name} ត្រូវការមើលឥឡូវ`, `${teamName} · ${hm(new Date().toISOString())}`, ''];
+  const bad = c.reasons.filter((x) => x.level === 'bad' && PUSH.has(x.kind)), lines = [`🔴 ${c.name} ត្រូវការមើលឥឡូវ`, `${teamName} · ${hm(new Date().toISOString())}`, ''];
   for (const r of bad) lines.push(`• ${r.text}${r.detail ? ' — ' + r.detail : ''}`);
   const how = bad.map((r) => HOW[r.kind]).filter(Boolean)[0]; if (how) lines.push('', 'អ្វីគួរធ្វើ៖ ' + how);
   return lines.join('\n');
@@ -105,9 +108,10 @@ async function tick({ leaders = async () => [], log = () => {} } = {}) {
       const st = (await db.getUserSetting(u.fb_id, KEY, null)) || {}; let dirty = false;
       const chats = await teamChats(u.fb_id);
       for (const c of clients) {
-        const s = st[c.id] || (st[c.id] = {}), key = c.level === 'bad' ? today + ':' + c.reasons.filter((x) => x.level === 'bad').map((x) => x.kind).sort().join(',') : '';
+        const s = st[c.id] || (st[c.id] = {}), push = c.reasons.filter((x) => x.level === 'bad' && PUSH.has(x.kind)), key = push.length ? today + ':' + push.map((x) => x.kind).sort().join(',') : '';
         if (s.alert && s.alert.key !== key && s.alert.key.startsWith(today) && !key) { // the problem is gone
-          for (const t of chats) telegram.send(`✅ ${c.name} — ដោះស្រាយហើយ`, t.chat).catch(() => {});
+          const wasPushed = s.alert.key.slice(today.length + 1).split(',').some((k) => PUSH.has(k)); // an alert about money only is dropped quietly
+          if (wasPushed) for (const t of chats) telegram.send(`✅ ${c.name} — ដោះស្រាយហើយ`, t.chat).catch(() => {});
           delete s.alert; dirty = true; continue;
         }
         if (s.alert && !s.alert.key.startsWith(today)) { delete s.alert; dirty = true; }

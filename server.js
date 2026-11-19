@@ -2149,11 +2149,10 @@ api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
 // The client that stays keeps its name, settings and saved days. From the duplicate it takes: Page names, the Telegram group
 // (if it has none), days it has no entry for, invoices, notes, open tasks and boost plans. Then the duplicate is removed and
 // every saved day is matched again, so the spend lands on the client that stays.
-api.post('/clients/:id/merge-from', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return;
-  const owner = req.user.fb_id, list = await db.listClients(owner), A = list.find((x) => x.id === Number(req.params.id)), B = list.find((x) => x.id === Number((req.body || {}).from));
-  if (!A || !B || A.id === B.id) return res.status(400).json({ error: 'Choose two different clients of yours.' });
-  if (sync.isBusy(owner)) return res.status(409).json({ error: 'A sync is running right now. Try again in a minute.' });
+async function mergeClients(user, aId, bId) {
+  const owner = user.fb_id, list = await db.listClients(owner), A = list.find((x) => x.id === Number(aId)), B = list.find((x) => x.id === Number(bId));
+  if (!A || !B || A.id === B.id) throw Object.assign(new Error('Choose two different clients of yours.'), { status: 400 });
+  if (sync.isBusy(owner)) throw Object.assign(new Error('A sync is running right now. Try again in a minute.'), { status: 409 });
   const low = (x) => String(x || '').trim().toLowerCase(), have = new Set([A.name, A.match, ...(A.pages || [])].map(low));
   const pages = [...(A.pages || [])]; for (const x of [B.name, B.match, ...(B.pages || [])]) { const k = low(x); if (k && !have.has(k)) { have.add(k); pages.push(String(x).trim()); } }
   const planA = A.plan || {}, planB = B.plan || {}, pastB = [...((planB.lines || []).length ? [{ lines: planB.lines, tax: !!planB.tax, sentAt: planB.sentAt || null, at: new Date().toISOString(), by: `merged from ${B.name}` }] : []), ...(planB.past || [])];
@@ -2176,9 +2175,13 @@ api.post('/clients/:id/merge-from', wrap(async (req, res) => {
     await c.query('DELETE FROM clients WHERE id=$1 AND owner=$2', [B.id, owner]);
     await c.query('COMMIT');
   } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
-  console.log(`[client merge] ${req.user.name}: "${B.name}" (#${B.id}) into "${A.name}" (#${A.id})`);
-  try { await sync.exclusive(owner, () => sync.rematch(req.user)); } catch (e) { console.error('[client merge] rematch failed:', e.message); }
-  res.json({ ok: true, client: (await db.listClients(owner)).find((x) => x.id === A.id) });
+  console.log(`[client merge] ${user.name}: "${B.name}" (#${B.id}) into "${A.name}" (#${A.id})`);
+  try { await sync.exclusive(owner, () => sync.rematch(user)); } catch (e) { console.error('[client merge] rematch failed:', e.message); }
+  return (await db.listClients(owner)).find((x) => x.id === A.id);
+}
+api.post('/clients/:id/merge-from', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return;
+  try { res.json({ ok: true, client: await mergeClients(req.user, req.params.id, (req.body || {}).from) }); } catch (e) { if (e.status) return res.status(e.status).json({ error: e.message }); throw e; }
 }));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');
@@ -2853,6 +2856,31 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
       await db.setSetting('mergeRepair1', { at: new Date().toISOString(), done });
     } catch (e) { console.error('[merge repair]', e.message); }
   }, 20e3).unref();
+  // One-off (owner's request, 19 Nov 2026): in the workspaces merged into today, merge the FIRST pair of clients with the
+  // same name and log this month's spend before and after, so the result can be checked before the rest is done.
+  setTimeout(async () => {
+    try {
+      if (await db.getSetting('dupMerge1', null)) return;
+      const targets = [...new Set(((await db.getSetting('mergeLog', [])) || []).filter((m) => String(m.at) >= '2026-11-19' && m.into && m.into.id).map((m) => String(m.into.id)))];
+      const today = sync.todayIn(), from = today.slice(0, 8) + '01', out = [];
+      for (const owner of targets) {
+        const u = await db.getUser(owner); if (!u) continue;
+        const list = (await db.listClients(owner)).filter((c) => !c.archived), groups = {};
+        for (const c of list) (groups[String(c.name || '').trim().toLowerCase()] = groups[String(c.name || '').trim().toLowerCase()] || []).push(c);
+        const dups = Object.values(groups).filter((g) => g.length > 1);
+        console.log(`[dup merge] ${u.name}: ${list.length} clients, ${dups.length} names used more than once — ${dups.map((g) => `${g[0].name} ×${g.length}`).join(', ')}`);
+        if (!dups.length) continue;
+        const spendOf = async () => Object.fromEntries(((await sync.dashboard(owner, from, today)).clients || []).map((x) => [x.id, x.spend || 0]));
+        const before = await spendOf(), g = dups[0].slice().sort((a, b) => (before[b.id] || 0) - (before[a.id] || 0) || a.id - b.id), A = g[0], B = g[1];
+        const sumBefore = Math.round(((before[A.id] || 0) + (before[B.id] || 0)) * 100) / 100;
+        await mergeClients(u, A.id, B.id);
+        const after = await spendOf();
+        console.log(`[dup merge] ${u.name}: "${B.name}" #${B.id} ($${(before[B.id] || 0).toFixed(2)}) into #${A.id} ($${(before[A.id] || 0).toFixed(2)}) — this month before $${sumBefore.toFixed(2)}, after $${(after[A.id] || 0).toFixed(2)}${Math.abs((after[A.id] || 0) - sumBefore) < 0.01 ? ' ✓ same' : ' ✗ DIFFERENT'}`);
+        out.push({ owner, kept: A.id, removed: B.id, name: A.name, before: sumBefore, after: after[A.id] || 0 });
+      }
+      await db.setSetting('dupMerge1', { at: new Date().toISOString(), out });
+    } catch (e) { console.error('[dup merge]', e.message); }
+  }, 45e3).unref();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

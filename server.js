@@ -2210,18 +2210,23 @@ api.post('/clients/:id/merge-from', wrap(async (req, res) => {
 // Spend is known per client, not per post, so the plan's progress is the client's and is the same on each of its rows.
 api.get('/boosts', wrap(async (req, res) => {
   const owner = req.user.fb_id, today = sync.todayIn(), st = await STATUS().forOwner({ fb_id: owner, name: req.user.name }), by = Object.fromEntries(st.clients.map((x) => [x.id, x])), rows = [];
-  for (const c of (await db.listClients(owner)).filter((x) => !x.archived)) {
+  // today's campaigns from Meta (as synced): a post linked to its campaign gets its own spend, and post campaigns that are in
+  // no plan yet are offered as "found on Meta" so a plan line can be added in one step
+  const raw = {}; try { for (const r of (await db.getRaw(owner, today)) || []) if (r.campaignId) raw[String(r.campaignId)] = r; } catch (_) {}
+  const all = (await db.listClients(owner)).filter((x) => !x.archived), linked = new Set(all.flatMap((c) => ((c.plan && c.plan.lines) || []).map((l) => l.camp).filter(Boolean))), found = [];
+  for (const c of all) {
     const x = by[c.id] || {}, lines = (c.plan && c.plan.lines) || [];
+    try { const e = await db.getEntry(today, c.id); for (const id of ((e && e.post && e.post.ids) || []).map(String)) { const r = raw[id]; if (r && !linked.has(id) && Number(r.spend) > 0) found.push({ clientId: c.id, client: c.name, camp: id, name: r.name || '', account: r.accountId || '', accountName: r.account || '', spend: Math.round(Number(r.spend) * 100) / 100 }); } } catch (_) {}
     lines.forEach((l, i) => {
       const end = l.start ? sync.addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '', state = !l.start ? 'nodate' : l.start > today ? 'new' : end < today ? 'ended' : 'active';
       rows.push({ clientId: c.id, client: c.name, i, post: l.post || `Post ${i + 1}`, link: l.link || '', daily: Number(l.daily) || 0, days: Number(l.days) || 0, budget: Math.round((Number(l.daily) || 0) * (Number(l.days) || 0) * 100) / 100,
         account: l.accountName || l.account || '', start: l.start || '', end, left: end ? Math.round((Date.parse(end) - Date.parse(today)) / 864e5) : null, state,
         noSpend: state === 'active' && (x.reasons || []).some((r) => r.kind === 'noboost'), sent: l.sent || (c.plan.sentAt && !lines.some((y) => y.sent) ? c.plan.sentAt : ''),
-        postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
+        camp: l.camp || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
     });
   }
   const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));
-  res.json({ today, rows, noPlan });
+  res.json({ today, rows, noPlan, found: found.sort((a, b) => b.spend - a.spend) });
 }));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');

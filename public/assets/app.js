@@ -1025,19 +1025,51 @@
       .sort((a, b) => (rank[a.state] - rank[b.state]) || (a.state === 'ended' ? String(b.end).localeCompare(String(a.end)) : String(a.end || '9').localeCompare(String(b.end || '9'))) || a.client.localeCompare(b.client));
     const pill = (r) => r.noSpend ? '<span class="pill bad"><i></i>No spend</span>' : r.state === 'active' ? '<span class="pill ok"><i></i>Active</span>' : r.state === 'new' ? '<span class="pill mute">New</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : '<span class="pill warn"><i></i>No start date</span>';
     const left = (r) => r.left == null ? '–' : r.state === 'ended' ? `ended ${-r.left} day${r.left === -1 ? '' : 's'} ago` : r.state === 'new' ? `starts in ${Math.round((Date.parse(r.start) - Date.parse(d.today)) / 864e5)} d` : r.left === 0 ? '<b class="is-warn">ends today</b>' : r.left <= 2 ? `<b class="is-warn">${r.left} day${r.left === 1 ? '' : 's'} left</b>` : `${r.left} days left`;
-    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2><span class="hint">one row per post in a boost plan · state and spend fill in by themselves</span><span class="spacer"></span>
+    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2><span class="hint">one row per post in a boost plan · state and spend fill in by themselves</span><span class="spacer"></span><button type="button" class="primary sm" id="bstAdd">+ Add boost</button>
         <div class="seg" role="group" aria-label="Which boosts"><button type="button" data-bst="run" aria-pressed="${bstTab === 'run'}">Running · ${n.run}</button><button type="button" data-bst="ended" aria-pressed="${bstTab === 'ended'}">Ended · ${n.ended}</button><button type="button" data-bst="all" aria-pressed="${bstTab === 'all'}">All · ${n.all}</button></div></div>
       ${d.noPlan.length ? `<div class="note bst-np"><b>${d.noPlan.length} client${d.noPlan.length === 1 ? ' is' : 's are'} boosting without a plan</b> — no end date, no budget and no “no spend” alert for ${d.noPlan.length === 1 ? 'it' : 'them'}: ${d.noPlan.slice(0, 12).map((c) => `<button type="button" class="linkbtn" data-bstopen="${c.id}">${esc(c.name)}</button>`).join(', ')}${d.noPlan.length > 12 ? ` … +${d.noPlan.length - 12}` : ''}. Open a client and add its posts under “Post boost plan”.</div>` : ''}
+      ${(d.found || []).length ? `<details class="bst-found" ${bstFoundOpen ? 'open' : ''}><summary><b>Found on Meta today, not in a plan · ${d.found.length}</b><span class="hint">post campaigns that are spending — add each to its client's plan in one step</span></summary>
+        ${d.found.map((f, k) => `<div class="bst-f"><div class="bst-fn"><b>${esc(f.name || 'Campaign ' + f.camp)}</b><span class="hint">${esc(f.client)}${f.accountName ? ' · ' + esc(f.accountName) : ''} · ${money(f.spend)} today</span></div><button type="button" class="sm" data-bstfound="${k}">Add to plan</button></div>`).join('')}</details>` : ''}
       ${rows.length ? `<div class="tablewrap"><table class="bst-t"><thead><tr><th scope="col">Post</th><th scope="col">Client</th><th scope="col" class="num">$ / day</th><th scope="col">Ad account</th><th scope="col">Start</th><th scope="col">End</th><th scope="col">State</th><th scope="col" class="num">Post spend today</th><th scope="col">Client's plan used</th><th scope="col">Sent to client</th></tr></thead><tbody>
         ${rows.map((r) => `<tr class="${r.state}"><td class="bst-p">${r.link ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.post)}</a>` : `<b>${esc(r.post)}</b>`}<span class="hint">${money(r.budget)} · ${r.days} day${r.days === 1 ? '' : 's'}</span></td>
           <td><button type="button" class="linkbtn" data-bstopen="${r.clientId}">${esc(r.client)}</button>${r.telegram ? '' : '<span class="hint">no Telegram group</span>'}</td>
           <td class="num">${money(r.daily)}</td><td>${esc(r.account || '–')}</td><td>${r.start ? esc(shortDay(r.start)) : '–'}</td><td>${r.end ? esc(shortDay(r.end)) : '–'}<span class="hint">${left(r)}</span></td>
-          <td>${pill(r)}</td><td class="num">${r.state === 'active' ? money(r.postToday) : '–'}</td>
+          <td>${pill(r)}</td><td class="num">${r.state !== 'active' ? '–' : r.campSpend != null ? `${money(r.campSpend)}<span class="hint">this post</span>` : `${money(r.postToday)}<span class="hint">all the client's posts</span>`}</td>
           <td>${r.planPct != null ? `<span class="bst-pl"><i class="ct-bar${r.planPct > 100 ? ' over' : ''}" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, r.planPct))}%"></i></i>${r.planPct}%</span><span class="hint">${money(r.planSpent)} of ${money(r.planBudget)}</span>` : '–'}</td>
           <td>${r.sent ? esc(new Date(r.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${d.rows.length ? 'No boost matches.' : '<b>No boost plan yet.</b><br>Open a client and add the posts you boost under “Post boost plan” — they show up here.'}</div>`}</section>`;
     host.querySelectorAll('[data-bst]').forEach((b) => b.onclick = () => { bstTab = b.dataset.bst; paintBoosts(); });
+    if ($('bstAdd')) $('bstAdd').onclick = () => openBoostAdd(null);
+    host.querySelectorAll('[data-bstfound]').forEach((b) => b.onclick = () => openBoostAdd(d.found[Number(b.dataset.bstfound)]));
+    const fd = host.querySelector('.bst-found'); if (fd) fd.addEventListener('toggle', () => { bstFoundOpen = fd.open; });
     host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
+  }
+  // Add one post to a client's boost plan without leaving the Boosts page. From "found on Meta" the campaign, the client and
+  // the ad account are filled in already; only the $ per day and the number of days are left to type.
+  let bstFoundOpen = true;
+  function openBoostAdd(f) {
+    let dlg = $('bstDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'bstDlg'; dlg.className = 'ho-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-bstclose]')) dlg.close(); }); }
+    const cs = clients.filter((c) => !c.archived).sort((a, b) => a.name.localeCompare(b.name)), accs = (accounts || []).filter((a) => a.enabled !== false);
+    const t = (bstData && bstData.today) || (me && me.today) || iso(new Date());
+    dlg.innerHTML = `<form class="ho-dw bst-form" id="bstForm"><div class="ho-dh"><h2>${f ? 'Add this campaign to the plan' : 'Add a boost'}</h2><button type="button" class="ghost sm" data-bstclose aria-label="Close">✕</button></div>
+      ${f ? `<p class="hint">Found on Meta: <b>${esc(f.name)}</b> · ${money(f.spend)} today. Type the budget per day and how many days the client asked for.</p>` : '<p class="hint">It is added to the client’s Post boost plan and shows up in this table.</p>'}
+      <label for="bstC">Client</label><select id="bstC" required>${cs.map((c) => `<option value="${c.id}"${f && f.clientId === c.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <label for="bstP">Post</label><input id="bstP" maxlength="120" required value="${esc(f ? f.name : '')}" placeholder="e.g. Serum video 20 Nov">
+      <label for="bstL">Link to the post <span class="hint">optional</span></label><input id="bstL" type="url" maxlength="400" placeholder="https://www.facebook.com/…">
+      <div class="bst-3"><div><label for="bstD">$ per day</label><input id="bstD" type="number" min="0.5" step="0.5" inputmode="decimal" required></div><div><label for="bstN">Days</label><input id="bstN" type="number" min="1" max="90" step="1" inputmode="numeric" required value="3"></div><div><label for="bstS">Start</label><input id="bstS" type="date" required value="${esc(t)}"></div></div>
+      <label for="bstA">Ad account <span class="hint">optional — needed for the “ad account” alerts</span></label><select id="bstA"><option value="">–</option>${accs.map((a) => `<option value="${esc(a.id)}"${f && String(f.account).replace(/^act_/, '') === String(a.id).replace(/^act_/, '') ? ' selected' : ''}>${esc(a.name || a.id)}</option>`).join('')}</select>
+      <div class="hint" id="bstSum" aria-live="polite"></div>
+      <div class="st-end"><button type="button" class="ghost sm" data-bstclose>Cancel</button><button type="submit" class="primary sm" id="bstGo">Add to the plan</button></div></form>`;
+    const sum = () => { const dly = Number($('bstD').value) || 0, n = Number($('bstN').value) || 0; $('bstSum').textContent = dly && n && $('bstS').value ? `${money(dly * n)} in total · ends ${shortDay(addDaysIso($('bstS').value, n - 1))}` : ''; };
+    ['bstD', 'bstN', 'bstS'].forEach((id) => $(id).oninput = sum); sum();
+    $('bstForm').onsubmit = async (ev) => {
+      ev.preventDefault(); const c = clients.find((x) => x.id === Number($('bstC').value)); if (!c) return;
+      const a = accs.find((x) => String(x.id) === $('bstA').value), line = { post: $('bstP').value.trim(), link: $('bstL').value.trim(), daily: Number($('bstD').value), days: Number($('bstN').value), start: $('bstS').value, account: a ? a.id : '', accountName: a ? a.name || '' : (f && f.accountName) || '', camp: f ? f.camp : '' };
+      const btn = $('bstGo'); btn.disabled = true; btn.textContent = 'Adding…';
+      try { await api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { lines: [...((c.plan && c.plan.lines) || []), line], tax: !!(c.plan && c.plan.tax) } }); dlg.close(); clients = await api('/clients'); ctMineData = null; await loadBoosts(); successBadge(`Added to ${c.name}’s plan`); }
+      catch (e) { toast(e.message); btn.disabled = false; btn.textContent = 'Add to the plan'; }
+    };
+    dlg.showModal(); (f ? $('bstD') : $('bstP')).focus();
   }
   function renderClients() {
     if (cView === 'boosts') { if (bstData) paintBoosts(); return; }

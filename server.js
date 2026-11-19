@@ -2205,6 +2205,24 @@ api.post('/clients/:id/merge-from', wrap(async (req, res) => {
   if (!pmOnly(req, res)) return;
   try { res.json({ ok: true, client: await mergeClients(req.user, req.params.id, (req.body || {}).from) }); } catch (e) { if (e.status) return res.status(e.status).json({ error: e.message }); throw e; }
 }));
+// ---- Boosts (20 Nov 2026): one row per post in a boost plan, across every client — the team's old status sheet, filled by itself ----
+// A row's state comes from its dates (new / active / ended); "no spend" is the client's status finding (plan runs, nothing spent).
+// Spend is known per client, not per post, so the plan's progress is the client's and is the same on each of its rows.
+api.get('/boosts', wrap(async (req, res) => {
+  const owner = req.user.fb_id, today = sync.todayIn(), st = await STATUS().forOwner({ fb_id: owner, name: req.user.name }), by = Object.fromEntries(st.clients.map((x) => [x.id, x])), rows = [];
+  for (const c of (await db.listClients(owner)).filter((x) => !x.archived)) {
+    const x = by[c.id] || {}, lines = (c.plan && c.plan.lines) || [];
+    lines.forEach((l, i) => {
+      const end = l.start ? sync.addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '', state = !l.start ? 'nodate' : l.start > today ? 'new' : end < today ? 'ended' : 'active';
+      rows.push({ clientId: c.id, client: c.name, i, post: l.post || `Post ${i + 1}`, link: l.link || '', daily: Number(l.daily) || 0, days: Number(l.days) || 0, budget: Math.round((Number(l.daily) || 0) * (Number(l.days) || 0) * 100) / 100,
+        account: l.accountName || l.account || '', start: l.start || '', end, left: end ? Math.round((Date.parse(end) - Date.parse(today)) / 864e5) : null, state,
+        noSpend: state === 'active' && (x.reasons || []).some((r) => r.kind === 'noboost'), sent: l.sent || (c.plan.sentAt && !lines.some((y) => y.sent) ? c.plan.sentAt : ''),
+        postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
+    });
+  }
+  const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));
+  res.json({ today, rows, noPlan });
+}));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');
 const whoAmI = (req) => (req.user.buyer ? req.user.buyer.name : req.user.name);

@@ -1005,7 +1005,42 @@
     const urgent = todo.some((x) => x.level === 'bad' || x.level === 'warn' || x.kind === 'report');
     return { n: todo.length + (w.openTasks || 0), urgent };
   }
+  // ---- Boosts: one row per post in a boost plan, across every client (the team's old status sheet, filled by itself) ----
+  let cView = 'clients', bstData = null, bstTab = 'run', bstQ = '';
+  function setCView(v) {
+    cView = v; $('cViewSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+    $('cWrap').hidden = v !== 'clients'; $('cBoosts').hidden = v !== 'boosts'; $('cSortSeg') && ($('cSearch').placeholder = v === 'boosts' ? 'Search post, client or ad account' : 'Search client or Page');
+    if (v === 'boosts') loadBoosts(); else renderClients();
+  }
+  async function loadBoosts() {
+    const host = $('cBoosts'); if (!bstData) host.innerHTML = '<div class="panel"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>';
+    try { bstData = await api('/boosts'); } catch (e) { host.innerHTML = `<div class="panel"><div class="muted">${esc(e.message)}</div></div>`; return; }
+    paintBoosts();
+  }
+  function paintBoosts() {
+    const host = $('cBoosts'), d = bstData; if (!d) return;
+    const q = ($('cSearch').value || '').trim().toLowerCase(), n = { run: d.rows.filter((r) => r.state === 'active' || r.state === 'new' || r.state === 'nodate').length, ended: d.rows.filter((r) => r.state === 'ended').length, all: d.rows.length };
+    const rank = { active: 0, new: 1, nodate: 2, ended: 3 };
+    const rows = d.rows.filter((r) => (bstTab === 'all' || (bstTab === 'ended' ? r.state === 'ended' : r.state !== 'ended')) && (!q || [r.post, r.client, r.account].some((x) => String(x).toLowerCase().includes(q))))
+      .sort((a, b) => (rank[a.state] - rank[b.state]) || (a.state === 'ended' ? String(b.end).localeCompare(String(a.end)) : String(a.end || '9').localeCompare(String(b.end || '9'))) || a.client.localeCompare(b.client));
+    const pill = (r) => r.noSpend ? '<span class="pill bad"><i></i>No spend</span>' : r.state === 'active' ? '<span class="pill ok"><i></i>Active</span>' : r.state === 'new' ? '<span class="pill mute">New</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : '<span class="pill warn"><i></i>No start date</span>';
+    const left = (r) => r.left == null ? '–' : r.state === 'ended' ? `ended ${-r.left} day${r.left === -1 ? '' : 's'} ago` : r.state === 'new' ? `starts in ${Math.round((Date.parse(r.start) - Date.parse(d.today)) / 864e5)} d` : r.left === 0 ? '<b class="is-warn">ends today</b>' : r.left <= 2 ? `<b class="is-warn">${r.left} day${r.left === 1 ? '' : 's'} left</b>` : `${r.left} days left`;
+    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2><span class="hint">one row per post in a boost plan · state and spend fill in by themselves</span><span class="spacer"></span>
+        <div class="seg" role="group" aria-label="Which boosts"><button type="button" data-bst="run" aria-pressed="${bstTab === 'run'}">Running · ${n.run}</button><button type="button" data-bst="ended" aria-pressed="${bstTab === 'ended'}">Ended · ${n.ended}</button><button type="button" data-bst="all" aria-pressed="${bstTab === 'all'}">All · ${n.all}</button></div></div>
+      ${d.noPlan.length ? `<div class="note bst-np"><b>${d.noPlan.length} client${d.noPlan.length === 1 ? ' is' : 's are'} boosting without a plan</b> — no end date, no budget and no “no spend” alert for ${d.noPlan.length === 1 ? 'it' : 'them'}: ${d.noPlan.slice(0, 12).map((c) => `<button type="button" class="linkbtn" data-bstopen="${c.id}">${esc(c.name)}</button>`).join(', ')}${d.noPlan.length > 12 ? ` … +${d.noPlan.length - 12}` : ''}. Open a client and add its posts under “Post boost plan”.</div>` : ''}
+      ${rows.length ? `<div class="tablewrap"><table class="bst-t"><thead><tr><th scope="col">Post</th><th scope="col">Client</th><th scope="col" class="num">$ / day</th><th scope="col">Ad account</th><th scope="col">Start</th><th scope="col">End</th><th scope="col">State</th><th scope="col" class="num">Post spend today</th><th scope="col">Client's plan used</th><th scope="col">Sent to client</th></tr></thead><tbody>
+        ${rows.map((r) => `<tr class="${r.state}"><td class="bst-p">${r.link ? `<a href="${esc(r.link)}" target="_blank" rel="noopener">${esc(r.post)}</a>` : `<b>${esc(r.post)}</b>`}<span class="hint">${money(r.budget)} · ${r.days} day${r.days === 1 ? '' : 's'}</span></td>
+          <td><button type="button" class="linkbtn" data-bstopen="${r.clientId}">${esc(r.client)}</button>${r.telegram ? '' : '<span class="hint">no Telegram group</span>'}</td>
+          <td class="num">${money(r.daily)}</td><td>${esc(r.account || '–')}</td><td>${r.start ? esc(shortDay(r.start)) : '–'}</td><td>${r.end ? esc(shortDay(r.end)) : '–'}<span class="hint">${left(r)}</span></td>
+          <td>${pill(r)}</td><td class="num">${r.state === 'active' ? money(r.postToday) : '–'}</td>
+          <td>${r.planPct != null ? `<span class="bst-pl"><i class="ct-bar${r.planPct > 100 ? ' over' : ''}" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, r.planPct))}%"></i></i>${r.planPct}%</span><span class="hint">${money(r.planSpent)} of ${money(r.planBudget)}</span>` : '–'}</td>
+          <td>${r.sent ? esc(new Date(r.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty">${d.rows.length ? 'No boost matches.' : '<b>No boost plan yet.</b><br>Open a client and add the posts you boost under “Post boost plan” — they show up here.'}</div>`}</section>`;
+    host.querySelectorAll('[data-bst]').forEach((b) => b.onclick = () => { bstTab = b.dataset.bst; paintBoosts(); });
+    host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
+  }
   function renderClients() {
+    if (cView === 'boosts') { if (bstData) paintBoosts(); return; }
     const q = ($('cSearch').value || '').trim().toLowerCase();
     const att = Object.fromEntries(clients.map((c) => [c.id, attentionOf(c)]));
     // Boosting now first (spend today or yesterday, or a plan line that runs today), then the clients that are not boosting now.
@@ -1665,6 +1700,7 @@
     } catch (e) { toast(e.message); paintWork(); }
   });
   $('cSearch').oninput = () => renderClients();
+  if ($('cViewSeg')) $('cViewSeg').querySelectorAll('button').forEach((b) => b.onclick = () => setCView(b.dataset.v));
   document.querySelectorAll('#cSortSeg button').forEach((b) => b.onclick = () => { cSort = b.dataset.k; try { localStorage.setItem('cSort', cSort); } catch (_) {} renderClients(); });
 
   // Add / edit dialog

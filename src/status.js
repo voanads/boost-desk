@@ -109,7 +109,7 @@ async function forOwner(user) {
     }
     reasons = reasons.slice().sort((a, b) => rank[a.level] - rank[b.level]);
     const level = !active ? 'idle' : reasons.some((x) => x.level === 'bad') ? 'bad' : reasons.length ? 'warn' : 'ok', s = st[c.id] || {};
-    return { id: c.id, name: c.name, level, active, reasons, follow, spend: sp.all || 0, telegram: !!c.telegram,
+    return { id: c.id, name: c.name, level, active, reasons, follow, spend: sp.all || 0, postToday: sp.post || 0, telegram: !!c.telegram,
       cpr: sp.results > 0 && sp.resSpend > 0 ? { cost: Math.round(sp.resSpend / sp.results * 1000) / 1000, results: sp.results, type: sp.resultType || 'result' } : null,
       plan: tt.budget ? { budget: tt.budget, to: tt.to || '', left: tt.to ? daysBetween(today, tt.to) : null, spent: p ? p.spent : null, pct: p ? p.pct : null } : null,
       lastBoost: lastDay[c.id] || '',

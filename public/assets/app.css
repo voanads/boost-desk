@@ -3802,3 +3802,12 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
   #tab-dashboard .dside #ctMine .ct-card{height:100%;box-sizing:border-box}
   #tab-dashboard .dside #ctMine .ct-list{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
 }
+
+/* Clients › Boosts: one row per post in a boost plan */
+.cview{flex:none}.bst .panel.bst-card{padding:0!important;overflow:hidden}
+.bst-h{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:16px 18px 12px}.bst-h h2{margin:0;font-size:var(--fs-lg)}
+.bst-np{margin:0 18px 12px}
+.bst-t{width:100%;border-collapse:collapse;min-width:980px}.bst-t th{text-align:left;font-size:var(--fs-xs);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:10px 12px;background:var(--bg-2);white-space:nowrap}
+.bst-t td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top;font-size:var(--fs-sm)}.bst-t th.num,.bst-t td.num{text-align:right;font-variant-numeric:tabular-nums}
+.bst-t td .hint{display:block;font-size:var(--fs-xs)}.bst-t tr.ended td{color:var(--muted)}.bst-p a,.bst-p b{font-weight:600}.bst-p{max-width:280px}
+.bst-pl{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.bst .pill.bad{background:var(--danger-soft);color:var(--danger)}.bst .pill.ok{background:var(--ok-soft);color:var(--ok)}.bst .pill.warn{background:var(--warn-soft);color:var(--warn)}.bst .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}.bst .is-warn{color:var(--warn)}

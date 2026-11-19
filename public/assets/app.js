@@ -3115,15 +3115,25 @@
     try { ctMineData = await api('/clients-status'); ctMineAt = Date.now(); } catch (_) { host.hidden = true; return; }
     paintCtMine();
   }
+  let ctMineTab = 'on';
   function paintCtMine() {
-    const host = $('ctMine'), every = (ctMineData && ctMineData.clients) || []; if (!every.length) { host.hidden = true; return; }
+    const host = $('ctMine'), every = (ctMineData && ctMineData.clients) || []; if (!every.length) { host.hidden = true; host.innerHTML = ''; return; }
     const cs = every.filter((c) => c.level !== 'idle'), idle = every.filter((c) => c.level === 'idle');
     const n = ctCount(cs), need = cs.filter((c) => c.level !== 'ok'), unchecked = cs.filter((c) => !c.checked).length, show = ctMineAll ? cs : need;
+    if (ctMineTab === 'idle' && !idle.length) ctMineTab = 'on';
+    // beside the clients table on a wide screen; on a narrow one first thing under the page head
+    try { const wide = matchMedia('(min-width: 1100px)').matches, side = document.querySelector('#tab-dashboard .dside'), head = document.querySelector('#tab-dashboard .phead'); if (wide && side && host.parentElement !== side) side.prepend(host); else if (!wide && head && host.previousElementSibling !== head) head.after(host);
+      if (!paintCtMine.wired) { paintCtMine.wired = true; matchMedia('(min-width: 1100px)').addEventListener('change', () => { if (ctMineData) paintCtMine(); }); } } catch (_) {}
+    const fol = idle.filter((c) => c.follow).length, sortedIdle = idle.slice().sort((a, b) => (!!b.follow - !!a.follow) || String(b.lastBoost).localeCompare(String(a.lastBoost)));
     host.hidden = false;
-    host.innerHTML = `<section class="panel ct-card" aria-label="Clients today"><div class="ct-h"><h2>Clients today</h2><span class="pill mute">Boosting now · ${cs.length}</span>${cs.length ? ctPill(n) : ''}<span class="hint">${n.bad} urgent · ${n.warn} to watch · ${n.ok} fine · ${unchecked ? `${unchecked} not checked yet` : 'all checked today'}</span><span class="spacer"></span>${cs.length ? `<button type="button" class="sm" id="ctMineTog">${ctMineAll ? 'Only what needs attention' : `Show all ${cs.length}`}</button>` : ''}</div>
-      ${cs.length ? ctMix(n) : ''}${show.length ? show.map((c) => ctRow(c, true)).join('') : `<div class="ct-none hint">${cs.length ? 'Nothing needs attention right now.' : 'No client is boosting right now.'}</div>`}${ctIdle(idle, true, ctMineData.today, 'mine')}</section>`;
+    host.innerHTML = `<section class="panel ct-card ct-mine" aria-label="Clients today"><div class="ct-h"><h2>Clients today</h2><span class="spacer"></span>${cs.length ? ctPill(n) : ''}</div>
+      <div class="seg ct-tabs" role="tablist" aria-label="Which clients"><button type="button" role="tab" data-cttab="on" aria-selected="${ctMineTab === 'on'}">Boosting now · ${cs.length}</button><button type="button" role="tab" data-cttab="idle" aria-selected="${ctMineTab === 'idle'}"${idle.length ? '' : ' disabled'}>Not boosting · ${idle.length}</button></div>
+      ${ctMineTab === 'on'
+        ? `<div class="ct-sub"><span class="hint">${n.bad} urgent · ${n.warn} to watch · ${n.ok} fine · ${unchecked ? `${unchecked} not checked yet` : 'all checked today'}</span>${cs.length ? `<button type="button" class="linkbtn" id="ctMineTog">${ctMineAll ? 'Only what needs attention' : `Show all ${cs.length}`}</button>` : ''}</div>
+           ${cs.length ? ctMix(n) : ''}<div class="ct-list">${show.length ? show.map((c) => ctRow(c, true)).join('') : `<div class="ct-none hint">${cs.length ? 'Nothing needs attention right now.' : 'No client is boosting right now.'}</div>`}</div>`
+        : `<div class="ct-sub"><span class="hint">${fol ? `${fol} to follow up` : 'nothing to follow up'} · never urgent, no alerts</span></div><div class="ct-list ct-idle-list">${sortedIdle.map((c) => ctIdleRow(c, true, ctMineData.today)).join('')}</div>`}</section>`;
     if ($('ctMineTog')) $('ctMineTog').onclick = () => { ctMineAll = !ctMineAll; paintCtMine(); };
-    host.querySelectorAll('[data-ctidle]').forEach((d) => d.addEventListener('toggle', () => { ctIdleOpen[d.dataset.ctidle] = d.open; }));
+    host.querySelectorAll('[data-cttab]').forEach((b) => b.onclick = () => { ctMineTab = b.dataset.cttab; paintCtMine(); });
     const post = async (id, what, on) => { try { const r = await api(`/clients/${id}/${what}`, { method: 'POST', body: { on } }); const c = every.find((x) => x.id === Number(id)); if (c) { c.checked = r.checked; c.onIt = r.onIt; } paintCtMine(); } catch (e) { toast(e.message); } };
     host.querySelectorAll('[data-ctchk]').forEach((b) => b.onclick = () => post(b.dataset.ctchk, 'checked', b.getAttribute('aria-pressed') !== 'true'));
     host.querySelectorAll('[data-cton]').forEach((b) => b.onclick = () => post(b.dataset.cton, 'on-it', b.getAttribute('aria-pressed') !== 'true'));

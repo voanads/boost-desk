@@ -1646,7 +1646,7 @@
   function drawArState() { const el = $('cAutoState'); if (!arSet) { el.textContent = ''; return; } el.textContent = arSet.on ? arSet.time : 'Off'; el.classList.toggle('on', !!arSet.on); }
   async function loadAr() { try { arSet = await api('/auto-report'); drawArState(); } catch (_) {} }
   function drawAr() {
-    $('arOn').checked = !!arSet.on; $('arOnTxt').textContent = arSet.on ? 'On' : 'Off'; $('arTime').value = arSet.time; $('arImg').checked = arSet.withImage !== false;
+    $('arOn').checked = !!arSet.on; $('arOnTxt').textContent = arSet.on ? 'On' : 'Off'; $('arTime').value = arSet.time; $('arImg').checked = arSet.withImage !== false; if ($('arWeekly')) { $('arWeekly').checked = !!arSet.weekly; $('arMonthly').checked = !!arSet.monthly; }
     const list = clients.filter((c) => !c.archived).sort((a, b) => (!!b.telegram - !!a.telegram) || a.name.localeCompare(b.name));
     $('arList').innerHTML = list.map((c) => c.telegram
       ? `<label><input type="checkbox" data-ar="${c.id}" ${arSet.skip.includes(c.id) ? '' : 'checked'}><b>${esc(c.name)}</b><small>✈ ${esc(c.telegram_title || 'Telegram group')}</small></label>`
@@ -1658,7 +1658,7 @@
       : l && l.at ? `<b>Last run ${esc(t(l.at))}:</b> sent ${l.sent.length}${l.sent.length ? ' (' + esc(l.sent.join(', ')) + ')' : ''}${l.already && l.already.length ? ` · ${l.already.length} already sent by hand` : ''}${l.noSpend ? ` · ${l.noSpend} with no spend` : ''}${l.failed && l.failed.length ? `<br>⚠ Failed: ${esc(l.failed.map((f) => f.name + ' — ' + f.error).join('; '))}` : ''}`
       : `Clients with no boost spend that day get nothing. A report you already sent by hand is not sent again. Time zone: ${esc(arSet.tz || me.tz)}.`;
   }
-  const arBody = () => ({ on: $('arOn').checked, time: $('arTime').value, withImage: $('arImg').checked, skip: [...document.querySelectorAll('#arList [data-ar]')].filter((x) => !x.checked).map((x) => Number(x.dataset.ar)) });
+  const arBody = () => ({ on: $('arOn').checked, time: $('arTime').value, withImage: $('arImg').checked, weekly: !!($('arWeekly') && $('arWeekly').checked), monthly: !!($('arMonthly') && $('arMonthly').checked), skip: [...document.querySelectorAll('#arList [data-ar]')].filter((x) => !x.checked).map((x) => Number(x.dataset.ar)) });
   $('arOn').onchange = () => { $('arOnTxt').textContent = $('arOn').checked ? 'On' : 'Off'; };
   $('cAutoBtn').onclick = async () => {
     if (!arSet) await loadAr(); if (!arSet) return toast('Could not load the auto report settings.');
@@ -1674,7 +1674,7 @@
       const scr = arBody(), keep = arSet.on; const saved = await api('/auto-report', { method: 'PUT', body: { ...scr, on: keep } }); // use the ticks on screen
       const r = await api('/auto-report/run', { method: 'POST' });
       arSet = { ...arSet, ...saved, last: r }; drawAr(); $('arOn').checked = scr.on; $('arOnTxt').textContent = scr.on ? 'On' : 'Off';
-      toast(r.sent.length ? `Sent ${r.sent.length} report${r.sent.length === 1 ? '' : 's'}` : r.already.length ? 'Today’s reports were already sent.' : 'No client has boost spend today.');
+      toast((r.warn ? `Numbers were NOT refreshed from Meta (${r.warn}) — ` : '') + (r.sent.length ? `Sent ${r.sent.length} report${r.sent.length === 1 ? '' : 's'}${r.noGroup && r.noGroup.length ? ` · ${r.noGroup.length} with spend but no Telegram group` : ''}${r.differs && r.differs.length ? ` · ${r.differs.length} differ from Meta` : ''}` : r.already.length ? 'Today’s reports were already sent.' : 'No client has boost spend today.'));
     } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Send now'; }
   };
   loadAr();

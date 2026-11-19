@@ -773,6 +773,9 @@
     <div class="dlg-head"><div><h2 id="arTitle">Auto daily report</h2><div class="hint">Every day at the time you set, each client's report goes to their own Telegram group by itself.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
     <div class="arrow"><label class="switch"><input type="checkbox" id="arOn"><i></i><span id="arOnTxt">Off</span></label><span class="spacer"></span><label class="artime"><span>Send at</span><input type="time" id="arTime" step="300"></label></div>
     <label class="chk"><input type="checkbox" id="arImg"> Send with the ads picture</label>
+    <label class="chk"><input type="checkbox" id="arWeekly"> Also send a weekly summary — Monday 9:00, for last week</label>
+    <label class="chk"><input type="checkbox" id="arMonthly"> Also send a monthly summary — the 1st at 9:00, for last month</label>
+    <p class="hint">Reports are sent only after today's numbers are refreshed from Meta. If Meta cannot be reached, nothing is sent; Boost Desk tries again every 15 minutes (3 times) and tells you on Telegram.</p>
     <div class="arlist-head"><b>Clients</b><span class="hint" id="arCount"></span></div>
     <div class="arlist" id="arList"></div>
     <div class="note" id="arNote"></div>
@@ -845,7 +848,7 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/adscheck-bridge-sdk.js?v=243"></script>
-<script src="/assets/app.js?v=279"></script>
+<script src="/assets/app.js?v=280"></script>
 <script src="/assets/i18n.js?v=5"></script>
 </body>
 </html>

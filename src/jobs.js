@@ -162,13 +162,8 @@ function start(deps = {}) {
   }
   H.register('Health check', 5, 'every 5 minutes');
   cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
-  const m = cfg.reportTime.match(/^(\d{1,2}):(\d{2})$/);
-  if (telegram.configured() && m) {
-    cron.schedule(`${Number(m[2])} ${Number(m[1])} * * *`, () => sendDailyReport()
-      .then((who) => log('daily report sent for', who.join(', ') || 'nobody'))
-      .catch((e) => log('daily report failed:', e.message)), opts);
-    log(`Telegram report scheduled at ${cfg.reportTime} (${cfg.tz})`);
-  } else log('Telegram report off (set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and REPORT_TIME=HH:MM)');
+  // The 21:00 "Boost report" to the team group was removed on 19 Nov 2026 (owner's decision). The evening digest to each
+  // PM, the per-client auto reports and Teams today cover it. sendDailyReport() stays for a manual run only.
 }
 
 // Owner's control panel: every account that has logged in, with its auto sync state.

@@ -70,6 +70,8 @@ async function move(from, into, p, by) {
     await c.query('UPDATE post_images SET owner=$2 WHERE owner=$1', [from, into]);
     // 2 · ad accounts: one the target already has stays the target's; the rest move and remember which Facebook login reaches them
     const shared = (await c.query('SELECT s.id FROM ad_accounts s JOIN ad_accounts d ON d.id=s.id AND d.owner=$2 WHERE s.owner=$1', [from, into])).rows.map((r) => r.id);
+    // an account the source was syncing stays ticked: otherwise the merged clients' spend silently stops (Nang Sokhy, 19 Nov 2026)
+    await c.query('UPDATE ad_accounts d SET enabled = true FROM ad_accounts s WHERE d.owner=$2 AND s.owner=$1 AND s.id=d.id AND s.enabled AND NOT d.enabled', [from, into]);
     await c.query('DELETE FROM ad_accounts WHERE owner=$1 AND id = ANY($2)', [from, shared]);
     await c.query(`UPDATE ad_accounts SET owner=$2, info = info || CASE WHEN info ? 'via' THEN '{}'::jsonb ELSE jsonb_build_object('via', $1::text, 'viaName', $3::text) END WHERE owner=$1`, [from, into, srcFb]);
     // 3 · synced rows: a day both have gets the source's rows added, minus accounts the target already counted

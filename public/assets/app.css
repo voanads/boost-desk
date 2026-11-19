@@ -3700,3 +3700,24 @@ nav.tabs button.nav-sub{display:none!important}
 
 /* 19 Nov 2026: KPIs and the daily task menu live in GenZ KPI now — their entry points are hidden (code kept) */
 body.tasks-off nav.tabs button[data-tab="mytasks"],body.tasks-off #moreList [data-go="mytasks"],body.tasks-off #kpiMine,body.tasks-off [data-mbkpi],body.tasks-off [data-mbkpi2],body.tasks-off .tm-row .kpi-score,body.tasks-off section[aria-labelledby="coTgT"]{display:none!important}
+
+/* Client status (19 Nov): Clients today — leaders' board on the Main Dashboard, team list on the Dashboard */
+.ct{display:flex;flex-direction:column;gap:14px}
+.ct-top{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px} .ct-top h2{margin:0;font-size:var(--fs-lg)}
+.ct .panel.ct-card{padding:0!important;gap:0!important;display:flex;flex-direction:column;overflow:hidden}
+.ct .panel.lb-sum.ct-card{flex-direction:row;flex-wrap:wrap}
+.ct-grid{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+.ct-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:14px 16px 12px} .ct-h h2{margin:0;font-size:var(--fs-lg)}
+.ct-mix{display:flex;gap:2px;height:8px;border-radius:999px;overflow:hidden;background:var(--bg-2);margin:0 16px 14px} .ct-mix i{display:block;height:100%} .ct-mix i.ok{background:var(--ok)} .ct-mix i.mid{background:var(--warn)} .ct-mix i.bad{background:var(--danger)}
+.ct-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--line);min-height:60px}
+.ct-dot{width:10px;height:10px;border-radius:50%;background:var(--ok)} .ct-row.warn .ct-dot{background:var(--warn)} .ct-row.bad .ct-dot{background:var(--danger)}
+.ct-n{display:flex;flex-direction:column;min-width:0;line-height:1.3;align-items:flex-start} .ct-n b,.ct-n .ct-open{font-weight:600;font-size:var(--fs-sm);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .ct-n .hint{font-size:var(--fs-xs);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct-v{display:flex;flex-direction:column;align-items:flex-end;gap:2px;white-space:nowrap} .ct-v b{font-size:var(--fs-sm)} .ct-v .hint{font-size:var(--fs-xs)}
+.ct-a{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end} .ct-a button{min-height:36px}
+.ct-a button[aria-pressed=true]{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.ct-none{padding:14px 16px;border-top:1px solid var(--line);font-size:var(--fs-sm)}
+.ct .pill.bad{background:var(--danger-soft);color:var(--danger)} .ct .pill.warn{background:var(--warn-soft);color:var(--warn)} .ct .pill.ok{background:var(--ok-soft);color:var(--ok)} .ct .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.ct .is-warn{color:var(--warn)}
+#ctBoard{margin-bottom:6px}
+@media (max-width:640px){.ct-grid{grid-template-columns:minmax(0,1fr)}.ct-row{grid-template-columns:10px minmax(0,1fr) auto;row-gap:6px}.ct-a{grid-column:2/-1;justify-content:flex-start}.ct-top .pill{display:none}.ct-n .hint{white-space:normal}}
+body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){display:none}

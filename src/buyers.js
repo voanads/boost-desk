@@ -58,6 +58,7 @@ async function onTelegram(fresh, AI) {
     telegram.sendButtons(`📋 ${b.name}, here are your tasks for today.`, c.id, [[{ text: '📋 My tasks', url: dashLink(b) + '#dashboard' }]]).catch(() => {});
   }
   for (const t of fresh.taps || []) {
+    if (/^cs:/.test(String(t.data))) continue; // client status taps are handled in src/status.js
     const m = String(t.data).match(/^td:(\d+):([a-f0-9]{6,20})$/); if (!m) { telegram.answerTap(t.qid); continue; }
     try {
       const cid = m[1], tid = m[2];

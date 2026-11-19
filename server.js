@@ -502,7 +502,7 @@ const AUDIT = [
   [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
   [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
   [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
-  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
+  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
   [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
   [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
   [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
@@ -1668,6 +1668,7 @@ async function refreshChatsNow() {
       telegram.send('✅ Boost Desk system alerts will come to this chat. Send /alerts again from another chat to move them.', al.id).catch(() => {});
     }
   }
+  try { await require('./src/status').onTelegram(fresh); } catch (e) { console.error('[telegram] client status:', e.message); }
   try { await require('./src/buyers').onTelegram(fresh, AI); } catch (e) { console.error('[telegram] media buyers:', e.message); }
   try { await require('./src/handoff').onTelegram(fresh); } catch (e) { console.error('[telegram] handoff:', e.message); }
   // PMs / owner connecting their own Telegram (t.me/<bot>?start=pm_CODE) for plan / result alerts from their media buyers.
@@ -2082,6 +2083,41 @@ api.post('/admin/users/:id/rename', ownerOnly, wrap(async (req, res) => {
   const lg = await LOGINS().forFb(u.fb_id); if (lg) { lg.name = name; await LOGINS().save(lg); }
   res.json({ ok: true, name, was: u.name });
 }));
+// ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
+const STATUS = () => require('./src/status');
+const whoAmI = (req) => (req.user.buyer ? req.user.buyer.name : req.user.name);
+// My team's clients with their status (a media buyer sees their PM's clients).
+api.get('/clients-status', wrap(async (req, res) => res.json(await STATUS().forOwner({ fb_id: req.user.fb_id, name: req.user.name }))));
+api.post('/clients/:id/checked', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  res.json(await STATUS().mark(req.user.fb_id, Number(req.params.id), 'checked', whoAmI(req), (req.body || {}).on !== false));
+}));
+api.post('/clients/:id/on-it', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  res.json(await STATUS().mark(req.user.fb_id, Number(req.params.id), 'onIt', whoAmI(req), (req.body || {}).on !== false));
+}));
+// Leaders: every team's clients by status.
+api.get('/admin/clients-today', adminOnly, wrap(async (req, res) => {
+  const teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const bl = await MB().all(), out = [];
+  for (const u of await db.allUsers()) {
+    let s; try { s = await STATUS().forOwner({ fb_id: u.fb_id, name: u.name }); } catch (e) { s = { clients: [], error: e.message }; }
+    if (!s.clients.length) continue;
+    out.push({ id: u.fb_id, account: u.name, team: teamOf[u.fb_id] || u.name, mbs: bl.filter((b) => (b.addedById || '') === u.fb_id).map((b) => b.name), clients: s.clients });
+  }
+  res.json({ today: sync.todayIn(), hour: STATUS().hourNow(), teams: out });
+}));
+// Telegram for red clients: every 5 minutes (8:00–21:00). Leaders = the alert chat and every CEO / COO / CMO with Telegram.
+async function leaderChats() {
+  const out = new Set(); const a = await db.getSetting('alertChat', null); if (a && a.id) out.add(String(a.id));
+  const roles = await roleMap(), owner = await db.ownerId();
+  for (const u of await db.allUsers()) { if (u.fb_id !== owner && !LEAD.has(roles[u.fb_id])) continue; const c = await db.getUserSetting(u.fb_id, 'tgChat', null); if (c && c.id) out.add(String(c.id)); }
+  return [...out];
+}
+if (telegram.hasBot()) {
+  health.register('Client status alerts', 5, 'every 5 minutes, 8:00–21:00');
+  setInterval(() => health.track('Client status alerts', () => STATUS().tick({ leaders: leaderChats, log: (...a) => console.log('[status]', ...a) })).then((n) => { if (n) console.log('[status] client alerts sent:', n); }).catch((e) => console.error('[status]', e.message)), 5 * 60e3).unref();
+}
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)
 //   scope 'pms'  — every Project Manager;   scope 'mbs' — every media buyer (from a media buyer's list)
@@ -2187,7 +2223,7 @@ api.get('/onboarding', wrap(async (req, res) => {
     { key: 'clients', done: clients.length > 0, title: 'Add your first client', hint: 'A client is matched to spend by its Facebook Page.', go: '#clients', cta: 'Open Clients' },
     { key: 'telegram', done: !!(chat && chat.id), title: 'Link your Telegram', hint: 'For alerts, and so reports can go to your clients\' groups.', go: '#settings', cta: 'Open Settings' },
     { key: 'groups', done: clients.length > 0 && clients.every((c) => reports.routes(c).some((r) => r.chat)), title: 'Give every client a Telegram group', hint: clients.length ? `${clients.filter((c) => !reports.routes(c).some((r) => r.chat)).length} client(s) have no group yet — their report can't be sent.` : 'After you add clients.', go: '#reports', cta: 'Open Reports' },
-    { key: 'kpi', done: kpis > 0, title: 'Set this month\'s KPIs and your daily menu', hint: 'My Task → Monthly KPI, then ✨ Suggest from KPI.', go: '#mytasks', cta: 'Open My Task' },
+    ...(TASKS_OFF ? [] : [{ key: 'kpi', done: kpis > 0, title: 'Set this month\'s KPIs and your daily menu', hint: 'My Task → Monthly KPI, then ✨ Suggest from KPI.', go: '#mytasks', cta: 'Open My Task' }]),
   ];
   res.json({ show: steps.some((x) => !x.done), done: steps.filter((x) => x.done).length, total: steps.length, steps });
 }));

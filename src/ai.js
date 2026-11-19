@@ -334,7 +334,7 @@ async function weeklyStrategy(owner, clientId, { force = false } = {}) {
 // A PM's own wording replaces the AI's for one language.
 async function saveWeeklyText(owner, clientId, lang, text) {
   const wb = await workbook(owner, clientId); if (!wb.weekly) throw Object.assign(new Error('There is no weekly strategy yet.'), { status: 400 });
-  wb.weekly[lang === 'en' ? 'en' : 'km'] = String(text || '').trim().slice(0, 4000); wb.weekly.edited = true;
+  wb.weekly[lang === 'en' ? 'en' : 'km'] = String(text || '').trim().slice(0, 4000); wb.weekly.edited = true; wb.weekly.editedLangs = [...new Set([...(wb.weekly.editedLangs || []), lang === 'en' ? 'en' : 'km'])];
   // the actions follow the PM's wording: the bullets under "This week" (the last heading)
   const k = lang === 'en' ? 'en' : 'km', last = wb.weekly[k].split(/^##\s.*$/m).pop() || '';
   const acts = last.split('\n').map((l) => (l.match(/^\s*[-*•]\s*(?:\[\s?\]\s*)?(.+)$/) || [])[1]).filter(Boolean).map((t) => t.trim().slice(0, 200)).slice(0, 5);

@@ -1111,6 +1111,7 @@ api.post('/admin/merge', ownerOnly, wrap(async (req, res) => {
   const out = await M.run(p.from.id, p.into.id, req.user.name);
   console.log('[merge]', p.from.name, '→', p.into.name, 'by', req.user.name, '·', p.clients, 'clients,', p.adAccounts, 'ad accounts');
   const into = await db.getUser(p.into.id); sync.refreshAccounts(into).catch((e) => console.error('[merge] account refresh:', e.message));
+  dedupeClients(into).catch((e) => console.error('[merge] dedupe:', e.message)); // the same client in both accounts becomes one
   res.json(out);
 }));
 api.delete('/blocked/:id', ownerOnly, wrap(async (req, res) => { await db.setBlocked(req.params.id, '', false); res.json({ ok: true }); }));
@@ -1152,6 +1153,7 @@ api.post('/clients', wrap(async (req, res) => {
   if (!c.name) return res.status(400).json({ error: 'Client name is required.' });
   if (!(await groupAllowed(req.user.fb_id, c.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
   for (const v of Object.values(c.topics || {})) if (!(await groupAllowed(req.user.fb_id, v.id))) return res.status(403).json({ error: 'That Telegram topic is linked to another account.' });
+  if ((await db.listClients(req.user.fb_id)).some((x) => String(x.name).trim().toLowerCase() === c.name.trim().toLowerCase())) return res.status(409).json({ error: `You already have a client called “${c.name}”. Open it and add the Page there, or use another name.` });
   const created = await db.createClient(req.user.fb_id, c);
   await sync.rematch(req.user);
   res.json(created);
@@ -1160,6 +1162,7 @@ api.patch('/clients/:id', wrap(async (req, res) => {
   const body = cleanClient(req.body || {});
   if (body.telegram && !(await groupAllowed(req.user.fb_id, body.telegram))) return res.status(403).json({ error: 'That Telegram group is linked to another account.' });
   for (const v of Object.values(body.topics || {})) if (!(await groupAllowed(req.user.fb_id, v.id))) return res.status(403).json({ error: 'That Telegram topic is linked to another account.' });
+  if (body.name) { const mine = await db.listClients(req.user.fb_id), low = (x) => String(x || '').trim().toLowerCase(), cur = mine.find((x) => x.id === Number(req.params.id)); if (cur && low(cur.name) !== low(body.name) && mine.some((x) => x.id !== cur.id && low(x.name) === low(body.name))) return res.status(409).json({ error: `You already have a client called “${body.name}”. Use “Merge a duplicate…” to make them one.` }); }
   const c = await db.updateClient(req.user.fb_id, Number(req.params.id), body);
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   // Only changes that affect matching need a re-match (not e.g. the Telegram group).
@@ -2149,10 +2152,10 @@ api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
 // The client that stays keeps its name, settings and saved days. From the duplicate it takes: Page names, the Telegram group
 // (if it has none), days it has no entry for, invoices, notes, open tasks and boost plans. Then the duplicate is removed and
 // every saved day is matched again, so the spend lands on the client that stays.
-async function mergeClients(user, aId, bId) {
+async function mergeClients(user, aId, bId, { rematch = true } = {}) {
   const owner = user.fb_id, list = await db.listClients(owner), A = list.find((x) => x.id === Number(aId)), B = list.find((x) => x.id === Number(bId));
   if (!A || !B || A.id === B.id) throw Object.assign(new Error('Choose two different clients of yours.'), { status: 400 });
-  if (sync.isBusy(owner)) throw Object.assign(new Error('A sync is running right now. Try again in a minute.'), { status: 409 });
+  if (rematch && sync.isBusy(owner)) throw Object.assign(new Error('A sync is running right now. Try again in a minute.'), { status: 409 });
   const low = (x) => String(x || '').trim().toLowerCase(), have = new Set([A.name, A.match, ...(A.pages || [])].map(low));
   const pages = [...(A.pages || [])]; for (const x of [B.name, B.match, ...(B.pages || [])]) { const k = low(x); if (k && !have.has(k)) { have.add(k); pages.push(String(x).trim()); } }
   const planA = A.plan || {}, planB = B.plan || {}, pastB = [...((planB.lines || []).length ? [{ lines: planB.lines, tax: !!planB.tax, sentAt: planB.sentAt || null, at: new Date().toISOString(), by: `merged from ${B.name}` }] : []), ...(planB.past || [])];
@@ -2176,8 +2179,27 @@ async function mergeClients(user, aId, bId) {
     await c.query('COMMIT');
   } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
   console.log(`[client merge] ${user.name}: "${B.name}" (#${B.id}) into "${A.name}" (#${A.id})`);
-  try { await sync.exclusive(owner, () => sync.rematch(user)); } catch (e) { console.error('[client merge] rematch failed:', e.message); }
+  if (rematch) { try { await sync.exclusive(owner, () => sync.rematch(user)); } catch (e) { console.error('[client merge] rematch failed:', e.message); } }
   return (await db.listClients(owner)).find((x) => x.id === A.id);
+}
+// Every group of clients with the same name in one workspace becomes one client (owner's decision, 19 Nov 2026: for every
+// team, and from now on after an account merge). The one with the most spend this month stays (an active one before a
+// paused one). All spend is matched again once at the end; this month's spend per name is logged before and after.
+const sameName = (list) => { const g = {}; for (const c of list) { const k = String(c.name || '').trim().toLowerCase(); if (k) (g[k] = g[k] || []).push(c); } return Object.values(g).filter((x) => x.length > 1); };
+async function dedupeClients(user) {
+  const owner = user.fb_id, dups = sameName(await db.listClients(owner)); if (!dups.length) return { groups: 0, removed: 0, bad: [] };
+  const today = sync.todayIn(), from = today.slice(0, 8) + '01', r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const spendOf = async () => Object.fromEntries(((await sync.dashboard(owner, from, today)).clients || []).map((x) => [x.id, x.spend || 0]));
+  const before = await spendOf(), plan = [];
+  for (const g of dups) { const o = g.slice().sort((a, b) => (!!a.archived - !!b.archived) || (before[b.id] || 0) - (before[a.id] || 0) || a.id - b.id); plan.push({ keep: o[0], rest: o.slice(1), sum: r2(g.reduce((t, c) => t + (before[c.id] || 0), 0)) }); }
+  let removed = 0;
+  for (const p of plan) for (const b of p.rest) { try { await mergeClients(user, p.keep.id, b.id, { rematch: false }); removed++; } catch (e) { console.error(`[dedupe] ${user.name}: ${b.name} #${b.id} failed:`, e.message); } }
+  let matched = false;
+  for (let i = 0; i < 20 && !matched; i++) { const r = await sync.exclusive(owner, async () => { await sync.rematch(user); return true; }).catch((e) => { console.error('[dedupe] rematch failed:', e.message); return true; }); if (r) matched = true; else await new Promise((ok) => setTimeout(ok, 30e3)); }
+  const after = await spendOf(), bad = [];
+  for (const p of plan) { const a = r2(after[p.keep.id]); const ok = Math.abs(a - p.sum) < 0.01; if (!ok) bad.push(p.keep.name); console.log(`[dedupe] ${user.name}: ${p.keep.name} ×${p.rest.length + 1} → #${p.keep.id} · this month before $${p.sum.toFixed(2)}, after $${a.toFixed(2)} ${ok ? '✓' : '✗ DIFFERENT'}`); }
+  console.log(`[dedupe] ${user.name}: ${plan.length} names, ${removed} duplicate clients removed${matched ? '' : ' — spend NOT matched again yet (a sync was running)'}${bad.length ? ` — ${bad.length} with a different total: ${bad.join(', ')}` : ''}`);
+  return { groups: plan.length, removed, bad };
 }
 api.post('/clients/:id/merge-from', wrap(async (req, res) => {
   if (!pmOnly(req, res)) return;
@@ -2881,6 +2903,20 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
       await db.setSetting('dupMerge1', { at: new Date().toISOString(), out });
     } catch (e) { console.error('[dup merge]', e.message); }
   }, 45e3).unref();
+  // One-off (owner's request, 19 Nov 2026): the same for every workspace — after a backup to the owner's Telegram.
+  setTimeout(async () => {
+    try {
+      if (await db.getSetting('dupMergeAll', null)) return;
+      await db.setSetting('dupMergeAll', { at: new Date().toISOString(), running: true }); // claim first: never twice
+      const todo = []; for (const u of await db.allUsers()) { const n = sameName(await db.listClients(u.fb_id)).length; if (n) todo.push(u); }
+      if (!todo.length) { console.log('[dedupe] no workspace has two clients with the same name'); await db.setSetting('dupMergeAll', { at: new Date().toISOString(), out: [] }); return; }
+      const bk = process.env.DEDUPE_TEST === 'local-no-backup' ? { sent: true } : await require('./src/backup').run(telegram).catch((e) => ({ sent: false, error: e.message }));
+      console.log(`[dedupe] backup before merging duplicates: ${bk.sent ? 'sent to the owner on Telegram' : 'NOT sent (' + (bk.error || 'unknown') + ')'}`);
+      if (!bk.sent) { await db.setSetting('dupMergeAll', { at: new Date().toISOString(), stopped: 'no backup' }); return; } // nothing is merged without a backup
+      const out = []; for (const u of todo) { try { out.push({ name: u.name, ...(await dedupeClients(u)) }); } catch (e) { console.error('[dedupe]', u.name, e.message); out.push({ name: u.name, error: e.message }); } }
+      await db.setSetting('dupMergeAll', { at: new Date().toISOString(), out });
+    } catch (e) { console.error('[dedupe]', e.message); }
+  }, 60e3).unref();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

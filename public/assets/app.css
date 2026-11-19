@@ -3750,3 +3750,11 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 #whoAvatar{overflow:hidden}#whoAvatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
 
 .cd-dup{margin:0 0 12px}#cmDlg select{width:100%;min-height:44px;margin:6px 0 4px}
+
+/* Clients today: boosting now (with how the boost is doing) and, apart, not boosting now */
+.ct-b{display:flex;align-items:center;gap:8px;margin-top:2px}.ct-bar{display:inline-block;width:64px;height:6px;border-radius:999px;background:var(--bg-2);overflow:hidden;flex:none}.ct-bar i{display:block;height:100%;border-radius:999px;background:var(--brand-fill,var(--brand))}.ct-bar.over i{background:var(--danger)}
+.ct-idle{margin-top:12px;border-top:1px solid var(--line);padding:6px 16px 8px;background:var(--bg-2);border-radius:0 0 var(--r-lg,14px) var(--r-lg,14px)}.ct-idle summary{cursor:pointer;display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;min-height:40px;color:var(--muted)}.ct-idle summary b{color:var(--ink);font-weight:600}
+.ct-irow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px dashed var(--line)}.ct-irow .ct-n{display:flex;flex-direction:column;min-width:0}
+.ct-chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:var(--fs-xs);font-weight:600;background:var(--bg-2);color:var(--ink);white-space:nowrap}
+.cd-st.idle{border-left-color:var(--line)}.pill.mute{background:var(--bg-2);color:var(--muted)}
+@media (max-width:600px){.ct-irow{grid-template-columns:1fr;gap:4px}.ct-chip{justify-self:start}}

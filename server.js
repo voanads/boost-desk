@@ -2918,6 +2918,7 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
     } catch (e) { console.error('[dedupe]', e.message); }
   }, 60e3).unref();
   setTimeout(() => require('./src/announce').run().catch((e) => console.error('[announce]', e.message)), 30e3).unref(); // one-off announcement of 19 Nov 2026
+  setInterval(() => require('./src/announce').runGuide().catch((e) => console.error('[announce]', e.message)), 5 * 60e3).unref(); // one-off guide of 20 Nov 2026: goes out once, from 08:10
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

@@ -3811,3 +3811,10 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .bst-t td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top;font-size:var(--fs-sm)}.bst-t th.num,.bst-t td.num{text-align:right;font-variant-numeric:tabular-nums}
 .bst-t td .hint{display:block;font-size:var(--fs-xs)}.bst-t tr.ended td{color:var(--muted)}.bst-p a,.bst-p b{font-weight:600}.bst-p{max-width:280px}
 .bst-pl{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}.bst .pill.bad{background:var(--danger-soft);color:var(--danger)}.bst .pill.ok{background:var(--ok-soft);color:var(--ok)}.bst .pill.warn{background:var(--warn-soft);color:var(--warn)}.bst .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}.bst .is-warn{color:var(--warn)}
+
+/* Boosts: found on Meta, and the add form */
+.bst-found{margin:0 18px 12px;border:1px solid var(--line);border-radius:var(--r-md,10px);padding:4px 14px 6px;background:var(--bg-2)}.bst-found summary{cursor:pointer;display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;min-height:40px}
+.bst-f{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 0;border-top:1px dashed var(--line)}.bst-fn{display:flex;flex-direction:column;min-width:0}.bst-fn b{font-weight:600;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bst-form label{display:block;font-weight:600;font-size:var(--fs-sm);margin:10px 0 4px}.bst-form input,.bst-form select{width:100%;min-height:44px;box-sizing:border-box}.bst-3{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:10px}
+@media (max-width:520px){.bst-3{grid-template-columns:1fr 1fr}.bst-3>div:last-child{grid-column:1/-1}}
+.bst-form input{padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}

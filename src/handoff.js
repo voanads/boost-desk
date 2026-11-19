@@ -59,16 +59,16 @@ function briefText({ buyer, pmName, day, y, notes, tasks }) {
   if (y.unsent) lines.push(`⚠ របាយការណ៍ម្សិលមិញ ${y.unsent} មិនទាន់ផ្ញើ`);
   for (const n of notes) lines.push('', `📝 កំណត់ចំណាំពី ${n.by} (${n.day === day ? 'ថ្ងៃនេះ' : 'យប់មិញ'} ${hm(n.at)})`, bullets(n.text));
   if (!notes.length) lines.push('', `📝 យប់មិញគ្មានកំណត់ចំណាំពី ${pmName} ទេ។`);
-  lines.push('', `Task ថ្ងៃនេះ (${tasks.length})`);
+  lines.push('', `ការងារលើភ្ញៀវថ្ងៃនេះ (${tasks.length})`);
   for (const t of tasks.slice(0, 6)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`);
-  if (tasks.length > 6) lines.push(`… +${tasks.length - 6} ទៀត ក្នុង My Task`);
-  if (!tasks.length) lines.push('មិនទាន់មាន Task ទេ — PM អាចបន្ថែមបានគ្រប់ពេល។');
+  if (tasks.length > 6) lines.push(`… +${tasks.length - 6} ទៀត ក្នុង Dashboard`);
+  if (!tasks.length) lines.push('ថ្ងៃនេះមិនទាន់មានការងារលើភ្ញៀវទេ — PM អាចបន្ថែមបានគ្រប់ពេល។');
   return lines.join('\n');
 }
 function remindText({ buyer, pmName, open, tonight }) {
   const lines = ['⏰ 15 នាទីមុនចេញពីការងារ', ''];
-  if (open.length) { lines.push(`នៅសល់ ${open.length} Task មិនទាន់រួច៖`); for (const t of open.slice(0, 5)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`); if (open.length > 5) lines.push(`… +${open.length - 5} ទៀត`); }
-  else lines.push('Task ទាំងអស់រួចរាល់ហើយ ✅');
+  if (open.length) { lines.push(`នៅសល់ការងារលើភ្ញៀវ ${open.length} មិនទាន់រួច៖`); for (const t of open.slice(0, 5)) lines.push(`☐ ${t.client ? t.client + ' — ' : ''}${t.text}`); if (open.length > 5) lines.push(`… +${open.length - 5} ទៀត`); }
+  else lines.push('ការងារលើភ្ញៀវរួចរាល់ទាំងអស់ហើយ ✅');
   lines.push('', `✍ សូមសរសេរកំណត់ចំណាំជូន ${first(pmName)} សម្រាប់យប់នេះ — វាយនៅទីនេះ ហើយផ្ញើ។${tonight ? `\n(${tonight})` : ''}`);
   return lines.join('\n');
 }
@@ -81,7 +81,7 @@ function digestText({ day, rep, team, pmName, forPmChat }) {
   if (rows.length > 25) lines.push(`… +${rows.length - 25} ទៀត`);
   const skipped = rep.rows.length - rows.length; if (skipped) lines.push(`ភ្ញៀវគ្មានចំណាយ ${skipped}`);
   lines.push('', 'ក្រុមថ្ងៃនេះ');
-  lines.push(team.map((m) => `${first(m.name)} ${m.done}/${m.total}${m.total && m.done === m.total ? ' ✅' : ''}`).join(' · ') || 'ថ្ងៃនេះគ្មាន Task');
+  lines.push(team.map((m) => `${first(m.name)} ${m.done}/${m.total}${m.total && m.done === m.total ? ' ✅' : ''}`).join(' · ') || 'ថ្ងៃនេះគ្មានការងារលើភ្ញៀវ');
   if (forPmChat) lines.push('', '✍ សូមទុកកំណត់ចំណាំជូន Media Buyer សម្រាប់ព្រឹកស្អែក — វាយនៅទីនេះ ហើយផ្ញើ។');
   else lines.push('', `កំណត់ចំណាំសម្រាប់ស្អែក នឹងមកពី ${first(pmName)} ម៉ោង 8:00។`);
   return lines.join('\n');
@@ -111,7 +111,7 @@ async function morningBrief(D, log = () => {}) {
       const { day, yest, pm, tasks, mbs } = await dayData(owner, D), linked = mbs.filter((b) => b.chat); if (!linked.length) continue;
       const y = await yesterday(owner, yest, D), notes = await latest(owner, 'pm', yest);
       for (const b of linked) {
-        try { await telegram.sendButtons(briefText({ buyer: b, pmName: pm.name, day, y, notes, tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '✅ My tasks', url: buyers.dashLink(b) + '#dashboard' }]]); n++; }
+        try { await telegram.sendButtons(briefText({ buyer: b, pmName: pm.name, day, y, notes, tasks: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '👥 ភ្ញៀវរបស់ខ្ញុំ', url: buyers.dashLink(b) + '#dashboard' }]]); n++; }
         catch (e) { log('morning brief failed for', b.name, e.message); }
       }
     } catch (e) { log('morning brief failed:', e.message); }
@@ -127,7 +127,7 @@ async function leaveReminder(D, log = () => {}) {
       for (const b of mbs.filter((x) => x.chat)) {
         if ((await latest(owner, 'mb', day)).some((x) => x.byId === b.id)) continue; // already wrote today's note
         try {
-          await telegram.sendButtons(remindText({ buyer: b, pmName: pm.name, open: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '✅ My tasks', url: buyers.dashLink(b) + '#dashboard' }]]);
+          await telegram.sendButtons(remindText({ buyer: b, pmName: pm.name, open: forBuyer(tasks, b.id).filter((t) => !t.done) }), b.chat, [[{ text: '👥 ភ្ញៀវរបស់ខ្ញុំ', url: buyers.dashLink(b) + '#dashboard' }]]);
           await setAsk(b.chat, { owner, kind: 'mb', byId: b.id, by: b.name }); n++;
         } catch (e) { log('leave reminder failed for', b.name, e.message); }
       }

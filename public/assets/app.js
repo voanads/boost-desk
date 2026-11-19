@@ -263,7 +263,7 @@
   }
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
-  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'board', 'mytasks'] : ['dashboard', 'clients', 'lives', 'payments'];
+  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'adaccts', 'admin'] : ['dashboard', 'clients', 'lives', 'payments'];
   function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !b.classList.contains('nav-sub') && !KEEP.includes(b.dataset.tab)); }
   // A shorter menu: pages that belong together share one menu item and switch with a strip at the top of the page.
   //   Main Dashboard = Overview · Clients Board · Team reports        Ad accounts = My ad accounts · All ad accounts
@@ -301,6 +301,7 @@
     apply();
   });
   function showTab(name) {
+    if (me && me.tasksOff) { document.body.classList.add('tasks-off'); const mb0 = document.querySelector('nav.tabs button[data-tab="mytasks"]'); if (mb0) mb0.hidden = true; if (name === 'mytasks' || name === 'target') name = document.body.dataset.site === 'admin' ? 'main' : 'dashboard'; }
     if (name === 'checklist') name = 'dashboard'; // Home was merged into the Dashboard
     if (name === 'team') name = 'admin'; // Team & Telegram was removed; auto sync now lives in Admin
     if (name === 'target') name = 'mytasks'; // the Target page was removed; daily targets and KPIs live on My Task
@@ -3169,7 +3170,7 @@
     host.innerHTML = `<div class="top"><h2>📊 Monthly KPI · ${esc(monLbl(d.month))}</h2>${d.kpiAvg != null ? `<span class="kpi-score ${sc3(d.kpiAvg)}">${d.kpiAvg}%</span>` : ''}</div>
       ${d.kpis.length ? `<div class="mbm-list">${d.kpis.map((k) => `<div class="mbm-task"><div class="mbm-t"><b>${esc(k.name)}</b><span class="hint">${k.source === 'all' ? 'all daily tasks' : `${k.tasks} task${k.tasks === 1 ? '' : 's'}`}${k.estimated ? ' · auto' : ''}</span></div><span class="num mbm-kv">${k.result}<small> / ${k.target} ${esc(k.unit)}</small></span>${k.target ? `<span class="kpi-score ${sc3(k.score)}">${Math.round(k.score)}%</span>` : ''}</div>`).join('')}</div>` : '<div class="hl-empty">No KPI set for this month yet — your PM sets it.</div>'}`;
   }
-  function loadMyKpis() { if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', myKpiId()); } }
+  function loadMyKpis() { if (me && me.tasksOff) return; if ($('kpiMine') && me) { $('kpiMine').innerHTML = '<div class="top"><h2>📊 My KPIs</h2></div><div id="kpiMineBody"></div>'; kpiPanel('kpiMineBody', myKpiId()); } }
   // The KPI dropdown on the task form follows "For" (me or a media buyer) and this month.
   async function fillTaskKpis() {
     const sel = $('cdTaskKpi'); if (!sel) return;
@@ -3348,7 +3349,7 @@
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
-      card('📋', 'Task menu', '', 'The fixed daily duties every Project Manager and every media buyer ticks on their My Task page. One list per role.', '<button class="sm" data-sgo="menu">Edit task menu</button>'),
+      me && me.tasksOff ? '' : card('📋', 'Task menu', '', 'The fixed daily duties every Project Manager and every media buyer ticks on their My Task page. One list per role.', '<button class="sm" data-sgo="menu">Edit task menu</button>'),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
       d.canEdit ? card('🔑', 'Admin website · Google sign-in', '<span id="asState"></span>', '<div id="asBox" class="hint">Loading…</div>', '') : '',
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',

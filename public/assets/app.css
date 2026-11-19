@@ -3697,3 +3697,6 @@ nav.tabs button.nav-sub{display:none!important}
 #mtBoard .panel.lb-team{padding:0;gap:0;display:flex;flex-direction:column;overflow:hidden}
 #mtBoard .lb-stat{flex:1 1 170px} #mtBoard .lb-stat-ring{flex:1 1 250px} #mtBoard .lb-stat-wide{flex:2 1 360px}
 #mtBoard .panel.lb-sum,#mtBoard .panel.lb-team,#mtBoard .panel.lb-card{padding:0!important;gap:0!important}
+
+/* 19 Nov 2026: KPIs and the daily task menu live in GenZ KPI now — their entry points are hidden (code kept) */
+body.tasks-off nav.tabs button[data-tab="mytasks"],body.tasks-off #moreList [data-go="mytasks"],body.tasks-off #kpiMine,body.tasks-off [data-mbkpi],body.tasks-off [data-mbkpi2],body.tasks-off .tm-row .kpi-score,body.tasks-off section[aria-labelledby="coTgT"]{display:none!important}

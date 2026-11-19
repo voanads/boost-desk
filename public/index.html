@@ -18,7 +18,7 @@
     if (css) document.write('<link rel="stylesheet" id="bdFontCss" href="https://fonts.googleapis.com/css2?family=' + css + '&display=swap">'); })();
 </script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;600&display=swap">
-<link rel="stylesheet" href="/assets/app.css?v=278">
+<link rel="stylesheet" href="/assets/app.css?v=279">
 <link rel="stylesheet" href="/assets/restyle.css?v=3">
 </head>
 <body>
@@ -81,9 +81,10 @@
 
   <!-- MAIN DASHBOARD (admins) -->
   <section id="tab-main" class="wrap" hidden>
-    <div class="ohead"><div><h1>Main Dashboard</h1><div class="hint" id="mHint">What needs you first, then every team today, then this month's money and KPIs.</div></div>
+    <div class="ohead"><div><h1>Main Dashboard</h1><div class="hint" id="mHint">Clients that need attention first, then every team today, then this month's money.</div></div>
       <div class="ohead-r"><div class="seg" id="mModeSeg" role="group" aria-label="View"><button type="button" data-m="company" aria-pressed="true">Company</button><button type="button" data-m="pages" aria-pressed="false">Pages &amp; spend</button></div></div></div>
     <div class="note onote" id="mNote" hidden></div>
+    <div id="ctBoard" class="ct" hidden></div>
     <section id="mCompany" class="company" aria-label="Company overview">
       <div class="co-top"><div class="pb-nav co-nav"><button type="button" class="navbtn" id="coPrev" aria-label="Previous month">‹</button><b id="coMonth">…</b><button type="button" class="navbtn" id="coNext" aria-label="Next month">›</button></div><span class="hint" id="coSub"></span></div>
       <div class="co-attn" id="coAttn" aria-label="Needs your attention"></div>
@@ -206,6 +207,7 @@
       <button id="dTeamReport" class="teambtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.5 11l7 2.5 2.5 7 9.5-17Z"/><path d="m9.5 13.5 5-5"/></svg><span>Team report</span></button>
       </div>
     </div>
+    <div id="ctMine" class="ct" hidden></div>
     <div id="onb" class="onb" hidden></div>
     <section id="hoCard" class="ho" aria-label="Handoff" hidden></section>
     <div class="progress" id="syncProg" hidden>
@@ -843,7 +845,7 @@
   <div class="seg fp-size" role="radiogroup" aria-label="Text size"><button type="button" role="radio" data-size="s" style="font-size:12px">A</button><button type="button" role="radio" data-size="m" style="font-size:14px">A</button><button type="button" role="radio" data-size="l" style="font-size:16px">A</button><button type="button" role="radio" data-size="xl" style="font-size:19px">A</button></div>
 </div>
 <script src="/assets/adscheck-bridge-sdk.js?v=243"></script>
-<script src="/assets/app.js?v=278"></script>
-<script src="/assets/i18n.js?v=4"></script>
+<script src="/assets/app.js?v=279"></script>
+<script src="/assets/i18n.js?v=5"></script>
 </body>
 </html>

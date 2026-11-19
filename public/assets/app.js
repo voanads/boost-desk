@@ -316,7 +316,8 @@
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     paintSubnav(name);
     moveInk();
-    if (name === 'dashboard') { loadDash(); loadOnboarding(); loadHandoff(); }
+    if (name === 'dashboard') { loadDash(); loadOnboarding(); loadHandoff(); loadCtMine(); }
+    if (name === 'main') loadCtBoard();
     if (name === 'clients') loadClientMonth();
     if (name === 'admin') { showAdm(admSec); if (admSec !== 'health') loadHealth(); }
     if (name === 'lives') loadLives();
@@ -1786,7 +1787,7 @@
     mMode = m; localStorage.setItem('bd-main-mode', m);
     document.querySelectorAll('#mModeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
     $('mCompany').hidden = m !== 'company'; $('mPagesView').hidden = m !== 'pages';
-    $('mHint').textContent = m === 'company' ? 'What needs you first, then every team today, then this month\'s money and KPIs.' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
+    $('mHint').textContent = m === 'company' ? 'Clients that need attention first, then every team today, then this month\'s money.' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
     if (m === 'company') loadCompany(); else loadMainPages();
   }
   document.querySelectorAll('#mModeSeg button').forEach((b) => b.onclick = () => setMainMode(b.dataset.m));
@@ -2969,6 +2970,63 @@
       if (lead && lead.id !== me.id && !(mtAs && mtAs.id === lead.id)) return pick(lead);
       renderMtPeople();
     });
+  }
+  // ---- Client status (19 Nov 2026): fine / watch / problem per client; "checked today"; "I'm on it" ----
+  const ctTime = (at) => { try { return new Date(at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Phnom_Penh' }).replace(' ', '').toLowerCase(); } catch (_) { return ''; } };
+  const ctCount = (cs) => ({ bad: cs.filter((c) => c.level === 'bad').length, warn: cs.filter((c) => c.level === 'warn').length, ok: cs.filter((c) => c.level === 'ok').length });
+  const ctWho = (c) => (c.onIt ? `<span class="is-ok">${esc(c.onIt.by)} is on it</span>` : c.level === 'bad' ? '<span class="is-danger">nobody on it</span>' : c.checked ? `checked ${ctTime(c.checked.at)}` : 'not checked');
+  const ctMix = (n) => `<div class="ct-mix" role="img" aria-label="${n.ok} fine, ${n.warn} to watch, ${n.bad} with a problem">${n.bad ? `<i class="bad" style="flex:${n.bad}"></i>` : ''}${n.warn ? `<i class="mid" style="flex:${n.warn}"></i>` : ''}${n.ok ? `<i class="ok" style="flex:${n.ok}"></i>` : ''}</div>`;
+  const ctPill = (n) => (n.bad ? `<span class="pill bad"><i></i>${n.bad} problem${n.bad === 1 ? '' : 's'}</span>` : n.warn ? `<span class="pill warn"><i></i>${n.warn} to watch</span>` : '<span class="pill ok"><i></i>All fine</span>');
+  const ctRing = (n) => { const tot = n.ok + n.warn + n.bad || 1, C = 163.36, a = n.ok / tot * C, b = n.warn / tot * C, d = n.bad / tot * C;
+    return `<svg class="lb-ring" role="img" aria-label="${n.ok} fine, ${n.warn} to watch, ${n.bad} with a problem" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="var(--bg-2)" stroke-width="8"/>${a ? `<circle cx="32" cy="32" r="26" fill="none" stroke="var(--ok)" stroke-width="8" stroke-dasharray="${a.toFixed(1)} ${C}" transform="rotate(-90 32 32)"/>` : ''}${b ? `<circle cx="32" cy="32" r="26" fill="none" stroke="var(--warn)" stroke-width="8" stroke-dasharray="${b.toFixed(1)} ${C}" stroke-dashoffset="${(-a).toFixed(1)}" transform="rotate(-90 32 32)"/>` : ''}${d ? `<circle cx="32" cy="32" r="26" fill="none" stroke="var(--danger)" stroke-width="8" stroke-dasharray="${d.toFixed(1)} ${C}" stroke-dashoffset="${(-a - b).toFixed(1)}" transform="rotate(-90 32 32)"/>` : ''}<text x="32" y="37" text-anchor="middle" font-size="15" font-weight="700" fill="currentColor">${n.ok + n.warn + n.bad}</text></svg>`; };
+  const ctRow = (c, mine) => `<div class="ct-row ${c.level}"><span class="ct-dot" aria-hidden="true"></span><div class="ct-n">${mine ? `<button type="button" class="linkbtn ct-open" data-ctopen="${c.id}">${esc(c.name)}</button>` : `<b>${esc(c.name)}</b>`}<span class="hint">${c.reasons.length ? esc(c.reasons[0].text) + (c.reasons.length > 1 ? ` · +${c.reasons.length - 1} more` : '') : 'Nothing needs attention'}</span></div>
+      <div class="ct-v"><b class="num">${money(c.spend)}</b><span class="hint">${ctWho(c)}</span></div>
+      ${mine ? `<div class="ct-a">${c.level === 'bad' ? `<button type="button" class="sm${c.onIt ? '' : ' primary'}" data-cton="${c.id}" aria-pressed="${!!c.onIt}">${c.onIt ? 'On it ✓' : 'I’m on it'}</button>` : ''}<button type="button" class="sm" data-ctchk="${c.id}" aria-pressed="${!!c.checked}">${c.checked ? 'Checked ✓' : 'Checked'}</button></div>` : ''}</div>`;
+  // My team's clients (PM and media buyer): the ones that need attention on top of the Dashboard.
+  let ctMineAll = false, ctMineData = null;
+  async function loadCtMine() {
+    const host = $('ctMine'); if (!host || !me) return;
+    try { ctMineData = await api('/clients-status'); } catch (_) { host.hidden = true; return; }
+    paintCtMine();
+  }
+  function paintCtMine() {
+    const host = $('ctMine'), cs = (ctMineData && ctMineData.clients) || []; if (!cs.length) { host.hidden = true; return; }
+    const n = ctCount(cs), need = cs.filter((c) => c.level !== 'ok'), unchecked = cs.filter((c) => !c.checked).length, show = ctMineAll ? cs : need;
+    host.hidden = false;
+    host.innerHTML = `<section class="panel ct-card" aria-label="Clients today"><div class="ct-h"><h2>Clients today</h2>${ctPill(n)}<span class="hint">${n.ok} fine · ${n.warn} to watch · ${n.bad} with a problem · ${unchecked ? `${unchecked} not checked yet` : 'all checked today'}</span><span class="spacer"></span><button type="button" class="sm" id="ctMineTog">${ctMineAll ? 'Only what needs attention' : `Show all ${cs.length}`}</button></div>
+      ${ctMix(n)}${show.length ? show.map((c) => ctRow(c, true)).join('') : '<div class="ct-none hint">Nothing needs attention right now.</div>'}</section>`;
+    $('ctMineTog').onclick = () => { ctMineAll = !ctMineAll; paintCtMine(); };
+    const post = async (id, what, on) => { try { const r = await api(`/clients/${id}/${what}`, { method: 'POST', body: { on } }); const c = cs.find((x) => x.id === Number(id)); if (c) { c.checked = r.checked; c.onIt = r.onIt; } paintCtMine(); } catch (e) { toast(e.message); } };
+    host.querySelectorAll('[data-ctchk]').forEach((b) => b.onclick = () => post(b.dataset.ctchk, 'checked', b.getAttribute('aria-pressed') !== 'true'));
+    host.querySelectorAll('[data-cton]').forEach((b) => b.onclick = () => post(b.dataset.cton, 'on-it', b.getAttribute('aria-pressed') !== 'true'));
+    host.querySelectorAll('[data-ctopen]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); setTimeout(() => { try { selectClient(Number(b.dataset.ctopen)); } catch (_) {} }, 400); });
+  }
+  // Leaders: every team's clients by status, at the top of the Main Dashboard.
+  let ctAll = {}, ctBoardData = null;
+  async function loadCtBoard() {
+    const host = $('ctBoard'); if (!host || !me || !me.canAdmin || me.buyer) { if (host) host.hidden = true; return; }
+    if (!ctBoardData) { host.hidden = false; host.innerHTML = '<div class="panel"><div class="sk"></div><div class="sk"></div></div>'; }
+    try { ctBoardData = await api('/admin/clients-today'); } catch (e) { host.innerHTML = `<div class="panel"><div class="muted">${esc(e.message)}</div></div>`; return; }
+    paintCtBoard();
+  }
+  function paintCtBoard() {
+    const host = $('ctBoard'), d = ctBoardData; if (!d || !d.teams.length) { host.hidden = true; return; }
+    host.hidden = false;
+    const byTeam = {}; for (const t of d.teams) { const g = byTeam[t.team] || (byTeam[t.team] = { name: t.team, accounts: [], mbs: [], clients: [] }); g.accounts.push(t.account); g.mbs.push(...t.mbs); g.clients.push(...t.clients); }
+    const rank = { bad: 0, warn: 1, ok: 2 }, teams = Object.values(byTeam).map((g) => ({ ...g, n: ctCount(g.clients), clients: g.clients.sort((a, b) => rank[a.level] - rank[b.level] || a.name.localeCompare(b.name)) })).sort((a, b) => b.n.bad - a.n.bad || b.n.warn - a.n.warn || a.name.localeCompare(b.name));
+    const all = teams.flatMap((g) => g.clients), N = ctCount(all), checked = all.filter((c) => c.checked).length, spend = all.reduce((t, c) => t + c.spend, 0), withSpend = all.filter((c) => c.spend > 0).length, free = all.filter((c) => c.level === 'bad' && !c.onIt).length;
+    const stat = (lab, big, sub, cls) => `<div class="lb-stat"><span class="lb-lab">${lab}</span><b class="${cls || ''}">${big}</b><span class="hint">${sub}</span></div>`;
+    const card = (g) => { const need = g.clients.filter((c) => c.level !== 'ok'), open = !!ctAll[g.name], show = open ? g.clients : need, unchecked = g.clients.filter((c) => !c.checked).length;
+      return `<article class="panel ct-card ct-team"><div class="lb-th"><span class="avatar lb-tav">${initials(g.name)}</span><span class="lb-tn"><b>${esc(g.name)}</b><span class="hint">${esc(g.accounts.join(' + '))}${g.mbs.length ? ' · MB ' + esc(g.mbs.join(', ')) : ''} · ${g.clients.length} client${g.clients.length === 1 ? '' : 's'}</span></span>${ctPill(g.n)}</div>
+        ${ctMix(g.n)}${show.length ? show.map((c) => ctRow(c, false)).join('') : `<div class="ct-none hint">Nothing needs attention. ${unchecked ? `${unchecked} client${unchecked === 1 ? '' : 's'} not checked yet today.` : `All ${g.clients.length} clients were checked today.`}</div>`}
+        <div class="lb-tf"><span>${g.n.ok} client${g.n.ok === 1 ? ' is' : 's are'} fine</span><span class="spacer"></span><button type="button" class="linkbtn" data-ctall="${esc(g.name)}">${open ? 'Only what needs attention' : `Show all ${g.clients.length}`}</button></div></article>`; };
+    host.innerHTML = `<div class="ct-top"><h2>Clients today</h2><span class="hint">every team's clients by status · worked out from spend, plans, ad accounts, reports and invoices</span><span class="spacer"></span><span class="pill bad"><i></i>Problem · act now</span><span class="pill warn"><i></i>Watch</span><span class="pill ok"><i></i>Fine</span></div>
+      <section class="panel lb-sum ct-card" aria-label="Clients in numbers"><div class="lb-stat lb-stat-ring">${ctRing(N)}<div><span class="lb-lab">Active clients</span><b>${N.ok} fine</b><span class="hint">${N.warn} to watch · ${N.bad} with a problem</span></div></div>
+        ${stat('Problem', `${N.bad} client${N.bad === 1 ? '' : 's'}`, N.bad ? (free ? `nobody is on ${free} of them` : 'someone is on each of them') : 'no client has a problem', N.bad ? 'is-danger' : '')}
+        ${stat('Checked today', `${checked} of ${all.length}`, all.length - checked ? `${all.length - checked} not looked at yet` : 'every client was checked')}
+        ${stat('Spend today', money(spend), `${withSpend} client${withSpend === 1 ? '' : 's'} with spend`)}</section>
+      <section class="lb-grid ct-grid">${teams.map(card).join('')}</section>`;
+    host.querySelectorAll('[data-ctall]').forEach((b) => b.onclick = () => { ctAll[b.dataset.ctall] = !ctAll[b.dataset.ctall]; paintCtBoard(); });
   }
   // ---- Leader board: every team side by side (today), and every person KPI by KPI (this month) ----
   let mtView = null, mtMonthData = null;

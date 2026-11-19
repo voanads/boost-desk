@@ -1225,8 +1225,9 @@ api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
 api.get('/clients/:id/boost-plan/message', wrap(async (req, res) => {
   const P = require('./src/plan'), c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (!c) return res.status(404).json({ error: 'Client not found.' });
-  if (!P.totals(c.plan).budget) return res.status(400).json({ error: 'Add at least one post with a daily budget first.' });
-  res.json({ text: P.message(c, c.plan, req.query.lang === 'km' ? 'km' : 'en'), teamGroup: !!cfg.telegramChatId });
+  const only = String(req.query.only || '') ? String(req.query.only).split(',').map(Number) : null, pl = P.subset(c.plan, only).plan;
+  if (!P.totals(pl).budget) return res.status(400).json({ error: 'Add at least one post with a daily budget first.' });
+  res.json({ text: P.message(c, pl, req.query.lang === 'km' ? 'km' : 'en'), teamGroup: !!cfg.telegramChatId });
 }));
 api.get('/clients/:id/boost-plan/progress', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
@@ -1237,7 +1238,7 @@ api.post('/clients/:id/boost-plan/send', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (!c) return res.status(404).json({ error: 'Client not found.' });
   const b = req.body || {};
-  res.json(await require('./src/plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || '') }));
+  res.json(await require('./src/plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || ''), only: Array.isArray(b.only) ? b.only.slice(0, 30) : null }));
 }));
 api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 

@@ -3740,3 +3740,8 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 /* Boost plan: past plans */
 .bp-past{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}.bp-past summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:var(--fs-sm);min-height:32px;display:flex;align-items:center}
 .bp-pp{padding:8px 0;border-top:1px dashed var(--line)}.bp-pp-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}.bp-pp-l{padding-left:2px}
+
+/* Send plan: choose the posts */
+.bp-pick{border:1px solid var(--line);border-radius:var(--r-md,10px);padding:8px 12px;margin:0 0 10px;display:flex;flex-direction:column;gap:2px}.bp-pick legend{font-weight:600;font-size:var(--fs-sm);padding:0 4px}
+.bp-pick label{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-height:40px;cursor:pointer}.bp-pick input{width:18px;height:18px;flex:none}
+.bp-pick{align-self:start}

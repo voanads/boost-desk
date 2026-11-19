@@ -1028,8 +1028,10 @@
   // The client's main Facebook Page (its picture is the client's avatar): the Page with most spend, else a Page ID typed on the client.
   function clientPageId(c) {
     const o = cOrd[c.id]; const top = o && (o.pages || []).filter((p) => p.pageId).sort((a, b) => b.spend - a.spend)[0];
-    return top ? top.pageId : (c.pages || []).map(String).find((x) => /^\d{5,20}$/.test(x)) || '';
+    if (c.picId) cPic[c.id] = c.picId; // kept: a client object from a save does not carry it
+    return top ? top.pageId : (c.pages || []).map(String).find((x) => /^\d{5,20}$/.test(x)) || c.picId || cPic[c.id] || '';
   }
+  const cPic = {};
   function selectClient(id) {
     cSel = id; cPicked = true; cSetOpen = false; $('cWrap').classList.add('show-detail');
     document.querySelectorAll('#cGrid [data-csel]').forEach((b) => { const on = Number(b.dataset.csel) === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
@@ -4261,7 +4263,7 @@ Notes:
       const tags = (hasL(c) ? (liveNow(c) ? '<span class="chip livenow" title="A live started in the last 2 hours">Live now</span>' : '<span class="chip live">Live</span>') : '') + (hasP(c) ? '<span class="chip post">Post</span>' : '');
       const open = dOpen.has(c.id);
       return `<tr data-cid="${c.id}" style="--i:${Math.min(i, 14)}" class="drow${rowsEnter ? ' enter' : ''}${open ? ' open' : ''}${c.spend > 0 ? '' : ' nospend'}" tabindex="0" aria-expanded="${open}">
-        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><span class="avatar sm cav" aria-hidden="true">${esc(String(c.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</span><div class="nm-t"><b>${esc(c.name)}</b><span class="nm-s">${tags}</span></div></div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
+        <td class="cname"><div class="nm"><span class="chev" aria-hidden="true">›</span><span class="avatar sm cav" aria-hidden="true">${esc(String(c.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}${(() => { try { const cc = clients.find((x) => x.id === c.id); const top = (dPages[c.id] || []).filter((p) => p && p.pageId).sort((a, b) => (b.spend || 0) - (a.spend || 0))[0]; return pagePic((top && top.pageId) || clientPageId(cc || c), 'av'); } catch (_) { return ''; } })()}</span><div class="nm-t"><b>${esc(c.name)}</b><span class="nm-s">${tags}</span></div></div>${pageSplit(c) ? `<div class="pg pgmoney">${pageLine(c)}</div>` : pg ? `<div class="pg">${esc(pg)}</div>` : ''}</td>
         <td class="r num" data-l="Lives">${hasL(c) && c.lives ? c.lives : dash}</td>
         <td class="r num" data-l="Live">${c.liveSpend > 0 ? money(c.liveSpend) : dash}</td>
         <td class="r num" data-l="Post">${c.postSpend > 0 ? money(c.postSpend) : dash}</td>
@@ -5242,6 +5244,7 @@ Thank you for working with Ads Box!`,
       date = me.today || date;
       $('whoName').textContent = me.name;
       $('whoAvatar').textContent = ((me.buyer && me.buyer.name) || me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+      if (!me.buyer && !me.google && me.id) { const im = new Image(); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.onload = () => { const w = $('whoAvatar'); if (w) { w.textContent = ''; w.appendChild(im); } }; im.src = `/api/fb-pic/${encodeURIComponent(me.id)}`; } // my Facebook photo; the initials stay if there is none
       [clients, accounts] = await Promise.all([api('/clients'), api('/accounts')]);
       renderClients(); renderAccounts(); loadPages(); loadClientMonth();
       await loadDay();

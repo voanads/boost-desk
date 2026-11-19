@@ -1140,7 +1140,12 @@ const cleanClient = (b) => {
   return c;
 };
 api.get('/pages', wrap(async (req, res) => res.json(await db.listPagesSeen(req.user.fb_id))));
-api.get('/clients', wrap(async (req, res) => res.json(await db.listClients(req.user.fb_id))));
+// picId: the Facebook Page whose picture stands for the client — a Page ID typed on the client, else a Page known by one of the client's names.
+api.get('/clients', wrap(async (req, res) => {
+  const list = await db.listClients(req.user.fb_id), byName = {};
+  try { const names = { ...(await db.getSetting('pageNames', {})), ...meta.knownPageNames() }; for (const [id, n] of Object.entries(names)) { const k = String(n || '').trim().toLowerCase(); if (k && /^\d{5,20}$/.test(id) && !byName[k]) byName[k] = id; } } catch (_) {}
+  res.json(list.map((c) => { const all = [...(c.pages || []), c.name, c.match].map((x) => String(x || '').trim()).filter(Boolean); return { ...c, picId: all.find((x) => /^\d{5,20}$/.test(x)) || (all.map((x) => byName[x.toLowerCase()]).find(Boolean) || '') }; }));
+}));
 const groupAllowed = async (fbId, chatId) => !chatId || (String(chatId).includes(':') && (await groupAllowed(fbId, String(chatId).split(':')[0]))) || (await db.getSetting('telegramChats', [])).some((c) => c.id === chatId && (c.owners || [c.owner]).includes(fbId)) || (await db.listClients(fbId)).some((c) => c.telegram === chatId);
 api.post('/clients', wrap(async (req, res) => {
   const c = cleanClient(req.body || {});

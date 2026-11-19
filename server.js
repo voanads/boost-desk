@@ -2222,11 +2222,11 @@ api.get('/boosts', wrap(async (req, res) => {
       rows.push({ clientId: c.id, client: c.name, i, post: l.post || `Post ${i + 1}`, link: l.link || '', daily: Number(l.daily) || 0, days: Number(l.days) || 0, budget: Math.round((Number(l.daily) || 0) * (Number(l.days) || 0) * 100) / 100,
         account: l.accountName || l.account || '', start: l.start || '', end, left: end ? Math.round((Date.parse(end) - Date.parse(today)) / 864e5) : null, state,
         noSpend: state === 'active' && (x.reasons || []).some((r) => r.kind === 'noboost'), sent: l.sent || (c.plan.sentAt && !lines.some((y) => y.sent) ? c.plan.sentAt : ''),
-        am: x.am || null, pm: x.pm || null, camp: l.camp || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
+        camp: l.camp || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
     });
   }
   const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));
-  res.json({ today, slot: st.slot, rows, noPlan, found: found.sort((a, b) => b.spend - a.spend) });
+  res.json({ today, rows, noPlan, found: found.sort((a, b) => b.spend - a.spend) });
 }));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');
@@ -2250,7 +2250,7 @@ api.get('/admin/clients-today', adminOnly, wrap(async (req, res) => {
     if (!s.clients.length) continue;
     out.push({ id: u.fb_id, account: u.name, team: teamOf[u.fb_id] || u.name, mbs: bl.filter((b) => (b.addedById || '') === u.fb_id).map((b) => b.name), clients: s.clients });
   }
-  res.json({ today: sync.todayIn(), hour: STATUS().hourNow(), slot: STATUS().hourNow() < 14 ? 'am' : 'pm', teams: out });
+  res.json({ today: sync.todayIn(), hour: STATUS().hourNow(), teams: out });
 }));
 // Telegram for red clients: every 5 minutes (8:00–21:00). Leaders = the alert chat and every CEO / COO / CMO with Telegram.
 async function leaderChats() {

@@ -34,7 +34,7 @@ const HOW = {
 };
 
 // A short history per client (newest first, 30 lines): who checked, who took a problem, alerts and when they were solved.
-const note = (s, kind, by, text) => { const d = sync.todayIn(); if ((kind === 'checked' || kind === 'onIt') && (s.log || []).some((l) => l.kind === kind && l.by === (by || '') && (l.text || '') === (text || '') && sync.todayIn(undefined, new Date(l.at)) === d)) return; s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
+const note = (s, kind, by, text) => { const d = sync.todayIn(); if ((kind === 'checked' || kind === 'onIt') && (s.log || []).some((l) => l.kind === kind && l.by === (by || '') && sync.todayIn(undefined, new Date(l.at)) === d)) return; s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
 
 async function forOwner(user) {
   const owner = user.fb_id, today = sync.todayIn(), hour = hourNow();
@@ -113,28 +113,19 @@ async function forOwner(user) {
       cpr: sp.results > 0 && sp.resSpend > 0 ? { cost: Math.round(sp.resSpend / sp.results * 1000) / 1000, results: sp.results, type: sp.resultType || 'result' } : null,
       plan: tt.budget ? { budget: tt.budget, to: tt.to || '', left: tt.to ? daysBetween(today, tt.to) : null, spent: p ? p.spent : null, pct: p ? p.pct : null } : null,
       lastBoost: lastDay[c.id] || '',
-      checked: checksOf(s, today)[slotNow()] || null, am: checksOf(s, today).am || null, pm: checksOf(s, today).pm || null,
+      checked: s.checked && s.checked.day === today ? { by: s.checked.by, at: s.checked.at } : null,
       onIt: s.onIt && s.onIt.day === today ? { by: s.onIt.by, at: s.onIt.at } : null, log: (s.log || []).slice(0, 12) };
   }).sort((a, b) => rank[a.level] - rank[b.level] || (!!a.onIt - !!b.onIt) || a.name.localeCompare(b.name));
-  return { today, slot: slotNow(), clients: out };
+  return { today, clients: out };
 }
 
-const slotNow = () => (hourNow() < 14 ? 'am' : 'pm');
-// today's two checks of a client; a mark from before 20 Nov (one "checked" a day) counts for the half of the day it was made in
-function checksOf(s, today) {
-  const out = {}; if (s.checks && s.checks.day === today) { if (s.checks.am) out.am = s.checks.am; if (s.checks.pm) out.pm = s.checks.pm; }
-  if (s.checked && s.checked.day === today) { const h = Number(new Date(s.checked.at).toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' })); const k = h < 14 ? 'am' : 'pm'; if (!out[k]) out[k] = { by: s.checked.by, at: s.checked.at }; }
-  return out;
-}
 // "checked today" / "I'm on it" — by a PM, a media buyer or a leader. Returns the client's new marks.
 async function mark(owner, clientId, what, by, on = true) {
   const today = sync.todayIn(), st = (await db.getUserSetting(owner, KEY, null)) || {}, s = st[clientId] || (st[clientId] = {});
-  // two checks a day, like the team's old sheet: morning (before 14:00, the media buyer's shift) and night (from 14:00, the PM's)
-  if (what === 'checked') { const k = slotNow(), ch = checksOf(s, today); if (on) { ch[k] = { by, at: new Date().toISOString() }; note(s, 'checked', by, k === 'am' ? 'morning' : 'night'); } else delete ch[k]; s.checks = { day: today, ...ch }; delete s.checked; }
+  if (what === 'checked') { if (on) { s.checked = { day: today, by, at: new Date().toISOString() }; note(s, 'checked', by); } else delete s.checked; }
   if (what === 'onIt') { if (on) { s.onIt = { day: today, by, at: new Date().toISOString() }; note(s, 'onIt', by); } else delete s.onIt; }
   await db.setUserSetting(owner, KEY, st);
-  const ch = checksOf(s, today);
-  return { checked: ch[slotNow()] || null, am: ch.am || null, pm: ch.pm || null, slot: slotNow(), onIt: s.onIt && s.onIt.day === today ? s.onIt : null, log: (s.log || []).slice(0, 12) };
+  return { checked: s.checked && s.checked.day === today ? s.checked : null, onIt: s.onIt && s.onIt.day === today ? s.onIt : null, log: (s.log || []).slice(0, 12) };
 }
 
 // ---- Telegram: red alert -> "I'm on it" -> leaders after 30 minutes -> resolved ----

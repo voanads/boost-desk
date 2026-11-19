@@ -3794,3 +3794,11 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
   #tab-dashboard .dside .dside-r{display:contents}
   .dside .ct-mine .ct-list{max-height:min(52vh,520px)}
 }
+/* the three panels of the row have the same size; a long one scrolls inside */
+@media (min-width:1400px){
+  #tab-dashboard .dside{align-items:stretch!important}
+  #tab-dashboard .dside #ctMine,#tab-dashboard .dside #tasksMine,#tab-dashboard .dside #hoCard{height:600px;min-height:0;box-sizing:border-box}
+  #tab-dashboard .dside #tasksMine,#tab-dashboard .dside #hoCard{overflow:auto}
+  #tab-dashboard .dside #ctMine .ct-card{height:100%;box-sizing:border-box}
+  #tab-dashboard .dside #ctMine .ct-list{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
+}

@@ -107,7 +107,10 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
     list.push({ id: profile.id, name: profile.name, token_enc: encrypt(token), expires, addedAt: new Date().toISOString() });
     await db.setUserSetting(linkFor, 'fbExtras', list);
     let n = 0; try { await sync.refreshAccounts(await db.getUser(linkFor)); n = (await db.listAccounts(linkFor)).filter((a) => (a.info || {}).via === profile.id).length; } catch (e) { console.error('[fb link] account list failed:', e.message); }
-    return back(`${profile.name} connected — ${n} more ad account${n === 1 ? '' : 's'} found. Tick the ones to sync in Ad accounts, then Sync from Meta.`, true);
+    // Pull the last 30 days for the new ad accounts straight away (in the background), so their spend shows without a manual Sync.
+    if (n) { const me = await db.getUser(linkFor), today = sync.todayIn(), since = sync.addDays(today, -29);
+      sync.exclusive(linkFor, () => sync.syncRange(since, today, { ...me, name: 'Auto sync' })).then((r) => console.log(`[fb link] ${me.name}: first sync after connecting ${profile.name} ${r ? `done, ${r.campaigns} campaigns` : 'skipped (another sync is running)'}`)).catch((e) => console.error('[fb link] first sync failed:', e.message)); }
+    return back(n ? `${profile.name} connected — ${n} more ad account${n === 1 ? '' : 's'} found. Their last 30 days are loading now; it takes a few minutes. Untick any you do not boost with in Ad accounts.` : `${profile.name} connected, but no new ad account was found on it.`, true);
   }
   if (cfg.allowedFbIds.length && !cfg.allowedFbIds.includes(profile.id)) {
     return res.redirect('/login?error=' + encodeURIComponent(`${profile.name} is not on this app's team list. Ask the admin to add Facebook ID ${profile.id}.`));
@@ -1199,7 +1202,19 @@ api.post('/post-preview', wrap(async (req, res) => {
 api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (!c) return res.status(404).json({ error: 'Client not found.' });
-  const plan = require('./src/plan').clean(req.body || {}, c.plan);
+  const b = req.body || {}, cur = c.plan || {}, old = (cur.lines || []);
+  let plan;
+  // Past plans are kept (owner, 19 Nov 2026): a new plan or "Delete" moves the current one to plan.past instead of losing it.
+  const keep = (pl) => ({ lines: pl.lines || [], tax: !!pl.tax, sentAt: pl.sentAt || null, at: new Date().toISOString(), by: req.user.buyer ? req.user.buyer.name : req.user.name });
+  if (Number.isInteger(b.restore)) { // bring a past plan back; the current one takes its place in the list
+    const past = [...(cur.past || [])], back = past[b.restore]; if (!back) return res.status(400).json({ error: 'That past plan is no longer there.' });
+    past.splice(b.restore, 1); if (old.length) past.unshift(keep(cur));
+    plan = { ...cur, lines: back.lines || [], tax: !!back.tax, sentAt: back.sentAt || null, past: past.slice(0, 20) };
+  } else if (Number.isInteger(b.forget)) { const past = [...(cur.past || [])]; past.splice(b.forget, 1); plan = { ...cur, past };
+  } else {
+    plan = require('./src/plan').clean(b, cur);
+    if (Array.isArray(b.lines) && b.sentAt === null && old.length) plan.past = [keep(cur), ...(cur.past || [])].slice(0, 20);
+  }
   // The ad account on a line must be one of this workspace's own; its name is taken from our list.
   if ((plan.lines || []).some((l) => l.account)) {
     const mine = new Map((await db.listAccounts(req.user.fb_id)).map((a) => [a.id, a.name || a.id]));

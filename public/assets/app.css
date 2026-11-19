@@ -3725,3 +3725,14 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 /* Weekly AI strategy in the client page */
 #cdWkSec .switch{margin-left:8px;font-size:var(--fs-sm);gap:8px;white-space:nowrap} #cdWkSec .switch i{flex:none;width:36px;height:20px} #cdWkSec .switch i:after{width:14px;height:14px;left:3px;top:3px} #cdWkSec .switch input:checked+i:after{transform:translateX(16px)} #cdWkSec .wk-lbl{font-weight:600} #cdWkSec .cd-sec-h{flex-wrap:wrap;row-gap:8px} #cdWkSec textarea{width:100%;min-height:220px;font:inherit;line-height:1.5;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md,8px);background:var(--surface);color:var(--ink)}
 .wk-meta{margin-top:8px;font-size:var(--fs-xs)} .wk-acts{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+
+/* Client page: status today (why green / amber / red, who looked, history) */
+.cd-st{margin:0 0 14px;padding:14px 16px!important;border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:var(--r-lg,14px);background:var(--surface)}
+.cd-st.warn{border-left-color:var(--warn)}.cd-st.bad{border-left-color:var(--danger)}
+.cd-st-h{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px}.cd-st-h h4{margin:0;font-size:var(--fs-md,1rem)}.cd-st-h .hint{font-size:var(--fs-sm);flex:1 1 240px;min-width:0}.cd-st-h .spacer{display:none}
+.cd-st-why{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0 0;margin-top:10px;border-top:1px solid var(--line)}
+.cd-st-why b{font-weight:600;font-size:var(--fs-sm);display:block}.cd-st-why .hint{display:block;font-size:var(--fs-xs)}
+.cd-st-why .ct-dot{width:10px;height:10px;border-radius:50%;background:var(--warn)}.cd-st-why.bad .ct-dot{background:var(--danger)}
+.cd-st-log{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;font-size:var(--fs-sm)}.cd-st-log summary{cursor:pointer;color:var(--muted);font-weight:600;min-height:32px;display:flex;align-items:center}
+.cd-st-l{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;padding:4px 0}
+@media (max-width:600px){.cd-st-h .spacer{display:none}.cd-st-why{grid-template-columns:10px minmax(0,1fr)}.cd-st-why .linkbtn{grid-column:2;justify-self:start}.cd-st-l{grid-template-columns:1fr;gap:0}}

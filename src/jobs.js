@@ -141,6 +141,9 @@ function start(deps = {}) {
   // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
   H.register('AI daily plans', 1440, 'daily at 06:40');
   cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
+  // AI: a weekly strategy for the clients each PM picked, Mondays at 07:00 (drafts for the team; nothing is sent to a client).
+  H.register('AI weekly strategies', 10080, 'Mondays at 07:00');
+  cron.schedule('0 7 * * 1', () => H.track('AI weekly strategies', () => require('./ai').weeklyPlans(log)).then((n) => { if (n) log('AI weekly strategies:', n); }).catch((e) => log('AI weekly strategies failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Database backup', 1440, 'daily at 03:20');
   // Media buyers get their every-day tasks again each morning at 08:00, with a fresh Done button.

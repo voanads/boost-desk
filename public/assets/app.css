@@ -3721,3 +3721,7 @@ body.tasks-off nav.tabs button[data-tab="mytasks"],body.tasks-off #moreList [dat
 #ctBoard{margin-bottom:6px}
 @media (max-width:640px){.ct-grid{grid-template-columns:minmax(0,1fr)}.ct-row{grid-template-columns:10px minmax(0,1fr) auto;row-gap:6px}.ct-a{grid-column:2/-1;justify-content:flex-start}.ct-top .pill{display:none}.ct-n .hint{white-space:normal}}
 body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){display:none}
+
+/* Weekly AI strategy in the client page */
+#cdWkSec .switch{margin-left:8px;font-size:var(--fs-sm);gap:8px;white-space:nowrap} #cdWkSec .switch i{flex:none;width:36px;height:20px} #cdWkSec .switch i:after{width:14px;height:14px;left:3px;top:3px} #cdWkSec .switch input:checked+i:after{transform:translateX(16px)} #cdWkSec .wk-lbl{font-weight:600} #cdWkSec .cd-sec-h{flex-wrap:wrap;row-gap:8px} #cdWkSec textarea{width:100%;min-height:220px;font:inherit;line-height:1.5;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md,8px);background:var(--surface);color:var(--ink)}
+.wk-meta{margin-top:8px;font-size:var(--fs-xs)} .wk-acts{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}

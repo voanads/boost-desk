@@ -502,7 +502,7 @@ const AUDIT = [
   [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
   [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
   [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
-  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
+  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/strategy\/send$/, 'Sent a weekly strategy to a client'], [/^PUT \/clients\/\d+\/strategy$/, 'Changed a client\'s weekly strategy'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
   [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
   [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
   [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
@@ -2082,6 +2082,47 @@ api.post('/admin/users/:id/rename', ownerOnly, wrap(async (req, res) => {
   await db.pool.query('UPDATE users SET name=$2 WHERE fb_id=$1', [u.fb_id, name]);
   const lg = await LOGINS().forFb(u.fb_id); if (lg) { lg.name = name; await LOGINS().save(lg); }
   res.json({ ok: true, name, was: u.name });
+}));
+// ---- Weekly AI strategy per client (19 Nov 2026): a draft for the team; only a PM can send it to the client ----
+const aiErr = (res, e) => { if (e.status) return res.status(e.status).json({ error: e.message, notSetUp: !!e.notSetUp }); throw e; };
+const pmOnly = (req, res) => { if (req.user.buyer) { res.status(403).json({ error: 'Only the Project Manager can do this.' }); return false; } return true; };
+api.get('/clients/:id/strategy', wrap(async (req, res) => {
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const w = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
+  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly: w, week: AI().weekRange(), canSend: !req.user.buyer });
+}));
+api.put('/clients/:id/strategy', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const b = req.body || {};
+  if ('on' in b) await AI().setWeeklyPick(req.user.fb_id, req.params.id, !!b.on);
+  let weekly = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
+  if (typeof b.text === 'string') { try { weekly = await AI().saveWeeklyText(req.user.fb_id, req.params.id, b.lang === 'en' ? 'en' : 'km', b.text); } catch (e) { return aiErr(res, e); } }
+  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly });
+}));
+api.post('/clients/:id/strategy/run', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  try { res.json({ weekly: await AI().weeklyStrategy(req.user.fb_id, req.params.id, { force: !!(req.body || {}).force }) }); } catch (e) { return aiErr(res, e); }
+}));
+// The three actions become Clients Tasks of this client (once).
+api.post('/clients/:id/strategy/tasks', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk) return res.status(400).json({ error: 'There is no weekly strategy yet.' });
+  const acts = ((req.body || {}).lang === 'en' ? wk.actionsEn : wk.actionsKm) || []; if (!acts.length) return res.status(400).json({ error: 'This strategy has no actions to add.' });
+  const today = sync.todayIn(); let added = 0;
+  for (const t of acts) if (!w.tasks.some((x) => x.text === t && !x.done)) { w.tasks.push({ id: crypto.randomBytes(5).toString('hex'), text: t, from: 'weekly', day: today, done: false, by: req.user.name }); added++; }
+  wk.tasksAt = new Date().toISOString(); await AI().saveWorkbook(req.user.fb_id, req.params.id, w);
+  res.json({ added, weekly: wk });
+}));
+// Send to the client's Telegram group — the PM's decision, in Khmer, English or both.
+api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return; const c = await ownClient(req); if (!c) return res.status(404).json({ error: 'Client not found.' });
+  if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
+  if (!c.telegram) return res.status(400).json({ error: `${c.name} has no Telegram group yet. Pick one in the Clients tab.` });
+  const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk || !wk.km) return res.status(400).json({ error: 'There is no weekly strategy yet.' });
+  const lang = ['km', 'en', 'both'].includes((req.body || {}).lang) ? req.body.lang : 'km';
+  try { await telegram.send(AI().weeklyMessage(c.name, wk, lang), c.telegram); } catch (e) { return res.status(502).json({ error: 'Telegram did not take the message: ' + e.message }); }
+  wk.sent = { at: new Date().toISOString(), by: req.user.name, lang, to: c.telegram_title || '' }; await AI().saveWorkbook(req.user.fb_id, req.params.id, w);
+  res.json({ weekly: wk });
 }));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');

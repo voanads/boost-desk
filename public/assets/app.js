@@ -1000,10 +1000,8 @@
 
   // What needs doing for a client today: to-dos not ticked yet + open tasks; "urgent" = a warning or a report to send.
   function attentionOf(c) {
-    const w = cWork[c.id] || { openTasks: 0, ticked: [] }, items = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id && !w.ticked.includes(x.kind)) : [];
-    const todo = items.filter((x) => x.level !== 'good');
-    const urgent = todo.some((x) => x.level === 'bad' || x.level === 'warn' || x.kind === 'report');
-    return { n: todo.length + (w.openTasks || 0), urgent };
+    const w = cWork[c.id] || { openTasks: 0, ticked: [] }; // the number is the client's own open tasks for today; what the system finds is in the client's status
+    return { n: w.openTasks || 0, urgent: false };
   }
   // ---- Boosts: one row per post in a boost plan, across every client (the team's old status sheet, filled by itself) ----
   let cView = 'clients', bstData = null, bstTab = 'run', bstQ = '';
@@ -1537,7 +1535,9 @@
   function workSection(c) {
     const w = cWb[c.id] || { tasks: [], ticks: {} }, today = w.today || (cTodo && cTodo.today) || me.today;
     // Suggestions reset every day: each morning every client gets today's suggestions fresh and unticked (ticks are per day).
-    const todo = cTodo ? [...(cTodo.items || []), ...(cTodo.tips || [])].filter((x) => x.clientId === c.id) : [];
+    // What the system finds by itself (report not sent, over plan, no boost…) is shown in one place only: "Status today"
+    // at the top of the client page. Clients Task holds the tasks people wrote (owner, 20 Nov) — no more ticking a thing twice.
+    const todo = [];
     const tick = (k) => !!(w.ticks || {})[today + ':' + k];
     // Reset every day: a task finished on an earlier day drops off; repeating tasks come back unticked each day.
     const upcoming = (w.tasks || []).filter((t) => !t.done && (t.day || '') > today).sort((a, b) => (a.day || '').localeCompare(b.day || ''));

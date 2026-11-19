@@ -133,14 +133,14 @@ Rules:
 - Be concise and scannable: short headings, bullets, no intro, max about 250 words.`;
 
 // Google Gemini (AI Studio key).
-async function callGemini(key, system, messages, model = MODEL_FOR('gemini')) {
+async function callGemini(key, system, messages, model = MODEL_FOR('gemini'), maxTokens = 2048) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
   try {
     res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST', signal: ctl.signal,
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { maxOutputTokens: 2048, temperature: 0.4 } }),
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })), generationConfig: { maxOutputTokens: maxTokens, temperature: 0.4 } }),
     });
     body = await res.json().catch(() => ({}));
   } catch (e) { throw new Error(e.name === 'AbortError' ? 'The AI took too long to answer. Try again.' : 'Could not reach Gemini: ' + e.message); }
@@ -253,7 +253,7 @@ async function workbook(owner, clientId) {
     const doneDay = t.done && t.doneAt ? dayOf(t.doneAt) : '';
     return t.repeat && t.done && doneDay < today ? { ...t, done: false, doneAt: null, doneBy: null, doneDay: '' } : { ...t, doneDay };
   });
-  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks, ai: w.ai || null, ticks: w.ticks || {}, log: Array.isArray(w.log) ? w.log : [] };
+  return { notes: String(w.notes || ''), notesAt: w.notesAt || null, tasks, ai: w.ai || null, weekly: w.weekly || null, ticks: w.ticks || {}, log: Array.isArray(w.log) ? w.log : [] };
 }
 async function saveWorkbook(owner, clientId, w) {
   w.tasks = (w.tasks || []).slice(-80);
@@ -280,6 +280,85 @@ async function morningPlans(log = () => {}) {
   return n;
 }
 
+
+// ---------- weekly strategy per client (19 Nov 2026) ----------
+// For the clients a PM picks: every Monday the AI reads last week (against the week before) and writes a short strategy
+// in Khmer and in English with exactly three actions. It is a draft for the team; a PM may edit it and send it to the
+// client's Telegram group — nothing goes to a client by itself.
+const WEEKLY_SYSTEM = `You are the ads strategist inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders come from adsbox.biz per Page.
+
+You get ONE client's numbers for last week and the week before. Write a short weekly strategy the Project Manager can read in one minute and may forward to the client.
+
+Write it TWICE: first in Khmer (ខ្មែរ), then a line with exactly ===== , then the same content in simple English. Each version uses exactly these headings (keep the headings in English in both versions):
+## Last week
+One or two lines: spend, orders, cost per order, and the change against the week before.
+## What worked
+- 1 to 3 bullets: the best days, lives, Pages or posts, with numbers.
+## What to change
+- 1 to 3 bullets: spend with few or no orders, expensive lives or Pages, with numbers.
+## This week
+- [ ] exactly 3 concrete actions, each starting with a verb, tied to a Page, a live time, a post or a budget and to a number.
+
+Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if there are no orders data say so once and judge by messages and spend per live; keep Page names, numbers and $ unchanged in both languages; polite and plain, no blame; each version at most about 150 words.`;
+const weeklyPick = async (owner) => { const v = await db.getUserSetting(owner, 'aiWeekly', []); return (Array.isArray(v) ? v : []).map(Number).filter(Number.isFinite); };
+async function setWeeklyPick(owner, clientId, on) {
+  const cur = new Set(await weeklyPick(owner)); if (on) cur.add(Number(clientId)); else cur.delete(Number(clientId));
+  await db.setUserSetting(owner, 'aiWeekly', [...cur]); return on;
+}
+// The week to write about: on a Monday, last Monday–Sunday; any other day, the seven full days up to yesterday.
+function weekRange(today = sync.todayIn()) { const to = sync.addDays(today, -1); return { from: sync.addDays(to, -6), to }; }
+const splitWeekly = (text) => {
+  const [a, b] = String(text).split(/\n\s*={4,}\s*\n/), clean = (t) => String(t || '').trim();
+  const acts = (t) => { const out = []; for (const line of clean(t).split('\n')) { const m = line.match(/^\s*[-*]\s*\[\s?\]\s*(.+)$/); if (m) out.push(m[1].trim().slice(0, 200)); } return out.slice(0, 3); };
+  const body = (t) => clean(t).replace(/^\s*[-*]\s*\[\s?\]\s*/gm, '- ');
+  return { km: body(a), en: body(b || ''), actionsKm: acts(a), actionsEn: acts(b || '') };
+};
+async function weeklyStrategy(owner, clientId, { force = false } = {}) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  const today = sync.todayIn(), { from, to } = weekRange(today), wb = await workbook(owner, clientId);
+  if (!force && wb.weekly && wb.weekly.from === from && wb.weekly.to === to && wb.weekly.km) return wb.weekly;
+  const data = await clientData(owner, clientId, from, to);
+  if (!data.totals.spend && !data.totals.orders) return { from, to, empty: true, at: new Date().toISOString(), km: 'សប្ដាហ៍មុនគ្មានការចំណាយ Boost ទេ។', en: 'No boost spend last week — nothing to plan.', actionsKm: [], actionsEn: [] };
+  const used = Number(await db.getUserSetting(owner, `aiUse:${today}`, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const msg = [{ role: 'user', content: `Last week is ${from} to ${to}.\n\nClient data (JSON):\n${JSON.stringify(data)}` }];
+  const out = cfg.provider === 'gemini' ? await callGemini(cfg.key, WEEKLY_SYSTEM, msg, undefined, 4096) : await callClaude(cfg.key, WEEKLY_SYSTEM, msg, 2600);
+  await db.setUserSetting(owner, `aiUse:${today}`, used + 1);
+  const parts = splitWeekly(out.text);
+  if (!parts.km) throw Object.assign(new Error('The AI gave an empty answer. Try again.'), { status: 502 });
+  const weekly = { from, to, at: new Date().toISOString(), ...parts, totals: data.totals, sent: null, edited: false };
+  const fresh = await workbook(owner, clientId); fresh.weekly = weekly; await saveWorkbook(owner, clientId, fresh);
+  return weekly;
+}
+// A PM's own wording replaces the AI's for one language.
+async function saveWeeklyText(owner, clientId, lang, text) {
+  const wb = await workbook(owner, clientId); if (!wb.weekly) throw Object.assign(new Error('There is no weekly strategy yet.'), { status: 400 });
+  wb.weekly[lang === 'en' ? 'en' : 'km'] = String(text || '').trim().slice(0, 4000); wb.weekly.edited = true;
+  await saveWorkbook(owner, clientId, wb); return wb.weekly;
+}
+// Plain Telegram text for the client's group.
+function weeklyMessage(clientName, w, lang) {
+  const H = { en: ['📊 Last week', '✅ What worked', '🔧 What to change', '🎯 This week'], km: ['📊 សប្ដាហ៍មុន', '✅ អ្វីដែលដំណើរការល្អ', '🔧 អ្វីដែលគួរប្ដូរ', '🎯 សប្ដាហ៍នេះ'] };
+  const tidy = (t, l) => String(t || '').replace(/^##\s*Last week\s*$/gmi, H[l][0]).replace(/^##\s*What worked\s*$/gmi, '\n' + H[l][1]).replace(/^##\s*What to change\s*$/gmi, '\n' + H[l][2]).replace(/^##\s*This week\s*$/gmi, '\n' + H[l][3]).replace(/^##\s*/gm, '').replace(/^\s*[-*]\s+/gm, '• ').replace(/\*\*/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  const day = (iso) => { try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); } catch (_) { return iso; } };
+  const head = `📈 ${clientName} — ${lang === 'en' ? 'Weekly plan' : lang === 'km' ? 'ផែនការប្រចាំសប្ដាហ៍' : 'ផែនការប្រចាំសប្ដាហ៍ · Weekly plan'} · ${day(w.from)} – ${day(w.to)}`;
+  return [head, '', ...(lang === 'both' ? [tidy(w.km, 'km'), '', '— — —', '', tidy(w.en, 'en')] : [tidy(lang === 'en' ? w.en : w.km, lang === 'en' ? 'en' : 'km')])].join('\n').slice(0, 3900);
+}
+// Monday morning: write the strategy for every picked client (stops early if the AI says it is busy).
+async function weeklyPlans(log = () => {}) {
+  const cfg = await keyConfig(); if (!cfg.key) return 0;
+  let n = 0;
+  for (const u of await db.allUsers()) {
+    if ((await db.getUserSetting(u.fb_id, 'aiOn', true)) === false) continue;
+    const pick = new Set(await weeklyPick(u.fb_id)); if (!pick.size) continue;
+    for (const c of (await db.listClients(u.fb_id)).filter((x) => !x.archived && pick.has(x.id))) {
+      try { const w = await weeklyStrategy(u.fb_id, c.id); if (!w.empty) n++; }
+      catch (e) { if (e.status === 429) { log('AI weekly strategies paused: ' + e.message); return n; } log(`AI weekly strategy for ${c.name} failed: ${e.message}`); }
+    }
+  }
+  return n;
+}
 
 // ---------- KPI → suggested daily actions ----------
 const KPI_SYSTEM = `You coach the staff of Ads Box, a Facebook ads agency in Cambodia (project managers and media buyers who boost client lives and posts, send daily reports, collect payments and keep clients).
@@ -340,4 +419,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest };
+module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

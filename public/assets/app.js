@@ -1058,6 +1058,49 @@
     return `<section class="cd-sec aisec" id="cdAiSec"><div class="cd-sec-h"><h4>✨ AI advice</h4><span class="hint">${esc(cdPerLabel())}${st && st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span>${lang}<button type="button" class="${st ? 'ghost ' : ''}sm" id="cdAiGo" ${st && st.loading ? 'disabled' : ''}>${st ? '↻ New answer' : '✨ Get advice'}</button></div>${body}
       ${st && !st.loading && !st.err ? `<form class="ai-ask" id="cdAiAsk"><input type="text" maxlength="300" placeholder="Ask about this client… e.g. Which live time works best?" aria-label="Ask about this client"><button type="submit" class="sm">Ask</button></form>` : ''}</section>`;
   }
+  // 📅 Weekly strategy: for clients the PM picks; a draft for the team in Khmer and English; the PM may send it to the client.
+  const wkDay = (iso) => { try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); } catch (_) { return iso; } };
+  const cdWk = {}; let wkLang = (() => { try { return localStorage.getItem('wkLang') || 'km'; } catch (_) { return 'km'; } })();
+  function cdWeeklySection(c) {
+    if (me && me.aiOn === false) return '';
+    const st = cdWk[c.id];
+    if (!st) { cdWk[c.id] = { loading: true }; api(`/clients/${c.id}/strategy`).then((d) => { cdWk[c.id] = { d }; }).catch((e) => { cdWk[c.id] = { err: e.message }; }).finally(() => { const sec = $('cdWkSec'); if (sec) { sec.outerHTML = cdWeeklySection(c); wireWeekly(c); } }); }
+    const cur = cdWk[c.id], d = cur.d, w = d && d.weekly, pm = d && d.canSend;
+    const langSeg = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-wklang="km" aria-pressed="${wkLang === 'km'}">ខ្មែរ</button><button type="button" data-wklang="en" aria-pressed="${wkLang === 'en'}">English</button></div>`;
+    const txt = w ? (wkLang === 'en' ? w.en : w.km) || w.km : '';
+    const body = cur.loading ? '<div class="sk"></div>' : cur.err ? `<div class="note">${esc(cur.err)}</div>`
+      : cur.busy ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading last week\'s numbers…</div>'
+      : !w ? `<div class="hint">${aiReady === false ? 'AI is not set up yet — the app owner adds a key in Admin → Settings.' : d.on ? 'Switched on. The first strategy is written on Monday at 7:00 — or write one now.' : 'A short plan from last week\'s spend and orders: what worked, what to change and three actions. For the team first; you decide whether the client gets it.'}</div>`
+      : cur.edit ? `<textarea id="wkEdit" rows="12" aria-label="Weekly strategy text">${esc(txt)}</textarea><div class="st-end"><button type="button" class="ghost sm" id="wkEditX">Cancel</button><button type="button" class="primary sm" id="wkEditOk">Save</button></div>`
+      : `<div class="ai-text">${mdLite(wkLang === 'en' ? txt : txt.replace(/^##\s*Last week\s*$/mi, '## សប្ដាហ៍មុន').replace(/^##\s*What worked\s*$/mi, '## អ្វីដែលដំណើរការល្អ').replace(/^##\s*What to change\s*$/mi, '## អ្វីដែលគួរប្ដូរ').replace(/^##\s*This week\s*$/mi, '## សប្ដាហ៍នេះ'))}</div>
+         <div class="wk-meta hint">${esc(wkDay(w.from))} – ${esc(wkDay(w.to))}${w.edited ? ' · edited' : ''} · ${w.sent ? `<span class="is-ok">sent to the client ${esc(new Date(w.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))} by ${esc(w.sent.by)}</span>` : 'draft — only your team sees it'}${w.tasksAt ? ' · actions added to Clients Task' : ''}</div>`;
+    const acts = !w || cur.edit || cur.busy || w.empty || !pm ? '' : `<div class="wk-acts"><button type="button" class="sm" id="wkEditBtn">Edit</button><button type="button" class="sm" id="wkTasks" ${w.tasksAt ? 'disabled' : ''}>Add the 3 actions to Clients Task</button><span class="spacer"></span><button type="button" class="sm primary" id="wkSend">Send to the client…</button></div>`;
+    return `<section class="cd-sec aisec" id="cdWkSec"><div class="cd-sec-h"><h4>📅 Weekly strategy</h4>${d && pm ? `<label class="switch" title="Write one every Monday for this client"><input type="checkbox" id="wkOn" aria-label="Write a weekly strategy every Monday" ${d.on ? 'checked' : ''}><i></i><b class="wk-lbl">Every Monday</b></label>` : d && d.on ? '<span class="pill ok">Every Monday</span>' : ''}<span class="spacer"></span>${w && !cur.edit ? langSeg : ''}${d && pm && !cur.busy && !cur.edit ? `<button type="button" class="${w ? 'ghost ' : ''}sm" id="wkRun">${w ? '↻ Write again' : '✨ Write now'}</button>` : ''}</div>${body}${acts}</section>`;
+  }
+  function wireWeekly(c) {
+    const st = cdWk[c.id]; if (!st || !st.d) return;
+    const redraw = () => { const sec = $('cdWkSec'); if (sec) { sec.outerHTML = cdWeeklySection(c); wireWeekly(c); } };
+    const call = async (path, opts, after) => { try { const r = await api(`/clients/${c.id}/strategy${path}`, opts); if ('on' in r) st.d.on = r.on; if ('weekly' in r) st.d.weekly = r.weekly; if (after) after(r); } catch (e) { toast(e.message); } st.busy = false; redraw(); };
+    document.querySelectorAll('#cdWkSec [data-wklang]').forEach((b) => b.onclick = () => { wkLang = b.dataset.wklang; try { localStorage.setItem('wkLang', wkLang); } catch (_) {} redraw(); });
+    const on = $('wkOn'); if (on) on.onchange = () => call('', { method: 'PUT', body: { on: on.checked } }, (r) => successBadge(r.on ? 'A weekly strategy every Monday for this client' : 'Weekly strategy off for this client'));
+    const run = $('wkRun'); if (run) run.onclick = () => { if (aiReady === false) return toast('AI is not set up yet — the app owner adds a key in Admin → Settings.'); st.busy = true; redraw(); call('/run', { method: 'POST', body: { force: !!st.d.weekly } }); };
+    const eb = $('wkEditBtn'); if (eb) eb.onclick = () => { st.edit = true; redraw(); };
+    const ex = $('wkEditX'); if (ex) ex.onclick = () => { st.edit = false; redraw(); };
+    const eo = $('wkEditOk'); if (eo) eo.onclick = () => { const text = $('wkEdit').value; st.edit = false; call('', { method: 'PUT', body: { lang: wkLang, text } }, () => successBadge('Saved')); };
+    const tk = $('wkTasks'); if (tk) tk.onclick = () => call('/tasks', { method: 'POST', body: { lang: wkLang } }, (r) => successBadge(r.added ? `${r.added} action${r.added === 1 ? '' : 's'} added to Clients Task` : 'Those actions are already in Clients Task'));
+    const sd = $('wkSend'); if (sd) sd.onclick = () => openWeeklySend(c, st, redraw);
+  }
+  function openWeeklySend(c, st, redraw) {
+    let dlg = $('wkDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'wkDlg'; dlg.className = 'ho-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-wkclose]')) dlg.close(); }); }
+    const w = st.d.weekly;
+    dlg.innerHTML = `<div class="ho-dw"><div class="ho-dh"><h2>Send this strategy to ${esc(c.name)}?</h2><button type="button" class="ghost sm" data-wkclose aria-label="Close">✕</button></div>
+      <p class="hint">It goes to the client's Telegram group${c.telegram_title ? ` <b>${esc(c.telegram_title)}</b>` : ''} exactly as shown in Boost Desk. Read it first — the client will act on these numbers.${w.sent ? ` It was already sent on ${esc(new Date(w.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}.` : ''}</p>
+      <label class="fld">Language<select id="wkSendLang"><option value="km" ${wkLang === 'km' ? 'selected' : ''}>ខ្មែរ</option><option value="en" ${wkLang === 'en' ? 'selected' : ''}>English</option><option value="both">ខ្មែរ + English</option></select></label>
+      <div class="st-end"><button type="button" class="ghost" data-wkclose>Cancel</button><button type="button" class="primary" id="wkSendGo">Send to the client</button></div></div>`;
+    dlg.showModal();
+    $('wkSendGo').onclick = async () => { const b = $('wkSendGo'); b.disabled = true; b.textContent = 'Sending…';
+      try { const r = await api(`/clients/${c.id}/strategy/send`, { method: 'POST', body: { lang: $('wkSendLang').value } }); st.d.weekly = r.weekly; dlg.close(); successBadge(`Sent to ${c.name}`); redraw(); } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send to the client'; } };
+  }
   async function cdRunAi(cid, { fresh = false, question = '' } = {}) {
     const r = cdRange(); if (!r) return; const k = cdAiKey(cid);
     if (aiReady === false) return toast(me && me.isOwner ? 'Add a Claude or Gemini key in Admin → Settings → AI advice first.' : 'AI advice is not set up yet — ask the app owner.');
@@ -1117,6 +1160,7 @@
           <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
             <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
           ${cdAiSection(c)}
+          ${cdWeeklySection(c)}
           ${cdPagesSection(c)}
         </div>
         <div class="cd-col">${histSection(c)}</div>
@@ -1137,6 +1181,7 @@
     const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
     const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
+    wireWeekly(c);
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });
     const aiAsk = $('cdAiAsk'); if (aiAsk) aiAsk.onsubmit = (ev) => { ev.preventDefault(); const q = aiAsk.querySelector('input').value.trim(); if (q) cdRunAi(c.id, { question: q }); };
     box.querySelectorAll('[data-cdrep]').forEach((b) => b.onclick = () => cdSendPage(c, b.dataset.cdrep));

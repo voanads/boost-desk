@@ -20,7 +20,7 @@ const KEY = 'cstatus';
 const ESCALATE_MIN = 30, QUIET = [8, 21], NO_BOOST_FROM = 14, FRESH_MIN = 120, RENEW_FROM = 9, REPORT_FROM = '20:00', CPR_MIN_SPEND = 3; // hours, workspace time
 // Only problems that stop the client's boost are pushed to Telegram. Money problems (invoice overdue / unpaid) stay red on
 // the page for the PM but are not pushed: on the first day live they produced a burst of messages.
-const PUSH = new Set(['acct-off', 'acct-pay', 'noboost']);
+const PUSH = new Set(['acct-off', 'acct-pay', 'noboost', 'plan']); // 'plan' = post spend over the boost plan: red and pushed (owner, 19 Nov)
 const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hourNow = () => Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' })) % 24;
 const hm = (iso) => { try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: cfg.tz }); } catch (_) { return ''; } };
@@ -29,6 +29,7 @@ const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5
 const ACCT = { 2: ['bad', 'acct-off', 'Ad account ត្រូវបិទ'], 3: ['bad', 'acct-pay', 'Ad account បង់ប្រាក់បរាជ័យ'], 9: ['warn', 'acct-grace', 'Ad account នៅក្នុងរយៈពេលអនុគ្រោះ (ត្រូវបង់ប្រាក់)'] };
 const HOW = {
   'acct-pay': 'ពិនិត្យកាតបង់ប្រាក់ក្នុង Ad account រួចបើក Boost វិញ។', 'acct-off': 'បើក Ad accounts មើលមូលហេតុ ហើយប្ដូរទៅ Ad account ផ្សេងបើចាំបាច់។',
+  plan: 'បញ្ឈប់ ឬបន្ថយ budget របស់ Post នោះ ឬសុំភ្ញៀវបង់បន្ថែម រួចកែ Plan។',
   noboost: 'ពិនិត្យ Boost របស់ភ្ញៀវ៖ campaign បិទ, budget អស់ ឬ Ad account មានបញ្ហា។', invoice: 'ទាក់ទងភ្ញៀវអំពីការបង់ប្រាក់សេវា។', unpaid: 'ទាក់ទងភ្ញៀវអំពី invoice ដែលមិនទាន់បង់។',
 };
 
@@ -54,7 +55,7 @@ async function forOwner(user) {
     if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
     if (x.kind === 'report' && nowHM < reportFrom) continue;
     if (x.kind === 'cpr-up' && !((spend[x.clientId] || {}).post >= CPR_MIN_SPEND)) continue;
-    add(x.clientId, x.level === 'bad' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
+    add(x.clientId, x.level === 'bad' || x.kind === 'plan' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
   }
   // 2. yesterday's report was never sent (the client spent and has a Telegram group)
   try {

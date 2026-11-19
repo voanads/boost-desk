@@ -505,7 +505,7 @@ const AUDIT = [
   [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
   [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
   [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
-  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/strategy\/send$/, 'Sent a weekly strategy to a client'], [/^PUT \/clients\/\d+\/strategy$/, 'Changed a client\'s weekly strategy'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
+  [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/merge-from$/, 'Merged a duplicate client'], [/^POST \/clients\/\d+\/strategy\/send$/, 'Sent a weekly strategy to a client'], [/^PUT \/clients\/\d+\/strategy$/, 'Changed a client\'s weekly strategy'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
   [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
   [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
   [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
@@ -2145,6 +2145,44 @@ api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
   wk.sent = { at: new Date().toISOString(), by: req.user.name, lang, to: c.telegram_title || '' }; await AI().saveWorkbook(req.user.fb_id, req.params.id, w);
   res.json({ weekly: wk });
 }));
+// ---- Merge a duplicate client into another (19 Nov 2026): after two accounts were merged the same client can be there twice ----
+// The client that stays keeps its name, settings and saved days. From the duplicate it takes: Page names, the Telegram group
+// (if it has none), days it has no entry for, invoices, notes, open tasks and boost plans. Then the duplicate is removed and
+// every saved day is matched again, so the spend lands on the client that stays.
+async function mergeClients(user, aId, bId) {
+  const owner = user.fb_id, list = await db.listClients(owner), A = list.find((x) => x.id === Number(aId)), B = list.find((x) => x.id === Number(bId));
+  if (!A || !B || A.id === B.id) throw Object.assign(new Error('Choose two different clients of yours.'), { status: 400 });
+  if (sync.isBusy(owner)) throw Object.assign(new Error('A sync is running right now. Try again in a minute.'), { status: 409 });
+  const low = (x) => String(x || '').trim().toLowerCase(), have = new Set([A.name, A.match, ...(A.pages || [])].map(low));
+  const pages = [...(A.pages || [])]; for (const x of [B.name, B.match, ...(B.pages || [])]) { const k = low(x); if (k && !have.has(k)) { have.add(k); pages.push(String(x).trim()); } }
+  const planA = A.plan || {}, planB = B.plan || {}, pastB = [...((planB.lines || []).length ? [{ lines: planB.lines, tax: !!planB.tax, sentAt: planB.sentAt || null, at: new Date().toISOString(), by: `merged from ${B.name}` }] : []), ...(planB.past || [])];
+  const plan = (planA.lines || []).length || !(planB.lines || []).length ? { ...planA, past: [...(planA.past || []), ...pastB].slice(0, 20) } : { ...planB, past: [...(planA.past || []), ...(planB.past || [])].slice(0, 20) };
+  const type = A.type === B.type ? A.type : 'both';
+  const c = await db.pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('UPDATE day_entries SET client_id=$1 WHERE client_id=$2 AND day NOT IN (SELECT day FROM day_entries WHERE client_id=$1)', [A.id, B.id]);
+    await c.query('UPDATE invoices SET client_id=$1 WHERE client_id=$2 AND owner=$3', [A.id, B.id, owner]);
+    const wk = (id) => `${owner}:cwb:${id}`, get = async (k) => ((await c.query('SELECT value FROM settings WHERE key=$1', [k])).rows[0] || {}).value;
+    const wa = (await get(wk(A.id))) || {}, wb = await get(wk(B.id));
+    if (wb) {
+      const notes = [wa.notes, wb.notes].map((x) => String(x || '').trim()).filter(Boolean).join('\n\n').slice(0, 5000);
+      const tasks = [...(Array.isArray(wa.tasks) ? wa.tasks : []), ...(Array.isArray(wb.tasks) ? wb.tasks : []).filter((t) => t && !t.done)];
+      await c.query('INSERT INTO settings (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2', [wk(A.id), JSON.stringify({ ...wb, ...wa, notes, notesAt: wa.notesAt || wb.notesAt || null, tasks, log: [...(Array.isArray(wa.log) ? wa.log : []), ...(Array.isArray(wb.log) ? wb.log : [])].slice(-400) })]);
+      await c.query('DELETE FROM settings WHERE key=$1', [wk(B.id)]);
+    }
+    await c.query('UPDATE clients SET pages=$3, plan=$4, type=$5, telegram=$6, telegram_title=$7 WHERE id=$1 AND owner=$2', [A.id, owner, JSON.stringify(pages.slice(0, 60)), JSON.stringify(plan), type, A.telegram || B.telegram || '', A.telegram ? A.telegram_title || '' : B.telegram_title || '']);
+    await c.query('DELETE FROM clients WHERE id=$1 AND owner=$2', [B.id, owner]);
+    await c.query('COMMIT');
+  } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
+  console.log(`[client merge] ${user.name}: "${B.name}" (#${B.id}) into "${A.name}" (#${A.id})`);
+  try { await sync.exclusive(owner, () => sync.rematch(user)); } catch (e) { console.error('[client merge] rematch failed:', e.message); }
+  return (await db.listClients(owner)).find((x) => x.id === A.id);
+}
+api.post('/clients/:id/merge-from', wrap(async (req, res) => {
+  if (!pmOnly(req, res)) return;
+  try { res.json({ ok: true, client: await mergeClients(req.user, req.params.id, (req.body || {}).from) }); } catch (e) { if (e.status) return res.status(e.status).json({ error: e.message }); throw e; }
+}));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');
 const whoAmI = (req) => (req.user.buyer ? req.user.buyer.name : req.user.name);
@@ -2818,6 +2856,31 @@ db.init().then(() => { profit.init().catch((e) => console.log('[profit] init ski
       await db.setSetting('mergeRepair1', { at: new Date().toISOString(), done });
     } catch (e) { console.error('[merge repair]', e.message); }
   }, 20e3).unref();
+  // One-off (owner's request, 19 Nov 2026): in the workspaces merged into today, merge the FIRST pair of clients with the
+  // same name and log this month's spend before and after, so the result can be checked before the rest is done.
+  setTimeout(async () => {
+    try {
+      if (await db.getSetting('dupMerge1', null)) return;
+      const targets = [...new Set(((await db.getSetting('mergeLog', [])) || []).filter((m) => String(m.at) >= '2026-11-19' && m.into && m.into.id).map((m) => String(m.into.id)))];
+      const today = sync.todayIn(), from = today.slice(0, 8) + '01', out = [];
+      for (const owner of targets) {
+        const u = await db.getUser(owner); if (!u) continue;
+        const list = (await db.listClients(owner)).filter((c) => !c.archived), groups = {};
+        for (const c of list) (groups[String(c.name || '').trim().toLowerCase()] = groups[String(c.name || '').trim().toLowerCase()] || []).push(c);
+        const dups = Object.values(groups).filter((g) => g.length > 1);
+        console.log(`[dup merge] ${u.name}: ${list.length} clients, ${dups.length} names used more than once — ${dups.map((g) => `${g[0].name} ×${g.length}`).join(', ')}`);
+        if (!dups.length) continue;
+        const spendOf = async () => Object.fromEntries(((await sync.dashboard(owner, from, today)).clients || []).map((x) => [x.id, x.spend || 0]));
+        const before = await spendOf(), g = dups[0].slice().sort((a, b) => (before[b.id] || 0) - (before[a.id] || 0) || a.id - b.id), A = g[0], B = g[1];
+        const sumBefore = Math.round(((before[A.id] || 0) + (before[B.id] || 0)) * 100) / 100;
+        await mergeClients(u, A.id, B.id);
+        const after = await spendOf();
+        console.log(`[dup merge] ${u.name}: "${B.name}" #${B.id} ($${(before[B.id] || 0).toFixed(2)}) into #${A.id} ($${(before[A.id] || 0).toFixed(2)}) — this month before $${sumBefore.toFixed(2)}, after $${(after[A.id] || 0).toFixed(2)}${Math.abs((after[A.id] || 0) - sumBefore) < 0.01 ? ' ✓ same' : ' ✗ DIFFERENT'}`);
+        out.push({ owner, kept: A.id, removed: B.id, name: A.name, before: sumBefore, after: after[A.id] || 0 });
+      }
+      await db.setSetting('dupMerge1', { at: new Date().toISOString(), out });
+    } catch (e) { console.error('[dup merge]', e.message); }
+  }, 45e3).unref();
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

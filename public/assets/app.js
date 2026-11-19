@@ -1158,6 +1158,24 @@
     const shown = list.slice(0, 3), more = list.length - shown.length;
     return `<div class="cd-accts" title="Ad accounts that ran this client's ads in this period">${shown.map((a) => `<span class="chip acct" title="${esc(a.id)}">💳 ${esc(a.name)}${list.length > 1 ? ` <small>${money(a.spend)}</small>` : ''}</span>`).join('')}${more > 0 ? `<span class="chip meta">+${more} more</span>` : ''}</div>`;
   }
+  // Merge a duplicate client into this one (after two accounts were merged the same client can be there twice).
+  function openClientMerge(c) {
+    let dlg = $('cmDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'cmDlg'; dlg.className = 'ho-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-cmclose]')) dlg.close(); }); }
+    const k = String(c.name || '').trim().toLowerCase(), others = clients.filter((x) => x.id !== c.id).sort((a, b) => (String(b.name).trim().toLowerCase() === k) - (String(a.name).trim().toLowerCase() === k) || String(a.name).localeCompare(String(b.name)));
+    const mo = (x) => (cMonth[x.id] && cMonth[x.id].spend ? money(cMonth[x.id].spend) + ' this month' : 'no spend this month');
+    dlg.innerHTML = `<div class="ho-dw"><div class="ho-dh"><h2>Merge a duplicate into ${esc(c.name)}</h2><button type="button" class="ghost sm" data-cmclose aria-label="Close">✕</button></div>
+      <p class="hint"><b>${esc(c.name)}</b> stays (${mo(c)}). The client you pick is removed; its Pages, saved days, invoices, notes, open tasks and boost plans move here, and all spend is matched again. This cannot be undone.</p>
+      <label for="cmFrom">Duplicate to merge in</label><select id="cmFrom">${others.map((x) => `<option value="${x.id}">${esc(x.name)}${String(x.name).trim().toLowerCase() === k ? ' (same name)' : ''} — ${esc(x.type || '')} · ${mo(x)}${x.archived ? ' · paused' : ''}</option>`).join('')}</select>
+      <div class="st-end"><button type="button" class="ghost sm" data-cmclose>Cancel</button><button type="button" class="primary sm" id="cmGo">Merge into ${esc(c.name)}</button></div></div>`;
+    $('cmGo').onclick = async () => {
+      const from = Number($('cmFrom').value), b = clients.find((x) => x.id === from); if (!b) return;
+      if (!confirm(`Merge “${b.name}” into “${c.name}”? “${b.name}” is removed.`)) return;
+      const btn = $('cmGo'); btn.disabled = true; btn.textContent = 'Merging… (matching spend again)';
+      try { await api(`/clients/${c.id}/merge-from`, { method: 'POST', body: { from } }); dlg.close(); clients = await api('/clients'); ctMineData = null; renderClients(); loadClientMonth(); successBadge(`${b.name} merged into ${c.name}`); }
+      catch (e) { toast(e.message); btn.disabled = false; btn.textContent = `Merge into ${c.name}`; }
+    };
+    dlg.showModal();
+  }
   function renderClientDetail(fresh) {
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
@@ -1171,7 +1189,8 @@
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
         <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div class="cd-tw"><div class="cd-tline"><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div>${cdAccounts(m)}</div></div>
           <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
-      <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span><button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
+      <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span>${me && !me.buyer && clients.length > 1 ? '<button type="button" class="ghost sm" id="cdMergeBtn">Merge a duplicate…</button>' : ''}<button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
+      ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
       ${cdStatusSection(c)}
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
@@ -1205,6 +1224,8 @@
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
+    if ($('cdMergeBtn')) $('cdMergeBtn').onclick = () => openClientMerge(c);
+    if ($('cdDupBtn')) $('cdDupBtn').onclick = () => openClientMerge(c);
     const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
     const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });

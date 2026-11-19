@@ -209,7 +209,7 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   const pick = await tokenPicker(user); // an ad account found through an extra Facebook login is read with that login
   const items = [];
   const errors = [];
-  const checks = [], why = {};
+  const checks = [], why = {}, diagN = { totalErr: 0, withTotal: 0, firstErr: '' };
   // Ad accounts Meta refused for permission (#200 "Cannot call API … on behalf of user"): tried again only
   // every 6 hours, so one lost account doesn't fill the logs every 5 minutes. A manual Sync always tries.
   const noAccess = (await db.getUserSetting(owner, 'acctNoAccess', {})) || {};
@@ -224,7 +224,8 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
       // The total is read FIRST: a live that is running keeps spending during the sync, so reading it
       // afterwards made the account look a dollar or two short when nothing was missing.
       let total = null;
-      try { total = round2(await meta.accountSpendRange(pick(id), id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
+      try { total = round2(await meta.accountSpendRange(pick(id), id, since, until)); } catch (e) { if (e.needsLogin || e.rateLimited) throw e; diagN.totalErr++; diagN.firstErr = diagN.firstErr || `${names[id] || id}: ${(e.code ? '#' + e.code + ' ' : '') + String(e.message || '').slice(0, 140)}`; }
+      if (total > 0) diagN.withTotal++;
       let rows = await spendRangeSplit(pick(id), id, since, until, names[id]);
       // The account's total says campaigns are missing: ask again for every campaign status and merge.
       if (total != null && total - rows.reduce((t, r) => t + r.spend, 0) > Math.max(1, rows.length * 0.005)) {
@@ -262,6 +263,9 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
     }
   }
   if (noAccessChanged) await db.setUserSetting(owner, 'acctNoAccess', noAccess).catch(() => {});
+  // A workspace with ticked ad accounts that reads nothing at all: say why in the log (it looked like "0 campaigns" with no error).
+  if (!items.length && ids.length) { try { const ex = await extraLogins(owner), via = {}; for (const a of await db.listAccounts(owner)) if (a.enabled) { const k = (a.info || {}).via || 'main'; via[k] = (via[k] || 0) + 1; }
+    console.log(`[sync] ${(await db.getUser(owner) || {}).name || owner}: nothing read from ${ids.length} ticked ad accounts ${since}..${until} — errors ${errors.length} (skipped as no-access ${errors.filter((e) => e.noAccess).length}), account totals failed ${diagN.totalErr}, accounts with spend ${diagN.withTotal}${diagN.firstErr ? ', first: ' + diagN.firstErr : ''}; read through: ${Object.entries(via).map(([k, n]) => `${k === 'main' ? 'own login' : (ex.find((e) => e.id === k) || {}).name || 'unknown login ' + k} ${n}`).join(', ')}; extra logins: ${ex.map((e) => `${e.name}${e.error ? ' (' + e.error + ')' : e.expires && new Date(e.expires) < new Date() ? ' (expired)' : ''}`).join(', ') || 'none'}`); } catch (_) {} }
   try { await db.setSetting('pageNames', meta.knownPageNames()); } catch (_) {}
   return { items, errors, checks };
 }

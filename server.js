@@ -3008,6 +3008,7 @@ db.init().then(() => pageOrders.init()).then(() => { profit.init().catch((e) => 
     } catch (e) { console.error('[dedupe]', e.message); }
   }, 60e3).unref();
   setTimeout(() => require('./src/announce').run().catch((e) => console.error('[announce]', e.message)), 30e3).unref(); // one-off announcement of 19 Nov 2026
+  setTimeout(() => require('./src/announce').runConnect().catch((e) => console.error('[announce]', e.message)), 45e3).unref(); // one-off of 20 Nov 2026 13:42: PMs connect client Pages (daytime only)
   setInterval(() => require('./src/announce').runGuide().catch((e) => console.error('[announce]', e.message)), 5 * 60e3).unref(); // one-off guide of 20 Nov 2026: goes out once, from 08:10
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {

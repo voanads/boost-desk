@@ -156,4 +156,50 @@ async function runGuide(log = console.log) {
   await db.setSetting(KEY2, { at: new Date().toISOString(), sent, failed });
   return { sent, failed };
 }
-module.exports = { run, runGuide, TEXT, GUIDE, NEWS };
+// Third one-off (owner's request, 20 Nov 2026 13:42): PMs connect their client Pages so Boost Desk counts orders itself.
+// To PMs / leaders only (not media buyers — they don't manage the Facebook Pages). Sent once, in the daytime.
+const KEY3 = 'connect-pages-2026-11-20';
+const CONNECT = `🛒 Boost Desk រាប់ Order ដោយខ្លួនឯងហើយ — សូមភ្ជាប់ Page ភ្ញៀវ
+
+សួស្ដី PM ទាំងអស់គ្នា 🙏
+ចាប់ពីថ្ងៃនេះ Boost Desk រាប់ order ពី Messenger និង comment (ទាំង Live) ដោយខ្លួនឯង លែងយកពី adsbox.biz ទៀតហើយ។
+👉 Page ភ្ញៀវដែលមិនទាន់ភ្ជាប់ នឹងបង្ហាញ Order = 0 និងគ្មាន $/order។
+
+━━━━━━━━━━
+✅ សូមធ្វើតែម្ដង (ប្រហែល 2 នាទី)
+
+0️⃣ បើទទួលការអញ្ជើញ Tester ពី Meta (Facebook notification ឬ developers.facebook.com/requests) សូមចុច Accept មុន។
+
+1️⃣ បើក Chrome → log in Facebook ដោយគណនីដែលជា admin របស់ Page ភ្ញៀវ។
+
+2️⃣ បើក Boost Desk → ម៉ឺនុយ «Orders» → ចុចប៊ូតុង «Pages» (ខាងលើស្ដាំ) → ចុច «Connect Pages»។
+
+3️⃣ លើផ្ទាំង Facebook៖ ចុច «Edit access» → ធីក Page ភ្ញៀវទាំងអស់ → Allow សិទ្ធិទាំងអស់ → «Save»។
+
+4️⃣ ត្រឡប់មក Boost Desk ឃើញ «X Pages connected» ✅ រួចរាល់។
+
+🔁 Page នៅក្នុងគណនី Facebook ទី 2 / ទី 3? ប្ដូរ Facebook ទៅគណនីនោះ ហើយធ្វើជំហាន 2–4 ម្ដងទៀត។
+
+━━━━━━━━━━
+ℹ️ ដឹងបន្ថែម
+• Page មួយភ្ជាប់តែម្ដងគ្រប់គ្រាន់ — order បង្ហាញឲ្យគ្រប់គ្នា។ MB មិនបាច់ធ្វើទេ។
+• ក្រោយនេះ ពេល log in Boost Desk ដោយ Facebook ហើយ Allow សិទ្ធិ Page, Page ភ្ញៀវថ្មីនឹងភ្ជាប់ដោយខ្លួនឯង។
+• Boost Desk រក្សាទុកតែចំនួន order — មិនរក្សាទុកសារ ឈ្មោះ ឬលេខទូរស័ព្ទអតិថិជនទេ។
+• Order = អតិថិជនផ្ញើលេខទូរស័ព្ទ (សារ ឬ comment)។ មួយនាក់ ក្នុងមួយ Page ក្នុងមួយថ្ងៃ = 1 order។
+
+❗ បើ Facebook មិនបង្ហាញ Page ឬឃើញ error សូមថត screenshot ផ្ញើមកថ្នាក់ដឹកនាំ។ អរគុណ 🙏`;
+
+async function runConnect(log = console.log) {
+  if (!telegram.hasBot() || (await db.getSetting(KEY3, null))) return null;
+  const hm = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Phnom_Penh' });
+  if (hm < '08:10' || hm > '20:00') return null; // not at night
+  await db.setSetting(KEY3, { at: new Date().toISOString(), running: true }); // claim first: never twice
+  const to = new Map();
+  for (const u of await db.allUsers()) { const c = await db.getUserSetting(u.fb_id, 'tgChat', null); if (c && c.id) to.set(String(c.id), `PM ${u.name}`); }
+  const sent = [], failed = [];
+  for (const [chat, who] of to) { try { await telegram.send(CONNECT, chat); sent.push(who); } catch (e) { failed.push(`${who} (${e.message})`); } await new Promise((ok) => setTimeout(ok, 400)); }
+  log(`[announce] connect-pages sent to ${sent.length}: ${sent.join(', ')}${failed.length ? ` — failed ${failed.length}: ${failed.join('; ')}` : ''}`);
+  await db.setSetting(KEY3, { at: new Date().toISOString(), sent, failed });
+  return { sent, failed };
+}
+module.exports = { run, runGuide, runConnect, TEXT, GUIDE, NEWS, CONNECT };

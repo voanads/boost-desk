@@ -2745,11 +2745,11 @@ h1{font-size:1.35rem!important;font-weight:600!important;letter-spacing:-.01em}
 .tm-mates{display:flex;flex-wrap:wrap;gap:6px}
 @media (max-width:560px){.tm-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* media buyer inside the PM's account */
-.asbuyer #syncBtn,.asbuyer .cd-setbtn,.asbuyer #cdSettings,.asbuyer #cDel,.asbuyer #cPause{display:none!important}
+.asbuyer #cDel,.asbuyer #cPause{display:none!important}
 nav.tabs a.navlink{display:inline-flex;align-items:center;gap:7px;border-radius:var(--r-sm);padding:7px 12px;color:var(--muted);font-weight:600;font-size:var(--fs-xl);text-decoration:none;white-space:nowrap}
 @media (min-width:1100px){nav.tabs a.navlink{padding:9px 10px;font-size:var(--fs-xl);border-radius:var(--r-md);width:100%;box-sizing:border-box}nav.tabs a.navlink:hover{background:var(--bg-2);color:var(--ink)}}
 @media (max-width:760px){nav.tabs a.navlink{flex-direction:column;gap:3px;font-size:var(--fs-2xs);flex:1}nav.tabs a.navlink .full{display:none}nav.tabs a.navlink .short{display:inline}nav.tabs a.navlink .ic{width:22px;height:22px}}
-.asbuyer #teamMine,.asbuyer #kpiMine,.asbuyer #tgMine,.asbuyer #cdTaskMore,.asbuyer #cdTaskOpts,.asbuyer nav.tabs [data-tab=profit],.asbuyer .syncinfo{display:none!important}
+.asbuyer #teamMine,.asbuyer #kpiMine,.asbuyer #tgMine,.asbuyer #cdTaskMore,.asbuyer #cdTaskOpts,.asbuyer nav.tabs [data-tab=profit]{display:none!important}
 /* media buyer: my tasks on the Dashboard */
 .mb-mine{gap:10px}
 .mbm-tg{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);box-shadow:inset 3px 0 0 var(--brand)}
@@ -3293,8 +3293,7 @@ nav.tabs button,nav.tabs button:hover{border:0!important;background:transparent}
   .co-rv{white-space:normal}
 }
 /* Media buyer site: Ad accounts page is read-only (PM syncs, ticks, connects the extension) */
-html.asbuyer body[data-site=mb] #refreshAccts,html.asbuyer body[data-site=mb] #extBtn,html.asbuyer body[data-site=mb] #extBox,html.asbuyer body[data-site=mb] .smit-td-chk,html.asbuyer body[data-site=mb] #smitAccountsTable th:first-child,html.asbuyer body[data-site=mb] .smit-banner-row,html.asbuyer body[data-site=mb] [data-av=share],html.asbuyer body[data-site=mb] [data-av=pixel]{display:none!important}
-html.asbuyer body[data-site=mb] #tab-accounts .top .hint::after{content:' Read-only here — your PM syncs and ticks accounts.';color:var(--muted)}
+/* (20 Nov) media buyers sync and tick ad accounts like their PM */
 .as-full{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-sm);font-weight:600;margin:0 10px;white-space:nowrap}
 .as-full input{width:16px;height:16px;accent-color:var(--brand)}
 .rolechip.full{background:var(--brand);color:var(--on-brand)}

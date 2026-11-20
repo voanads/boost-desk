@@ -482,16 +482,17 @@ app.use(wrap(async (req, res, next) => {
     else { user = { fb_id: 'g:' + p.email, name: req.session.gName || p.name || p.email, token_expires: null, google: true }; req.adminSite = true; }
   }
   // A media buyer (signed in from the Telegram link) works inside their PM's account, with limits:
-  // no deleting clients, no client settings, no Sync from Meta, nothing in Admin / Profit / KPIs.
+  // no deleting, pausing or merging clients, nothing in Admin / Profit / KPIs / team. Since 20 Nov 2026 (owner) they do the
+  // daily client work like their PM: Sync from Meta, client settings, ad accounts, the weekly strategy. (Connecting Pages for orders needs a Facebook login, so it stays with the PM.)
   if (!user && req.session.mb) {
     const b = await MB().get(req.session.mb);
     const pmId = b && (b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy]);
     const pm = pmId && (await db.getUser(pmId));
     if (b && pm) {
       if (req.method !== 'GET' && req.path.startsWith('/api/') && (
-        /^\/api\/(sync|sync-recent|sync-range|admin|auto-sync|profit|media-buyers|kpis|accounts|main|company|team|targets)/.test(req.path)
+        /^\/api\/(admin|auto-sync|profit|media-buyers|kpis|main|company|team|targets)/.test(req.path)
         || (req.method === 'DELETE' && /^\/api\/clients\/\d+$/.test(req.path))
-        || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path))
+        || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path) && req.body && 'archived' in req.body) // pausing a client stays with the PM
       )) return res.status(403).json({ error: 'Media buyers can\'t do this — ask your PM.' });
       if (req.path.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(req.path)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
       if (!req.path.startsWith('/api/') && !req.path.startsWith('/mediabuyer') && !req.path.startsWith('/mb')) return res.redirect('/mediabuyer');
@@ -2175,10 +2176,10 @@ const pmOnly = (req, res) => { if (req.user.buyer) { res.status(403).json({ erro
 api.get('/clients/:id/strategy', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
-  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly: w, week: AI().weekRange(), canSend: !req.user.buyer });
+  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly: w, week: AI().weekRange(), canSend: true });
 }));
 api.put('/clients/:id/strategy', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const b = req.body || {};
   if ('on' in b) await AI().setWeeklyPick(req.user.fb_id, req.params.id, !!b.on);
   let weekly = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
@@ -2186,12 +2187,12 @@ api.put('/clients/:id/strategy', wrap(async (req, res) => {
   res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly });
 }));
 api.post('/clients/:id/strategy/run', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   try { res.json({ weekly: await AI().weeklyStrategy(req.user.fb_id, req.params.id, { force: !!(req.body || {}).force }) }); } catch (e) { return aiErr(res, e); }
 }));
 // The three actions become Clients Tasks of this client (once).
 api.post('/clients/:id/strategy/tasks', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk) return res.status(400).json({ error: 'There is no weekly strategy yet.' });
   const acts = ((req.body || {}).lang === 'en' ? wk.actionsEn : wk.actionsKm) || []; if (!acts.length) return res.status(400).json({ error: 'This strategy has no actions to add.' });
   const today = sync.todayIn(); let added = 0;
@@ -2201,7 +2202,7 @@ api.post('/clients/:id/strategy/tasks', wrap(async (req, res) => {
 }));
 // Send to the client's Telegram group — the PM's decision, in Khmer, English or both.
 api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; const c = await ownClient(req); if (!c) return res.status(404).json({ error: 'Client not found.' });
+  const c = await ownClient(req); if (!c) return res.status(404).json({ error: 'Client not found.' });
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
   if (!c.telegram) return res.status(400).json({ error: `${c.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk || !wk.km) return res.status(400).json({ error: 'There is no weekly strategy yet.' });

@@ -22,7 +22,7 @@ async function clientCampaigns(owner, clientId, from, to, kind = '', only = null
   if (!c) return { client: null, byAccount: {} };
   const all = (await db.listRaw(owner, from, to)).flatMap((d) => (d.rows || []).map((r) => ({ ...r, day: r.day || d.day })));
   const clients = await sync.clientsWithLearnedPages(owner, all, { save: false });
-  const byAccount = {};
+  const byAccount = {}; let posts = 0, livesN = 0;
   for (const r of all) {
     if (!(Number(r.spend) > 0) || !r.campaignId || !r.accountId) continue;
     const m = sync.matchClient(r, clients);
@@ -30,9 +30,10 @@ async function clientCampaigns(owner, clientId, from, to, kind = '', only = null
     if (kind && (sync.isPostFor(c, r) ? 'post' : 'live') !== kind) continue; // Live / Post filter
     if (only && !only.has(String(r.campaignId))) continue; // only the ticked lives / posts
     if (notIds && notIds.has(String(r.campaignId))) continue; // lines left out of a longer report
+    if (sync.isPostFor(c, r)) posts++; else livesN++;
     (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
   }
-  return { client: c, byAccount };
+  return { client: c, byAccount, live: livesN > 0 && !posts }; // live: every campaign in the picture is a Live
 }
 
 async function fetchThumb(url) {
@@ -54,13 +55,14 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
     const client = (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId));
     if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
     const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(from, clientId, parts) : null, notIds);
-    const byAccount = {};
+    const byAccount = {}; let posts = 0, livesN = 0;
     for (const r of rows) {
       if (!r.campaignId || !r.accountId) continue;
       if (kind && (sync.isPostFor(client, r) ? 'post' : 'live') !== kind) continue;
+      if (sync.isPostFor(client, r)) posts++; else livesN++;
       (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
     }
-    return adsFor(user, scope.page ? { ...client, name: `${client.name} · ${scope.page}` } : client, byAccount, from, to);
+    return { ...(await adsFor(user, scope.page ? { ...client, name: `${client.name} · ${scope.page}` } : client, byAccount, from, to)), live: livesN > 0 && !posts };
   }
   // Ticked lines (one-day reports): keep only the campaigns behind those lives / the post.
   let only = null;
@@ -70,9 +72,9 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
     for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) only.add(String(id));
     if (!only.size) return { client: (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId)), ads: [], reach: 0 }; // campaign list not saved for this day: no picture rather than a wrong one
   }
-  const { client, byAccount } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only, notIds);
+  const { client, byAccount, live } = await clientCampaigns(user.fb_id, clientId, from, to, kind, only, notIds);
   if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
-  return adsFor(user, client, byAccount, from, to);
+  return { ...(await adsFor(user, client, byAccount, from, to)), live };
 }
 // Meta can refuse one ad account for this login ("Cannot call API for app … on behalf of user …", #200/#10:
 // access to the ad account was removed, or a Business blocks the app). Then try the login of another Boost Desk
@@ -191,9 +193,8 @@ async function render({ client, ads, reach }, from, to, { live = false } = {}) {
 async function clientReportImage(user, clientId, from, to, kind = '', parts = null, scope = null) {
   const data = await clientAds(user, clientId, from, to, kind, parts, scope);
   if (!data.ads.length) return null;
-  // a Live report: the Live filter, or only Live lines ticked (no post line)
-  const pick = sync.splitParts(parts).pick, live = kind === 'live' || !!(pick && pick.length && !pick.includes('post'));
-  return render(data, from, to, { live });
+  // a Live report: every campaign in the picture is a Live (whatever was ticked) — then Comments is shown instead of Messages
+  return render(data, from, to, { live: !!data.live });
 }
 
 module.exports = { clientReportImage, render, clientCampaigns };

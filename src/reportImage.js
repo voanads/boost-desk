@@ -114,7 +114,7 @@ function periodTitle(from, to) {
 }
 
 // Draw the table. Up to 12 ads are listed; the total row always covers every ad.
-async function render({ client, ads, reach }, from, to) {
+async function render({ client, ads, reach }, from, to, { live = false } = {}) {
   const shown = ads.slice(0, 12), more = ads.length - shown.length;
   const thumbs = await Promise.all(shown.map((a) => fetchThumb(a.thumb)));
   const W = 1200, pad = 28, headH = 96, colH = 46, rowH = 64, totH = 62, footH = more > 0 ? 34 : 14;
@@ -128,9 +128,13 @@ async function render({ client, ads, reach }, from, to) {
     { k: 'reach', label: 'Reach', x: 1060, align: 'end' },
     { k: 'msg', label: 'Messages', x: W - pad - 16, align: 'end' },
   ];
-  const tot = ads.reduce((t, a) => ({ spend: t.spend + a.spend, imp: t.imp + a.impressions, msg: t.msg + (a.messages || 0), res: t.res + (a.results || 0), type: !a.results ? t.type : !t.type || t.type === a.resultType ? a.resultType : 'result' }), { spend: 0, imp: 0, msg: 0, res: 0, type: '' });
+  // A Live report shows the comments each ad brought in instead of messages (owner, 20 Nov 2026).
+  // Column order asked for: Results, Comments, Cost per result, Amount spent, Impressions, Reach.
+  if (live) { const xs = { res: 570, cpr: 810, spend: 930, imp: 1045, reach: W - pad - 16 }; cols.pop(); for (const c of cols) if (xs[c.k]) c.x = xs[c.k]; cols.splice(2, 0, { k: 'cm', label: 'Comments', x: 675, align: 'end' }); }
+  const X = Object.fromEntries(cols.map((c) => [c.k, c.x]));
+  const tot = ads.reduce((t, a) => ({ cm: t.cm + (a.comments || 0), spend: t.spend + a.spend, imp: t.imp + a.impressions, msg: t.msg + (a.messages || 0), res: t.res + (a.results || 0), type: !a.results ? t.type : !t.type || t.type === a.resultType ? a.resultType : 'result' }), { cm: 0, spend: 0, imp: 0, msg: 0, res: 0, type: '' });
   const txt = (x, y, s, { size = 17, weight = 400, fill = '#1c1e21', anchor = 'start' } = {}) => svgText(s, x, y, { size, weight, fill, anchor });
-  const names = await Promise.all(shown.map((a) => fit(a.name, 400, 16, 600)));
+  const names = await Promise.all(shown.map((a) => fit(a.name, live ? 380 : 400, 16, 600)));
   const title = await fit(client.name, 620, 22, 600);
   let y = headH;
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -156,24 +160,26 @@ async function render({ client, ads, reach }, from, to) {
       : `<rect x="${pad + 16}" y="${y + 10}" width="44" height="44" rx="8" fill="#e4e6eb"/>`;
     svg += await txt(pad + 72, y + 30, names[i], { size: 16, weight: 600 });
     svg += await txt(pad + 72, y + 51, a.results > 0 ? plural(a.results, a.resultType) : (a.resultType || 'No results yet'), { size: 13, fill: '#65676b' });
-    svg += await txt(cols[1].x, y + 38, a.results > 0 ? int(a.results) : '—', { weight: 600, fill: a.results > 0 ? '#1c1e21' : '#8a8d91', anchor: 'end' });
-    svg += await txt(cols[2].x, y + 38, cpr != null ? money(cpr) : '—', { fill: cpr != null ? '#1c1e21' : '#8a8d91', anchor: 'end' });
-    svg += await txt(cols[3].x, y + 38, money(a.spend), { weight: 600, anchor: 'end' });
-    svg += await txt(cols[4].x, y + 38, int(a.impressions), { anchor: 'end' });
-    svg += await txt(cols[5].x, y + 38, a.reach ? int(a.reach) : '—', { anchor: 'end' });
-    svg += await txt(cols[6].x, y + 38, a.messages ? int(a.messages) : '—', { fill: a.messages ? '#1c1e21' : '#8a8d91', anchor: 'end' });
+    svg += await txt(X.res, y + 38, a.results > 0 ? int(a.results) : '—', { weight: 600, fill: a.results > 0 ? '#1c1e21' : '#8a8d91', anchor: 'end' });
+    svg += await txt(X.cpr, y + 38, cpr != null ? money(cpr) : '—', { fill: cpr != null ? '#1c1e21' : '#8a8d91', anchor: 'end' });
+    svg += await txt(X.spend, y + 38, money(a.spend), { weight: 600, anchor: 'end' });
+    svg += await txt(X.imp, y + 38, int(a.impressions), { anchor: 'end' });
+    svg += await txt(X.reach, y + 38, a.reach ? int(a.reach) : '—', { anchor: 'end' });
+    if (live) svg += await txt(X.cm, y + 38, a.comments ? int(a.comments) : '—', { fill: a.comments ? '#1c1e21' : '#8a8d91', anchor: 'end' });
+    else svg += await txt(X.msg, y + 38, a.messages ? int(a.messages) : '—', { fill: a.messages ? '#1c1e21' : '#8a8d91', anchor: 'end' });
     svg += `<line x1="${pad}" y1="${y + rowH}" x2="${W - pad}" y2="${y + rowH}" stroke="#ebedf0"/>`;
     y += rowH;
   }
   svg += `<rect x="${pad}" y="${y}" width="${W - 2 * pad}" height="${totH}" fill="#f0edff"/>`;
   svg += await txt(pad + 16, y + 28, `Total · ${ads.length} ad${ads.length === 1 ? '' : 's'}`, { size: 16, weight: 600 });
   svg += await txt(pad + 16, y + 48, tot.res ? plural(tot.res, tot.type || 'result') : '', { size: 13, fill: '#65676b' });
-  svg += await txt(cols[1].x, y + 38, tot.res ? int(tot.res) : '—', { weight: 600, anchor: 'end' });
-  svg += await txt(cols[2].x, y + 38, tot.res ? money(tot.spend / tot.res) : '—', { weight: 600, anchor: 'end' });
-  svg += await txt(cols[3].x, y + 38, money(tot.spend), { weight: 600, fill: '#2563EB', anchor: 'end', size: 18 });
-  svg += await txt(cols[4].x, y + 38, int(tot.imp), { weight: 600, anchor: 'end' });
-  svg += await txt(cols[5].x, y + 38, reach ? int(reach) : '—', { weight: 600, anchor: 'end' });
-  svg += await txt(cols[6].x, y + 38, tot.msg ? int(tot.msg) : '—', { weight: 600, anchor: 'end' });
+  svg += await txt(X.res, y + 38, tot.res ? int(tot.res) : '—', { weight: 600, anchor: 'end' });
+  svg += await txt(X.cpr, y + 38, tot.res ? money(tot.spend / tot.res) : '—', { weight: 600, anchor: 'end' });
+  svg += await txt(X.spend, y + 38, money(tot.spend), { weight: 600, fill: '#2563EB', anchor: 'end', size: 18 });
+  svg += await txt(X.imp, y + 38, int(tot.imp), { weight: 600, anchor: 'end' });
+  svg += await txt(X.reach, y + 38, reach ? int(reach) : '—', { weight: 600, anchor: 'end' });
+  if (live) svg += await txt(X.cm, y + 38, tot.cm ? int(tot.cm) : '—', { weight: 600, anchor: 'end' });
+  else svg += await txt(X.msg, y + 38, tot.msg ? int(tot.msg) : '—', { weight: 600, anchor: 'end' });
   y += totH;
   if (more > 0) svg += await txt(pad + 16, y + 24, `+ ${more} more ad${more === 1 ? '' : 's'} included in the total`, { size: 13, fill: '#65676b' });
   svg += '</svg>';
@@ -185,7 +191,9 @@ async function render({ client, ads, reach }, from, to) {
 async function clientReportImage(user, clientId, from, to, kind = '', parts = null, scope = null) {
   const data = await clientAds(user, clientId, from, to, kind, parts, scope);
   if (!data.ads.length) return null;
-  return render(data, from, to);
+  // a Live report: the Live filter, or only Live lines ticked (no post line)
+  const pick = sync.splitParts(parts).pick, live = kind === 'live' || !!(pick && pick.length && !pick.includes('post'));
+  return render(data, from, to, { live });
 }
 
 module.exports = { clientReportImage, render, clientCampaigns };

@@ -40,12 +40,13 @@ function finish(client, day, rows) {
   const pages = {};
   for (const r of rows) if (r.page) pages[r.page] = (pages[r.page] || 0) + 1;
   const page = Object.entries(pages).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const pageId = String((rows.find((r) => r.pageId && (!page || r.page === page)) || rows.find((r) => r.pageId) || {}).pageId || '');
   const spend = round2(rows.reduce((s, r) => s + Number(r.spend), 0));
   const comments = has ? rows.reduce((s, r) => s + (Number(r.comments) || 0), 0) : null;
   const messages = has ? rows.reduce((s, r) => s + (Number(r.messages) || 0), 0) : null;
   return {
     key: `${client.id}|${day}|${rows[0].campaignId || rows[0].name}`,
-    clientId: client.id, client: client.name, page, day,
+    clientId: client.id, client: client.name, page, pageId, day,
     start: rows[0].start ?? null, time: rows[0].start != null ? sync.hhmm(rows[0].start) : '',
     // when the boost is scheduled to stop (the latest campaign); null when a campaign has no start or no run time
     end: rows.every((r) => r.start != null && typeof r.runMinutes === 'number') ? Math.max(...rows.map((r) => r.start + r.runMinutes * 60000)) : null,

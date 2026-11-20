@@ -18,17 +18,30 @@ function fromName(name) {
 }
 
 // The plan line for one campaign, or null when the budget or the number of days is not known.
+// The line starts TODAY (the day it is added) and runs to the campaign's end on Meta: a plan's spend is counted for the whole
+// client since the plan's first day, so a start in the past would count other, older posts against this budget.
 function lineFor(cand, setup, usd, today) {
   const n = fromName(cand.name), s = usd && setup ? setup : {};
-  const start = s.start ? sync.todayIn(undefined, new Date(s.start)) : '';
-  let days = s.start && s.end ? Math.max(1, Math.ceil((Date.parse(s.end) - Date.parse(s.start)) / 864e5 - 0.02)) : null;
-  let daily = null, how = '';
-  if (s.dailyBudget > 0 && days) { daily = s.dailyBudget; how = 'meta'; }
-  else if (s.lifetimeBudget > 0 && days) { daily = s.lifetimeBudget / days; how = 'meta'; }
-  else if (n.total && (days || n.days)) { days = days || n.days; daily = n.total / days; how = 'name'; }
+  const total = s.start && s.end ? Math.max(1, Math.ceil((Date.parse(s.end) - Date.parse(s.start)) / 864e5 - 0.02)) : null; // the campaign's whole run
+  const left = s.end ? Math.max(1, Math.round((Date.parse(sync.todayIn(undefined, new Date(s.end))) - Date.parse(today)) / 864e5) + 1) : null; // days from today to its end
+  let daily = null, days = null, how = '';
+  if (s.dailyBudget > 0 && left) { daily = s.dailyBudget; days = left; how = 'meta'; }
+  else if (s.lifetimeBudget > 0 && total) { daily = s.lifetimeBudget / total; days = left; how = 'meta'; }
+  else if (n.total && n.days) { daily = n.total / n.days; days = left || n.days; how = 'name'; }
   if (!(daily > 0) || !days || days > 365) return null;
-  return { post: String(cand.name || 'Post').slice(0, 160), link: '', img: '', extra: [], daily: round2(daily), days, start: start || today,
+  return { post: String(cand.name || 'Post').slice(0, 160), link: '', img: '', extra: [], daily: round2(daily), days, start: today,
     account: cand.account || '', accountName: String(cand.accountName || '').slice(0, 120), sent: '', camp: cand.camp, auto: how };
+}
+
+// One-off for the lines added on 20 Nov before the rule above: a start in the past becomes today, the end date stays.
+async function fixPastStarts() {
+  const today = sync.todayIn(); let n = 0;
+  for (const u of await db.allUsers()) for (const c of await db.listClients(u.fb_id)) {
+    const lines = (c.plan && c.plan.lines) || []; if (!lines.some((l) => l.auto && l.start && l.start < today)) continue;
+    const next = lines.map((l) => { if (!l.auto || !l.start || l.start >= today) return l; const end = sync.addDays(l.start, Math.max(1, Number(l.days) || 1) - 1); n++; return { ...l, start: today, days: Math.max(1, Math.round((Date.parse(end) - Date.parse(today)) / 864e5) + 1) }; });
+    await db.updateClient(u.fb_id, c.id, { plan: { ...c.plan, lines: next } });
+  }
+  return n;
 }
 
 // Today's post campaigns with spend that belong to a client and are in no current plan.
@@ -73,4 +86,4 @@ async function run(user) {
   return added;
 }
 
-module.exports = { run, fromName, lineFor };
+module.exports = { run, fromName, lineFor, fixPastStarts };

@@ -1222,6 +1222,8 @@ api.put('/clients/:id/boost-plan', wrap(async (req, res) => {
   } else {
     plan = require('./src/plan').clean(b, cur);
     if (Array.isArray(b.lines) && b.sentAt === null && old.length) plan.past = [keep(cur), ...(cur.past || [])].slice(0, 20);
+    // a campaign whose line a person took out of the plan is not added again by itself (src/autoplan.js)
+    if (Array.isArray(b.lines)) { const still = new Set(plan.lines.map((l) => l.camp).filter(Boolean)), gone = old.map((l) => l.camp).filter((x) => x && !still.has(x)); if (gone.length) plan.noAuto = [...new Set([...(cur.noAuto || []), ...gone])].slice(-300); }
   }
   // The ad account on a line must be one of this workspace's own; its name is taken from our list.
   if ((plan.lines || []).some((l) => l.account)) {
@@ -2222,7 +2224,7 @@ api.get('/boosts', wrap(async (req, res) => {
       rows.push({ clientId: c.id, client: c.name, i, post: l.post || `Post ${i + 1}`, link: l.link || '', daily: Number(l.daily) || 0, days: Number(l.days) || 0, budget: Math.round((Number(l.daily) || 0) * (Number(l.days) || 0) * 100) / 100,
         account: l.accountName || l.account || '', start: l.start || '', end, left: end ? Math.round((Date.parse(end) - Date.parse(today)) / 864e5) : null, state,
         noSpend: state === 'active' && (x.reasons || []).some((r) => r.kind === 'noboost'), sent: l.sent || (c.plan.sentAt && !lines.some((y) => y.sent) ? c.plan.sentAt : ''),
-        camp: l.camp || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
+        camp: l.camp || '', auto: l.auto || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
     });
   }
   const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));

@@ -85,14 +85,17 @@ app.get('/auth/facebook', (req, res) => {
 });
 
 // Orders → Connect Pages: the same Facebook login, asking for the Page permissions. The callback below sees pagesFor
-// and saves the Pages instead of logging in. Only a logged-in team member (not a media buyer) can start it.
-app.get('/auth/facebook/pages', (req, res) => {
+// and saves the Pages instead of logging in. A media buyer (owner, 20 Nov 2026) can start it too: the Pages are saved
+// in their PM's workspace, and the media buyer's own Facebook login is used for nothing else.
+const mbPmId = async (mbId) => { const b = mbId && (await MB().get(mbId)); return (b && (b.addedById || ((await db.allUsers()).find((u) => u.name === b.addedBy) || {}).fb_id)) || ''; };
+app.get('/auth/facebook/pages', wrap(async (req, res) => {
   // Facebook/username login, or an owner who signs in with Gmail on the admin site (e.g. Hor Vannak).
-  const who = req.session && !req.session.mb ? req.session.fbId || (req.session.gEmail ? 'g:' + req.session.gEmail : '') : '';
+  const pm = req.session && req.session.mb ? await mbPmId(req.session.mb) : '';
+  const who = req.session && req.session.mb ? (pm ? 'mb:' + pm : '') : req.session ? req.session.fbId || (req.session.gEmail ? 'g:' + req.session.gEmail : '') : '';
   if (!who) return res.redirect('/login');
   req.session.pagesFor = who; req.session.linkFor = null;
   res.redirect(pageOrders.connectUrl(newState()));
-});
+}));
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
   if (error_description && !req.session.pagesFor && !req.session.noPageScopes && /scope|permission/i.test(String(error_description))) {
@@ -116,12 +119,13 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   // Connecting Pages for order counting (Orders → Connect Pages): save the Pages, stay logged in as myself.
   const pagesFor = req.session.pagesFor; req.session.pagesFor = null;
   const viaGmail = !!(pagesFor && req.session.gEmail && pagesFor === 'g:' + req.session.gEmail);
-  const pagesUser = pagesFor && req.session.fbId === pagesFor ? await db.getUser(pagesFor) : null;
+  const viaMb = !!(pagesFor && pagesFor.startsWith('mb:') && req.session.mb && (await mbPmId(req.session.mb)) === pagesFor.slice(3)); // a media buyer, for their PM's workspace
+  const pagesUser = viaMb ? await db.getUser(pagesFor.slice(3)) : pagesFor && req.session.fbId === pagesFor ? await db.getUser(pagesFor) : null;
   if (pagesFor && (pagesUser || viaGmail)) {
-    const back = (msg, ok) => res.redirect('/?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
+    const back = (msg, ok) => res.redirect((viaMb ? '/mediabuyer' : '/') + '?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
     try {
       const who = pagesUser ? pagesUser.name : req.session.gName || req.session.gEmail;
-      const r = await pageOrders.connectFromUserToken(token, { id: pagesFor, name: who + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
+      const r = await pageOrders.connectFromUserToken(token, { id: viaMb ? pagesFor.slice(3) : pagesFor, name: viaMb ? who + ' (' + profile.name + ')' : who + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
       if (r.missing.length && !r.connected.length) return back(`Facebook did not give Boost Desk the Page permissions (${r.missing.join(', ')}). Tap Connect Pages again and allow everything.`, false);
       if (!r.connected.length && !r.failed.length) return back(`${profile.name} does not manage any Facebook Page.`, false);
       return back(`${r.connected.length} Page${r.connected.length === 1 ? '' : 's'} connected — new orders are counted from now.${r.failed.length ? ` ${r.failed.length} could not be connected: ${r.failed[0].name} (${r.failed[0].error}).` : ''}`, r.connected.length > 0);
@@ -483,7 +487,7 @@ app.use(wrap(async (req, res, next) => {
   }
   // A media buyer (signed in from the Telegram link) works inside their PM's account, with limits:
   // no deleting, pausing or merging clients, nothing in Admin / Profit / KPIs / team. Since 20 Nov 2026 (owner) they do the
-  // daily client work like their PM: Sync from Meta, client settings, ad accounts, the weekly strategy. (Connecting Pages for orders needs a Facebook login, so it stays with the PM.)
+  // daily client work like their PM: Sync from Meta, client settings, ad accounts, the weekly strategy. Connecting Pages for orders too (removing one stays with the PM).
   if (!user && req.session.mb) {
     const b = await MB().get(req.session.mb);
     const pmId = b && (b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy]);
@@ -2863,7 +2867,7 @@ api.post('/orders/use-live', adminOnly, wrap(async (req, res) => {
   const n = await orders.useLive(from, to > today ? today : to); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json({ ok: true, rows: n });
 }));
 // Boost Desk's own order counting: connected Pages, and the switch between it and adsbox.biz.
-api.get('/orders/pages', wrap(async (req, res) => { if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM to connect Pages.' }); res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
+api.get('/orders/pages', wrap(async (req, res) => { res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
 api.delete('/orders/pages/:id', wrap(async (req, res) => {
   if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
   const id = String(req.params.id || ''); if (!/^\d{5,30}$/.test(id)) return res.status(400).json({ error: 'Pick a Page.' });

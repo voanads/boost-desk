@@ -2298,12 +2298,12 @@
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
       }
       const own = !!(cfg.own && cfg.own.on);
-      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = !!(me && me.buyer);
+      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = false;
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
       if (own) { if (oPgN === null) api('/orders/pages').then((r) => { oPgN = r.pages.length; if (!oPgN) loadOrders(); }).catch(() => { oPgN = -1; });
-        if (oPgN === 0) msg = me && me.buyer ? 'No Facebook Page is connected for orders yet — ask your PM.' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
+        if (oPgN === 0) msg = false ? '' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
         else if (!d.hasData) msg = 'No orders in this period yet. New orders show here within seconds.'; }
       else if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
       else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;

@@ -293,7 +293,8 @@ async function notConnected() {
   const since = require('./sync').addDays(today(), -7), seen = new Map();
   for (const r of (await q(`SELECT rows FROM raw_rows WHERE day >= $1`, [since])).rows) for (const x of r.rows || []) if (x.pageId && /^\d{5,}$/.test(String(x.pageId)) && (Number(x.spend) || 0) > 0) seen.set(String(x.pageId), x.page || seen.get(String(x.pageId)) || '');
   const have = new Set((await q('SELECT page_id FROM page_links WHERE subscribed')).rows.map((r) => r.page_id));
-  return [...seen].filter(([id]) => !have.has(id)).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  const names = (await db.getSetting('pageNames', {})) || {}; // Page names Boost Desk learned from Meta
+  return [...seen].filter(([id]) => !have.has(id)).map(([id, name]) => ({ id, name: name || names[id] || 'Page ' + id })).sort((a, b) => a.name.localeCompare(b.name));
 }
 async function disconnect(pageId) {
   const p = (await q('SELECT token_enc FROM page_links WHERE page_id=$1', [pageId])).rows[0]; if (!p) return false;

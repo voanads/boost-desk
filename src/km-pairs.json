@@ -1,0 +1,1074 @@
+[
+[
+"data-bp=\"hide\">Hide</button><button type=\"button\" class=\"ghost sm\" data-bp=\"edit\">Edit</button><button type=\"button\" class=\"ghost sm\" data-bp=\"new\">New plan</button><button type=\"button\" class=\"ghost sm bp-rm\" data-bp=\"clear\" title=\"Delete this plan\">Delete</button><button type=\"button\" class=\"sm\" data-bp=\"send\">📤 Send plan</button>",
+"data-bp=\"hide\">លាក់</button><button type=\"button\" class=\"ghost sm\" data-bp=\"edit\">កែ</button><button type=\"button\" class=\"ghost sm\" data-bp=\"new\">Plan ថ្មី</button><button type=\"button\" class=\"ghost sm bp-rm\" data-bp=\"clear\" title=\"Delete this plan\">លុប</button><button type=\"button\" class=\"sm\" data-bp=\"send\">📤 ផ្ញើ Plan</button>"
+],
+[
+"<th scope=\"col\">Post</th><th scope=\"col\">Client</th><th scope=\"col\" class=\"num\">$ / day</th><th scope=\"col\">Ad account</th><th scope=\"col\">Start</th><th scope=\"col\">End</th><th scope=\"col\">State</th><th scope=\"col\" class=\"num\">Post spend today</th><th scope=\"col\">Client's plan used</th><th scope=\"col\">Sent to client</th>",
+"<th scope=\"col\">Post</th><th scope=\"col\">ភ្ញៀវ</th><th scope=\"col\" class=\"num\">$ / ថ្ងៃ</th><th scope=\"col\">Ad account</th><th scope=\"col\">ចាប់ផ្ដើម</th><th scope=\"col\">បញ្ចប់</th><th scope=\"col\">ស្ថានភាព</th><th scope=\"col\" class=\"num\">ចំណាយ Post ថ្ងៃនេះ</th><th scope=\"col\">Boost plan ប្រើអស់</th><th scope=\"col\">ផ្ញើជូនភ្ញៀវ</th>"
+],
+[
+"<b>📣 Boost plan</b><span class=\"hint\">Plan the posts to boost and send the client the total to pay before you start.</span><button type=\"button\" class=\"ghost sm\" data-bp=\"hide\">Hide</button><button type=\"button\" class=\"sm primary\" data-bp=\"new\">+ New plan</button>",
+"<b>📣 Boost plan</b><span class=\"hint\">រៀប Post ដែលត្រូវ Boost ហើយផ្ញើចំនួនសរុបត្រូវបង់ជូនភ្ញៀវមុនចាប់ផ្ដើម។</span><button type=\"button\" class=\"ghost sm\" data-bp=\"hide\">លាក់</button><button type=\"button\" class=\"sm primary\" data-bp=\"new\">+ Plan ថ្មី</button>"
+],
+[
+"<b>Boost plan hidden</b><span class=\"hint\">${lines.length ? money(planTotals(c.plan).total) + ' · ' + lines.length + ' post' + (lines.length === 1 ? '' : 's') : 'No plan yet'}</span><button type=\"button\" class=\"sm\" data-bp=\"show\">Show plan</button>",
+"<b>Boost plan ត្រូវបានលាក់</b><span class=\"hint\">${lines.length ? money(planTotals(c.plan).total) + ' · ' + lines.length + ' Post' : 'មិនទាន់មាន Plan'}</span><button type=\"button\" class=\"sm\" data-bp=\"show\">បង្ហាញ Plan</button>"
+],
+[
+"'What should the PM know tonight? e.g. LR wants live at 7:00 · CPM high on sneakers post · J.Mey has not answered the plan' : 'What should they do first tomorrow? e.g. top up KHM-01 $50 before 9:00 · boost 2 posts for J.Mey · do not pause sneakers'",
+"'PM គួរដឹងអ្វីយប់នេះ? ឧ. LR ចង់ Live ម៉ោង 7:00 · CPM ខ្ពស់លើ Post ស្បែកជើង · J.Mey មិនទាន់ឆ្លើយ Plan' : 'ស្អែកត្រូវធ្វើអ្វីមុនគេ? ឧ. បញ្ចូល $50 ក្នុង KHM-01 មុនម៉ោង 9:00 · Boost 2 Post ឲ្យ J.Mey · កុំផ្អាក Post ស្បែកជើង'"
+],
+[
+"<th scope=\"col\">Team</th><th scope=\"col\">People</th><th scope=\"col\" class=\"r\">Clients</th><th scope=\"col\" class=\"r\">Spend</th><th scope=\"col\" class=\"r\">Revenue</th><th scope=\"col\" class=\"r\">Reports today</th><th scope=\"col\">Last active</th>",
+"<th scope=\"col\">ក្រុម</th><th scope=\"col\">សមាជិក</th><th scope=\"col\" class=\"r\">ភ្ញៀវ</th><th scope=\"col\" class=\"r\">ចំណាយ</th><th scope=\"col\" class=\"r\">ចំណូល</th><th scope=\"col\" class=\"r\">របាយការណ៍ថ្ងៃនេះ</th><th scope=\"col\">សកម្មចុងក្រោយ</th>"
+],
+[
+"fb.length ? `Facebook login${fb.length === 1 ? '' : 's'} to renew` : (A.buyersUnlinked || []).length ? ((A.buyersUnlinked || []).length === 1 ? 'media buyer not on Telegram' : 'media buyers not on Telegram') : 'Logins and Telegram fine'",
+"fb.length ? 'Facebook login ត្រូវបន្ត' : (A.buyersUnlinked || []).length ? 'Media buyer មិនទាន់ភ្ជាប់ Telegram' : 'Login និង Telegram ល្អ'"
+],
+[
+"`Nothing needs attention. ${unchecked ? `${unchecked} client${unchecked === 1 ? '' : 's'} not checked yet today.` : `All ${g.clients.length} clients were checked today.`}` : 'No client is boosting right now.'",
+"`គ្មានអ្វីត្រូវមើល។ ${unchecked ? `ភ្ញៀវ ${unchecked} មិនទាន់ពិនិត្យថ្ងៃនេះ។` : `ភ្ញៀវទាំង ${g.clients.length} បានពិនិត្យថ្ងៃនេះ។`}` : 'ឥឡូវគ្មានភ្ញៀវកំពុង Boost ទេ។'"
+],
+[
+"<span class=\"lb-lab\">Boosting now · ${all.length}</span><b>${N.ok} fine</b><span class=\"hint\">${N.warn} to watch${N.seen ? ` · ${N.seen} checked ✓` : ''} · ${N.bad} urgent · ${idleAll} not boosting</span>",
+"<span class=\"lb-lab\">កំពុង Boost · ${all.length}</span><b>ល្អ ${N.ok}</b><span class=\"hint\">ត្រូវមើល ${N.warn}${N.seen ? ` · បានពិនិត្យ ✓ ${N.seen}` : ''} · បន្ទាន់ ${N.bad} · មិនកំពុង Boost ${idleAll}</span>"
+],
+[
+"<span class=\"hint\">${when}. One line per point.</span>${d.mine ? '<button type=\"button\" class=\"ghost sm\" data-ho=\"cancel\">Cancel</button>' : ''}<button type=\"submit\" class=\"primary sm\">Save note</button>",
+"<span class=\"hint\">${when}។ មួយបន្ទាត់ = មួយចំណុច។</span>${d.mine ? '<button type=\"button\" class=\"ghost sm\" data-ho=\"cancel\">បោះបង់</button>' : ''}<button type=\"submit\" class=\"primary sm\">រក្សាទុក Note</button>"
+],
+[
+"const forWho = mb ? esc(d.pmName) : 'your media buyer', when = mb ? 'They see it here at once' + (d.telegram.on ? ' and on Telegram' : '') : `Sent to them on Telegram at ${esc(d.times.brief)} tomorrow`;",
+"const forWho = mb ? esc(d.pmName) : 'Media buyer', when = mb ? 'PM ឃើញវានៅទីនេះភ្លាម' + (d.telegram.on ? ' និងលើ Telegram' : '') : `ផ្ញើទៅ Telegram របស់ Media buyer ស្អែក ម៉ោង ${esc(d.times.brief)}`;"
+],
+[
+"<b>${d.noPlan.length} client${d.noPlan.length === 1 ? ' is' : 's are'} boosting without a plan</b> — no end date, no budget and no “no spend” alert for ${d.noPlan.length === 1 ? 'it' : 'them'}: ",
+"<b>ភ្ញៀវ ${d.noPlan.length} កំពុង Boost ដោយគ្មាន Boost plan</b> — គ្មានថ្ងៃបញ្ចប់ គ្មានថវិកា ហើយគ្មានការជូនដំណឹង «គ្មានចំណាយ»៖ "
+],
+[
+"unsent ? `report${unsent === 1 ? '' : 's'} not sent yet` : A.reportsDue ? 'All reports sent' : 'No reports due yet', `${A.reportsSent || 0} of ${A.reportsDue || 0} clients with spend today`",
+"unsent ? 'របាយការណ៍មិនទាន់ផ្ញើ' : A.reportsDue ? 'របាយការណ៍ផ្ញើអស់ហើយ' : 'មិនទាន់មានរបាយការណ៍ត្រូវផ្ញើ', `${A.reportsSent || 0} / ${A.reportsDue || 0} ភ្ញៀវដែលមានចំណាយថ្ងៃនេះ`"
+],
+[
+"<span class=\"hint\">${n.bad} urgent · ${n.warn} to watch${n.seen ? ` · ${n.seen} checked ✓` : ''} · ${n.ok} fine · ${unchecked ? `${unchecked} not checked yet` : 'all checked today'}</span>",
+"<span class=\"hint\">បន្ទាន់ ${n.bad} · ត្រូវមើល ${n.warn}${n.seen ? ` · បានពិនិត្យ ✓ ${n.seen}` : ''} · ល្អ ${n.ok} · ${unchecked ? `មិនទាន់ពិនិត្យ ${unchecked}` : 'បានពិនិត្យទាំងអស់'}</span>"
+],
+[
+"`Plan ${c.plan.pct}%${c.plan.left != null ? (c.plan.left < 0 ? ' · ended' : c.plan.left === 0 ? ' · ends today' : ` · ${c.plan.left} day${c.plan.left === 1 ? '' : 's'} left`) : ''}`",
+"`Boost plan ${c.plan.pct}%${c.plan.left != null ? (c.plan.left < 0 ? ' · ចប់ហើយ' : c.plan.left === 0 ? ' · ចប់ថ្ងៃនេះ' : ` · នៅ ${c.plan.left} ថ្ងៃ`) : ''}`"
+],
+[
+"<span class=\"lbl\">Clients</span><b class=\"num\">${d.clients.active}<small> active</small></b><span class=\"sub\">${d.clients.new} new this month · ${d.clients.paused} paused</span>",
+"<span class=\"lbl\">ភ្ញៀវ</span><b class=\"num\">${d.clients.active}<small> សកម្ម</small></b><span class=\"sub\">ថ្មីខែនេះ ${d.clients.new} · ផ្អាក ${d.clients.paused}</span>"
+],
+[
+"<span class=\"lbl\">Boost spend</span><b class=\"num\">${money(d.money.spend)}</b><span class=\"sub\">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span>",
+"<span class=\"lbl\">ចំណាយ Boost</span><b class=\"num\">${money(d.money.spend)}</b><span class=\"sub\">គ្រប់ក្រុម · ${d.isThisMonth ? 'មកដល់ថ្ងៃនេះ' : 'ពេញមួយខែ'}</span>"
+],
+[
+"stat('Urgent', `${N.bad} client${N.bad === 1 ? '' : 's'}`, N.bad ? (free ? `nobody is on ${free} of them` : 'someone is on each of them') : 'no client has a problem'",
+"stat('បន្ទាន់', `ភ្ញៀវ ${N.bad}`, N.bad ? (free ? `${free} គ្មានអ្នកមើល` : 'មានអ្នកមើលគ្រប់ភ្ញៀវ') : 'គ្មានភ្ញៀវមានបញ្ហា'"
+],
+[
+"<span class=\"hint\">${done.length} done · ${open.length} open${late.length ? ` · <span class=\"is-danger\">${late.length} overdue</span>` : ''} · every client</span>",
+"<span class=\"hint\">រួច ${done.length} · នៅសល់ ${open.length}${late.length ? ` · <span class=\"is-danger\">ហួសថ្ងៃ ${late.length}</span>` : ''} · គ្រប់ភ្ញៀវ</span>"
+],
+[
+"by: 'You' })}<div class=\"ho-act\"><span class=\"hint\">✓ Saved · ${when.replace(/^Sent/, 'goes')}</span><button type=\"button\" class=\"sm\" data-ho=\"edit\">Edit</button>",
+"by: 'អ្នក' })}<div class=\"ho-act\"><span class=\"hint\">✓ បានរក្សាទុក · ${when}</span><button type=\"button\" class=\"sm\" data-ho=\"edit\">កែ</button>"
+],
+[
+"data-a=\"save\">Save</button><button type=\"button\" class=\"sm\" data-a=\"ask\">Ask Meta</button><button type=\"button\" class=\"ghost sm\" data-a=\"x\">Cancel</button>",
+"data-a=\"save\">រក្សាទុក</button><button type=\"button\" class=\"sm\" data-a=\"ask\">សួរ Meta</button><button type=\"button\" class=\"ghost sm\" data-a=\"x\">បោះបង់</button>"
+],
+[
+"stat('Checked today', `${checked} of ${all.length}`, all.length - checked ? `${all.length - checked} not looked at yet` : 'every client was checked')",
+"stat('បានពិនិត្យថ្ងៃនេះ', `${checked} / ${all.length}`, all.length - checked ? `មិនទាន់មើល ${all.length - checked}` : 'បានពិនិត្យគ្រប់ភ្ញៀវ')"
+],
+[
+"<th scope=\"col\" class=\"num\">$ / day × days</th><th scope=\"col\">Start – end</th><th scope=\"col\">Ad account</th><th scope=\"col\" class=\"num\">Total</th>",
+"<th scope=\"col\" class=\"num\">$ / ថ្ងៃ × ថ្ងៃ</th><th scope=\"col\">ចាប់ផ្ដើម – បញ្ចប់</th><th scope=\"col\">Ad account</th><th scope=\"col\" class=\"num\">សរុប</th>"
+],
+[
+"<b>Not boosting now · ${list.length}</b><span class=\"hint\">${fol ? `${fol} to follow up` : 'nothing to follow up'} · no alerts for these</span>",
+"<b>មិនកំពុង Boost · ${list.length}</b><span class=\"hint\">${fol ? `ត្រូវតាមដាន ${fol}` : 'គ្មានអ្វីត្រូវតាមដាន'} · គ្មានការជូនដំណឹង</span>"
+],
+[
+"' · sent ✈' : ' · not sent'}</span>` : 'My task'}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class=\"is-danger\">late — since ${esc(",
+"' · បានផ្ញើ ✈' : ' · មិនទាន់ផ្ញើ'}</span>` : 'ការងារខ្ញុំ'}${t.repeat ? ' · 🔁 រាល់ថ្ងៃ' : ''}${t.late ? ` · <span class=\"is-danger\">ហួសថ្ងៃ — តាំងពី ${esc("
+],
+[
+"<h2>Clients today</h2><span class=\"hint\">clients that are boosting now, by status · the others are listed apart as “Not boosting now”</span>",
+"<h2>ភ្ញៀវថ្ងៃនេះ</h2><span class=\"hint\">ភ្ញៀវកំពុង Boost តាមស្ថានភាព · ភ្ញៀវផ្សេងនៅក្នុង «មិនកំពុង Boost»</span>"
+],
+[
+"<span class=\"hint\">campaigns that are spending but could not be added by themselves (no budget or number of days) — add them by hand</span>",
+"<span class=\"hint\">Campaign ដែលកំពុងចំណាយ តែប្រព័ន្ធបញ្ចូលដោយខ្លួនឯងមិនបាន (មិនដឹងថវិកា ឬចំនួនថ្ងៃ) — សូមបន្ថែមដោយដៃ</span>"
+],
+[
+"<div class=\"ca-past\">You are looking at ${esc($('coMonth').textContent || d.month)} — the tiles for today show on the current month.</div>",
+"<div class=\"ca-past\">អ្នកកំពុងមើល ${esc($('coMonth').textContent || d.month)} — ប្រអប់សម្រាប់ថ្ងៃនេះបង្ហាញតែក្នុងខែបច្ចុប្បន្ន។</div>"
+],
+[
+"'Budget and days come from the campaign on Meta' : 'Budget and days come from the campaign name'}\">added by itself — please check</span>",
+"'ថវិកា និងថ្ងៃ យកពី Campaign លើ Meta' : 'ថវិកា និងថ្ងៃ យកពីឈ្មោះ Campaign'}\">បញ្ចូលស្វ័យប្រវត្តិ — សូមពិនិត្យ</span>"
+],
+[
+"'No boost matches.' : '<b>No boost plan yet.</b><br>Open a client and add the posts you boost under “Boost plan” — they show up here.'",
+"'រកមិនឃើញ Post ទេ។' : '<b>មិនទាន់មាន Boost plan។</b><br>បើកភ្ញៀវ ហើយបន្ថែម Post ក្នុង «Boost plan» — វានឹងបង្ហាញនៅទីនេះ។'"
+],
+[
+"<button type=\"submit\" class=\"primary sm\">Save plan</button><button type=\"button\" class=\"ghost sm\" data-bp=\"close\">Cancel</button>",
+"<button type=\"submit\" class=\"primary sm\">រក្សាទុក Plan</button><button type=\"button\" class=\"ghost sm\" data-bp=\"close\">បោះបង់</button>"
+],
+[
+"confirm('Turn off the morning brief, the 16:45 reminder and the evening digest for your team? Notes in Boost Desk keep working.')",
+"confirm('បិទសារព្រឹក សាររំលឹកម៉ោង 16:45 និងសារសង្ខេបល្ងាច សម្រាប់ក្រុមអ្នក? Note ក្នុង Boost Desk នៅដំណើរការដដែល។')"
+],
+[
+"<h2>🤝 Handoff</h2><span class=\"hint\">${mb ? 'your morning → the PM\\'s evening' : 'media buyer\\'s morning → your evening'}</span>",
+"<h2>🤝 ប្រគល់វេន (Handoff)</h2><span class=\"hint\">${mb ? 'ព្រឹករបស់អ្នក → ល្ងាចរបស់ PM' : 'ព្រឹករបស់ Media buyer → ល្ងាចរបស់អ្នក'}</span>"
+],
+[
+"Found on Meta: <b>${esc(f.name)}</b> · ${money(f.spend)} today. Type the budget per day and how many days the client asked for.",
+"រកឃើញលើ Meta៖ <b>${esc(f.name)}</b> · ${money(f.spend)} ថ្ងៃនេះ។ បញ្ចូលថវិកាក្នុងមួយថ្ងៃ និងចំនួនថ្ងៃដែលភ្ញៀវសុំ។"
+],
+[
+"${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices",
+"បានបង់ ${money(d.money.revenue.paid)} · ត្រូវប្រមូល ${money(d.money.revenue.outstanding)} · Invoice ${d.money.revenue.count}"
+],
+[
+"${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}",
+"${money(l.daily)}/ថ្ងៃ × ${l.days} ថ្ងៃ${l.start ? ' · ពី ' + esc(shortDay(l.start)) : ''}"
+],
+[
+"<b>📅 Planned</b><span class=\"hint\">${upcoming.length} task${upcoming.length === 1 ? '' : 's'} for later days</span>",
+"<b>📅 គ្រោងទុក</b><span class=\"hint\">${upcoming.length} ការងារសម្រាប់ថ្ងៃក្រោយ</span>"
+],
+[
+"📷 ${n} picture${n === 1 ? '' : 's'} — each post is sent as its picture with its line under it, then the total.",
+"📷 រូប ${n} — Post នីមួយៗផ្ញើជារូប មានព័ត៌មានពីក្រោម រួចចំនួនសរុប។"
+],
+[
+"<b>✍ Your note for ${forWho}</b><span class=\"hint\">${mb ? 'before you leave' : 'for tomorrow morning'}</span>",
+"<b>✍ Note របស់អ្នកសម្រាប់ ${forWho}</b><span class=\"hint\">${mb ? 'មុនចេញពីការងារ' : 'សម្រាប់ព្រឹកស្អែក'}</span>"
+],
+[
+"' · done ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' by ' + esc(t.doneBy) : '')",
+"' · រួច ' + esc(ago(t.doneAt)) + (t.doneBy && t.to && t.doneBy === t.to.name ? ' ដោយ ' + esc(t.doneBy) : '')"
+],
+[
+"<span class=\"hint\">Day</span><button type=\"button\" data-daypick=\"\" aria-pressed=\"${!taskDay}\">Today</button>",
+"<span class=\"hint\">ថ្ងៃ</span><button type=\"button\" data-daypick=\"\" aria-pressed=\"${!taskDay}\">ថ្ងៃនេះ</button>"
+],
+[
+"<span class=\"hint\">Ad budget ${money(t.budget)}${t.rate ? ` + tax ${t.rate}% ${money(t.tax)}` : ''}</span>",
+"<span class=\"hint\">ថវិកា Ad ${money(t.budget)}${t.rate ? ` + ពន្ធ ${t.rate}% ${money(t.tax)}` : ''}</span>"
+],
+[
+"${rl === 'bad' ? 'Reports not sent after 20:00' : rl === 'mid' ? 'Reports still to send' : 'Reports sent'}",
+"${rl === 'bad' ? 'របាយការណ៍មិនទាន់ផ្ញើក្រោយម៉ោង 20:00' : rl === 'mid' ? 'នៅមានរបាយការណ៍ត្រូវផ្ញើ' : 'របាយការណ៍ផ្ញើហើយ'}"
+],
+[
+"Telegram: brief ${esc(d.times.brief)} · reminder ${esc(d.times.remind)} · digest ${esc(d.times.digest)}",
+"Telegram៖ សារព្រឹក ${esc(d.times.brief)} · រំលឹក ${esc(d.times.remind)} · សង្ខេបល្ងាច ${esc(d.times.digest)}"
+],
+[
+"m === 'company' ? 'Clients that need attention first, then every team today, then this month\\'s money.'",
+"m === 'company' ? 'ភ្ញៀវដែលត្រូវមើលមុន រួចក្រុមនីមួយៗថ្ងៃនេះ រួចលុយខែនេះ។'"
+],
+[
+"<option value=\"\">Main chat${c.telegram.includes(':') ? ' (the topic set on the client)' : ''}</option>",
+"<option value=\"\">Chat ធំ${c.telegram.includes(':') ? ' (Topic ដែលកំណត់លើភ្ញៀវ)' : ''}</option>"
+],
+[
+"${pl.lines.length} post${pl.lines.length === 1 ? '' : 's'}${pl.by ? ' · kept by ' + esc(pl.by) : ''}",
+"${pl.lines.length} Post${pl.by ? ' · រក្សាដោយ ' + esc(pl.by) : ''}"
+],
+[
+"<b>📣 Boost plan</b><span class=\"hint\">${lines.length} post${lines.length === 1 ? '' : 's'}</span>",
+"<b>📣 Boost plan</b><span class=\"hint\">${lines.length} Post</span>"
+],
+[
+"stat('Spend today', money(spend), `${withSpend} client${withSpend === 1 ? '' : 's'} with spend`)",
+"stat('ចំណាយថ្ងៃនេះ', money(spend), `ភ្ញៀវ ${withSpend} មានចំណាយ`)"
+],
+[
+"${doneN ? `All ${doneN} done for this client today.` : 'Nothing to do for this client today.'}",
+"${doneN ? `ការងារទាំង ${doneN} រួចហើយថ្ងៃនេះ។` : 'ថ្ងៃនេះគ្មានការងារសម្រាប់ភ្ញៀវនេះ។'}"
+],
+[
+"`last boost ${shortDay(day)} · ${n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'}`",
+"`Boost ចុងក្រោយ ${shortDay(day)} · ${n <= 0 ? 'ថ្ងៃនេះ' : n === 1 ? 'ម្សិលមិញ' : n + ' ថ្ងៃមុន'}`"
+],
+[
+"all ? 'Show only Clients today and My tasks' : 'See more: Handoff · numbers · clients table';",
+"all ? 'បង្ហាញតែភ្ញៀវថ្ងៃនេះ និងការងារខ្ញុំ' : 'មើលបន្ថែម៖ ប្រគល់វេន · លេខចំណាយ · តារាងភ្ញៀវ';"
+],
+[
+"No note from ${esc(d.pmName)} yet. It also comes to your Telegram at ${esc(d.times.brief)}.",
+"មិនទាន់មាន Note ពី ${esc(d.pmName)}។ វាក៏មកដល់ Telegram របស់អ្នកនៅម៉ោង ${esc(d.times.brief)}។"
+],
+[
+"['Sent ' + shortDay(c.plan.sentAt.slice(0, 10)), 'bp-sent'] : ['Not sent yet', 'bp-draft']",
+"['បានផ្ញើ ' + shortDay(c.plan.sentAt.slice(0, 10)), 'bp-sent'] : ['មិនទាន់ផ្ញើ', 'bp-draft']"
+],
+[
+"' · nothing to follow up'}. No alerts are sent while the client is not boosting.</span>",
+"' · គ្មានអ្វីត្រូវតាមដាន'}។ គ្មានការជូនដំណឹងពេលភ្ញៀវមិនកំពុង Boost។</span>"
+],
+[
+"placeholder=\"Paste the post link (or several links at once) — picture and name fill in\"",
+"placeholder=\"ដាក់ Link របស់ Post (ឬច្រើន Link ម្ដង) — រូប និងឈ្មោះបំពេញដោយខ្លួនឯង\""
+],
+[
+"<b>📝 Note from ${esc(d.pmName)}</b><span class=\"hint\">their latest note for you</span>",
+"<b>📝 Note ពី ${esc(d.pmName)}</b><span class=\"hint\">Note ចុងក្រោយសម្រាប់អ្នក</span>"
+],
+[
+"<b>🌅 What your media buyer did today</b><span class=\"hint\">tasks you gave them</span>",
+"<b>🌅 អ្វីដែល Media buyer បានធ្វើថ្ងៃនេះ</b><span class=\"hint\">ការងារដែលអ្នកបានឲ្យ</span>"
+],
+[
+"No note yet. Your media buyer is asked for one on Telegram at ${esc(d.times.remind)}.",
+"មិនទាន់មាន Note។ Telegram នឹងសួរ Media buyer នៅម៉ោង ${esc(d.times.remind)}។"
+],
+[
+"`${money(dly * n)} in total · ends ${shortDay(addDaysIso($('bstS').value, n - 1))}`",
+"`សរុប ${money(dly * n)} · ចប់ ${shortDay(addDaysIso($('bstS').value, n - 1))}`"
+],
+[
+"${fol ? `${fol} to follow up` : 'nothing to follow up'} · never urgent, no alerts",
+"${fol ? `ត្រូវតាមដាន ${fol}` : 'គ្មានអ្វីត្រូវតាមដាន'} · មិនបន្ទាន់ គ្មានការជូនដំណឹង"
+],
+[
+"${t.repeat ? 'Every day' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'Your task'}",
+"${t.repeat ? 'រាល់ថ្ងៃ' : t.from === 'ai' ? 'AI plan' : t.to ? '' : 'ការងារអ្នក'}"
+],
+[
+"`starts in ${Math.round((Date.parse(r.start) - Date.parse(d.today)) / 864e5)} d`",
+"`ចាប់ផ្ដើមក្នុង ${Math.round((Date.parse(r.start) - Date.parse(d.today)) / 864e5)} ថ្ងៃ`"
+],
+[
+"toast('Meta does not give this Page’s name — open the Page and type its name')",
+"toast('Meta មិនឲ្យឈ្មោះ Page នេះទេ — សូមបើក Page ហើយសរសេរឈ្មោះដោយដៃ')"
+],
+[
+"'🎉 Nothing open today. Add tasks on a client page.') : 'Nothing here yet.'",
+"'🎉 ថ្ងៃនេះគ្មានការងារនៅសល់។ បន្ថែមការងារក្នុងទំព័រភ្ញៀវ (ផ្ទាំង «ថ្ងៃនេះ»)។') : 'មិនទាន់មានអ្វីទេ។'"
+],
+[
+"<b>📣 Boost plan</b><span class=\"hint\">$ a day × days for each post</span>",
+"<b>📣 Boost plan</b><span class=\"hint\">$ ក្នុងមួយថ្ងៃ × ចំនួនថ្ងៃ សម្រាប់ Post នីមួយៗ</span>"
+],
+[
+"'Nothing needs attention right now.' : 'No client is boosting right now.'",
+"'ឥឡូវគ្មានអ្វីត្រូវមើលទេ។' : 'ឥឡូវគ្មានភ្ញៀវកំពុង Boost ទេ។'"
+],
+[
+"placeholder=\"The Page’s real name (open it on Facebook to see)\" value=\"\">",
+"placeholder=\"ឈ្មោះ Page ពិត (បើកលើ Facebook ដើម្បីមើល)\" value=\"\">"
+],
+[
+"one row per post in a boost plan · state and spend fill in by themselves",
+"មួយជួរ = មួយ Post ក្នុង Boost plan · ស្ថានភាព និងចំណាយបំពេញដោយខ្លួនឯង"
+],
+[
+"\">History and settings<small>Notes · Reports · Settings</small></button>",
+"\">ប្រវត្តិ និងការកំណត់<small>Notes · របាយការណ៍ · ការកំណត់</small></button>"
+],
+[
+"${planView.all ? 'Show fewer' : `Show ${rows.length - CAP} more posts`}",
+"${planView.all ? 'បង្ហាញតិចវិញ' : `បង្ហាញ ${rows.length - CAP} Post ទៀត`}"
+],
+[
+"${open ? 'Only what needs attention' : `Show all ${g.clients.length}`}",
+"${open ? 'តែអ្វីដែលត្រូវមើល' : `បង្ហាញទាំង ${g.clients.length}`}"
+],
+[
+"confirm('Bring this plan back? The current plan moves to Past plans.')",
+"confirm('យក Plan នេះមកវិញ? Plan បច្ចុប្បន្នទៅក្នុង Plan ចាស់។')"
+],
+[
+"${money(r.budget)} · ${r.days} day${r.days === 1 ? '' : 's'}${r.auto ?",
+"${money(r.budget)} · ${r.days} ថ្ងៃ${r.auto ?"
+],
+[
+"`<b class=\"is-warn\">${r.left} day${r.left === 1 ? '' : 's'} left</b>`",
+"`<b class=\"is-warn\">នៅ ${r.left} ថ្ងៃ</b>`"
+],
+[
+"'<div class=\"empty\">No teams yet — make them in Admin → Teams.</div>'",
+"'<div class=\"empty\">មិនទាន់មានក្រុម — បង្កើតក្នុង Admin → Teams។</div>'"
+],
+[
+"${ctMineAll ? 'Only what needs attention' : `Show all ${cs.length}`}",
+"${ctMineAll ? 'តែអ្វីដែលត្រូវមើល' : `បង្ហាញទាំង ${cs.length}`}"
+],
+[
+"${t.repeat ? 'Repeats every day — tap to stop' : 'Repeat every day'}",
+"${t.repeat ? 'ធ្វើរាល់ថ្ងៃ — ចុចដើម្បីឈប់' : 'ធ្វើរាល់ថ្ងៃ'}"
+],
+[
+"data-pnuse=\"${esc(r.guess)}\">Use the guess: ${esc(r.guess)}</button>",
+"data-pnuse=\"${esc(r.guess)}\">ប្រើការទាយ៖ ${esc(r.guess)}</button>"
+],
+[
+"aria-label=\"Clients today\"><div class=\"ct-h\"><h2>Clients today</h2>",
+"aria-label=\"Clients today\"><div class=\"ct-h\"><h2>ភ្ញៀវថ្ងៃនេះ</h2>"
+],
+[
+"<span>${g.n.ok} client${g.n.ok === 1 ? ' is' : 's are'} fine</span>",
+"<span>ភ្ញៀវ ${g.n.ok} ល្អ</span>"
+],
+[
+"It is added to the client’s Boost plan and shows up in this table.",
+"វាចូលក្នុង Boost plan របស់ភ្ញៀវ ហើយបង្ហាញក្នុងតារាងនេះ។"
+],
+[
+"> Client's group · ${esc(c.telegram_title || 'Telegram')}</label>",
+"> Group របស់ភ្ញៀវ · ${esc(c.telegram_title || 'Telegram')}</label>"
+],
+[
+"No Telegram group yet — link one in ⚙ Settings to send it there.",
+"មិនទាន់មាន Telegram group — ភ្ជាប់ក្នុង ⚙ Edit ដើម្បីផ្ញើទៅទីនោះ។"
+],
+[
+"confirm('Remove this boost plan? It is kept under Past plans.')",
+"confirm('លុប Boost plan នេះ? វានៅរក្សាក្នុង Plan ចាស់។')"
+],
+[
+"'✅ ' + (as ? esc(as.name) + \"'s tasks\" : 'My tasks')}${dayLbl}",
+"'✅ ' + (as ? esc(as.name) + \"'s tasks\" : 'ការងារខ្ញុំ')}${dayLbl}"
+],
+[
+"<span class=\"pill mute\">Checked ✓</span><span class=\"pill ok\">",
+"<span class=\"pill mute\">បានពិនិត្យ ✓</span><span class=\"pill ok\">"
+],
+[
+"'Search post, client or ad account' : 'Search client or Page'",
+"'ស្វែងរក Post ភ្ញៀវ ឬ Ad account' : 'ស្វែងរកភ្ញៀវ ឬ Page'"
+],
+[
+"${b.total ? `${b.done} / ${b.total} done` : 'no tasks today'}",
+"${b.total ? `រួច ${b.done} / ${b.total}` : 'ថ្ងៃនេះគ្មានការងារ'}"
+],
+[
+"<b>Found on Meta today, not in a plan · ${d.found.length}</b>",
+"<b>រកឃើញលើ Meta ថ្ងៃនេះ តែមិនទាន់មានក្នុង Boost plan · ${d.found.length}</b>"
+],
+[
+"+ ' ' : ''}checked ${ctTime(c.checked.at)}` : 'not checked');",
+"+ ' ' : ''}បានពិនិត្យ ${ctTime(c.checked.at)}` : 'មិនទាន់ពិនិត្យ');"
+],
+[
+"}Checked by ${esc(x.checked.by)} at ${ctTime(x.checked.at)}`",
+"}${esc(x.checked.by)} បានពិនិត្យ ${ctTime(x.checked.at)}`"
+],
+[
+"toast(on ? 'Telegram messages on' : 'Telegram messages off')",
+"toast(on ? 'បានបើកសារ Telegram' : 'បានបិទសារ Telegram')"
+],
+[
+"title=\"Added by itself from Meta — please check\">Auto</span>",
+"title=\"បញ្ចូលស្វ័យប្រវត្តិពី Meta — សូមពិនិត្យ\">Auto</span>"
+],
+[
+"`${d.people.users} people · ${d.people.buyers} media buyers`",
+"`${d.people.users} នាក់ · Media buyer ${d.people.buyers}`"
+],
+[
+". Open a client and add its posts under “Boost plan”.</div>",
+"។ បើកភ្ញៀវ ហើយបន្ថែម Post ក្នុង «Boost plan»។</div>"
+],
+[
+"\">Today<small>Status · Boost plan · Tasks</small></button>",
+"\">ថ្ងៃនេះ<small>ស្ថានភាព · Boost plan · ការងារ</small></button>"
+],
+[
+"`${w.openTasks} task${w.openTasks === 1 ? '' : 's'} left`",
+"`នៅ ${w.openTasks} ការងារ`"
+],
+[
+"'Plan sent to your team group' : 'Plan sent to ' + c.name",
+"'បានផ្ញើ Plan ទៅ Group ក្រុមអ្នក' : 'បានផ្ញើ Plan ទៅ ' + c.name"
+],
+[
+"`Not boosting now · ${nIdle}` : `Boosting now · ${nAct}`",
+"`មិនកំពុង Boost · ${nIdle}` : `កំពុង Boost · ${nAct}`"
+],
+[
+"The message and the total cover only the posts you tick.",
+"សារ និងចំនួនសរុប គិតតែ Post ដែលអ្នកធីក។"
+],
+[
+"? ' · ' + nice(mtDay).replace(/ \\d{4}$/, '') : ' today';",
+"? ' · ' + nice(mtDay).replace(/ \\d{4}$/, '') : hostId === 'mtTasks' ? ' today' : 'ថ្ងៃនេះ';"
+],
+[
+"<span class=\"ho-pill warn\">Telegram not connected</span>",
+"<span class=\"ho-pill warn\">មិនទាន់ភ្ជាប់ Telegram</span>"
+],
+[
+"<span class=\"hint\">since ${esc(shortDay(p.from))}</span>",
+"<span class=\"hint\">តាំងពី ${esc(shortDay(p.from))}</span>"
+],
+[
+"${Number(c.cpr.results).toLocaleString('en-US')} today`",
+"${Number(c.cpr.results).toLocaleString('en-US')} ថ្ងៃនេះ`"
+],
+[
+"'Plan hidden — Show plan brings it back' : 'Plan shown'",
+"'បានលាក់ Plan — ចុច បង្ហាញ Plan ដើម្បីយកមកវិញ' : 'បានបង្ហាញ Plan'"
+],
+[
+"${showDoneWork ? 'Hide done' : `Done today · ${doneN}`}",
+"${showDoneWork ? 'លាក់អ្វីដែលរួច' : `រួចថ្ងៃនេះ · ${doneN}`}"
+],
+[
+"<span class=\"ho-pill mute\">Telegram messages off</span>",
+"<span class=\"ho-pill mute\">សារ Telegram បិទ</span>"
+],
+[
+"${f ? 'Add this campaign to the plan' : 'Add a boost'}",
+"${f ? 'បន្ថែម Campaign នេះចូល Boost plan' : 'បន្ថែម Post'}"
+],
+[
+"? '<span class=\"pill mute\">Checked ✓</span>' : x.level",
+"? '<span class=\"pill mute\">បានពិនិត្យ ✓</span>' : x.level"
+],
+[
+"`ended ${-r.left} day${r.left === -1 ? '' : 's'} ago`",
+"`ចប់ ${-r.left} ថ្ងៃមុន`"
+],
+[
+"${esc(x.onIt.by)} is on it since ${ctTime(x.onIt.at)}",
+"${esc(x.onIt.by)} កំពុងមើលតាំងពី ${ctTime(x.onIt.at)}"
+],
+[
+"placeholder=\"Another post link under the same budget\"",
+"placeholder=\"Link Post មួយទៀត ក្រោមថវិកាដដែល\""
+],
+[
+"toast('Could not copy — select the text and copy it')",
+"toast('Copy មិនបាន — សូមជ្រើសអក្សរ ហើយ Copy ដោយដៃ')"
+],
+[
+"<button type=\"submit\" class=\"sm primary\">Add</button>",
+"<button type=\"submit\" class=\"sm primary\">បន្ថែម</button>"
+],
+[
+"'<div class=\"empty\">No new clients this month.</div>'",
+"'<div class=\"empty\">ខែនេះគ្មានភ្ញៀវថ្មី។</div>'"
+],
+[
+"'Nobody took it in 30 minutes — sent to the leaders'",
+"'គ្មានអ្នកមើលក្នុង 30 នាទី — បានផ្ញើទៅថ្នាក់ដឹកនាំ'"
+],
+[
+"No ad accounts yet — connect Facebook in Ad accounts",
+"មិនទាន់មាន Ad account — ភ្ជាប់ Facebook ក្នុង Ad accounts"
+],
+[
+"${planSend.to === 'copy' ? 'Copy text' : 'Send now'}",
+"${planSend.to === 'copy' ? 'Copy អក្សរ' : 'ផ្ញើឥឡូវ'}"
+],
+[
+"\">AI<small>Advice · Weekly strategy</small></button>",
+"\">AI<small>ដំបូន្មាន · យុទ្ធសាស្ត្រប្រចាំសប្ដាហ៍</small></button>"
+],
+[
+"`<span class=\"pill mute\">${n.seen} checked ✓</span>`",
+"`<span class=\"pill mute\">បានពិនិត្យ ✓ ${n.seen}</span>`"
+],
+[
+"Link to the post <span class=\"hint\">optional</span>",
+"Link របស់ Post <span class=\"hint\">មិនចាំបាច់</span>"
+],
+[
+"aria-pressed=\"${tmFilter === 'open'}\">Open</button>",
+"aria-pressed=\"${tmFilter === 'open'}\">នៅសល់</button>"
+],
+[
+"aria-pressed=\"${tmFilter === 'done'}\">Done</button>",
+"aria-pressed=\"${tmFilter === 'done'}\">រួច</button>"
+],
+[
+"Connect your Telegram in Settings to get the digest",
+"ភ្ជាប់ Telegram ក្នុង Settings ដើម្បីទទួលសារសង្ខេប"
+],
+[
+"' · sent ✈' : ' · not sent'}</span> ` : ''}${t.kpi",
+"' · បានផ្ញើ ✈' : ' · មិនទាន់ផ្ញើ'}</span> ` : ''}${t.kpi"
+],
+[
+"${n.today ? 'today' : 'last night'} ${esc(n.time)}",
+"${n.today ? 'ថ្ងៃនេះ' : 'យប់មិញ'} ${esc(n.time)}"
+],
+[
+"parts.push('<span class=\"hint\">checked ✓</span>');",
+"parts.push('<span class=\"hint\">បានពិនិត្យ ✓</span>');"
+],
+[
+"<span class=\"hint\">The plan has not started</span>",
+"<span class=\"hint\">Plan មិនទាន់ចាប់ផ្ដើម</span>"
+],
+[
+"${nEnd ? ` · ${nEnd} end today` : ''}</span></div>",
+"${nEnd ? ` · ${nEnd} ចប់ថ្ងៃនេះ` : ''}</span></div>"
+],
+[
+"aria-pressed=\"${tmFilter === 'all'}\">All</button>",
+"aria-pressed=\"${tmFilter === 'all'}\">ទាំងអស់</button>"
+],
+[
+"<span class=\"hint\">all the client's posts</span>",
+"<span class=\"hint\">គ្រប់ Post របស់ភ្ញៀវ</span>"
+],
+[
+"successBadge('Boost plan saved — tap Send plan')",
+"successBadge('បានរក្សាទុក Boost plan — ចុច ផ្ញើ Plan')"
+],
+[
+"' by ' + esc(t.doneBy) : ''}` : ''}</span></div>",
+"' ដោយ ' + esc(t.doneBy) : ''}` : ''}</span></div>"
+],
+[
+"<small>of ${money(p.budget)} · ${p.pct}%</small>",
+"<small>នៃ ${money(p.budget)} · ${p.pct}%</small>"
+],
+[
+"${money(r.planSpent)} of ${money(r.planBudget)}",
+"${money(r.planSpent)} នៃ ${money(r.planBudget)}"
+],
+[
+"<span class=\"pill mute\">Not boosting now</span>",
+"<span class=\"pill mute\">មិនកំពុង Boost</span>"
+],
+[
+"`<span class=\"hint\">sent ${esc(new Date(l.sent)",
+"`<span class=\"hint\">បានផ្ញើ ${esc(new Date(l.sent)"
+],
+[
+"<span class=\"is-danger\">needs attention</span>",
+"<span class=\"is-danger\">ត្រូវមើល</span>"
+],
+[
+"<span class=\"hint\">nothing to follow up</span>",
+"<span class=\"hint\">គ្មានអ្វីត្រូវតាមដាន</span>"
+],
+[
+"'Nothing needs attention'}</span>${ctBoost(c)}",
+"'គ្មានអ្វីត្រូវមើល'}</span>${ctBoost(c)}"
+],
+[
+"<summary>Past plans (${past.length})</summary>",
+"<summary>Plan ចាស់ (${past.length})</summary>"
+],
+[
+"`${d.clients.new} added in ${monLbl(d.month)}`",
+"`បន្ថែម ${d.clients.new} ក្នុង ${monLbl(d.month)}`"
+],
+[
+"optional — needed for the “ad account” alerts",
+"មិនចាំបាច់ — ត្រូវការសម្រាប់ការជូនដំណឹងអំពី Ad account"
+],
+[
+"<span class=\"hint\">Telegram not set up</span>",
+"<span class=\"hint\">Telegram មិនទាន់កំណត់</span>"
+],
+[
+"toast('Add a $ a day for at least one post')",
+"toast('សូមបញ្ចូល $ ក្នុងមួយថ្ងៃ សម្រាប់ Post យ៉ាងតិចមួយ')"
+],
+[
+"title=\"Open the Page on Facebook\">Open ↗</a>",
+"title=\"បើក Page លើ Facebook\">Open ↗</a>"
+],
+[
+"<span class=\"hint\">no Telegram group</span>",
+"<span class=\"hint\">គ្មាន Telegram group</span>"
+],
+[
+"<span class=\"is-danger\">nobody on it</span>",
+"<span class=\"is-danger\">គ្មានអ្នកមើល</span>"
+],
+[
+"<span class=\"pill warn\">not sent yet</span>",
+"<span class=\"pill warn\">មិនទាន់ផ្ញើ</span>"
+],
+[
+"planSend.err || planSend.text || 'Loading…'",
+"planSend.err || planSend.text || 'កំពុងផ្ទុក…'"
+],
+[
+"</span> · sent that morning` : 'Your task'}",
+"</span> · ផ្ញើនៅព្រឹកថ្ងៃនោះ` : 'ការងារអ្នក'}"
+],
+[
+"data-ho=\"preview\">See the messages</button>",
+"data-ho=\"preview\">មើលសារ</button>"
+],
+[
+"<span class=\"linkbtn\">show</span></summary>",
+"<span class=\"linkbtn\">មើល</span></summary>"
+],
+[
+"<span class=\"bp-tag warn\">ends today</span>",
+"<span class=\"bp-tag warn\">ចប់ថ្ងៃនេះ</span>"
+],
+[
+"<span class=\"lbl\">Revenue · invoiced</span>",
+"<span class=\"lbl\">ចំណូល · តាម Invoice</span>"
+],
+[
+"<span class=\"is-warn\">plan not sent</span>",
+"<span class=\"is-warn\">Boost plan មិនទាន់ផ្ញើ</span>"
+],
+[
+"confirm('Remove this past plan for good?')",
+"confirm('លុប Plan ចាស់នេះចោលរហូត?')"
+],
+[
+"placeholder=\"+ Add a task for this client\"",
+"placeholder=\"+ បន្ថែមការងារសម្រាប់ភ្ញៀវនេះ\""
+],
+[
+"successBadge(`Added to ${c.name}’s plan`)",
+"successBadge(`បានបន្ថែមចូល Boost plan របស់ ${c.name}`)"
+],
+[
+">+ Add another link to this post</button>",
+">+ បន្ថែម Link មួយទៀតក្នុង Post នេះ</button>"
+],
+[
+"${d.telegram.on ? 'Turn off' : 'Turn on'}",
+"${d.telegram.on ? 'បិទ' : 'បើក'}"
+],
+[
+"<span class=\"is-danger\">over plan</span>",
+"<span class=\"is-danger\">លើស Boost plan</span>"
+],
+[
+"toast('Copied — paste it to the client')",
+"toast('Copy ហើយ — Paste ជូនភ្ញៀវ')"
+],
+[
+">Not boosting · ${idle.length}</button>",
+">មិនកំពុង Boost · ${idle.length}</button>"
+],
+[
+"${g.clients.length} boosting now</span>",
+"កំពុង Boost ${g.clients.length}</span>"
+],
+[
+"chipB('auto', 'Added by itself', nAuto)",
+"chipB('auto', 'បញ្ចូលស្វ័យប្រវត្តិ', nAuto)"
+],
+[
+"' · ended ' + esc(shortDay(c.plan.to))",
+"' · ចប់ ' + esc(shortDay(c.plan.to))"
+],
+[
+"data-bpback=\"${i}\">Bring back</button>",
+"data-bpback=\"${i}\">យកមកវិញ</button>"
+],
+[
+"<span class=\"is-warn\">not sent</span>",
+"<span class=\"is-warn\">មិនទាន់ផ្ញើ</span>"
+],
+[
+"placeholder=\"e.g. Serum video 20 Nov\"",
+"placeholder=\"ឧ. វីដេអូ Serum 20 Nov\""
+],
+[
+"<span class=\"is-danger\">urgent</span>",
+"<span class=\"is-danger\">បន្ទាន់</span>"
+],
+[
+"<span class=\"is-warn\">to watch</span>",
+"<span class=\"is-warn\">ត្រូវមើល</span>"
+],
+[
+">Boosting now · ${cs.length}</button>",
+">កំពុង Boost · ${cs.length}</button>"
+],
+[
+"<span class=\"lbl\">Total to pay</span>",
+"<span class=\"lbl\">សរុបត្រូវបង់</span>"
+],
+[
+"<span class=\"pill mute\">Ended</span>",
+"<span class=\"pill mute\">ចប់ហើយ</span>"
+],
+[
+"${money(f.spend)} today</span></div>",
+"${money(f.spend)} ថ្ងៃនេះ</span></div>"
+],
+[
+"data-bp=\"clear\">Delete plan</button>",
+"data-bp=\"clear\">លុប Plan</button>"
+],
+[
+"<span class=\"bp-big\">Total to pay <b",
+"<span class=\"bp-big\">សរុបត្រូវបង់ <b"
+],
+[
+"successBadge('Meta says: ' + r.name)",
+"successBadge('Meta ឲ្យឈ្មោះ៖ ' + r.name)"
+],
+[
+"<span class=\"hint\">this post</span>",
+"<span class=\"hint\">Post នេះ</span>"
+],
+[
+"<label for=\"bstD\">$ per day</label>",
+"<label for=\"bstD\">$ ក្នុងមួយថ្ងៃ</label>"
+],
+[
+"btn.textContent = 'Add to the plan'",
+"btn.textContent = 'បន្ថែមចូល Plan'"
+],
+[
+"<span class=\"is-ok\">all done</span>",
+"<span class=\"is-ok\">ធ្វើរួចទាំងអស់</span>"
+],
+[
+"data-histshow>Show history</button>",
+"data-histshow>បង្ហាញប្រវត្តិ</button>"
+],
+[
+"<span class=\"lbl\">Post spend</span>",
+"<span class=\"lbl\">ចំណាយ Post</span>"
+],
+[
+"<span class=\"pill mute\">New</span>",
+"<span class=\"pill mute\">ថ្មី</span>"
+],
+[
+"`${esc(l.by)} checked this client`",
+"`${esc(l.by)} បានពិនិត្យភ្ញៀវនេះ`"
+],
+[
+"` · +${c.reasons.length - 1} more`",
+"` · +${c.reasons.length - 1} ទៀត`"
+],
+[
+"<b class=\"is-warn\">ends today</b>",
+"<b class=\"is-warn\">ចប់ថ្ងៃនេះ</b>"
+],
+[
+"${esc(c.onIt.by)} is on it</span>",
+"${esc(c.onIt.by)} កំពុងមើល</span>"
+],
+[
+"<optgroup label=\"Other accounts\">",
+"<optgroup label=\"Account ផ្សេង\">"
+],
+[
+"<span class=\"hint\">Send to</span>",
+"<span class=\"hint\">ផ្ញើទៅ</span>"
+],
+[
+"'Tick at least one post to send.'",
+"'សូមធីក Post យ៉ាងតិចមួយ។'"
+],
+[
+"toast('Plan moved to Past plans')",
+"toast('Plan ទៅក្នុង Plan ចាស់ហើយ')"
+],
+[
+"chipB('all', 'All', lines.length)",
+"chipB('all', 'ទាំងអស់', lines.length)"
+],
+[
+"<label for=\"bstC\">Client</label>",
+"<label for=\"bstC\">ភ្ញៀវ</label>"
+],
+[
+"'No client matches your search.'",
+"'រកមិនឃើញភ្ញៀវទេ។'"
+],
+[
+"<i></i>${n.warn} to watch</span>",
+"<i></i>ត្រូវមើល ${n.warn}</span>"
+],
+[
+"placeholder=\"Post ${i + 1} name\"",
+"placeholder=\"ឈ្មោះ Post ${i + 1}\""
+],
+[
+"chipB('end', 'Ends today', nEnd)",
+"chipB('end', 'ចប់ថ្ងៃនេះ', nEnd)"
+],
+[
+"<label for=\"bstS\">Start</label>",
+"<label for=\"bstS\">ថ្ងៃចាប់ផ្ដើម</label>"
+],
+[
+"`${esc(l.by)} took the problem`",
+"`${esc(l.by)} កំពុងមើលបញ្ហា`"
+],
+[
+"> Add tax ${taxRate()}%</label>",
+"> បូកពន្ធ ${taxRate()}%</label>"
+],
+[
+"data-prn=\"${i}\">Rename</button>",
+"data-prn=\"${i}\">ប្ដូរឈ្មោះ</button>"
+],
+[
+"<label for=\"bstN\">Days</label>",
+"<label for=\"bstN\">ចំនួនថ្ងៃ</label>"
+],
+[
+"<i></i>Urgent · act now</span>",
+"<i></i>បន្ទាន់ · ធ្វើឥឡូវ</span>"
+],
+[
+"return ['Finished', 'bp-done']",
+"return ['ចប់ហើយ', 'bp-done']"
+],
+[
+"<legend>Posts to send</legend>",
+"<legend>Post ដែលត្រូវផ្ញើ</legend>"
+],
+[
+"<span class=\"lbl\">Dates</span>",
+"<span class=\"lbl\">កាលបរិច្ឆេទ</span>"
+],
+[
+"data-bstclose>Cancel</button>",
+"data-bstclose>បោះបង់</button>"
+],
+[
+"'Checked ✓' : 'Checked today'",
+"'បានពិនិត្យ ✓' : 'បានពិនិត្យថ្ងៃនេះ'"
+],
+[
+"<i></i>${n.bad} urgent</span>",
+"<i></i>បន្ទាន់ ${n.bad}</span>"
+],
+[
+"toast('Write the note first')",
+"toast('សូមសរសេរ Note សិន')"
+],
+[
+"aria-label=\"Page name\" value=",
+"aria-label=\"ឈ្មោះ Page\" value="
+],
+[
+"> Just copy the text</label>",
+"> គ្រាន់តែ Copy អក្សរ</label>"
+],
+[
+"successBadge('Page renamed')",
+"successBadge('បានប្ដូរឈ្មោះ Page')"
+],
+[
+"<i></i>No start date</span>",
+"<i></i>គ្មានថ្ងៃចាប់ផ្ដើម</span>"
+],
+[
+"'Nothing needs attention. '",
+"'គ្មានអ្វីត្រូវមើល។ '"
+],
+[
+"<label><span>$ / day</span>",
+"<label><span>$ / ថ្ងៃ</span>"
+],
+[
+"data-cdstsend>Send</button>",
+"data-cdstsend>ផ្ញើ</button>"
+],
+[
+"toast('Type the Page name')",
+"toast('សូមសរសេរឈ្មោះ Page')"
+],
+[
+"toast('Past plan removed')",
+"toast('បានលុប Plan ចាស់')"
+],
+[
+"toast('Plan brought back')",
+"toast('បានយក Plan មកវិញ')"
+],
+[
+"successBadge('Note saved')",
+"successBadge('បានរក្សាទុក Note')"
+],
+[
+"`Alert sent on Telegram${",
+"`បានផ្ញើការជូនដំណឹងទៅ Telegram${"
+],
+[
+"<optgroup label=\"In use\">",
+"<optgroup label=\"កំពុងប្រើ\">"
+],
+[
+"<label><span>Start</span>",
+"<label><span>ចាប់ផ្ដើម</span>"
+],
+[
+"<b>📝 Note for tonight</b>",
+"<b>📝 Note សម្រាប់យប់នេះ</b>"
+],
+[
+"'Over plan' : 'Boosting'",
+"'លើស Boost plan' : 'កំពុង Boost'"
+],
+[
+"<label><span>Days</span>",
+"<label><span>ចំនួនថ្ងៃ</span>"
+],
+[
+"textContent = 'Send now'",
+"textContent = 'ផ្ញើឥឡូវ'"
+],
+[
+"textContent = 'Sending…'",
+"textContent = 'កំពុងផ្ញើ…'"
+],
+[
+"}Not checked yet today`",
+"}មិនទាន់ពិនិត្យថ្ងៃនេះ`"
+],
+[
+"'On it ✓' : 'I’m on it'",
+"'កំពុងមើល ✓' : 'ខ្ញុំកំពុងមើល'"
+],
+[
+"History (${log.length})",
+"ប្រវត្តិ (${log.length})"
+],
+[
+"` · plan ${c.plan.spent",
+"` · Boost plan ${c.plan.spent"
+],
+[
+"'Checked ✓' : 'Checked'",
+"'បានពិនិត្យ ✓' : 'បានពិនិត្យ'"
+],
+[
+"<span>Tax ${t.rate}% <b",
+"<span>ពន្ធ ${t.rate}% <b"
+],
+[
+"> My team group</label>",
+"> Group ក្រុមខ្ញុំ</label>"
+],
+[
+"<h4>✅ Clients Task</h4>",
+"<h4>✅ ការងារ (Clients Task)</h4>"
+],
+[
+">Open client →</button>",
+">បើកភ្ញៀវ →</button>"
+],
+[
+"<i></i>No spend</span>",
+"<i></i>គ្មានចំណាយ</span>"
+],
+[
+"<i></i>All fine</span>",
+"<i></i>ល្អទាំងអស់</span>"
+],
+[
+"Choose the ad account…",
+"ជ្រើស Ad account…"
+],
+[
+"<small>Picture</small>",
+"<small>រូប</small>"
+],
+[
+"`${r.left} days left`",
+"`នៅ ${r.left} ថ្ងៃ`"
+],
+[
+">+ Add boost</button>",
+">+ បន្ថែម Post</button>"
+],
+[
+">Add to plan</button>",
+">បន្ថែមចូល Plan</button>"
+],
+[
+"<h4>Status today</h4>",
+"<h4>ស្ថានភាពថ្ងៃនេះ</h4>"
+],
+[
+"'no boost in 30 days'",
+"'គ្មាន Boost ក្នុង 30 ថ្ងៃ'"
+],
+[
+"<i></i>Active</span>",
+"<i></i>កំពុងដើរ</span>"
+],
+[
+"<i></i>Urgent</span>",
+"<i></i>បន្ទាន់</span>"
+],
+[
+"'not boosting now')",
+"'មិនកំពុង Boost')"
+],
+[
+"<i></i>Watch</span>",
+"<i></i>ត្រូវមើល</span>"
+],
+[
+"Nobody is on it yet",
+"មិនទាន់មានអ្នកមើល"
+],
+[
+"Running · ${n.run}",
+"កំពុងដើរ · ${n.run}"
+],
+[
+"Ended · ${n.ended}",
+"ចប់ហើយ · ${n.ended}"
+],
+[
+"<i></i>Fine</span>",
+"<i></i>ល្អ</span>"
+],
+[
+"'Open Ad accounts'",
+"'បើក Ad accounts'"
+],
+[
+"<span>Ad budget <b",
+"<span>ថវិកា Ad <b"
+],
+[
+">Tomorrow</button>",
+">ស្អែក</button>"
+],
+[
+"'Problem solved'",
+"'បញ្ហាដោះស្រាយហើយ'"
+],
+[
+": 'no dates'; };",
+": 'គ្មានថ្ងៃ'; };"
+],
+[
+"' — not active'",
+"' — មិនដំណើរការ'"
+],
+[
+"All · ${n.all}",
+"ទាំងអស់ · ${n.all}"
+],
+[
+"' · no plan'",
+"' · គ្មាន Boost plan'"
+],
+[
+"'Adding…'",
+"'កំពុងបន្ថែម…'"
+]
+]

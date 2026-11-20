@@ -1190,5 +1190,21 @@
 [
 "${money(r.spend / r.orders)} per order</span>",
 "${money(r.spend / r.orders)} ក្នុងមួយ Order</span>"
+],
+[
+"<span class=\"hint\">Report covers</span>",
+"<span class=\"hint\">របាយការណ៍សម្រាប់</span>"
+],
+[
+"aria-pressed=\"${!o.only}\">All</button>",
+"aria-pressed=\"${!o.only}\">ទាំងអស់</button>"
+],
+[
+">Live only</button><button type=\"button\" data-ckkind=\"post\"",
+">តែ Live</button><button type=\"button\" data-ckkind=\"post\""
+],
+[
+">Post only</button>`;",
+">តែ Post</button>`;"
 ]
 ]

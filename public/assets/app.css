@@ -3932,3 +3932,11 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-fill)!important;border-color:transparent!important;color:var(--on-brand,#fff)!important;box-shadow:none!important}
 .wrap #cViewSeg.cview button[aria-pressed="true"] .ic{color:currentColor}
 .wrap #cViewSeg.cview button{min-width:0;padding:0 16px!important}
+
+/* the sort sits in the page head, left of the Clients / Boosts switch (owner's sketch, 20 Nov) */
+.chead2 #cSortSeg.csort{flex:0 1 auto;margin:0;align-self:center}
+.chead2 #cSortSeg.csort[hidden]{display:none!important}
+.chead2 #cSortSeg.csort button{min-height:44px;padding:0 16px;white-space:nowrap}
+@media (max-width:760px){.chead2 #cSortSeg.csort{flex:1 1 100%;order:5}.chead2 #cSortSeg.csort button{flex:1}}
+#tab-clients .chead2>div:first-child .hint{display:none}
+#tab-clients .chead2 #cSearch{flex:1 1 180px;min-width:150px;max-width:300px}

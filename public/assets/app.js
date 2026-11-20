@@ -1007,7 +1007,7 @@
   let cView = 'clients', bstData = null, bstTab = 'run', bstQ = '';
   function setCView(v) {
     cView = v; $('cViewSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
-    $('cWrap').hidden = v !== 'clients'; $('cBoosts').hidden = v !== 'boosts'; $('cSortSeg') && ($('cSearch').placeholder = v === 'boosts' ? 'Search post, client or ad account' : 'Search client or Page');
+    $('cWrap').hidden = v !== 'clients'; $('cBoosts').hidden = v !== 'boosts'; if ($('cSortSeg')) $('cSortSeg').hidden = v !== 'clients'; // the sort is for the clients list only $('cSortSeg') && ($('cSearch').placeholder = v === 'boosts' ? 'Search post, client or ad account' : 'Search client or Page');
     if (v === 'boosts') loadBoosts(); else renderClients();
   }
   async function loadBoosts() {

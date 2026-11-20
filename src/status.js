@@ -55,8 +55,10 @@ async function forOwner(user) {
   let t = { items: [], tips: [] }; try { t = await pm.todo(user); } catch (_) {}
   const auto = (await db.getUserSetting(owner, 'autoReport', null)) || {}, reportFrom = auto.on && /^\d\d:\d\d$/.test(String(auto.time || '')) ? auto.time : REPORT_FROM;
   const nowHM = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' });
+  const repDue = new Set();
   for (const x of [...(t.items || []), ...(t.tips || [])]) {
     if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
+    if (x.kind === 'report' || x.kind === 'nogroup') repDue.add(x.clientId); // for the leaders' "reports sent" count, at any hour
     if (x.kind === 'report' && nowHM < reportFrom) continue;
     if (x.kind === 'cpr-up' && !((spend[x.clientId] || {}).post >= CPR_MIN_SPEND)) continue;
     add(x.clientId, x.level === 'bad' || x.kind === 'plan' ? 'bad' : 'warn', x.kind, x.title, x.detail || '', x.action || '');
@@ -114,7 +116,7 @@ async function forOwner(user) {
     // a reason appears that was not there when they looked. Urgent stays urgent whoever looked.
     const chk = s.checked && s.checked.day === today ? s.checked : null;
     const seen = level === 'warn' && !!chk && (!Array.isArray(chk.kinds) || reasons.every((x) => chk.kinds.includes(x.kind)));
-    return { id: c.id, name: c.name, level, seen, active, reasons, follow, spend: sp.all || 0, postToday: sp.post || 0, telegram: !!c.telegram,
+    return { id: c.id, name: c.name, level, seen, active, reasons, follow, spend: sp.all || 0, postToday: sp.post || 0, telegram: !!c.telegram, report: sp.all > 0 ? (repDue.has(c.id) ? 'due' : 'sent') : '',
       cpr: sp.results > 0 && sp.resSpend > 0 ? { cost: Math.round(sp.resSpend / sp.results * 1000) / 1000, results: sp.results, type: sp.resultType || 'result' } : null,
       plan: tt.budget ? { budget: tt.budget, to: tt.to || '', left: tt.to ? daysBetween(today, tt.to) : null, spent: p ? p.spent : null, pct: p ? p.pct : null } : null,
       lastBoost: lastDay[c.id] || '',

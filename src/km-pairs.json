@@ -20,10 +20,6 @@
 "'PM គួរដឹងអ្វីយប់នេះ? ឧ. LR ចង់ Live ម៉ោង 7:00 · CPM ខ្ពស់លើ Post ស្បែកជើង · J.Mey មិនទាន់ឆ្លើយ Plan' : 'ស្អែកត្រូវធ្វើអ្វីមុនគេ? ឧ. បញ្ចូល $50 ក្នុង KHM-01 មុនម៉ោង 9:00 · Boost 2 Post ឲ្យ J.Mey · កុំផ្អាក Post ស្បែកជើង'"
 ],
 [
-"<th scope=\"col\">Team</th><th scope=\"col\">People</th><th scope=\"col\" class=\"r\">Clients</th><th scope=\"col\" class=\"r\">Spend</th><th scope=\"col\" class=\"r\">Revenue</th><th scope=\"col\" class=\"r\">Reports today</th><th scope=\"col\">Last active</th>",
-"<th scope=\"col\">ក្រុម</th><th scope=\"col\">សមាជិក</th><th scope=\"col\" class=\"r\">ភ្ញៀវ</th><th scope=\"col\" class=\"r\">ចំណាយ</th><th scope=\"col\" class=\"r\">ចំណូល</th><th scope=\"col\" class=\"r\">របាយការណ៍ថ្ងៃនេះ</th><th scope=\"col\">សកម្មចុងក្រោយ</th>"
-],
-[
 "fb.length ? `Facebook login${fb.length === 1 ? '' : 's'} to renew` : (A.buyersUnlinked || []).length ? ((A.buyersUnlinked || []).length === 1 ? 'media buyer not on Telegram' : 'media buyers not on Telegram') : 'Logins and Telegram fine'",
 "fb.length ? 'Facebook login ត្រូវបន្ត' : (A.buyersUnlinked || []).length ? 'Media buyer មិនទាន់ភ្ជាប់ Telegram' : 'Login និង Telegram ល្អ'"
 ],
@@ -164,16 +160,12 @@
 "<span class=\"hint\">ថវិកា Ad ${money(t.budget)}${t.rate ? ` + ពន្ធ ${t.rate}% ${money(t.tax)}` : ''}</span>"
 ],
 [
-"${rl === 'bad' ? 'Reports not sent after 20:00' : rl === 'mid' ? 'Reports still to send' : 'Reports sent'}",
-"${rl === 'bad' ? 'របាយការណ៍មិនទាន់ផ្ញើក្រោយម៉ោង 20:00' : rl === 'mid' ? 'នៅមានរបាយការណ៍ត្រូវផ្ញើ' : 'របាយការណ៍ផ្ញើហើយ'}"
-],
-[
 "Telegram: brief ${esc(d.times.brief)} · reminder ${esc(d.times.remind)} · digest ${esc(d.times.digest)}",
 "Telegram៖ សារព្រឹក ${esc(d.times.brief)} · រំលឹក ${esc(d.times.remind)} · សង្ខេបល្ងាច ${esc(d.times.digest)}"
 ],
 [
-"m === 'company' ? 'Clients that need attention first, then every team today, then this month\\'s money.'",
-"m === 'company' ? 'ភ្ញៀវដែលត្រូវមើលមុន រួចក្រុមនីមួយៗថ្ងៃនេះ រួចលុយខែនេះ។'"
+"m === 'company' ? 'Today\\'s numbers, then every team, then this month\\'s money.'",
+"m === 'company' ? 'លេខថ្ងៃនេះ រួចក្រុមនីមួយៗ រួចលុយខែនេះ។'"
 ],
 [
 "<option value=\"\">Main chat${c.telegram.includes(':') ? ' (the topic set on the client)' : ''}</option>",
@@ -1192,8 +1184,8 @@
 ">តែ Post</button>`;"
 ],
 [
-"<span class=\"hint\">boosting now</span></span><span><b>${money(sp)}</b><span class=\"hint\">spend today</span></span><span><b>${chk} of ${g.clients.length}</b><span class=\"hint\">checked today</span>",
-"<span class=\"hint\">កំពុង Boost</span></span><span><b>${money(sp)}</b><span class=\"hint\">ចំណាយថ្ងៃនេះ</span></span><span><b>${chk} នៃ ${g.clients.length}</b><span class=\"hint\">បានពិនិត្យថ្ងៃនេះ</span>"
+"<span class=\"hint\">boosting now</span></span><span><b>${money(sp)}</b><span class=\"hint\">spend today</span></span><span><b>${chk} of ${g.clients.length}</b><span class=\"hint\">checked today</span></span><span><b>${rS} of ${rA}</b><span class=\"hint\">reports sent</span>",
+"<span class=\"hint\">កំពុង Boost</span></span><span><b>${money(sp)}</b><span class=\"hint\">ចំណាយថ្ងៃនេះ</span></span><span><b>${chk} នៃ ${g.clients.length}</b><span class=\"hint\">បានពិនិត្យថ្ងៃនេះ</span></span><span><b>${rS} នៃ ${rA}</b><span class=\"hint\">របាយការណ៍ផ្ញើហើយ</span>"
 ],
 [
 "</i>${g.n.bad} urgent</span><span><i class=\"mid\"></i>${g.n.warn} watch</span><span><i class=\"seen\"></i>${g.n.seen} checked</span><span><i class=\"ok\"></i>${g.n.ok} fine</span>",
@@ -1238,5 +1230,13 @@
 [
 "aria-pressed=\"${ctTeamSort === 'spend'}\">Most spend</button>",
 "aria-pressed=\"${ctTeamSort === 'spend'}\">ចំណាយច្រើន</button>"
+],
+[
+"${stat('Reports sent', `${repSent} of ${repAll}`, repAll - repSent ? `${repAll - repSent} still to send` : repAll ? 'every report was sent' : 'no client with spend yet')}",
+"${stat('របាយការណ៍ផ្ញើហើយ', `${repSent} នៃ ${repAll}`, repAll - repSent ? `នៅ ${repAll - repSent} ត្រូវផ្ញើ` : repAll ? 'ផ្ញើអស់ហើយ' : 'មិនទាន់មានភ្ញៀវចំណាយ')}"
+],
+[
+"${t.clients} clients · revenue ${money(t.revenue)}",
+"ភ្ញៀវ ${t.clients} · ចំណូល ${money(t.revenue)}"
 ]
 ]

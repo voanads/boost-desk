@@ -77,7 +77,11 @@ const loggedIn = async (req) => !!(req.session && req.session.fbId && (await db.
 app.get('/auth/facebook', (req, res) => {
   // ?link=1 from Settings: connect ANOTHER Facebook account to the workspace I'm logged in to (my 2nd / 3rd account).
   req.session.linkFor = req.query.link === '1' && req.session.fbId && !req.session.mb ? req.session.fbId : null;
-  req.session.next = req.query.next === 'admin' ? '/admin' : null; res.redirect(meta.loginUrl(newState()));
+  req.session.next = req.query.next === 'admin' ? '/admin' : null;
+  // Asks for the Page permissions too (automatic Page connecting for orders). If Facebook refused that once in this
+  // browser session, ask only for the ads permissions so login itself never breaks.
+  req.session.lastAuthQ = req.originalUrl.split('?')[1] || '';
+  res.redirect(meta.loginUrl(newState(), { noPages: !!req.session.noPageScopes }));
 });
 
 // Orders → Connect Pages: the same Facebook login, asking for the Page permissions. The callback below sees pagesFor
@@ -91,6 +95,10 @@ app.get('/auth/facebook/pages', (req, res) => {
 });
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
+  if (error_description && !req.session.pagesFor && !req.session.noPageScopes && /scope|permission/i.test(String(error_description))) {
+    req.session.noPageScopes = true; // try the login again with the ads permissions only
+    return res.redirect('/auth/facebook' + (req.session.lastAuthQ ? '?' + req.session.lastAuthQ : ''));
+  }
   if (error_description) return res.redirect('/login?error=' + encodeURIComponent(error_description));
   if (!code || !stateOk(state)) {
     // A replayed or old return link: if you're already logged in, just go in.
@@ -131,6 +139,7 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
     if (list.length >= 5) return back('You can connect up to 5 extra Facebook accounts.', false);
     list.push({ id: profile.id, name: profile.name, token_enc: encrypt(token), expires, addedAt: new Date().toISOString() });
     await db.setUserSetting(linkFor, 'fbExtras', list);
+    pageOrders.autoConnect({ only: profile.id }).catch((e) => console.error('[own orders] auto-connect (extra login):', e.message));
     let n = 0; try { await sync.refreshAccounts(await db.getUser(linkFor)); n = (await db.listAccounts(linkFor)).filter((a) => (a.info || {}).via === profile.id).length; } catch (e) { console.error('[fb link] account list failed:', e.message); }
     // Pull the last 30 days for the new ad accounts straight away (in the background), so their spend shows without a manual Sync.
     if (n) { const me = await db.getUser(linkFor), today = sync.todayIn(), since = sync.addDays(today, -29);
@@ -167,6 +176,7 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   await saveFbLogin(profile, encrypt(token), expires);
   req.session.fbId = profile.id;
   req.session.name = profile.name;
+  pageOrders.autoConnect({ only: profile.id }).catch((e) => console.error('[own orders] auto-connect after login:', e.message));
   // Each admin starts with an empty workspace; nothing is loaded until they tap Sync from Meta.
   const next = req.session.next === '/admin' ? '/admin' : '/'; req.session.next = null;
   res.redirect(next);

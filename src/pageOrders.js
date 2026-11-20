@@ -211,26 +211,89 @@ async function del(path, token) {
 async function connectFromUserToken(userToken, person) {
   const granted = ((await meta.get('/me/permissions', {}, userToken)).data || []).filter((p) => p.status === 'granted').map((p) => p.permission);
   const missing = ['pages_messaging', 'pages_read_engagement', 'pages_manage_metadata'].filter((p) => !granted.includes(p));
-  const pages = [];
-  let after = '';
-  for (let i = 0; i < 20; i++) {
-    const b = await meta.get('/me/accounts', { fields: 'id,name,access_token,tasks', limit: 100, ...(after ? { after } : {}) }, userToken);
-    pages.push(...(b.data || []));
-    after = b.paging && b.paging.next && b.paging.cursors ? b.paging.cursors.after : ''; if (!after) break;
-  }
+  const pages = await myPages(userToken);
   const out = { connected: [], failed: [], missing };
   for (const p of pages) {
     if (!p.access_token) continue;
-    let subscribed = false, err = '';
-    try { await post(`/${p.id}/subscribed_apps`, { subscribed_fields: FIELDS }, p.access_token); subscribed = true; } catch (e) { err = e.message; }
-    await q(`INSERT INTO page_links (page_id, page_name, token_enc, connected_by, connected_name, connected_at, subscribed, last_error)
-             VALUES ($1,$2,$3,$4,$5,now(),$6,$7)
-             ON CONFLICT (page_id) DO UPDATE SET page_name=$2, token_enc=$3, connected_by=$4, connected_name=$5, connected_at=now(), subscribed=$6, last_error=$7`,
-      [p.id, String(p.name || '').slice(0, 150), encrypt(p.access_token), person.id, String(person.name || '').slice(0, 100), subscribed, err.slice(0, 300)]);
-    (subscribed ? out.connected : out.failed).push({ id: p.id, name: p.name, error: err });
-    if (subscribed) await startPageDay(p.id).catch(() => {});
+    const r = await savePage(p, person);
+    (r.subscribed ? out.connected : out.failed).push({ id: p.id, name: p.name, error: r.error });
   }
   return out;
+}
+async function myPages(userToken) {
+  const pages = []; let after = '';
+  for (let i = 0; i < 20; i++) {
+    const b = await meta.get('/me/accounts', { fields: 'id,name,access_token', limit: 100, ...(after ? { after } : {}) }, userToken);
+    pages.push(...(b.data || []));
+    after = b.paging && b.paging.next && b.paging.cursors ? b.paging.cursors.after : ''; if (!after) break;
+  }
+  return pages;
+}
+async function savePage(p, person) {
+  let subscribed = false, error = '';
+  try { await post(`/${p.id}/subscribed_apps`, { subscribed_fields: FIELDS }, p.access_token); subscribed = true; } catch (e) { error = e.message; }
+  await q(`INSERT INTO page_links (page_id, page_name, token_enc, connected_by, connected_name, connected_at, subscribed, last_error)
+           VALUES ($1,$2,$3,$4,$5,now(),$6,$7)
+           ON CONFLICT (page_id) DO UPDATE SET page_name=$2, token_enc=$3, connected_by=$4, connected_name=$5, connected_at=now(), subscribed=$6, last_error=$7`,
+    [p.id, String(p.name || '').slice(0, 150), encrypt(p.access_token), person.id, String(person.name || '').slice(0, 100), subscribed, error.slice(0, 300)]);
+  if (subscribed) await startPageDay(p.id).catch(() => {});
+  return { subscribed, error };
+}
+
+// ---------- automatic connecting (20 Nov 2026) ----------
+// The normal Facebook login now also asks for the Page permissions. With every saved login of the team (main logins and
+// the extra Facebook accounts of each workspace), Boost Desk connects the client Pages it can: only Pages that are boosted
+// for a client (seen in synced campaigns of the last 30 days) or written in a client's Settings — never personal Pages.
+// Runs after each login and every 3 hours, so a new client's Page is picked up by itself.
+async function clientPageIds() {
+  const ids = new Map(); // id → name
+  const since = require('./sync').addDays(today(), -30);
+  for (const r of (await q(`SELECT rows FROM raw_rows WHERE day >= $1`, [since])).rows) for (const x of r.rows || []) if (x.pageId && /^\d{5,}$/.test(String(x.pageId))) ids.set(String(x.pageId), ids.get(String(x.pageId)) || x.page || '');
+  for (const c of (await q(`SELECT pages FROM clients WHERE NOT archived`)).rows) for (const p of c.pages || []) if (/^\d{5,}$/.test(String(p))) ids.set(String(p), ids.get(String(p)) || '');
+  return ids;
+}
+let autoRunning = false;
+async function autoConnect({ only } = {}) {
+  if (autoRunning) return null; autoRunning = true;
+  try {
+    const m = await mode(); if (!m.on) return null;
+    const want = await clientPageIds();
+    const have = new Map((await q('SELECT page_id, subscribed, last_error FROM page_links')).rows.map((r) => [r.page_id, r]));
+    const logins = [];
+    for (const u of await db.activeUsers()) {
+      if (only && u.fb_id !== only) { /* still read its extra logins below */ } else { try { logins.push({ token: decrypt(u.token_enc), person: { id: u.fb_id, name: u.name } }); } catch (_) { /* old key */ } }
+      const ex = await db.getUserSetting(u.fb_id, 'fbExtras', []);
+      for (const e of Array.isArray(ex) ? ex : []) {
+        if (only && e.id !== only && u.fb_id !== only) continue;
+        if (e.expires && Date.parse(e.expires) < Date.now()) continue;
+        try { logins.push({ token: decrypt(e.token_enc), person: { id: u.fb_id, name: `${u.name} (${e.name})` } }); } catch (_) { /* old key */ }
+      }
+    }
+    const out = { at: new Date().toISOString(), logins: logins.length, withPages: 0, connected: [], failed: [] };
+    for (const l of logins) {
+      try {
+        const granted = ((await meta.get('/me/permissions', {}, l.token)).data || []).filter((p) => p.status === 'granted').map((p) => p.permission);
+        if (!granted.includes('pages_messaging') || !granted.includes('pages_manage_metadata')) continue;
+        out.withPages++;
+        for (const p of await myPages(l.token)) {
+          if (!p.access_token || !want.has(String(p.id))) continue;
+          const h = have.get(String(p.id)); if (h && h.subscribed && !h.last_error) continue;
+          const r = await savePage(p, l.person); have.set(String(p.id), { subscribed: r.subscribed, last_error: r.error });
+          (r.subscribed ? out.connected : out.failed).push({ id: p.id, name: p.name, by: l.person.name, error: r.error });
+        }
+      } catch (e) { /* this login can't be read now (expired / removed); the next one may */ }
+    }
+    if (!only) await db.setSetting('ordersAutoLast', { ...out, connected: out.connected.length, failed: out.failed.length });
+    if (out.connected.length) console.log('[own orders] auto-connected Pages:', out.connected.map((p) => p.name).join(', '));
+    return out;
+  } finally { autoRunning = false; }
+}
+// Client Pages boosted in the last 7 days that no connected login can count yet (shown to admins on Orders → Pages).
+async function notConnected() {
+  const since = require('./sync').addDays(today(), -7), seen = new Map();
+  for (const r of (await q(`SELECT rows FROM raw_rows WHERE day >= $1`, [since])).rows) for (const x of r.rows || []) if (x.pageId && /^\d{5,}$/.test(String(x.pageId)) && (Number(x.spend) || 0) > 0) seen.set(String(x.pageId), x.page || seen.get(String(x.pageId)) || '');
+  const have = new Set((await q('SELECT page_id FROM page_links WHERE subscribed')).rows.map((r) => r.page_id));
+  return [...seen].filter(([id]) => !have.has(id)).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 async function disconnect(pageId) {
   const p = (await q('SELECT token_enc FROM page_links WHERE page_id=$1', [pageId])).rows[0]; if (!p) return false;
@@ -243,7 +306,8 @@ async function list(fbId, all) {
   const rows = (await q(`SELECT l.page_id, l.page_name, l.connected_name, l.connected_by, l.connected_at, l.subscribed, l.last_event_at, l.last_order_at, l.last_error, (l.live_id <> '') AS live,
       coalesce((SELECT count(*) FROM page_order_hits h WHERE h.page_id = l.page_id AND h.day = $1), 0)::int AS today
     FROM page_links l ${all ? '' : 'WHERE l.connected_by = $2'} ORDER BY l.page_name`, all ? [today()] : [today(), fbId])).rows;
-  return { mode: await mode(), pages: rows, hookUrl: `${cfg.baseUrl}/hooks/meta`, verifyToken: all ? await verifyToken() : undefined };
+  return { mode: await mode(), pages: rows, hookUrl: `${cfg.baseUrl}/hooks/meta`, verifyToken: all ? await verifyToken() : undefined,
+    notConnected: all ? await notConnected() : undefined, auto: all ? await db.getSetting('ordersAutoLast', null) : undefined };
 }
 
-module.exports = { init, mode, setMode, record, flush, handleHook, signatureOk, verifyToken, pollLives, connectUrl, connectFromUserToken, disconnect, list, PAGE_SCOPES };
+module.exports = { autoConnect, init, mode, setMode, record, flush, handleHook, signatureOk, verifyToken, pollLives, connectUrl, connectFromUserToken, disconnect, list, PAGE_SCOPES };

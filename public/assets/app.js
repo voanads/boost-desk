@@ -2386,6 +2386,8 @@
         if (!confirm('Stop counting orders on this Page? Orders already counted stay.')) return;
         try { await api('/orders/pages/' + b.dataset.pgdel, { method: 'DELETE' }); toast('Page removed'); loadPages(); } catch (e) { toast(e.message); }
       });
+      if (r.notConnected && r.notConnected.length) box.insertAdjacentHTML('beforeend', `<div class="pg-miss"><b>Not counted yet — ${r.notConnected.length} client Page${r.notConnected.length === 1 ? '' : 's'} boosted this week</b><div class="hint">No saved Facebook login of the team manages ${r.notConnected.length === 1 ? 'it' : 'them'} with the Page permissions. The Project Manager who manages the Page logs in to Boost Desk with Facebook again (or adds that Facebook account in Settings) and allows the Page permissions — Boost Desk then connects it by itself.</div><div class="pg-miss-list">${r.notConnected.map((p) => `<span title="${esc(p.id)}">${esc(p.name || p.id)}</span>`).join('')}</div></div>`);
+      if (r.auto && r.auto.at) box.insertAdjacentHTML('beforeend', `<div class="hint">Automatic connect: last run ${esc(ago(r.auto.at))} · ${r.auto.withPages} of ${r.auto.logins} Facebook logins allowed Pages${r.auto.connected ? ` · ${r.auto.connected} connected` : ''}</div>`);
       const setup = $('oPgSetup'); setup.hidden = !r.verifyToken;
       if (r.verifyToken) { $('oPgHook').value = r.hookUrl; $('oPgTok').value = r.verifyToken; $('oPgOwnBox').hidden = !(me && me.isOwner); $('oPgOwn').checked = !!m.on; }
     } catch (e) { box.innerHTML = `<div class="note">${esc(e.message)}</div>`; }

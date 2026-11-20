@@ -1972,7 +1972,7 @@
     mMode = m; localStorage.setItem('bd-main-mode', m);
     document.querySelectorAll('#mModeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
     $('mCompany').hidden = m !== 'company'; $('mPagesView').hidden = m !== 'pages';
-    $('mHint').textContent = m === 'company' ? 'Clients that need attention first, then every team today, then this month\'s money.' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
+    $('mHint').textContent = m === 'company' ? 'ភ្ញៀវដែលត្រូវមើលមុន រួចក្រុមនីមួយៗថ្ងៃនេះ រួចលុយខែនេះ។' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
     if (m === 'company') loadCompany(); else loadMainPages();
   }
   document.querySelectorAll('#mModeSeg button').forEach((b) => b.onclick = () => setMainMode(b.dataset.m));
@@ -1996,9 +1996,7 @@
       const A = d.attention || {}, unsent = Math.max(0, (A.reportsDue || 0) - (A.reportsSent || 0)), fb = [...(A.fbExpired || []), ...(A.fbSoon || [])], late = (A.hour || 0) >= 20;
       const tile = (cls, n, label, sub, go) => `<button type="button" class="ca ${cls}" data-cago="${go}"><b class="num">${n}</b><span class="ca-l">${label}</span><span class="ca-s">${sub}</span></button>`;
       const tiles = [
-        tile(A.teamsBad ? 'bad' : A.teamsMid ? 'mid' : 'ok', A.teamsBad || A.teamsMid || '✓', A.teamsBad ? (A.teamsBad === 1 ? 'team needs attention' : 'teams need attention') : A.teamsMid ? `team${A.teamsMid === 1 ? '' : 's'} behind` : 'All teams on track', `${A.teams || 0} teams${A.teamsBad && A.teamsMid ? ` · ${A.teamsMid} more behind` : ''}`, 'teams'),
         tile(unsent ? (late ? 'bad' : 'mid') : 'ok', unsent || '✓', unsent ? `report${unsent === 1 ? '' : 's'} not sent yet` : A.reportsDue ? 'All reports sent' : 'No reports due yet', `${A.reportsSent || 0} of ${A.reportsDue || 0} clients with spend today`, 'teams'),
-        tile(d.tasks.overdue ? 'bad' : 'ok', d.tasks.overdue || '✓', d.tasks.overdue ? `overdue task${d.tasks.overdue === 1 ? '' : 's'}` : 'Nothing overdue', `today ${d.tasks.done} of ${d.tasks.done + d.tasks.open} done`, 'overdue'),
         tile(d.alerts.length ? 'bad' : 'ok', d.alerts.length || '✓', d.alerts.length ? `urgent on client${d.alerts.length === 1 ? '' : 's'}` : 'No urgent client items', 'unpaid, overspend, no boost…', 'alerts'),
         tile((A.fbExpired || []).length ? 'bad' : fb.length || (A.buyersUnlinked || []).length ? 'mid' : 'ok', fb.length + (A.buyersUnlinked || []).length || '✓', fb.length ? `Facebook login${fb.length === 1 ? '' : 's'} to renew` : (A.buyersUnlinked || []).length ? ((A.buyersUnlinked || []).length === 1 ? 'media buyer not on Telegram' : 'media buyers not on Telegram') : 'Logins and Telegram fine', fb.length ? esc(fb.slice(0, 3).join(', ')) + (fb.length > 3 ? '…' : '') : (A.buyersUnlinked || []).length ? esc(A.buyersUnlinked.slice(0, 3).join(', ')) : `${d.people.users} people · ${d.people.buyers} media buyers`, 'users'),
       ];
@@ -2010,15 +2008,12 @@
     $('coKpis').innerHTML = `
       <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
       <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
-      <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>
-      <div class="mk"><span class="lbl">KPI achievement</span><b class="num ${col(d.kpis.avg)}">${pc(d.kpis.avg)}</b><span class="sub">${d.isThisMonth ? `day ${Number(d.to.slice(8, 10))}/${dim} · expected ${pace}% · ${paceTxt(d.kpis.avg) || '–'}` : `${d.kpis.hit} of ${d.kpis.total} KPIs reached`}</span></div>`;
-    $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th scope="col">Team</th><th scope="col">People</th><th scope="col" class="r">Clients</th><th scope="col" class="r">Spend</th><th scope="col" class="r">Revenue</th><th scope="col" class="r">Tasks today</th><th scope="col" class="r">Reports today</th><th scope="col" class="r">Overdue</th><th scope="col" class="r">KPI</th><th scope="col">Last active</th></tr></thead><tbody>${d.teams.map((t) => { const tt = t.tasks.done + t.tasks.open, tp = tt ? Math.round(t.tasks.done / tt * 100) : null, rp = t.reports || { due: 0, sent: 0 }, la = t.lastActive;
+      <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>`;
+    $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th scope="col">Team</th><th scope="col">People</th><th scope="col" class="r">Clients</th><th scope="col" class="r">Spend</th><th scope="col" class="r">Revenue</th><th scope="col" class="r">Reports today</th><th scope="col">Last active</th></tr></thead><tbody>${d.teams.map((t) => { const tt = t.tasks.done + t.tasks.open, tp = tt ? Math.round(t.tasks.done / tt * 100) : null, rp = t.reports || { due: 0, sent: 0 }, la = t.lastActive, rl = rp.due && rp.sent < rp.due ? (((d.attention || {}).hour || 0) >= 20 ? 'bad' : 'mid') : 'good';
       return `<tr class="co-team" data-coteam="${esc(t.id || '')}" tabindex="0" role="link" title="Open ${esc(t.name)} on the Clients Board">
-      <th scope="row"><span class="co-light ${t.health || 'good'}" title="${t.health === 'bad' ? 'Needs attention: overdue tasks, or reports not sent after 21:00' : t.health === 'mid' ? 'Behind: under half of today\'s tasks done, or reports still to send' : 'On track'}"></span><b>${esc(t.name)}</b></th>
+      <th scope="row"><span class="co-light ${rl}" title="${rl === 'bad' ? 'Reports not sent after 20:00' : rl === 'mid' ? 'Reports still to send' : 'Reports sent'}"></span><b>${esc(t.name)}</b></th>
       <td class="hint">${t.people.map((p) => esc(p.name)).join(', ') || '—'}${(t.buyerNames || []).length ? ` · MB: ${t.buyerNames.map(esc).join(', ')}` : ''}</td><td class="r num">${t.clients}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.revenue)}</td>
-      <td class="r num">${tt ? `${t.tasks.done} / ${tt}<span class="hint"> · ${tp}%</span>` : '–'}</td>
       <td class="r num ${rp.due && rp.sent < rp.due ? 'bad' : rp.due ? 'good' : ''}">${rp.due ? `${rp.sent} / ${rp.due}` : '–'}</td>
-      <td class="r num ${t.tasks.overdue ? 'bad' : ''}">${t.tasks.overdue || '–'}</td><td class="r num ${col(t.kpiAvg)}">${pc(t.kpiAvg)}${t.kpis ? `<span class="hint"> · ${t.kpis}</span>` : ''}</td>
       <td class="hint">${la ? `${esc(ago(la.at))} · ${esc(la.name)}` : '—'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">No teams yet — make them in Admin → Teams.</div>';
     $('coTeams').querySelectorAll('[data-coteam]').forEach((r) => { const go = () => { bTeam = r.dataset.coteam === '' ? '__none' : r.dataset.coteam; bPicked = false; showTab('board'); try { history.replaceState(null, '', '#board'); } catch (_) {} if (bData) renderBoard(); }; r.onclick = go; r.onkeydown = (ev) => { if (ev.key === 'Enter') go(); }; });
     const K = d.kpis.rows; $('coTgHint').textContent = K.length ? `${K.length} KPIs with a target this month` : '';

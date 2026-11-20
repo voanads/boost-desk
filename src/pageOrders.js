@@ -153,10 +153,16 @@ async function handleHook(body) {
 
 // ---------- Live comments (every minute) ----------
 // For each connected Page with a Live running now, read the comments since the last check.
+// Until Meta approves the Live Video API for this app, Facebook refuses /live_videos for most Pages (#10). That is not a
+// Page problem: comments on a Live still arrive through the feed webhook. So it is not shown as an error, and those
+// Pages are skipped for 6 hours instead of being asked every minute.
+const liveBlocked = new Map(); // page_id → until (ms)
+const isLiveReview = (msg) => /live-video-api|reviewed and approved/i.test(String(msg || ''));
 async function pollLives() {
   const m = await mode(); if (!m.on) return 0;
   let n = 0;
   for (const p of (await q('SELECT * FROM page_links WHERE subscribed')).rows) {
+    if ((liveBlocked.get(p.page_id) || 0) > Date.now()) continue;
     let token; try { token = decrypt(p.token_enc); } catch (_) { continue; }
     try {
       const lives = await meta.get(`/${p.page_id}/live_videos`, { broadcast_status: ['LIVE'], fields: 'id', limit: 3 }, token);
@@ -177,6 +183,7 @@ async function pollLives() {
       } while (url && ++pages < 10);
       await q(`UPDATE page_links SET live_id=$2, live_since=$3, last_error='' WHERE page_id=$1`, [p.page_id, live.id, newest]);
     } catch (e) {
+      if (isLiveReview(e.message)) { liveBlocked.set(p.page_id, Date.now() + 6 * 3600e3); if (p.last_error) await q(`UPDATE page_links SET last_error='' WHERE page_id=$1`, [p.page_id]); continue; }
       await q('UPDATE page_links SET last_error=$2 WHERE page_id=$1', [p.page_id, String(e.message).slice(0, 300)]);
     }
   }

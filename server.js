@@ -279,6 +279,16 @@ app.get(['/adscheck.js', '/adscheck/adscheck.js'], (req, res) => {
   res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.js'));
 });
 // Always revalidate so a new deploy shows up on the next refresh.
+// Khmer mode: the same address serves the Khmer build of app.js (src/km.js). The page is reloaded on a language switch and
+// assets are always revalidated (no-cache), so the right one arrives; the ETag differs between the two.
+app.get('/assets/app.js', (req, res, next) => {
+  res.setHeader('Vary', 'Cookie');
+  if (!/(?:^|;\s*)bd_lang=km(?:;|$)/.test(req.headers.cookie || '')) return next();
+  const b = require('./src/km').build(); if (!b) return next();
+  res.setHeader('Cache-Control', 'no-cache'); res.setHeader('ETag', b.etag);
+  if (req.headers['if-none-match'] === b.etag) return res.status(304).end();
+  res.type('application/javascript').send(b.text);
+});
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
 app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip', '/AdsCheck-Pro-NoLogin-Extension.zip'], (req, res) => {
   res.download(path.join(__dirname, 'public', 'adscheck-connect-extension.zip'), 'AdsCheck-Pro-NoLogin-Extension.zip');

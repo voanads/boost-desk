@@ -3902,3 +3902,41 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
   .bp-tbl td:nth-child(2),.bp-tbl td:nth-child(3),.bp-tbl td:nth-child(4){grid-column:1}
   .bp-tbl td:nth-child(5){grid-column:2;grid-row:2/span 3;align-self:center;color:var(--ink)}
 }
+
+/* Clients page: easier to read (owner, 20 Nov) — a bigger page switch and three clear, equal tabs on the client page */
+#cViewSeg.cview{padding:4px;gap:4px;background:var(--bg-2);border-radius:12px}
+#cViewSeg.cview button{min-height:44px;padding:0 22px;font-size:var(--fs-lg,1.05rem);font-weight:600;border-radius:9px;color:var(--ink)}
+#cViewSeg.cview button[aria-pressed="true"]{background:var(--surface)!important;color:var(--brand-text)!important;box-shadow:0 0 0 1.5px var(--brand) inset}
+#cSortSeg.csort button{min-height:40px;font-size:var(--fs-md,.95rem)}
+#cdTabs.cd-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-bottom:2px solid var(--line);margin:var(--s-3) 0;align-items:stretch}
+#cdTabs.cd-tabs button{min-height:48px;padding:0 10px;font-size:var(--fs-lg,1.05rem);font-weight:600;color:var(--ink);background:var(--bg-2)!important;border-radius:10px 10px 0 0!important;border-bottom:3px solid transparent!important;margin-bottom:-2px;justify-content:center;align-items:center}
+#cdTabs.cd-tabs button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text);border-bottom-color:var(--brand)!important}
+@media (max-width:600px){#cdTabs.cd-tabs button{font-size:var(--fs-md,.95rem);padding:0 4px}}
+.wrap #cViewSeg.cview{background:var(--bg-2)!important;border:1px solid var(--line)}
+.wrap #cViewSeg.cview button{background:transparent!important;border:0!important;box-shadow:none!important}
+.wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text)!important;box-shadow:0 0 0 1.5px var(--brand) inset!important}
+.wrap #cViewSeg.cview{border-radius:12px!important;padding:4px!important;gap:4px}
+.wrap #cViewSeg.cview button{border-radius:9px!important;padding:0 22px!important;min-width:104px;min-height:44px!important;font-size:var(--fs-lg,1.05rem)!important}
+
+/* tabs on the left, the period on the right of the same row; the page switch in colour with icons (owner, 20 Nov) */
+.cd-tabrow{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 16px;border-bottom:2px solid var(--line);margin:var(--s-3) 0}
+.cd-tabrow #cdTabs.cd-tabs{display:flex!important;flex:0 1 auto;border-bottom:0;margin:0 0 -2px;gap:6px}
+.cd-tabrow #cdTabs.cd-tabs button{flex:0 0 auto;padding:0 20px;margin-bottom:0}
+.cd-tabrow .cd-per{margin:0 0 6px auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cd-tabrow .cd-per[hidden]{display:none}
+@media (max-width:600px){.cd-tabrow #cdTabs.cd-tabs{flex:1 1 100%}.cd-tabrow #cdTabs.cd-tabs button{flex:1 1 0;padding:0 6px}.cd-tabrow .cd-per{margin:0 0 6px 0}}
+.wrap #cViewSeg.cview{background:none!important;border:0;padding:0!important;gap:8px}
+.wrap #cViewSeg.cview button{display:inline-flex;align-items:center;gap:8px;background:var(--surface)!important;border:1.5px solid var(--line)!important;color:var(--ink)!important}
+.wrap #cViewSeg.cview button .ic{width:20px;height:20px;flex:none;color:var(--brand)}
+.wrap #cViewSeg.cview button[data-v="boosts"] .ic{color:var(--warn)}
+.wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-fill)!important;border-color:transparent!important;color:var(--on-brand,#fff)!important;box-shadow:none!important}
+.wrap #cViewSeg.cview button[aria-pressed="true"] .ic{color:currentColor}
+.wrap #cViewSeg.cview button{min-width:0;padding:0 16px!important}
+
+/* the sort sits in the page head, left of the Clients / Boosts switch (owner's sketch, 20 Nov) */
+.chead2 #cSortSeg.csort{flex:0 1 auto;margin:0;align-self:center}
+.chead2 #cSortSeg.csort[hidden]{display:none!important}
+.chead2 #cSortSeg.csort button{min-height:44px;padding:0 16px;white-space:nowrap}
+@media (max-width:760px){.chead2 #cSortSeg.csort{flex:1 1 100%;order:5}.chead2 #cSortSeg.csort button{flex:1}}
+#tab-clients .chead2>div:first-child .hint{display:none}
+#tab-clients .chead2 #cSearch{flex:1 1 180px;min-width:150px;max-width:300px}

@@ -1273,7 +1273,7 @@
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
         ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + ordSpendOf(x), 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? ordSpendOf(y) / y.orders : null;
-          return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>`; })()}
+          return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>`; })()}
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : perLbl}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
@@ -1983,7 +1983,7 @@
     mMode = m; localStorage.setItem('bd-main-mode', m);
     document.querySelectorAll('#mModeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
     $('mCompany').hidden = m !== 'company'; $('mPagesView').hidden = m !== 'pages';
-    $('mHint').textContent = m === 'company' ? 'ភ្ញៀវដែលត្រូវមើលមុន រួចក្រុមនីមួយៗថ្ងៃនេះ រួចលុយខែនេះ។' : 'Every team and every Page it boosts — spend, orders from adsbox.biz and cost per order.';
+    $('mHint').textContent = m === 'company' ? 'ភ្ញៀវដែលត្រូវមើលមុន រួចក្រុមនីមួយៗថ្ងៃនេះ រួចលុយខែនេះ។' : 'Every team and every Page it boosts — spend, orders and cost per order.';
     if (m === 'company') loadCompany(); else loadMainPages();
   }
   document.querySelectorAll('#mModeSeg button').forEach((b) => b.onclick = () => setMainMode(b.dataset.m));
@@ -2242,7 +2242,7 @@
           <span class="bd-owner"><span class="mini-av lg">${esc(mIni(c.ownerName))}</span><span><b>${esc(c.ownerName)}</b><span class="hint">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</span></span></span></div></div>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(c.month.spend)}</b>${c.month.spend && d.taxRate ? `<span class="sub">+tax ${money(c.month.spend * (1 + d.taxRate / 100))}</span>` : ''}</div>
-        <div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub">${c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : c.yest.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from adsbox.biz'}</span></div>
+        <div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub">${c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : c.yest.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${c.month.orders ? c.month.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${c.yest.orders ? 'Yesterday ' + c.yest.orders.toLocaleString('en-US') : 'this month'}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${c.month.lives || 0} · ${money(c.month.postSpend || 0)}</b><span class="sub">${money(c.month.liveSpend || 0)} on lives · ${c.month.days || 0} day${c.month.days === 1 ? '' : 's'}</span></div>
       </div>
@@ -2286,11 +2286,15 @@
         oPulled.add(pk);
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
       }
-      $('oSetBtn').hidden = !(me && me.canAdmin); $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey);
+      const own = !!(cfg.own && cfg.own.on);
+      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = !!(me && me.buyer);
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
-      if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
+      if (own) { if (oPgN === null) api('/orders/pages').then((r) => { oPgN = r.pages.length; if (!oPgN) loadOrders(); }).catch(() => { oPgN = -1; });
+        if (oPgN === 0) msg = me && me.buyer ? 'No Facebook Page is connected for orders yet — ask your PM.' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
+        else if (!d.hasData) msg = 'No orders in this period yet. New orders show here within seconds.'; }
+      else if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
       else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
       else if (cfg.listUrl && cfg.listError && cfg.last && cfg.listError.at > (cfg.last.at || '')) msg = `ⓘ The order list address could not be read (${esc(cfg.listError.message)}) — counts come from the summary API instead.`;
       else if (!d.hasData) msg = 'No orders for this period yet. Tap <b>↻ Update</b> to fetch them.';
@@ -2366,6 +2370,37 @@
   $('oUseDay').onclick = () => useLive($('oCmpDay').value, $('oCmpDay').value, $('oUseDay'));
   $('oUse7').onclick = () => useLive(addD(me.today, -7), addD(me.today, -1), $('oUse7'));
   $('oUse30').onclick = () => useLive(addD(me.today, -30), addD(me.today, -1), $('oUse30'));
+  // ---- Pages Boost Desk counts orders on ----
+  var oPgN = null; // var: loadOrders (defined above) may run before this line
+  async function loadPages() {
+    const box = $('oPgList');
+    try {
+      const r = await api('/orders/pages'); oPgN = r.pages.length;
+      const m = r.mode || {}, note = $('oPgMode');
+      note.hidden = !!m.on; note.innerHTML = m.on ? '' : 'Boost Desk is reading orders from adsbox.biz now. Pages connected here start counting when an owner switches it on below.';
+      box.innerHTML = r.pages.length ? r.pages.map((p) => {
+        const st = !p.subscribed ? `<span class="is-danger">✕ Not receiving messages${p.last_error ? ' — ' + esc(p.last_error) : ''}</span>` : p.last_error ? `<span class="is-warn">⚠ ${esc(p.last_error)}</span>` : p.last_event_at ? `<span class="is-ok">✓ Working</span> · last message ${esc(ago(p.last_event_at))}` : '<span class="muted">Connected · waiting for the first message</span>';
+        return `<div class="pgrow"><div><b>${esc(p.page_name || p.page_id)}</b>${p.live ? ' <span class="tag live">LIVE</span>' : ''}<div class="hint">${st}${p.connected_name ? ' · by ' + esc(p.connected_name) : ''}</div></div><span class="num pg-today" title="Orders today">${p.today}</span><button type="button" class="ghost sm" data-pgdel="${esc(p.page_id)}" aria-label="Remove ${esc(p.page_name)}">Remove</button></div>`;
+      }).join('') : '<div class="empty">No Page connected yet. Tap <b>Connect Pages</b> and log in with the Facebook account that manages the client Pages.</div>';
+      box.querySelectorAll('[data-pgdel]').forEach((b) => b.onclick = async () => {
+        if (!confirm('Stop counting orders on this Page? Orders already counted stay.')) return;
+        try { await api('/orders/pages/' + b.dataset.pgdel, { method: 'DELETE' }); toast('Page removed'); loadPages(); } catch (e) { toast(e.message); }
+      });
+      const setup = $('oPgSetup'); setup.hidden = !r.verifyToken;
+      if (r.verifyToken) { $('oPgHook').value = r.hookUrl; $('oPgTok').value = r.verifyToken; $('oPgOwnBox').hidden = !(me && me.isOwner); $('oPgOwn').checked = !!m.on; }
+    } catch (e) { box.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
+  }
+  $('oPgBtn').onclick = () => { dlgOpen($('oPgDlg')); loadPages(); };
+  $('oPgOwn').onchange = async () => {
+    const on = $('oPgOwn').checked;
+    if (!confirm(on ? 'Count orders in Boost Desk from today, and stop reading them from adsbox.biz?' : 'Go back to reading orders from adsbox.biz? Boost Desk stops counting.')) { $('oPgOwn').checked = !on; return; }
+    try { await api('/orders/own', { method: 'PUT', body: { on } }); toast(on ? 'Boost Desk counts orders now' : 'Orders come from adsbox.biz again'); oData2 = null; oCfg = null; loadPages(); loadOrders(); } catch (e) { toast(e.message); $('oPgOwn').checked = !on; }
+  };
+  (() => { // back from "Connect Pages" on Facebook
+    const q = new URLSearchParams(location.search), m = q.get('pgmsg'); if (!m) return;
+    const ok = q.get('pg') === 'ok'; history.replaceState(null, '', location.pathname + location.hash);
+    setTimeout(() => { if (ok) successBadge(m); else toast(m); oPgN = null; $('oPgBtn').click(); }, 900);
+  })();
   $('oSetBtn').onclick = async () => {
     if (!(me && me.canAdmin)) return;
     const c = oCfg || await api('/orders/api').catch(() => ({}));
@@ -3626,7 +3661,7 @@
     const card = (ic, title, state, body, acts) => `<div class="setcard"><div class="sc-h"><span class="sc-ic">${ic}</span><b>${title}</b>${state}</div><div class="sc-b">${body}</div>${acts ? `<div class="sc-a">${acts}</div>` : ''}</div>`;
     const on = (t) => `<span class="sc-st ok">${t}</span>`, off = (t) => `<span class="sc-st bad">${t}</span>`;
     $('sGrid').innerHTML = [
-      card('📦', 'adsbox.biz orders', oc.hasKey ? (oc.lastError ? off('Error') : on('Connected')) : off('Not connected'),
+      card('📦', oc.own && oc.own.on ? 'Orders (Boost Desk)' : 'adsbox.biz orders', oc.own && oc.own.on ? on('Counting') : oc.hasKey ? (oc.lastError ? off('Error') : on('Connected')) : off('Not connected'),
         `${oc.hasKey ? `Key ${esc(oc.keyHint || '')}${oc.savedBy ? ' · saved by ' + esc(oc.savedBy) : ''}<br>` : 'Connect to see cost per order.<br>'}${oc.last ? 'Last update ' + esc(ago(oc.last.at)) : ''}${oc.lastError ? `<div class="over">${esc(oc.lastError.message)}</div>` : ''}<div class="hint">Updates every 30 minutes for everyone. Only admins see the key.</div>`,
         '<button class="sm" data-sgo="orders-api">⚙ API settings</button>'),
       card('✈️', 'Telegram bot', d.telegram.bot ? on('Set up') : off('Missing'),
@@ -5219,7 +5254,7 @@ Thank you for working with Ads Box!`,
     rollTo($('aSpend'), money(t.spend)); $('aTax').textContent = (t.spend && d.taxRate ? `With tax ${d.taxRate}%: ${money(tax(t.spend))}` : '') + (t.added - t.spend > 0.009 ? ` · ${money(t.added - t.spend)} shared, counted once` : '');
     rollTo($('aLive'), money(t.live)); $('aLives').textContent = `${t.lives} live${t.lives === 1 ? '' : 's'}`;
     rollTo($('aPost'), money(t.post));
-    rollTo($('aOrd'), t.orders ? t.orders.toLocaleString('en-US') : '–'); $('aOrdSub').textContent = t.orders ? `${money(t.orderSpend / t.orders)} per order` : 'adsbox.biz';
+    rollTo($('aOrd'), t.orders ? t.orders.toLocaleString('en-US') : '–'); $('aOrdSub').textContent = t.orders ? `${money(t.orderSpend / t.orders)} per order` : 'orders';
     rollTo($('aAcc'), String(t.accounts)); $('aAccSub').textContent = `of ${d.users.length} account${d.users.length === 1 ? '' : 's'} · ${t.clients} client${t.clients === 1 ? '' : 's'} with spend`;
     const dash = '<span class="muted">–</span>';
     const ago = (at) => { if (!at) return '<span class="muted">Never</span>'; const m = Math.round((Date.now() - new Date(at)) / 60000); return m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : new Date(at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };

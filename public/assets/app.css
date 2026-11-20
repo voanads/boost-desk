@@ -3834,3 +3834,10 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
   #tab-dashboard:not(.dash-all)>.perbar,#tab-dashboard:not(.dash-all)>.summary,#tab-dashboard:not(.dash-all) .dgrid>.dmain,#tab-dashboard:not(.dash-all) #hoCard{display:none!important}
   #dMoreBtn.dmore{display:flex!important;align-items:center;justify-content:center;width:100%;min-height:48px;margin-top:var(--s-3);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--brand-text);font-weight:600;text-align:center;white-space:normal;padding:8px 14px}
 }
+/* Orders → Pages (Boost Desk's own order counting) */
+.pglist{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto}
+.pgrow{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.pgrow .pg-today{font-weight:700;min-width:2ch;text-align:right}
+.pgrow .tag.live{background:#e11d48;color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+a.btnlink.primary{background:var(--grad);color:var(--on-brand);border:none;font-weight:700;padding:10px 18px}
+a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}

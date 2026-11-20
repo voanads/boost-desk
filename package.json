@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/grouping.test.js"
+    "test": "node test/grouping.test.js && node test/orderDetect.test.js"
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",

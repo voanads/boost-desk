@@ -10,6 +10,11 @@ async function rekey() {
     if (!isOld(u.token_enc)) continue;
     try { await db.pool.query('UPDATE users SET token_enc=$1 WHERE fb_id=$2', [encrypt(decrypt(u.token_enc)), u.fb_id]); out.logins++; } catch (_) { out.failed++; }
   }
+  // Page tokens for Boost Desk's own order counting.
+  for (const p of (await db.pool.query('SELECT page_id, token_enc FROM page_links').catch(() => ({ rows: [] }))).rows) {
+    if (!isOld(p.token_enc)) continue;
+    try { await db.pool.query('UPDATE page_links SET token_enc=$1 WHERE page_id=$2', [encrypt(decrypt(p.token_enc)), p.page_id]); out.keys++; } catch (_) { out.failed++; }
+  }
   for (const s of (await db.pool.query(`SELECT key, value FROM settings WHERE value ? 'keyEnc'`)).rows) {
     if (!isOld(s.value.keyEnc)) continue;
     try { await db.setSetting(s.key, { ...s.value, keyEnc: encrypt(decrypt(s.value.keyEnc)) }); out.keys++; } catch (_) { out.failed++; }

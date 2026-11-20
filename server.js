@@ -20,6 +20,7 @@ const extras = require('./src/extras');
 const reports = require('./src/reports');
 const pm = require('./src/pm');
 const orders = require('./src/orders');
+const pageOrders = require('./src/pageOrders'); // Boost Desk's own order counting (Messenger + comments)
 const telegram = require('./src/telegram');
 const profit = require('./src/profit');
 const { encrypt } = require('./src/crypto');
@@ -44,9 +45,10 @@ app.use((req, res, next) => {
 });
 // Public addresses: a limit per address, so nobody can hammer the login or the open API.
 app.use(['/auth', '/admin/login', '/mediabuyer/login', '/mb/login'], net.rateLimit(40, 60000, 'auth'));
-app.use(['/public-api', '/hooks'], net.rateLimit(240, 60000, 'pub'));
+app.use(['/public-api', '/hooks/adsbox'], net.rateLimit(240, 60000, 'pub')); // /hooks/meta is signed by Facebook and can be busy during a Live, so it has no per-address limit
 app.use('/api', net.sameOrigin);
-app.use(express.json({ limit: '8mb' })); // room for the invoice logo / QR / signature pictures
+// /hooks/meta keeps the raw body too: Facebook signs it (X-Hub-Signature-256) and the signature is checked on those bytes.
+app.use(express.json({ limit: '8mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/hooks/meta')) req.rawBody = buf; } })); // room for the invoice logo / QR / signature pictures
 app.use(cookieSession({
   name: 'bd_session', secret: cfg.sessionSecret, maxAge: 30 * 864e5,
   sameSite: 'lax', secure: cfg.baseUrl.startsWith('https'), httpOnly: true,
@@ -78,6 +80,13 @@ app.get('/auth/facebook', (req, res) => {
   req.session.next = req.query.next === 'admin' ? '/admin' : null; res.redirect(meta.loginUrl(newState()));
 });
 
+// Orders → Connect Pages: the same Facebook login, asking for the Page permissions. The callback below sees pagesFor
+// and saves the Pages instead of logging in. Only a logged-in team member (not a media buyer) can start it.
+app.get('/auth/facebook/pages', (req, res) => {
+  if (!req.session || !req.session.fbId || req.session.mb) return res.redirect('/login');
+  req.session.pagesFor = req.session.fbId; req.session.linkFor = null;
+  res.redirect(pageOrders.connectUrl(newState()));
+});
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
   if (error_description) return res.redirect('/login?error=' + encodeURIComponent(error_description));
@@ -94,6 +103,17 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
     return res.redirect('/login?error=' + encodeURIComponent('Facebook login did not finish (' + e.message + '). Tap Continue with Facebook again.'));
   }
   const profile = await meta.me(token);
+  // Connecting Pages for order counting (Orders → Connect Pages): save the Pages, stay logged in as myself.
+  const pagesFor = req.session.pagesFor; req.session.pagesFor = null;
+  if (pagesFor && req.session.fbId === pagesFor && (await db.getUser(pagesFor))) {
+    const back = (msg, ok) => res.redirect('/?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
+    try {
+      const r = await pageOrders.connectFromUserToken(token, { id: pagesFor, name: (await db.getUser(pagesFor)).name + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
+      if (r.missing.length && !r.connected.length) return back(`Facebook did not give Boost Desk the Page permissions (${r.missing.join(', ')}). Tap Connect Pages again and allow everything.`, false);
+      if (!r.connected.length && !r.failed.length) return back(`${profile.name} does not manage any Facebook Page.`, false);
+      return back(`${r.connected.length} Page${r.connected.length === 1 ? '' : 's'} connected — new orders are counted from now.${r.failed.length ? ` ${r.failed.length} could not be connected: ${r.failed[0].name} (${r.failed[0].error}).` : ''}`, r.connected.length > 0);
+    } catch (e) { return back('Connecting Pages failed: ' + e.message, false); }
+  }
   // Connecting an extra Facebook account to my workspace: keep me logged in as myself, save the other login beside mine.
   const linkFor = req.session.linkFor; req.session.linkFor = null;
   if (linkFor && req.session.fbId === linkFor && (await db.getUser(linkFor))) {
@@ -351,6 +371,18 @@ const mbOnly = wrap(async (req, res, next) => {
   req.buyer = b; next();
 });
 app.post('/mb/logout', (req, res) => { req.session = null; res.json({ ok: true }); });
+// Facebook → Boost Desk webhook for connected Pages (Messenger messages and comments). GET is Facebook's check when the
+// webhook is set up in the Meta app; POST must carry Facebook's signature made with the app secret.
+app.get('/hooks/meta', wrap(async (req, res) => {
+  const qy = req.query || {};
+  if (qy['hub.mode'] === 'subscribe' && String(qy['hub.verify_token'] || '') === (await pageOrders.verifyToken())) return res.type('text/plain').send(String(qy['hub.challenge'] || ''));
+  res.sendStatus(403);
+}));
+app.post('/hooks/meta', (req, res) => {
+  if (!pageOrders.signatureOk(req.rawBody, req.get('X-Hub-Signature-256'))) return res.sendStatus(401);
+  res.sendStatus(200); // answer at once; Facebook retries slow webhooks
+  pageOrders.handleHook(req.body).catch((e) => console.error('[meta hook]', e.message));
+});
 // adsbox.biz → Boost Desk webhook (no login; the shared secret from the Orders → adsbox.biz dialog).
 app.post('/hooks/adsbox', wrap(async (req, res) => {
   const given = String(req.get('X-Webhook-Secret') || (req.query || {}).secret || (req.body || {}).secret || ''), want = await orders.hookSecret();
@@ -905,7 +937,11 @@ api.get('/admin/health', adminOnly, wrap(async (req, res) => {
   }
   if (!telegram.hasBot()) add('bad', 'Telegram', 'The Telegram bot is not set up', 'Add TELEGRAM_BOT_TOKEN in Railway so reports can be sent.', null);
   const oc = await orders.publicConfig();
-  if (!oc.hasKey) add('info', 'Orders', 'adsbox.biz is not connected', 'Connect it to see cost per order.', { kind: 'orders' });
+  if (oc.own && oc.own.on) {
+    const pg = (await db.pool.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE NOT subscribed OR last_error <> '')::int AS bad FROM page_links`)).rows[0];
+    if (!pg.n) add('info', 'Orders', 'No Facebook Page is connected for orders', 'Orders → Connect Pages, so Boost Desk can count orders from Messenger and comments.', { kind: 'orders' });
+    else if (pg.bad) add('warn', 'Orders', `${pg.bad} connected Page${pg.bad === 1 ? ' has' : 's have'} a problem`, 'Open Orders → Pages to see which one and connect it again.', { kind: 'orders' });
+  } else if (!oc.hasKey) add('info', 'Orders', 'adsbox.biz is not connected', 'Connect it to see cost per order.', { kind: 'orders' });
   else if (oc.lastError) add('bad', 'Orders', 'Getting orders from adsbox.biz failed', oc.lastError.message, { kind: 'orders' });
   else if (oc.last && now - Date.parse(oc.last.at) > 2 * 3600e3) add('warn', 'Orders', 'Orders from adsbox.biz have not updated in ' + Math.round((now - Date.parse(oc.last.at)) / 3600e3) + ' hours', 'Usually every 30 minutes.', { kind: 'orders' });
   const ps = await orders.pushStatus();
@@ -2801,8 +2837,20 @@ api.post('/orders/use-live', adminOnly, wrap(async (req, res) => {
   if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick up to 3 months.' });
   const n = await orders.useLive(from, to > today ? today : to); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json({ ok: true, rows: n });
 }));
+// Boost Desk's own order counting: connected Pages, and the switch between it and adsbox.biz.
+api.get('/orders/pages', wrap(async (req, res) => { if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM to connect Pages.' }); res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
+api.delete('/orders/pages/:id', wrap(async (req, res) => {
+  if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
+  const id = String(req.params.id || ''); if (!/^\d{5,30}$/.test(id)) return res.status(400).json({ error: 'Pick a Page.' });
+  const row = (await db.pool.query('SELECT connected_by FROM page_links WHERE page_id=$1', [id])).rows[0];
+  if (!row) return res.status(404).json({ error: 'That Page is not connected.' });
+  if (row.connected_by !== req.user.fb_id && !(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only the person who connected it or an admin can remove it.' });
+  await pageOrders.disconnect(id); res.json({ ok: true });
+}));
+api.put('/orders/own', ownerOnly, wrap(async (req, res) => res.json(await pageOrders.setMode(!!(req.body || {}).on, req.user.name))));
 api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
 api.post('/orders/pull', wrap(async (req, res) => {
+  if ((await pageOrders.mode()).on) { await pageOrders.flush(); return res.json({ ok: true, own: true }); } // counted live by Boost Desk; nothing to fetch
   const b = req.body || {}, today = sync.todayIn();
   let n;
   if (isDay(b.from) && isDay(b.to) && b.from <= b.to && b.from >= sync.addDays(today, -800)) n = await orders.pullRange(b.from, b.to > today ? today : b.to, { force: !!b.force });
@@ -2847,7 +2895,7 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   res.status(err.status || 500).json({ error: err.message || 'Something went wrong.' });
 });
 
-db.init().then(() => { profit.init().catch((e) => console.log('[profit] init skipped:', e.message)); }).then(() => {
+db.init().then(() => pageOrders.init()).then(() => { profit.init().catch((e) => console.log('[profit] init skipped:', e.message)); }).then(() => {
   require('./src/security').rekey().then((r) => { if (r.oldKey) console.log('[security] re-encrypted with the new key:', r.logins, 'logins,', r.keys, 'API keys', r.failed ? `(${r.failed} could not be read)` : ''); }).catch((e) => console.log('[security] rekey failed:', e.message));
   db.getSetting('invoiceQr', '').then((q) => invoice.setQr(q)).catch(() => {});
   // FULL_ADMIN_EMAILS (Railway variable, comma-separated Gmail addresses): on start, each one is put on the Admin website

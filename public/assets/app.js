@@ -2761,7 +2761,7 @@
     if (as && as.buyer && !as.pm) { host.hidden = false; host.innerHTML = `<div class="top"><h2>✅ ${esc(as.name)}'s tasks today</h2></div><div class="hl-empty">This media buyer has no PM yet, so there is nowhere to add tasks.</div>`; return; }
     const dayQ = hostId === 'mtTasks' && mtDay ? (asQ ? '&' : '?') + 'day=' + mtDay : '';
     let d; try { d = await api('/tasks/mine' + asQ + dayQ); } catch (e) { host.hidden = true; return; }
-    const dayLbl = hostId === 'mtTasks' && mtDay && mtDay !== d.today ? ' · ' + nice(mtDay).replace(/ \d{4}$/, '') : ' today';
+    const dayLbl = hostId === 'mtTasks' && mtDay && mtDay !== d.today ? ' · ' + nice(mtDay).replace(/ \d{4}$/, '') : hostId === 'mtTasks' ? ' today' : 'ថ្ងៃនេះ';
     if (as && as.buyer) d.tasks = d.tasks.filter((t) => t.to && t.to.id === as.id.slice(3));
     const all = d.tasks.filter((t) => t.from !== 'work' && t.from !== 'ai'), open = all.filter((t) => !t.done), done = all.filter((t) => t.done), late = open.filter((t) => t.late); // only tasks people created — not the automatic suggestions
     const list = tmFilter === 'open' ? open : tmFilter === 'done' ? done : all;
@@ -2769,14 +2769,14 @@
     const hhmm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const byClient = {}; for (const t of list) (byClient[t.client] = byClient[t.client] || []).push(t);
     host.hidden = false;
-    host.innerHTML = `<div class="top"><h2>${hostId === 'mtTasks' ? '📌 Clients Task' : '✅ ' + (as ? esc(as.name) + "'s tasks" : 'My tasks')}${dayLbl} <span class="countpill">${open.length}</span></h2>${hostId === 'mtTasks' && mtDay && mtDay !== d.today ? '<button type="button" class="ghost sm" id="mtBackToday">Back to today</button>' : ''}<span class="hint">${done.length} done · ${open.length} open${late.length ? ` · <span class="is-danger">${late.length} overdue</span>` : ''} · every client</span>
-      <div class="seg tm-seg" role="group" aria-label="Show"><button type="button" data-tmf="open" aria-pressed="${tmFilter === 'open'}">Open</button><button type="button" data-tmf="done" aria-pressed="${tmFilter === 'done'}">Done</button><button type="button" data-tmf="all" aria-pressed="${tmFilter === 'all'}">All</button></div></div>
-      ${list.length ? Object.entries(byClient).map(([cn, ts]) => `<div class="tmg"><div class="tmg-h"><b>${esc(cn)}</b><span class="hint">${ts.filter((t) => t.done).length} / ${ts.length}</span><button type="button" class="ghost sm" data-tmgo="${ts[0].clientId}">Open client →</button></div>
+    host.innerHTML = `<div class="top"><h2>${hostId === 'mtTasks' ? '📌 Clients Task' : '✅ ' + (as ? esc(as.name) + "'s tasks" : 'ការងារខ្ញុំ')}${dayLbl} <span class="countpill">${open.length}</span></h2>${hostId === 'mtTasks' && mtDay && mtDay !== d.today ? '<button type="button" class="ghost sm" id="mtBackToday">Back to today</button>' : ''}<span class="hint">រួច ${done.length} · នៅសល់ ${open.length}${late.length ? ` · <span class="is-danger">ហួសថ្ងៃ ${late.length}</span>` : ''} · គ្រប់ភ្ញៀវ</span>
+      <div class="seg tm-seg" role="group" aria-label="Show"><button type="button" data-tmf="open" aria-pressed="${tmFilter === 'open'}">នៅសល់</button><button type="button" data-tmf="done" aria-pressed="${tmFilter === 'done'}">រួច</button><button type="button" data-tmf="all" aria-pressed="${tmFilter === 'all'}">ទាំងអស់</button></div></div>
+      ${list.length ? Object.entries(byClient).map(([cn, ts]) => `<div class="tmg"><div class="tmg-h"><b>${esc(cn)}</b><span class="hint">${ts.filter((t) => t.done).length} / ${ts.length}</span><button type="button" class="ghost sm" data-tmgo="${ts[0].clientId}">បើកភ្ញៀវ →</button></div>
         ${ts.map((t) => `<div class="mbm-task ${t.done ? 'done' : ''} ${t.late ? 'late' : ''}">
           <button type="button" class="tcheck mbm-check" role="checkbox" aria-checked="${t.done}" data-tmtick="${t.clientId}|${t.id}|${t.from === 'work' ? 'w:' + t.kind : 't'}" data-title="${esc(t.text)}" aria-label="Done">${box}</button>
-          <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'work' ? esc(t.detail || 'Today\'s work') : t.from === 'ai' ? 'AI plan' : t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · sent ✈' : ' · not sent'}</span>` : 'My task'}${t.repeat ? ' · 🔁 every day' : ''}${t.late ? ` · <span class="is-danger">late — since ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}${t.doneBy && t.doneBy !== me.name ? ' by ' + esc(t.doneBy) : ''}` : ''}</span></div>
+          <div class="mbm-t"><b>${esc(t.text)}</b><span class="hint">${t.from === 'work' ? esc(t.detail || 'Today\'s work') : t.from === 'ai' ? 'AI plan' : t.to ? `<span class="to-chip">→ ${esc(t.to.name)}${t.sentAt ? ' · បានផ្ញើ ✈' : ' · មិនទាន់ផ្ញើ'}</span>` : 'ការងារខ្ញុំ'}${t.repeat ? ' · 🔁 រាល់ថ្ងៃ' : ''}${t.late ? ` · <span class="is-danger">ហួសថ្ងៃ — តាំងពី ${esc(nice(t.day).replace(/ \d{4}$/, ''))}</span>` : ''}${t.done && t.doneAt ? ` · ✅ ${hhmm(t.doneAt)}${t.doneBy && t.doneBy !== me.name ? ' ដោយ ' + esc(t.doneBy) : ''}` : ''}</span></div>
           ${t.target ? `<span class="mbm-reach"><input type="number" inputmode="numeric" min="0" value="${t.reached || 0}" data-tmreach="${t.clientId}|${t.id}" aria-label="Reached"> / ${t.target} ${esc(t.unit || '')}</span>` : ''}</div>`).join('')}</div>`).join('')
-      : `<div class="hl-empty">${tmFilter === 'open' ? (hostId === 'mtTasks' ? '🎉 Nothing open today. Add a task above.' : '🎉 Nothing open today. Add tasks on a client page.') : 'Nothing here yet.'}</div>`}`;
+      : `<div class="hl-empty">${tmFilter === 'open' ? (hostId === 'mtTasks' ? '🎉 Nothing open today. Add a task above.' : '🎉 ថ្ងៃនេះគ្មានការងារនៅសល់។ បន្ថែមការងារក្នុងទំព័រភ្ញៀវ (ផ្ទាំង «ថ្ងៃនេះ»)។') : 'មិនទាន់មានអ្វីទេ។'}</div>`}`;
     host.querySelectorAll('[data-tmf]').forEach((b) => b.onclick = () => { tmFilter = b.dataset.tmf; loadMyTasks(hostId); });
     const bt = $('mtBackToday'); if (bt) bt.onclick = () => { mtDay = null; loadMyTasks('mtTasks'); loadMtCal(); };
     host.querySelectorAll('[data-tmgo]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); if (typeof selectClient === 'function') selectClient(Number(b.dataset.tmgo)); else { cSel = Number(b.dataset.tmgo); renderClients(); } });
@@ -3191,7 +3191,16 @@
   let ctMineTab = 'on';
   // Dashboard on a desktop (owner's layout, 19 Nov): under the numbers, Clients today on the left; on the right My tasks today
   // and, under it, the Handoff. On a narrow screen Clients today is first under the page head and the Handoff is back on top.
+  // Phone (owner, 20 Nov): the Dashboard opens short — Clients today and My tasks. The numbers, the chart, the clients
+  // table and the Handoff open with one button, and the choice is kept for the visit.
+  function dashMore() {
+    const b = $('dMoreBtn'), tab = $('tab-dashboard'); if (!b || !tab || b.dataset.wired) return; b.dataset.wired = '1';
+    const paint = () => { const all = tab.classList.contains('dash-all'); b.setAttribute('aria-expanded', String(all)); b.textContent = all ? 'បង្ហាញតែភ្ញៀវថ្ងៃនេះ និងការងារខ្ញុំ' : 'មើលបន្ថែម៖ ប្រគល់វេន · លេខចំណាយ · តារាងភ្ញៀវ'; };
+    b.onclick = () => { tab.classList.toggle('dash-all'); paint(); if (tab.classList.contains('dash-all')) { const h = $('hoCard'); (h && !h.hidden ? h : tab.querySelector('.perbar')).scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' }); } else window.scrollTo({ top: 0 }); };
+    paint();
+  }
   function dashPlace() {
+    dashMore();
     try {
       const wide = matchMedia('(min-width: 1100px)').matches, side = document.querySelector('#tab-dashboard .dside'), head = document.querySelector('#tab-dashboard .phead'), ct = $('ctMine'), ho = $('hoCard'), onb = $('onb'); if (!side || !ct) return;
       let right = side.querySelector('.dside-r'); if (!right) { right = document.createElement('div'); right.className = 'dside-r'; [...side.children].filter((k) => k !== ct).forEach((k) => right.appendChild(k)); side.appendChild(right); }
@@ -4518,33 +4527,33 @@ Notes:
     const mb = d.me.kind === 'mb';
     if (!mb && !d.hasTeam) { host.hidden = true; return; } // a PM working alone has nobody to hand over to
     host.hidden = false;
-    const noteHtml = (n) => `<div class="ho-note"><div class="ho-nh"><b>${esc(n.by)}</b><span class="hint">${n.today ? 'today' : 'last night'} ${esc(n.time)}</span></div><div class="ho-nt">${esc(n.text).replace(/\n/g, '<br>')}</div></div>`;
+    const noteHtml = (n) => `<div class="ho-note"><div class="ho-nh"><b>${esc(n.by)}</b><span class="hint">${n.today ? 'ថ្ងៃនេះ' : 'យប់មិញ'} ${esc(n.time)}</span></div><div class="ho-nt">${esc(n.text).replace(/\n/g, '<br>')}</div></div>`;
     const tk = (t, done) => `<li class="${done ? 'done' : 'open'}"><i aria-hidden="true">${done ? '✓' : ''}</i><span>${t.client ? `<b>${esc(t.client)}</b> ` : ''}${esc(t.text)}</span>${done && t.at ? `<small>${esc(t.at)}</small>` : ''}</li>`;
     const left = mb
-      ? `<div class="ho-col"><div class="ho-t"><b>📝 Note from ${esc(d.pmName)}</b><span class="hint">their latest note for you</span></div>
-          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">No note from ${esc(d.pmName)} yet. It also comes to your Telegram at ${esc(d.times.brief)}.</div>`}</div>`
-      : `<div class="ho-col"><div class="ho-t"><b>🌅 What your media buyer did today</b><span class="hint">tasks you gave them</span></div>
-          ${d.team.map((b) => `<div class="ho-mb"><div class="ho-mh"><span class="avatar">${initials(b.name)}</span><b>${esc(b.name)}</b><span class="ho-pill ${b.total && b.done === b.total ? 'ok' : b.total ? '' : 'mute'}">${b.total ? `${b.done} / ${b.total} done` : 'no tasks today'}</span>${b.linked ? '' : '<span class="ho-pill warn">Telegram not connected</span>'}</div>
+      ? `<div class="ho-col"><div class="ho-t"><b>📝 Note ពី ${esc(d.pmName)}</b><span class="hint">Note ចុងក្រោយសម្រាប់អ្នក</span></div>
+          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">មិនទាន់មាន Note ពី ${esc(d.pmName)}។ វាក៏មកដល់ Telegram របស់អ្នកនៅម៉ោង ${esc(d.times.brief)}។</div>`}</div>`
+      : `<div class="ho-col"><div class="ho-t"><b>🌅 អ្វីដែល Media buyer បានធ្វើថ្ងៃនេះ</b><span class="hint">ការងារដែលអ្នកបានឲ្យ</span></div>
+          ${d.team.map((b) => `<div class="ho-mb"><div class="ho-mh"><span class="avatar">${initials(b.name)}</span><b>${esc(b.name)}</b><span class="ho-pill ${b.total && b.done === b.total ? 'ok' : b.total ? '' : 'mute'}">${b.total ? `រួច ${b.done} / ${b.total}` : 'ថ្ងៃនេះគ្មានការងារ'}</span>${b.linked ? '' : '<span class="ho-pill warn">មិនទាន់ភ្ជាប់ Telegram</span>'}</div>
             ${b.total ? `<ul class="ho-tk">${b.doneList.map((t) => tk(t, true)).join('')}${b.open.map((t) => tk(t, false)).join('')}</ul>` : ''}</div>`).join('')}
-          <div class="ho-t ho-t2"><b>📝 Note for tonight</b></div>
-          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">No note yet. Your media buyer is asked for one on Telegram at ${esc(d.times.remind)}.</div>`}</div>`;
-    const forWho = mb ? esc(d.pmName) : 'your media buyer', when = mb ? 'They see it here at once' + (d.telegram.on ? ' and on Telegram' : '') : `Sent to them on Telegram at ${esc(d.times.brief)} tomorrow`;
-    const right = `<div class="ho-col ho-me"><div class="ho-t"><b>✍ Your note for ${forWho}</b><span class="hint">${mb ? 'before you leave' : 'for tomorrow morning'}</span></div>
-      ${d.mine && !hoEdit ? `${noteHtml({ ...d.mine, by: 'You' })}<div class="ho-act"><span class="hint">✓ Saved · ${when.replace(/^Sent/, 'goes')}</span><button type="button" class="sm" data-ho="edit">Edit</button></div>`
-        : `<form id="hoForm"><textarea id="hoText" rows="4" maxlength="${d.max}" placeholder="${mb ? 'What should the PM know tonight? e.g. LR wants live at 7:00 · CPM high on sneakers post · J.Mey has not answered the plan' : 'What should they do first tomorrow? e.g. top up KHM-01 $50 before 9:00 · boost 2 posts for J.Mey · do not pause sneakers'}">${d.mine ? esc(d.mine.text) : ''}</textarea>
-          <div class="ho-act"><span class="hint">${when}. One line per point.</span>${d.mine ? '<button type="button" class="ghost sm" data-ho="cancel">Cancel</button>' : ''}<button type="submit" class="primary sm">Save note</button></div></form>`}</div>`;
-    host.innerHTML = `<div class="ho-top"><h2>🤝 Handoff</h2><span class="hint">${mb ? 'your morning → the PM\'s evening' : 'media buyer\'s morning → your evening'}</span>
-        <span class="ho-tg">${!d.telegram.bot ? '<span class="hint">Telegram not set up</span>' : !d.telegram.on ? '<span class="ho-pill mute">Telegram messages off</span>' : d.telegram.mine ? `<span class="hint">Telegram: brief ${esc(d.times.brief)} · reminder ${esc(d.times.remind)} · digest ${esc(d.times.digest)}</span>` : '<span class="ho-pill warn">Connect your Telegram in Settings to get the digest</span>'}
-        <button type="button" class="ghost sm" data-ho="preview">See the messages</button>${mb ? '' : `<button type="button" class="ghost sm" data-ho="toggle">${d.telegram.on ? 'Turn off' : 'Turn on'}</button>`}</span></div>
+          <div class="ho-t ho-t2"><b>📝 Note សម្រាប់យប់នេះ</b></div>
+          ${d.theirs.length ? d.theirs.map(noteHtml).join('') : `<div class="hl-empty">មិនទាន់មាន Note។ Telegram នឹងសួរ Media buyer នៅម៉ោង ${esc(d.times.remind)}។</div>`}</div>`;
+    const forWho = mb ? esc(d.pmName) : 'Media buyer', when = mb ? 'PM ឃើញវានៅទីនេះភ្លាម' + (d.telegram.on ? ' និងលើ Telegram' : '') : `ផ្ញើទៅ Telegram របស់ Media buyer ស្អែក ម៉ោង ${esc(d.times.brief)}`;
+    const right = `<div class="ho-col ho-me"><div class="ho-t"><b>✍ Note របស់អ្នកសម្រាប់ ${forWho}</b><span class="hint">${mb ? 'មុនចេញពីការងារ' : 'សម្រាប់ព្រឹកស្អែក'}</span></div>
+      ${d.mine && !hoEdit ? `${noteHtml({ ...d.mine, by: 'អ្នក' })}<div class="ho-act"><span class="hint">✓ បានរក្សាទុក · ${when}</span><button type="button" class="sm" data-ho="edit">កែ</button></div>`
+        : `<form id="hoForm"><textarea id="hoText" rows="4" maxlength="${d.max}" placeholder="${mb ? 'PM គួរដឹងអ្វីយប់នេះ? ឧ. LR ចង់ Live ម៉ោង 7:00 · CPM ខ្ពស់លើ Post ស្បែកជើង · J.Mey មិនទាន់ឆ្លើយ Plan' : 'ស្អែកត្រូវធ្វើអ្វីមុនគេ? ឧ. បញ្ចូល $50 ក្នុង KHM-01 មុនម៉ោង 9:00 · Boost 2 Post ឲ្យ J.Mey · កុំផ្អាក Post ស្បែកជើង'}">${d.mine ? esc(d.mine.text) : ''}</textarea>
+          <div class="ho-act"><span class="hint">${when}។ មួយបន្ទាត់ = មួយចំណុច។</span>${d.mine ? '<button type="button" class="ghost sm" data-ho="cancel">បោះបង់</button>' : ''}<button type="submit" class="primary sm">រក្សាទុក Note</button></div></form>`}</div>`;
+    host.innerHTML = `<div class="ho-top"><h2>🤝 ប្រគល់វេន (Handoff)</h2><span class="hint">${mb ? 'ព្រឹករបស់អ្នក → ល្ងាចរបស់ PM' : 'ព្រឹករបស់ Media buyer → ល្ងាចរបស់អ្នក'}</span>
+        <span class="ho-tg">${!d.telegram.bot ? '<span class="hint">Telegram មិនទាន់កំណត់</span>' : !d.telegram.on ? '<span class="ho-pill mute">សារ Telegram បិទ</span>' : d.telegram.mine ? `<span class="hint">Telegram៖ សារព្រឹក ${esc(d.times.brief)} · រំលឹក ${esc(d.times.remind)} · សង្ខេបល្ងាច ${esc(d.times.digest)}</span>` : '<span class="ho-pill warn">ភ្ជាប់ Telegram ក្នុង Settings ដើម្បីទទួលសារសង្ខេប</span>'}
+        <button type="button" class="ghost sm" data-ho="preview">មើលសារ</button>${mb ? '' : `<button type="button" class="ghost sm" data-ho="toggle">${d.telegram.on ? 'បិទ' : 'បើក'}</button>`}</span></div>
       <div class="ho-grid">${left}${right}</div>`;
-    const f = $('hoForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const text = $('hoText').value.trim(); if (!text) { toast('Write the note first'); return; }
+    const f = $('hoForm'); if (f) f.onsubmit = async (ev) => { ev.preventDefault(); const text = $('hoText').value.trim(); if (!text) { toast('សូមសរសេរ Note សិន'); return; }
       const b = f.querySelector('[type=submit]'); b.disabled = true;
-      try { hoData = await api('/handoff', { method: 'POST', body: { text } }); hoEdit = false; paintHandoff(); successBadge('Note saved'); } catch (e) { toast(e.message); b.disabled = false; } };
+      try { hoData = await api('/handoff', { method: 'POST', body: { text } }); hoEdit = false; paintHandoff(); successBadge('បានរក្សាទុក Note'); } catch (e) { toast(e.message); b.disabled = false; } };
     host.querySelectorAll('[data-ho]').forEach((b) => b.onclick = async () => {
       const k = b.dataset.ho;
       if (k === 'edit') { hoEdit = true; paintHandoff(); const t = $('hoText'); if (t) t.focus(); }
       if (k === 'cancel') { hoEdit = false; paintHandoff(); }
-      if (k === 'toggle') { const on = !d.telegram.on; if (!on && !confirm('Turn off the morning brief, the 16:45 reminder and the evening digest for your team? Notes in Boost Desk keep working.')) return; try { await api('/handoff/prefs', { method: 'PUT', body: { on } }); hoData.telegram.on = on; paintHandoff(); toast(on ? 'Telegram messages on' : 'Telegram messages off'); } catch (e) { toast(e.message); } }
+      if (k === 'toggle') { const on = !d.telegram.on; if (!on && !confirm('បិទសារព្រឹក សាររំលឹកម៉ោង 16:45 និងសារសង្ខេបល្ងាច សម្រាប់ក្រុមអ្នក? Note ក្នុង Boost Desk នៅដំណើរការដដែល។')) return; try { await api('/handoff/prefs', { method: 'PUT', body: { on } }); hoData.telegram.on = on; paintHandoff(); toast(on ? 'បានបើកសារ Telegram' : 'បានបិទសារ Telegram'); } catch (e) { toast(e.message); } }
       if (k === 'preview') openHandoffPreview();
     });
   }

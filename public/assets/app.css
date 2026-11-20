@@ -3844,3 +3844,12 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .pg-miss{border:1px dashed var(--line);border-radius:var(--r-md);padding:10px 12px;margin-top:6px}
 .pg-miss-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .pg-miss-list span{background:var(--bg-2);border-radius:999px;padding:2px 10px;font-size:13px}
+
+/* rename a Page in client settings (20 Nov) */
+.pcard .pcard-rn{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding-top:8px;width:100%}
+.pcard .pcard-rn input{flex:1 1 180px;min-width:0;font:inherit;padding:8px 10px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.pnrow .pn-use{align-self:flex-start;white-space:normal;text-align:left}
+#cPageCards .pcard-h{flex-wrap:wrap}
+#cPageCards .pcard-n{flex:1 1 150px;min-width:0}
+#cPageCards .pcard-x{order:2;margin-left:auto}
+#cPageCards .pcard-h>.btn.sm,#cPageCards .pcard-h>button.sm{order:3}

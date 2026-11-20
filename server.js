@@ -83,8 +83,10 @@ app.get('/auth/facebook', (req, res) => {
 // Orders → Connect Pages: the same Facebook login, asking for the Page permissions. The callback below sees pagesFor
 // and saves the Pages instead of logging in. Only a logged-in team member (not a media buyer) can start it.
 app.get('/auth/facebook/pages', (req, res) => {
-  if (!req.session || !req.session.fbId || req.session.mb) return res.redirect('/login');
-  req.session.pagesFor = req.session.fbId; req.session.linkFor = null;
+  // Facebook/username login, or an owner who signs in with Gmail on the admin site (e.g. Hor Vannak).
+  const who = req.session && !req.session.mb ? req.session.fbId || (req.session.gEmail ? 'g:' + req.session.gEmail : '') : '';
+  if (!who) return res.redirect('/login');
+  req.session.pagesFor = who; req.session.linkFor = null;
   res.redirect(pageOrders.connectUrl(newState()));
 });
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
@@ -105,10 +107,13 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const profile = await meta.me(token);
   // Connecting Pages for order counting (Orders → Connect Pages): save the Pages, stay logged in as myself.
   const pagesFor = req.session.pagesFor; req.session.pagesFor = null;
-  if (pagesFor && req.session.fbId === pagesFor && (await db.getUser(pagesFor))) {
+  const viaGmail = !!(pagesFor && req.session.gEmail && pagesFor === 'g:' + req.session.gEmail);
+  const pagesUser = pagesFor && req.session.fbId === pagesFor ? await db.getUser(pagesFor) : null;
+  if (pagesFor && (pagesUser || viaGmail)) {
     const back = (msg, ok) => res.redirect('/?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
     try {
-      const r = await pageOrders.connectFromUserToken(token, { id: pagesFor, name: (await db.getUser(pagesFor)).name + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
+      const who = pagesUser ? pagesUser.name : req.session.gName || req.session.gEmail;
+      const r = await pageOrders.connectFromUserToken(token, { id: pagesFor, name: who + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
       if (r.missing.length && !r.connected.length) return back(`Facebook did not give Boost Desk the Page permissions (${r.missing.join(', ')}). Tap Connect Pages again and allow everything.`, false);
       if (!r.connected.length && !r.failed.length) return back(`${profile.name} does not manage any Facebook Page.`, false);
       return back(`${r.connected.length} Page${r.connected.length === 1 ? '' : 's'} connected — new orders are counted from now.${r.failed.length ? ` ${r.failed.length} could not be connected: ${r.failed[0].name} (${r.failed[0].error}).` : ''}`, r.connected.length > 0);

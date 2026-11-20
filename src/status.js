@@ -78,7 +78,8 @@ async function forOwner(user) {
     // 4. the boost plan: runs today but nothing spent by the afternoon; ends within two days
     const tt = plan.totals(c.plan); planOf[c.id] = tt;
     if (tt.budget && tt.from && tt.from <= today && tt.to && tt.to >= today) {
-      const running = lines.some((l) => l.start && l.start <= today && daysBetween(l.start, today) < l.days); runs[c.id] = running;
+      // a line added by itself only mirrors Meta (the campaign may stop early): it does not count as "plan runs today" until a person confirmed it
+      const running = lines.some((l) => !l.auto && l.start && l.start <= today && daysBetween(l.start, today) < l.days); runs[c.id] = running;
       if (running && fresh && hour >= NO_BOOST_FROM && !((spend[c.id] || {}).post > 0)) add(c.id, 'bad', 'noboost', 'Plan ថា Boost ថ្ងៃនេះ ប៉ុន្តែគ្មានចំណាយ', `Plan ${money(tt.budget)} · ថ្ងៃនេះ ${money(0)}`, 'plan');
       const left = daysBetween(today, tt.to);
       if (left <= 2) add(c.id, 'warn', 'ending', left === 0 ? 'Boost plan ចប់ថ្ងៃនេះ' : `Boost plan នឹងចប់ក្នុង ${left} ថ្ងៃ`, 'សួរភ្ញៀវថាបន្តឬអត់', 'plan');

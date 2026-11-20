@@ -1070,5 +1070,105 @@
 [
 "'Adding…'",
 "'កំពុងបន្ថែម…'"
+],
+[
+"Post boosts <i>${n.run}</i>",
+"Boost Post <i>${n.run}</i>"
+],
+[
+"</span>Live boosts <i>",
+"</span>Boost Live <i>"
+],
+[
+"one row per Live · spend and comments fill in by themselves",
+"មួយជួរ = Live មួយ · ចំណាយ និង Comments បំពេញដោយខ្លួនឯង"
+],
+[
+">Today · ${cnt('t')}",
+">ថ្ងៃនេះ · ${cnt('t')}"
+],
+[
+">Yesterday · ${cnt('y')}",
+">ម្សិលមិញ · ${cnt('y')}"
+],
+[
+">7 days · ${cnt('w')}",
+">7 ថ្ងៃ · ${cnt('w')}"
+],
+[
+"'today' : bstLiveP === 'y' ? 'yesterday' : 'in 7 days'",
+"'ថ្ងៃនេះ' : bstLiveP === 'y' ? 'ម្សិលមិញ' : '7 ថ្ងៃ'"
+],
+[
+"<small>Clients on Live ${pName}</small>",
+"<small>ភ្ញៀវ Live ${pName}</small>"
+],
+[
+"<small>Live spend ${pName}</small>",
+"<small>ចំណាយ Live ${pName}</small>"
+],
+[
+"<span>yesterday ${new Set(prev",
+"<span>ម្សិលមិញ ${new Set(prev"
+],
+[
+"<span>yesterday ${money(sum(prev",
+"<span>ម្សិលមិញ ${money(sum(prev"
+],
+[
+"' per comment' : 'no comment counted'",
+"' ក្នុងមួយ Comment' : 'មិនមាន Comment'"
+],
+[
+"<small>Report to client</small><b>${sentDays.size} of ${days.size} sent</b>",
+"<small>របាយការណ៍ទៅភ្ញៀវ</small><b>ផ្ញើ ${sentDays.size} នៃ ${days.size}</b>"
+],
+[
+"+ ' not sent yet' : days.size ? 'all sent'",
+"+ ' មិនទាន់ផ្ញើ' : days.size ? 'ផ្ញើអស់ហើយ'"
+],
+[
+"<th scope=\"col\">Live</th><th scope=\"col\">Client</th><th scope=\"col\">Ad account</th><th scope=\"col\">Started</th><th scope=\"col\" class=\"num\">Budget</th><th scope=\"col\" class=\"num\">Spend</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / comment</th><th scope=\"col\">Report</th>",
+"<th scope=\"col\">Live</th><th scope=\"col\">ភ្ញៀវ</th><th scope=\"col\">Ad account</th><th scope=\"col\">ចាប់ផ្ដើម</th><th scope=\"col\" class=\"num\">ថវិកា</th><th scope=\"col\" class=\"num\">ចំណាយ</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / Comment</th><th scope=\"col\">របាយការណ៍</th>"
+],
+[
+"</i>On now</span>",
+"</i>កំពុង Live</span>"
+],
+[
+"r.state === 'ended' ? '<span class=\"pill mute\">Ended</span>' : '';",
+"r.state === 'ended' ? '<span class=\"pill mute\">ចប់ហើយ</span>' : '';"
+],
+[
+"${r.camps} campaign${r.camps === 1 ? '' : 's'} ${pill(r)}",
+"${r.camps} Campaign ${pill(r)}"
+],
+[
+"<span class=\"hint\">from Meta</span>",
+"<span class=\"hint\">ពី Meta</span>"
+],
+[
+"–<span class=\"hint\">not known</span>",
+"–<span class=\"hint\">មិនដឹង</span>"
+],
+[
+"% of budget</span>",
+"% នៃថវិកា</span>"
+],
+[
+"<span class=\"is-ok\">sent ${esc(tm(r.sent))}</span>",
+"<span class=\"is-ok\">បានផ្ញើ ${esc(tm(r.sent))}</span>"
+],
+[
+"'No Live matches.'",
+"'រកមិនឃើញ Live។'"
+],
+[
+"<b>No boosted Live ${pName}.</b><br>A Live shows up here by itself after the next sync from Meta.",
+"<b>គ្មាន Live ដែល Boost ${pName}។</b><br>Live បង្ហាញទីនេះដោយខ្លួនឯង ក្រោយ Sync ពី Meta លើកក្រោយ។"
+],
+[
+"The Live table could not be loaded. Reload the page.",
+"បើកតារាង Live មិនបាន។ សូម Reload ទំព័រ។"
 ]
 ]

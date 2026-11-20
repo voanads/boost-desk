@@ -1547,6 +1547,14 @@ api.get('/page-names', wrap(async (req, res) => {
   const saved = await db.getSetting('pageNames', {}), known = meta.knownPageNames();
   res.json(Object.fromEntries(ids.map((id) => [id, saved[id] || known[id] || ''])));
 }));
+// Ask Meta once more for a Page's real name (a name typed by a person is otherwise kept for good).
+api.post('/page-names/:id/ask', wrap(async (req, res) => {
+  const id = String(req.params.id); if (!/^\d{5,25}$/.test(id)) return res.status(400).json({ error: 'Not a Page ID.' });
+  let name = '';
+  try { name = String((await meta.get(`/${id}`, { fields: 'name' }, await sync.tokenFor(req.user))).name || '').trim().slice(0, 120); } catch (e) { if (e.needsLogin) throw e; }
+  if (name) { const names = await db.getSetting('pageNames', {}); names[id] = name; await db.setSetting('pageNames', names); meta.rememberPageNames({ [id]: name }, true); }
+  res.json({ ok: true, name });
+}));
 // Name a Page that Meta won't name (client Pages you don't manage). Saved for everyone, used by every sync.
 api.put('/page-names/:id', wrap(async (req, res) => {
   const id = String(req.params.id), name = String((req.body || {}).name || '').trim().slice(0, 120);

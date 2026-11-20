@@ -1779,11 +1779,22 @@
       return `<div class="pcard" style="--i:${i}">
         <div class="pcard-h"><span class="pcard-ic" aria-hidden="true">📄</span>
           <div class="pcard-n">${name ? `<b title="${esc(name)}">${esc(name)}</b>` : `<b class="muted">Page without a name</b>`}${isId(p) ? `<span class="hint num">ID …${esc(p.slice(-6))}</span>` : ''}</div>
-          ${isId(p) && !name ? `<a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(p)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
+          ${isId(p) ? `<a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(p)}" target="_blank" rel="noopener" title="បើក Page លើ Facebook">Open ↗</a><button type="button" class="sm" data-prn="${i}">ប្ដូរឈ្មោះ</button>` : ''}
           <button type="button" class="ghost pcard-x" data-rm="${i}" aria-label="Remove this Page">✕</button></div>
         ${topics.length ? `<label class="pcard-t"><span>Report to</span><select data-tp="${i}"><option value="">Main group chat</option>${topics.map((t) => `<option value="${esc(t.id)}" ${cur === t.id ? 'selected' : ''}># ${esc(topicName(t))}</option>`).join('')}</select></label>` : ''}
       </div>`;
     }).join('') || '<div class="pcard-empty">No Page yet — add the Facebook Page this client boosts from.</div>';
+    // Rename a Page (a wrong name someone saved, or a Page Meta does not name) — or ask Meta for the real name again.
+    $('cPageCards').querySelectorAll('[data-prn]').forEach((b) => b.onclick = () => {
+      const p = cDraft.pages[Number(b.dataset.prn)], card = b.closest('.pcard'), box = document.createElement('div'); if (card.querySelector('.pcard-rn')) return;
+      box.className = 'pcard-rn'; box.innerHTML = `<input type="text" maxlength="120" aria-label="ឈ្មោះ Page" value="${esc(pnKnown[p] || '')}"><button type="button" class="sm primary" data-a="save">រក្សាទុក</button><button type="button" class="sm" data-a="ask">សួរ Meta</button><button type="button" class="ghost sm" data-a="x">បោះបង់</button>`;
+      card.appendChild(box); const inp = box.querySelector('input'); inp.focus(); inp.select();
+      const done = (name) => { pnKnown[p] = name; drawDlgPages(); };
+      box.querySelector('[data-a=x]').onclick = () => box.remove();
+      box.querySelector('[data-a=save]').onclick = async () => { const v = inp.value.trim(); if (!v) { toast('សូមសរសេរឈ្មោះ Page'); return; } try { await api('/page-names/' + p, { method: 'PUT', body: { name: v } }); done(v); successBadge('បានប្ដូរឈ្មោះ Page'); } catch (e) { toast(e.message); } };
+      box.querySelector('[data-a=ask]').onclick = async (ev) => { ev.target.disabled = true; try { const r = await api('/page-names/' + p + '/ask', { method: 'POST' }); if (r.name) { done(r.name); successBadge('Meta ឲ្យឈ្មោះ៖ ' + r.name); } else { toast('Meta មិនឲ្យឈ្មោះ Page នេះទេ — សូមបើក Page ហើយសរសេរឈ្មោះដោយដៃ'); ev.target.disabled = false; } } catch (e) { toast(e.message); ev.target.disabled = false; } };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); box.querySelector('[data-a=save]').click(); } };
+    });
     $('cPageCards').querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const p = cDraft.pages[Number(b.dataset.rm)]; cDraft.pages = cDraft.pages.filter((x) => x !== p); delete cDraft.topics[p]; drawDlgPages(); });
     $('cPageCards').querySelectorAll('[data-tp]').forEach((sel) => sel.onchange = () => {
       const p = cDraft.pages[Number(sel.dataset.tp)], t = topics.find((x) => x.id === sel.value);
@@ -4074,7 +4085,8 @@ Notes:
     }
     rows.sort((a, b) => (a.id === first ? -1 : b.id === first ? 1 : b.spend - a.spend));
     if (!rows.length) { toast('All Pages in this period have a name.'); return; }
-    $('pnList').innerHTML = rows.map((r) => `<div class="pnrow"><div class="pn-h"><b>${esc(r.client)}</b><span class="hint num">Page ID ${esc(r.id)}</span><a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a></div>${r.ex ? `<div class="hint pn-ex" title="${esc(r.ex)}">e.g. ${esc(r.ex)}</div>` : ''}<input type="text" data-pn="${esc(r.id)}" maxlength="120" placeholder="Page name" value="${esc(r.guess)}"></div>`).join('');
+    $('pnList').innerHTML = rows.map((r) => `<div class="pnrow"><div class="pn-h"><b>${esc(r.client)}</b><span class="hint num">Page ID ${esc(r.id)}</span><a class="btn sm" href="https://www.facebook.com/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a></div>${r.ex ? `<div class="hint pn-ex" title="${esc(r.ex)}">e.g. ${esc(r.ex)}</div>` : ''}<input type="text" data-pn="${esc(r.id)}" maxlength="120" placeholder="ឈ្មោះ Page ពិត (បើកលើ Facebook ដើម្បីមើល)" value="">${r.guess ? `<button type="button" class="ghost sm pn-use" data-pnuse="${esc(r.guess)}">ប្រើការទាយ៖ ${esc(r.guess)}</button>` : ''}</div>`).join('');
+    $('pnList').querySelectorAll('[data-pnuse]').forEach((b) => b.onclick = () => { const i = b.parentElement.querySelector('[data-pn]'); i.value = b.dataset.pnuse; i.focus(); });
     dlgOpen($('pnDlg'));
     setTimeout(() => { const i = $('pnList').querySelector('input'); if (i) i.focus(); }, 80);
   }

@@ -103,6 +103,45 @@ PM ល្ងាច៖ អានកំណត់ចំណាំ MB → ពិន�
 
 បើប្រអប់ណាទទេ មានន័យថាថ្ងៃនេះមិនទាន់មាននរណាដាក់ការងារ ឬកំណត់ចំណាំទេ។`;
 
+// Sent just before the guide (owner's request, 20 Nov morning): everything that is new since the 19 Nov announcement.
+const NEWS = `📢 Boost Desk — មុខងារថ្មីបន្ថែម (20 វិច្ឆិកា 2026)
+
+សួស្ដីក្រុមការងារ 🙏 នេះជាអ្វីដែលថ្មីចាប់ពីម្សិលមិញ និងរបៀបប្រើ។ សារទី 2 បន្ទាប់ពីនេះពន្យល់ 3 ប្រអប់លើ Dashboard។
+
+━━━━━━━━━━
+🆕 1. ទំព័រ «Boosts» — ជំនួសតារាងស្ថានភាពចាស់ (Google Sheet)
+ចូល Clients → ចុច «Boosts» ខាងលើ។
+• មួយជួរក្នុងមួយ post៖ Post, Client, $/ថ្ងៃ, Ad account, Start, End, ថ្ងៃនៅសល់, State, ចំណាយថ្ងៃនេះ, % នៃ Plan។
+• State បំពេញដោយខ្លួនឯង៖ New · Active · No spend (ក្រហម) · Ended។ មិនបាច់កែដោយដៃទេ។
+• Tab៖ Running · Ended · All។ ស្វែងរកតាម post, ភ្ញៀវ ឬ ad account។
+
+➕ របៀបបញ្ចូល post ថ្មី (2 វិធី)
+ក) «Found on Meta today, not in a plan»៖ ប្រព័ន្ធរកឃើញ campaign ដែលកំពុងចំណាយ តែមិនទាន់មានក្នុង Plan។ ចុច «Add to plan» → វាយតែ $/ថ្ងៃ និងចំនួនថ្ងៃ → «Add to the plan»។
+ខ) «+ Add boost»៖ សម្រាប់ post ដែលមិនទាន់ចាប់ផ្ដើម។ ជ្រើសភ្ញៀវ, វាយ post, $/ថ្ងៃ, ចំនួនថ្ងៃ, ថ្ងៃចាប់ផ្ដើម, Ad account។
+
+⚠️ សំខាន់៖ ភ្ញៀវដែលកំពុង Boost ត្រូវមាន Plan។ បើគ្មាន Plan ប្រព័ន្ធមិនដឹងថ្ងៃចប់ និង budget ហើយមិនអាចជូនដំណឹង «គ្មានចំណាយ», «លើស Plan», «ជិតចប់» បានទេ។ ទំព័រ Boosts បង្ហាញបញ្ជីភ្ញៀវ «boosting without a plan» — សូមបញ្ចូលឱ្យគ្រប់ថ្ងៃនេះ។
+
+━━━━━━━━━━
+🆕 2. ភ្ញៀវ «កំពុង Boost» និង «មិនកំពុង Boost» បែកគ្នា
+• កំពុង Boost = មានចំណាយថ្ងៃនេះ ឬម្សិលមិញ ឬ Plan ត្រូវដើរថ្ងៃនេះ។ ពណ៌ 🔴🟠🟢 និងសារ Telegram បន្ទាន់ គិតតែលើភ្ញៀវទាំងនេះ។
+• មិនកំពុង Boost = នៅផ្នែកដាច់ដោយឡែក គ្មានក្រហម។ មានស្លាកតាមដាន៖ «ទារប្រាក់ដែលលើស», «ស្នើ Plan ថ្មី», «ទាក់ទងសួរបន្ត»។
+• បញ្ជី Clients ក៏រៀបដូចគ្នា៖ «Boosting now» ខាងលើ, «Not boosting now» ខាងក្រោម។
+
+━━━━━━━━━━
+🆕 3. Dashboard រៀបថ្មី
+ក្រោមលេខសរុប មាន 3 ប្រអប់ជាប់គ្នា៖ Clients today · My tasks today · Handoff។ តារាង Clients នៅខាងក្រោម។
+
+━━━━━━━━━━
+🆕 4. កាត់ការងារស្ទួន
+• «Clients Task» ឥឡូវមានតែការងារដែលមនុស្សសរសេរ។ អ្វីដែលប្រព័ន្ធរកឃើញ (លើស Plan, របាយការណ៍មិនទាន់ផ្ញើ…) នៅតែក្នុង «Status today» ខាងលើទំព័រភ្ញៀវ។ មិនបាច់ធីករឿងដដែលពីរដងទេ។
+• PM ទទួលសារព្រឹកតែមួយ (08:00) ដែលរួមទាំង «🔔 Plan ជិតចប់»។ សារ 09:00 លែងមាន។
+• «ចំណាយលើស Plan» ជា 🔴 តែពេល post នៅចំណាយថ្ងៃនេះ។
+
+━━━━━━━━━━
+🆕 5. ភ្ញៀវឈ្មោះស្ទួន
+• ភ្ញៀវឈ្មោះដូចគ្នាត្រូវបានបញ្ចូលជាមួយហើយ។ បើឃើញស្ទួនទៀត៖ បើកភ្ញៀវ → ⚙ Edit → «Merge a duplicate…»។
+• បង្កើតភ្ញៀវឈ្មោះដែលមានរួចហើយ មិនបានទេ។`;
+
 async function runGuide(log = console.log) {
   if (!telegram.hasBot() || (await db.getSetting(KEY2, null))) return null;
   const hm = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Phnom_Penh' });
@@ -112,9 +151,9 @@ async function runGuide(log = console.log) {
   for (const u of await db.allUsers()) { const c = await db.getUserSetting(u.fb_id, 'tgChat', null); if (c && c.id) to.set(String(c.id), `PM ${u.name}`); }
   for (const b of await buyers.list()) if (b.chat && !to.has(String(b.chat))) to.set(String(b.chat), `MB ${b.name}`);
   const sent = [], failed = [];
-  for (const [chat, who] of to) { try { await telegram.send(GUIDE, chat); sent.push(who); } catch (e) { failed.push(`${who} (${e.message})`); } await new Promise((ok) => setTimeout(ok, 400)); }
-  log(`[announce] guide sent to ${sent.length}: ${sent.join(', ')}${failed.length ? ` — failed ${failed.length}: ${failed.join('; ')}` : ''}`);
+  for (const [chat, who] of to) { try { await telegram.send(NEWS, chat); await new Promise((ok) => setTimeout(ok, 600)); await telegram.send(GUIDE, chat); sent.push(who); } catch (e) { failed.push(`${who} (${e.message})`); } await new Promise((ok) => setTimeout(ok, 400)); }
+  log(`[announce] news + guide sent to ${sent.length}: ${sent.join(', ')}${failed.length ? ` — failed ${failed.length}: ${failed.join('; ')}` : ''}`);
   await db.setSetting(KEY2, { at: new Date().toISOString(), sent, failed });
   return { sent, failed };
 }
-module.exports = { run, runGuide, TEXT, GUIDE };
+module.exports = { run, runGuide, TEXT, GUIDE, NEWS };

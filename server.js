@@ -2302,7 +2302,10 @@ const whoAmI = (req) => (req.user.buyer ? req.user.buyer.name : req.user.name);
 api.get('/clients-status', wrap(async (req, res) => res.json(await STATUS().forOwner({ fb_id: req.user.fb_id, name: req.user.name }))));
 api.post('/clients/:id/checked', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
-  res.json(await STATUS().mark(req.user.fb_id, Number(req.params.id), 'checked', whoAmI(req), (req.body || {}).on !== false));
+  // remember which reasons were there when the person looked: a new one brings the client back to "to watch"
+  const id = Number(req.params.id), on = (req.body || {}).on !== false; let kinds;
+  if (on) { try { const x = (await STATUS().forOwner({ fb_id: req.user.fb_id, name: req.user.name })).clients.find((k) => k.id === id); if (x) kinds = x.reasons.map((r) => r.kind); } catch (_) {} }
+  res.json(await STATUS().mark(req.user.fb_id, id, 'checked', whoAmI(req), on, kinds));
 }));
 api.post('/clients/:id/on-it', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });

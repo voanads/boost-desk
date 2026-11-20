@@ -109,20 +109,24 @@ async function forOwner(user) {
     }
     reasons = reasons.slice().sort((a, b) => rank[a.level] - rank[b.level]);
     const level = !active ? 'idle' : reasons.some((x) => x.level === 'bad') ? 'bad' : reasons.length ? 'warn' : 'ok', s = st[c.id] || {};
-    return { id: c.id, name: c.name, level, active, reasons, follow, spend: sp.all || 0, postToday: sp.post || 0, telegram: !!c.telegram,
+    // "Checked ✓" (owner, 20 Nov): a client to watch that someone looked at today shows as checked, not as to watch — until
+    // a reason appears that was not there when they looked. Urgent stays urgent whoever looked.
+    const chk = s.checked && s.checked.day === today ? s.checked : null;
+    const seen = level === 'warn' && !!chk && (!Array.isArray(chk.kinds) || reasons.every((x) => chk.kinds.includes(x.kind)));
+    return { id: c.id, name: c.name, level, seen, active, reasons, follow, spend: sp.all || 0, postToday: sp.post || 0, telegram: !!c.telegram,
       cpr: sp.results > 0 && sp.resSpend > 0 ? { cost: Math.round(sp.resSpend / sp.results * 1000) / 1000, results: sp.results, type: sp.resultType || 'result' } : null,
       plan: tt.budget ? { budget: tt.budget, to: tt.to || '', left: tt.to ? daysBetween(today, tt.to) : null, spent: p ? p.spent : null, pct: p ? p.pct : null } : null,
       lastBoost: lastDay[c.id] || '',
       checked: s.checked && s.checked.day === today ? { by: s.checked.by, at: s.checked.at } : null,
       onIt: s.onIt && s.onIt.day === today ? { by: s.onIt.by, at: s.onIt.at } : null, log: (s.log || []).slice(0, 12) };
-  }).sort((a, b) => rank[a.level] - rank[b.level] || (!!a.onIt - !!b.onIt) || a.name.localeCompare(b.name));
+  }).sort((a, b) => rank[a.level] - rank[b.level] || (a.seen - b.seen) || (!!a.onIt - !!b.onIt) || a.name.localeCompare(b.name));
   return { today, clients: out };
 }
 
 // "checked today" / "I'm on it" — by a PM, a media buyer or a leader. Returns the client's new marks.
-async function mark(owner, clientId, what, by, on = true) {
+async function mark(owner, clientId, what, by, on = true, kinds) {
   const today = sync.todayIn(), st = (await db.getUserSetting(owner, KEY, null)) || {}, s = st[clientId] || (st[clientId] = {});
-  if (what === 'checked') { if (on) { s.checked = { day: today, by, at: new Date().toISOString() }; note(s, 'checked', by); } else delete s.checked; }
+  if (what === 'checked') { if (on) { s.checked = { day: today, by, at: new Date().toISOString(), ...(Array.isArray(kinds) ? { kinds } : {}) }; note(s, 'checked', by); } else delete s.checked; }
   if (what === 'onIt') { if (on) { s.onIt = { day: today, by, at: new Date().toISOString() }; note(s, 'onIt', by); } else delete s.onIt; }
   await db.setUserSetting(owner, KEY, st);
   return { checked: s.checked && s.checked.day === today ? s.checked : null, onIt: s.onIt && s.onIt.day === today ? s.onIt : null, log: (s.log || []).slice(0, 12) };

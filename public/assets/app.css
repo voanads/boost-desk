@@ -3852,3 +3852,7 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 #cPageCards .pcard-n{flex:1 1 150px;min-width:0}
 #cPageCards .pcard-x{order:2;margin-left:auto}
 #cPageCards .pcard-h>.btn.sm,#cPageCards .pcard-h>button.sm{order:3}
+
+/* checked today (20 Nov): a client to watch that someone looked at — grey, under the ones still to watch */
+.ct-row.seen .ct-dot{background:var(--muted)} .ct-row.seen .ct-n .hint{opacity:.85} .ct-mix i.seen{background:var(--muted)}
+.cd-st.seen{border-left-color:var(--muted)}

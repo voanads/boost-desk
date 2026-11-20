@@ -1128,8 +1128,8 @@
 "+ ' មិនទាន់ផ្ញើ' : days.size ? 'ផ្ញើអស់ហើយ'"
 ],
 [
-"<th scope=\"col\">Live</th><th scope=\"col\">Client</th><th scope=\"col\">Ad account</th><th scope=\"col\">Started</th><th scope=\"col\" class=\"num\">Budget</th><th scope=\"col\" class=\"num\">Spend</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / comment</th><th scope=\"col\">Report</th>",
-"<th scope=\"col\">Live</th><th scope=\"col\">ភ្ញៀវ</th><th scope=\"col\">Ad account</th><th scope=\"col\">ចាប់ផ្ដើម</th><th scope=\"col\" class=\"num\">ថវិកា</th><th scope=\"col\" class=\"num\">ចំណាយ</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / Comment</th><th scope=\"col\">របាយការណ៍</th>"
+"<th scope=\"col\">Live</th><th scope=\"col\">Client</th><th scope=\"col\">Ad account</th><th scope=\"col\">Started</th><th scope=\"col\" class=\"num\">Budget</th><th scope=\"col\" class=\"num\">Spend</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / comment</th><th scope=\"col\" class=\"num\">Orders</th><th scope=\"col\">Report</th>",
+"<th scope=\"col\">Live</th><th scope=\"col\">ភ្ញៀវ</th><th scope=\"col\">Ad account</th><th scope=\"col\">ចាប់ផ្ដើម</th><th scope=\"col\" class=\"num\">ថវិកា</th><th scope=\"col\" class=\"num\">ចំណាយ</th><th scope=\"col\" class=\"num\">Comments</th><th scope=\"col\" class=\"num\">Messages</th><th scope=\"col\" class=\"num\">$ / Comment</th><th scope=\"col\" class=\"num\">Orders</th><th scope=\"col\">របាយការណ៍</th>"
 ],
 [
 "</i>On now</span>",
@@ -1170,5 +1170,25 @@
 [
 "The Live table could not be loaded. Reload the page.",
 "បើកតារាង Live មិនបាន។ សូម Reload ទំព័រ។"
+],
+[
+"<small>Orders in Live</small>",
+"<small>Orders ក្នុង Live</small>"
+],
+[
+"'Page not connected' : odN ? money(odSp / odN) + ' per order' : 'no order counted'",
+"'Page មិនទាន់ភ្ជាប់' : odN ? money(odSp / odN) + ' ក្នុងមួយ Order' : 'មិនមាន Order'"
+],
+[
+"of ${per.length} Lives`",
+"នៃ ${per.length} Live`"
+],
+[
+"–<span class=\"hint\">Page not connected</span>",
+"–<span class=\"hint\">Page មិនទាន់ភ្ជាប់</span>"
+],
+[
+"${money(r.spend / r.orders)} per order</span>",
+"${money(r.spend / r.orders)} ក្នុងមួយ Order</span>"
 ]
 ]

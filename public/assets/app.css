@@ -3948,7 +3948,7 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .bst-kind i{font-style:normal;font-size:var(--fs-xs);padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted)}
 .bst-kind button[data-bstkind="live"][aria-pressed="true"] i{background:var(--danger-soft);color:var(--danger)}
 .bst-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block}
-.bst-lsum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-2);padding:0 18px 16px}
+.bst-lsum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:var(--s-2);padding:0 18px 16px}
 .bst-lsum>div{border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-width:0}
 .bst-lsum small{display:block;font-size:var(--fs-xs);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .bst-lsum b{font-size:1.25rem}.bst-lsum span{display:block;font-size:var(--fs-xs);color:var(--muted)}

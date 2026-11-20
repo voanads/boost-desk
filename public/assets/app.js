@@ -1055,6 +1055,7 @@
     const per = all.filter((r) => inP(r, bstLiveP)), rows = per.filter((r) => !q || [r.client, r.page, r.account].some((x) => String(x || '').toLowerCase().includes(q)));
     const prev = bstLiveP === 't' ? all.filter((r) => inP(r, 'y')) : null, days = new Set(per.map((r) => r.clientId + '|' + r.day)), sentDays = new Set(per.filter((r) => r.sent).map((r) => r.clientId + '|' + r.day));
     const sp = sum(per, 'spend'), cm = sum(per.filter((r) => r.comments != null), 'comments'), cmSp = sum(per.filter((r) => r.comments), 'spend'), nCl = new Set(per.map((r) => r.clientId)).size;
+    const od = per.filter((r) => r.orders != null), odN = sum(od, 'orders'), odSp = sum(od.filter((r) => r.orders), 'spend');
     const pName = bstLiveP === 't' ? 'today' : bstLiveP === 'y' ? 'yesterday' : 'in 7 days';
     const tm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     const pill = (r) => r.state === 'on' ? '<span class="pill bad"><i></i>On now</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : '';
@@ -1064,8 +1065,9 @@
         <div><small>Clients on Live ${pName}</small><b>${nCl}</b>${prev ? `<span>yesterday ${new Set(prev.map((r) => r.clientId)).size}</span>` : ''}</div>
         <div><small>Live spend ${pName}</small><b>${money(sp)}</b>${prev ? `<span>yesterday ${money(sum(prev, 'spend'))}</span>` : ''}</div>
         <div><small>Comments</small><b>${cm.toLocaleString('en-US')}</b><span>${cm ? '$' + (cmSp / cm).toFixed(3) + ' per comment' : 'no comment counted'}</span></div>
+        <div><small>Orders in Live</small><b>${od.length ? odN.toLocaleString('en-US') : '–'}</b><span>${!od.length ? 'Page not connected' : odN ? money(odSp / odN) + ' per order' : 'no order counted'}${od.length && od.length < per.length ? ` · ${od.length} of ${per.length} Lives` : ''}</span></div>
         <div><small>Report to client</small><b>${sentDays.size} of ${days.size} sent</b><span>${days.size - sentDays.size ? (days.size - sentDays.size) + ' not sent yet' : days.size ? 'all sent' : '–'}</span></div></div>
-      ${rows.length ? `<div class="tablewrap"><table class="bst-t bst-lt"><thead><tr><th scope="col">Live</th><th scope="col">Client</th><th scope="col">Ad account</th><th scope="col">Started</th><th scope="col" class="num">Budget</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Comments</th><th scope="col" class="num">Messages</th><th scope="col" class="num">$ / comment</th><th scope="col">Report</th></tr></thead><tbody>
+      ${rows.length ? `<div class="tablewrap"><table class="bst-t bst-lt"><thead><tr><th scope="col">Live</th><th scope="col">Client</th><th scope="col">Ad account</th><th scope="col">Started</th><th scope="col" class="num">Budget</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Comments</th><th scope="col" class="num">Messages</th><th scope="col" class="num">$ / comment</th><th scope="col" class="num">Orders</th><th scope="col">Report</th></tr></thead><tbody>
         ${rows.map((r) => `<tr><td class="bst-p"><b>${esc(r.page || r.client)}${r.time ? ' — Live ' + esc(r.time) : ''}</b><span class="hint">${r.camps} campaign${r.camps === 1 ? '' : 's'} ${pill(r)}</span></td>
           <td><button type="button" class="linkbtn" data-bstopen="${r.clientId}">${esc(r.client)}</button></td><td>${esc(r.account || '–')}</td>
           <td>${r.time ? esc(r.time) : '–'}${bstLiveP === 't' ? '' : `<span class="hint">${esc(shortDay(r.day))}</span>`}</td>
@@ -1073,6 +1075,7 @@
           <td class="num"><b>${money(r.spend)}</b>${r.budget ? `<span class="hint">${Math.round(r.spend / r.budget * 100)}% of budget</span>` : ''}</td>
           <td class="num">${r.comments != null ? r.comments.toLocaleString('en-US') : '–'}</td><td class="num">${r.messages != null ? r.messages.toLocaleString('en-US') : '–'}</td>
           <td class="num">${r.perComment != null ? '$' + Number(r.perComment).toFixed(3) : '–'}</td>
+          <td class="num">${r.orders == null ? '–<span class="hint">Page not connected</span>' : `<b>${r.orders.toLocaleString('en-US')}</b>${r.orders ? `<span class="hint">${money(r.spend / r.orders)} per order</span>` : ''}`}</td>
           <td>${r.sent ? `<span class="is-ok">sent ${esc(tm(r.sent))}</span>` : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${per.length ? 'No Live matches.' : `<b>No boosted Live ${pName}.</b><br>A Live shows up here by itself after the next sync from Meta.`}</div>`}`}</section>`;
     host.querySelectorAll('[data-bstlp]').forEach((b) => b.onclick = () => { bstLiveP = b.dataset.bstlp; paintBoosts(); });

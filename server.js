@@ -2314,6 +2314,17 @@ api.get('/boosts/lives', wrap(async (req, res) => {
   let setups = {}; try { setups = await lives.setupsFor({ fb_id: owner }, list.flatMap((l) => l.campaigns), { fetch: false }); } catch (_) {}
   const acc = {}; try { for (const a of await db.listAccounts(owner)) acc[String(a.id).replace(/^act_/, '')] = a; } catch (_) {}
   const sentOf = {}, rows = [];
+  // Orders in one Live (20 Nov 2026): orders Boost Desk counted itself on the Live's Page from its start until one hour after
+  // the boost stops (or until the Page's next Live). Only for connected Pages and days since own counting began; else null.
+  // An order from a post boosted on the same Page in those hours is counted too — the Page and the time are all that is known.
+  let linked = new Set(), ownSince = null;
+  try { const m = await require('./src/pageOrders').mode(); if (m.on) { ownSince = m.since || today; linked = new Set((await db.pool.query('SELECT page_id FROM page_links')).rows.map((r) => String(r.page_id))); } } catch (_) {}
+  const ordersIn = async (l) => {
+    if (!ownSince || l.day < ownSince || !l.pageId || !linked.has(l.pageId) || l.start == null) return null;
+    const next = list.filter((x) => x.pageId === l.pageId && x.start != null && x.start > l.start).map((x) => x.start).sort((a, b) => a - b)[0];
+    const to = Math.min((l.end != null ? l.end : l.start + 3 * 3600e3) + 3600e3, next || Infinity);
+    try { return (await db.pool.query('SELECT count(*)::int AS n FROM page_order_hits WHERE page_id=$1 AND first_at >= $2 AND first_at < $3', [l.pageId, new Date(l.start), new Date(to)])).rows[0].n; } catch (_) { return null; }
+  };
   for (const l of list) {
     const k = l.clientId + '|' + l.day;
     if (!(k in sentOf)) { try { const e = await db.getEntry(l.day, l.clientId); sentOf[k] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sentOf[k] = ''; } }
@@ -2322,7 +2333,7 @@ api.get('/boosts/lives', wrap(async (req, res) => {
     const bs = l.campaigns.map((c) => { const s = setups[c.id], a = acc[String(c.accountId || '').replace(/^act_/, '')]; const usd = a && ((a.info || {}).currency || a.currency || '') === 'USD'; return s && usd ? Number(s.lifetimeBudget) || Number(s.dailyBudget) || 0 : 0; });
     rows.push({ key: l.key, clientId: l.clientId, client: l.client, page: l.page, day: l.day, time: l.time, start: l.start, spend: l.spend, comments: l.comments, messages: l.messages, perComment: l.perComment,
       camps: l.campaigns.length, account: ids.map((id) => (acc[id] && acc[id].name) || 'act_' + id).join(', '), budget: bs.length && bs.every((b) => b > 0) ? Math.round(bs.reduce((a, b) => a + b, 0) * 100) / 100 : null,
-      state: l.day !== today || (l.end != null && l.end <= now) ? 'ended' : l.end != null ? 'on' : '', sent: sentOf[k] });
+      orders: await ordersIn(l), state: l.day !== today || (l.end != null && l.end <= now) ? 'ended' : l.end != null ? 'on' : '', sent: sentOf[k] });
   }
   rows.sort((a, b) => String(b.day).localeCompare(String(a.day)) || (b.start || 0) - (a.start || 0));
   res.json({ today, yesterday: sync.addDays(today, -1), rows });

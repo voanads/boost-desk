@@ -3336,7 +3336,7 @@
     host.querySelectorAll('[data-ctopen]').forEach((b) => b.onclick = () => { location.hash = 'clients'; showTab('clients'); setTimeout(() => { try { selectClient(Number(b.dataset.ctopen)); } catch (_) {} }, 400); });
   }
   // Leaders: every team's clients by status, at the top of the Main Dashboard.
-  let ctAll = {}, ctBoardData = null;
+  let ctAll = {}, ctBoardData = null, ctTeamOpen = '', ctTeamF = 'all', ctTeamSort = 'need';
   async function loadCtBoard() {
     const host = $('ctBoard'); if (!host || !me || !me.canAdmin || me.buyer) { if (host) host.hidden = true; return; }
     if (!ctBoardData) { host.hidden = false; host.innerHTML = '<div class="panel"><div class="sk"></div><div class="sk"></div></div>'; }
@@ -3350,16 +3350,35 @@
     const rank = { bad: 0, warn: 1, ok: 2 }, teams = Object.values(byTeam).map((g) => ({ ...g, n: ctCount(g.clients), clients: g.clients.sort((a, b) => rank[a.level] - rank[b.level] || a.name.localeCompare(b.name)) })).sort((a, b) => b.n.bad - a.n.bad || b.n.warn - a.n.warn || a.name.localeCompare(b.name));
     const all = teams.flatMap((g) => g.clients), N = ctCount(all), checked = all.filter((c) => c.checked).length, spend = all.reduce((t, c) => t + c.spend, 0), withSpend = all.filter((c) => c.spend > 0).length, free = all.filter((c) => c.level === 'bad' && !c.onIt).length, idleAll = teams.reduce((t, g) => t + g.idle.length, 0);
     const stat = (lab, big, sub, cls) => `<div class="lb-stat"><span class="lb-lab">${lab}</span><b class="${cls || ''}">${big}</b><span class="hint">${sub}</span></div>`;
-    const card = (g) => { const need = g.clients.filter((c) => c.level !== 'ok' && !ctSeen(c)), open = !!ctAll[g.name], show = open ? g.clients : need, unchecked = g.clients.filter((c) => !c.checked).length;
-      return `<article class="panel ct-card ct-team"><div class="lb-th"><span class="avatar lb-tav">${initials(g.name)}</span><span class="lb-tn"><b>${esc(g.name)}</b><span class="hint">${esc(g.accounts.join(' + '))}${g.mbs.length ? ' · MB ' + esc(g.mbs.join(', ')) : ''} · ${g.clients.length} boosting now</span></span>${ctPill(g.n)}</div>
-        ${ctMix(g.n)}${show.length ? show.map((c) => ctRow(c, false)).join('') : `<div class="ct-none hint">${g.clients.length ? `Nothing needs attention. ${unchecked ? `${unchecked} client${unchecked === 1 ? '' : 's'} not checked yet today.` : `All ${g.clients.length} clients were checked today.`}` : 'No client is boosting right now.'}</div>`}${ctIdle(g.idle, false, d.today, g.name)}
-        <div class="lb-tf"><span>${g.n.ok} client${g.n.ok === 1 ? ' is' : 's are'} fine</span><span class="spacer"></span><button type="button" class="linkbtn" data-ctall="${esc(g.name)}">${open ? 'Only what needs attention' : `Show all ${g.clients.length}`}</button></div></article>`; };
+    // Team cards (20 Nov 2026, owner's design): one short card per team — who, how many are boosting, spend, checked, the
+    // status mix — and a tap opens that team's clients under the cards, with a filter by status.
+    const order = ctTeamSort === 'spend' ? teams.slice().sort((x, y) => y.clients.reduce((t, c) => t + c.spend, 0) - x.clients.reduce((t, c) => t + c.spend, 0)) : teams;
+    const card = (g) => { const on = ctTeamOpen === g.name, sp = g.clients.reduce((t, c) => t + c.spend, 0), chk = g.clients.filter((c) => c.checked).length, fol = g.idle.filter((c) => c.follow).length;
+      return `<button type="button" class="panel tc-card${on ? ' on' : ''}" data-tcopen="${esc(g.name)}" aria-pressed="${on}"><span class="tc-h"><span class="avatar lb-tav">${initials(g.name)}</span><span class="tc-n"><b>${esc(g.name)}</b><span class="hint">${esc(g.accounts.join(' + '))}${g.mbs.length ? ' · MB ' + esc(g.mbs.join(', ')) : ''}</span></span>${ctPill(g.n)}</span>
+        <span class="tc-stats"><span><b>${g.clients.length}</b><span class="hint">boosting now</span></span><span><b>${money(sp)}</b><span class="hint">spend today</span></span><span><b>${chk} of ${g.clients.length}</b><span class="hint">checked today</span></span></span>
+        ${ctMix(g.n)}<span class="tc-leg"><span><i class="bad"></i>${g.n.bad} urgent</span><span><i class="mid"></i>${g.n.warn} watch</span><span><i class="seen"></i>${g.n.seen} checked</span><span><i class="ok"></i>${g.n.ok} fine</span></span>
+        <span class="tc-foot"><span>Not boosting · ${g.idle.length}${fol ? ` · ${fol} to follow up` : ''}</span><b>${on ? 'Opened' : 'Open team'}</b></span></button>`; };
+    const detail = () => { const g = teams.find((x) => x.name === ctTeamOpen); if (!g) return '<div class="panel tc-none hint">Tap a team card to see that team’s clients here.</div>';
+      const sp = g.clients.reduce((t, c) => t + c.spend, 0), chk = g.clients.filter((c) => c.checked).length, rep = g.clients.filter((c) => c.reasons.some((r) => r.kind === 'report' || r.kind === 'report-y')).length;
+      const kinds = [['all', `All · ${g.clients.length}`], ['bad', `Urgent · ${g.n.bad}`], ['warn', `Watch · ${g.n.warn}`], ['seen', `Checked · ${g.n.seen}`], ['ok', `Fine · ${g.n.ok}`], ['idle', `Not boosting · ${g.idle.length}`]];
+      const kindOf = (c) => (ctSeen(c) ? 'seen' : c.level), list = ctTeamF === 'idle' ? [] : g.clients.filter((c) => ctTeamF === 'all' || kindOf(c) === ctTeamF).sort((x, y) => ({ bad: 0, warn: 1, seen: 2, ok: 3 }[kindOf(x)] - { bad: 0, warn: 1, seen: 2, ok: 3 }[kindOf(y)]) || y.spend - x.spend);
+      const idle = g.idle.slice().sort((x, y) => (!!y.follow - !!x.follow) || String(y.lastBoost).localeCompare(String(x.lastBoost)));
+      const tile = (lab, big) => `<div><span class="lb-lab">${lab}</span><b>${big}</b></div>`;
+      return `<section class="panel tc-detail" id="tcDetail" aria-label="Team clients"><div class="tc-dh"><span class="avatar lb-tav">${initials(g.name)}</span><span class="tc-n"><h3>${esc(g.name)}</h3><span class="hint">${esc(g.accounts.join(' + '))}${g.mbs.length ? ' · MB ' + esc(g.mbs.join(', ')) : ''}</span></span><button type="button" class="sm" id="tcClose">Close</button></div>
+        <div class="tc-tiles">${tile('Spend today', money(sp))}${tile('Boosting now', g.clients.length)}${tile('Checked today', `${chk} of ${g.clients.length}`)}${tile('Reports to send', rep)}${tile('Not boosting', g.idle.length)}</div>
+        <div class="tc-chips" role="group" aria-label="Which clients">${kinds.map(([k, t]) => `<button type="button" data-tcf="${k}" aria-pressed="${ctTeamF === k}">${t}</button>`).join('')}</div>
+        <div class="tc-rows">${ctTeamF === 'idle' ? (idle.length ? idle.map((c) => ctIdleRow(c, false, d.today)).join('') : '<div class="ct-none hint">Every client of this team is boosting.</div>') : list.length ? list.map((c) => ctRow(c, false)).join('') : '<div class="ct-none hint">No client with this status in this team.</div>'}</div></section>`; };
     host.innerHTML = `<div class="ct-top"><h2>Clients today</h2><span class="hint">clients that are boosting now, by status · the others are listed apart as “Not boosting now”</span><span class="spacer"></span><span class="pill bad"><i></i>Urgent · act now</span><span class="pill warn"><i></i>Watch</span><span class="pill mute">Checked ✓</span><span class="pill ok"><i></i>Fine</span></div>
       <section class="panel lb-sum ct-card" aria-label="Clients in numbers"><div class="lb-stat lb-stat-ring">${ctRing(N)}<div><span class="lb-lab">Boosting now · ${all.length}</span><b>${N.ok} fine</b><span class="hint">${N.warn} to watch${N.seen ? ` · ${N.seen} checked ✓` : ''} · ${N.bad} urgent · ${idleAll} not boosting</span></div></div>
         ${stat('Urgent', `${N.bad} client${N.bad === 1 ? '' : 's'}`, N.bad ? (free ? `nobody is on ${free} of them` : 'someone is on each of them') : 'no client has a problem', N.bad ? 'is-danger' : '')}
         ${stat('Checked today', `${checked} of ${all.length}`, all.length - checked ? `${all.length - checked} not looked at yet` : 'every client was checked')}
         ${stat('Spend today', money(spend), `${withSpend} client${withSpend === 1 ? '' : 's'} with spend`)}</section>
-      <section class="lb-grid ct-grid">${teams.map(card).join('')}</section>`;
+      <div class="tc-top"><h3>Teams · ${teams.length}</h3><span class="hint">tap a team to open its clients</span><span class="spacer"></span><div class="tc-chips" role="group" aria-label="Order of teams"><button type="button" data-tcsort="need" aria-pressed="${ctTeamSort !== 'spend'}">Needs attention first</button><button type="button" data-tcsort="spend" aria-pressed="${ctTeamSort === 'spend'}">Most spend</button></div></div>
+      <section class="tc-grid">${order.map(card).join('')}</section>${detail()}`;
+    host.querySelectorAll('[data-tcopen]').forEach((b) => b.onclick = () => { const was = ctTeamOpen === b.dataset.tcopen; ctTeamOpen = was ? '' : b.dataset.tcopen; ctTeamF = 'all'; paintCtBoard(); if (!was) { const el = $('tcDetail'); if (el) el.scrollIntoView({ block: 'nearest', behavior: calm ? 'auto' : 'smooth' }); } });
+    host.querySelectorAll('[data-tcf]').forEach((b) => b.onclick = () => { ctTeamF = b.dataset.tcf; paintCtBoard(); });
+    host.querySelectorAll('[data-tcsort]').forEach((b) => b.onclick = () => { ctTeamSort = b.dataset.tcsort; paintCtBoard(); });
+    if ($('tcClose')) $('tcClose').onclick = () => { ctTeamOpen = ''; paintCtBoard(); };
     host.querySelectorAll('[data-ctall]').forEach((b) => b.onclick = () => { ctAll[b.dataset.ctall] = !ctAll[b.dataset.ctall]; paintCtBoard(); });
     host.querySelectorAll('[data-ctidle]').forEach((x) => x.addEventListener('toggle', () => { ctIdleOpen[x.dataset.ctidle] = x.open; }));
   }

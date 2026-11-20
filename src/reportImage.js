@@ -129,11 +129,12 @@ async function render({ client, ads, reach }, from, to, { live = false } = {}) {
     { k: 'msg', label: 'Messages', x: W - pad - 16, align: 'end' },
   ];
   // A Live report shows the comments each ad brought in instead of messages (owner, 20 Nov 2026).
-  if (live) cols[6] = { k: 'cm', label: 'Comments', x: W - pad - 16, align: 'end' };
+  // Column order asked for: Results, Comments, Cost per result, Amount spent, Impressions, Reach.
+  if (live) { const xs = { res: 570, cpr: 810, spend: 930, imp: 1045, reach: W - pad - 16 }; cols.pop(); for (const c of cols) if (xs[c.k]) c.x = xs[c.k]; cols.splice(2, 0, { k: 'cm', label: 'Comments', x: 675, align: 'end' }); }
   const X = Object.fromEntries(cols.map((c) => [c.k, c.x]));
   const tot = ads.reduce((t, a) => ({ cm: t.cm + (a.comments || 0), spend: t.spend + a.spend, imp: t.imp + a.impressions, msg: t.msg + (a.messages || 0), res: t.res + (a.results || 0), type: !a.results ? t.type : !t.type || t.type === a.resultType ? a.resultType : 'result' }), { cm: 0, spend: 0, imp: 0, msg: 0, res: 0, type: '' });
   const txt = (x, y, s, { size = 17, weight = 400, fill = '#1c1e21', anchor = 'start' } = {}) => svgText(s, x, y, { size, weight, fill, anchor });
-  const names = await Promise.all(shown.map((a) => fit(a.name, 400, 16, 600)));
+  const names = await Promise.all(shown.map((a) => fit(a.name, live ? 380 : 400, 16, 600)));
   const title = await fit(client.name, 620, 22, 600);
   let y = headH;
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">

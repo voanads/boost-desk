@@ -249,6 +249,7 @@ app.get('/auth/google/callback', wrap(async (req, res) => {
   req.session.gEmail = email; req.session.gName = String(c.name || me.name || email).slice(0, 80); req.session.gPic = String(c.picture || '').slice(0, 400);
   res.redirect('/admin');
 }));
+require('./src/legal')(app); // public /privacy and /data-deletion (Meta app publishing)
 app.get('/admin/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin-login.html')));
 app.get('/admin/login/info', wrap(async (req, res) => res.json({ google: !!(cfg.googleClientId && cfg.googleClientSecret) })));
 

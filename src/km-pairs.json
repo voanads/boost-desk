@@ -28,10 +28,6 @@
 "fb.length ? 'Facebook login ត្រូវបន្ត' : (A.buyersUnlinked || []).length ? 'Media buyer មិនទាន់ភ្ជាប់ Telegram' : 'Login និង Telegram ល្អ'"
 ],
 [
-"`Nothing needs attention. ${unchecked ? `${unchecked} client${unchecked === 1 ? '' : 's'} not checked yet today.` : `All ${g.clients.length} clients were checked today.`}` : 'No client is boosting right now.'",
-"`គ្មានអ្វីត្រូវមើល។ ${unchecked ? `ភ្ញៀវ ${unchecked} មិនទាន់ពិនិត្យថ្ងៃនេះ។` : `ភ្ញៀវទាំង ${g.clients.length} បានពិនិត្យថ្ងៃនេះ។`}` : 'ឥឡូវគ្មានភ្ញៀវកំពុង Boost ទេ។'"
-],
-[
 "<span class=\"lb-lab\">Boosting now · ${all.length}</span><b>${N.ok} fine</b><span class=\"hint\">${N.warn} to watch${N.seen ? ` · ${N.seen} checked ✓` : ''} · ${N.bad} urgent · ${idleAll} not boosting</span>",
 "<span class=\"lb-lab\">កំពុង Boost · ${all.length}</span><b>ល្អ ${N.ok}</b><span class=\"hint\">ត្រូវមើល ${N.warn}${N.seen ? ` · បានពិនិត្យ ✓ ${N.seen}` : ''} · បន្ទាន់ ${N.bad} · មិនកំពុង Boost ${idleAll}</span>"
 ],
@@ -284,10 +280,6 @@
 "${planView.all ? 'បង្ហាញតិចវិញ' : `បង្ហាញ ${rows.length - CAP} Post ទៀត`}"
 ],
 [
-"${open ? 'Only what needs attention' : `Show all ${g.clients.length}`}",
-"${open ? 'តែអ្វីដែលត្រូវមើល' : `បង្ហាញទាំង ${g.clients.length}`}"
-],
-[
 "confirm('Bring this plan back? The current plan moves to Past plans.')",
 "confirm('យក Plan នេះមកវិញ? Plan បច្ចុប្បន្នទៅក្នុង Plan ចាស់។')"
 ],
@@ -318,10 +310,6 @@
 [
 "aria-label=\"Clients today\"><div class=\"ct-h\"><h2>Clients today</h2>",
 "aria-label=\"Clients today\"><div class=\"ct-h\"><h2>ភ្ញៀវថ្ងៃនេះ</h2>"
-],
-[
-"<span>${g.n.ok} client${g.n.ok === 1 ? ' is' : 's are'} fine</span>",
-"<span>ភ្ញៀវ ${g.n.ok} ល្អ</span>"
 ],
 [
 "It is added to the client’s Boost plan and shows up in this table.",
@@ -658,10 +646,6 @@
 [
 ">Not boosting · ${idle.length}</button>",
 ">មិនកំពុង Boost · ${idle.length}</button>"
-],
-[
-"${g.clients.length} boosting now</span>",
-"កំពុង Boost ${g.clients.length}</span>"
 ],
 [
 "chipB('auto', 'Added by itself', nAuto)",
@@ -1206,5 +1190,53 @@
 [
 ">Post only</button>`;",
 ">តែ Post</button>`;"
+],
+[
+"<span class=\"hint\">boosting now</span></span><span><b>${money(sp)}</b><span class=\"hint\">spend today</span></span><span><b>${chk} of ${g.clients.length}</b><span class=\"hint\">checked today</span>",
+"<span class=\"hint\">កំពុង Boost</span></span><span><b>${money(sp)}</b><span class=\"hint\">ចំណាយថ្ងៃនេះ</span></span><span><b>${chk} នៃ ${g.clients.length}</b><span class=\"hint\">បានពិនិត្យថ្ងៃនេះ</span>"
+],
+[
+"</i>${g.n.bad} urgent</span><span><i class=\"mid\"></i>${g.n.warn} watch</span><span><i class=\"seen\"></i>${g.n.seen} checked</span><span><i class=\"ok\"></i>${g.n.ok} fine</span>",
+"</i>${g.n.bad} បន្ទាន់</span><span><i class=\"mid\"></i>${g.n.warn} ត្រូវមើល</span><span><i class=\"seen\"></i>${g.n.seen} បានពិនិត្យ</span><span><i class=\"ok\"></i>${g.n.ok} ល្អ</span>"
+],
+[
+"<span>Not boosting · ${g.idle.length}${fol ? ` · ${fol} to follow up` : ''}</span><b>${on ? 'Opened' : 'Open team'}</b>",
+"<span>មិនកំពុង Boost · ${g.idle.length}${fol ? ` · ${fol} ត្រូវតាមដាន` : ''}</span><b>${on ? 'បានបើក' : 'បើកក្រុម'}</b>"
+],
+[
+"Tap a team card to see that team’s clients here.",
+"ចុចកាតក្រុម ដើម្បីមើលភ្ញៀវរបស់ក្រុមនោះនៅទីនេះ។"
+],
+[
+"[['all', `All · ${g.clients.length}`], ['bad', `Urgent · ${g.n.bad}`], ['warn', `Watch · ${g.n.warn}`], ['seen', `Checked · ${g.n.seen}`], ['ok', `Fine · ${g.n.ok}`], ['idle', `Not boosting · ${g.idle.length}`]]",
+"[['all', `ទាំងអស់ · ${g.clients.length}`], ['bad', `បន្ទាន់ · ${g.n.bad}`], ['warn', `ត្រូវមើល · ${g.n.warn}`], ['seen', `បានពិនិត្យ · ${g.n.seen}`], ['ok', `ល្អ · ${g.n.ok}`], ['idle', `មិនកំពុង Boost · ${g.idle.length}`]]"
+],
+[
+"id=\"tcClose\">Close</button>",
+"id=\"tcClose\">បិទ</button>"
+],
+[
+"${tile('Spend today', money(sp))}${tile('Boosting now', g.clients.length)}${tile('Checked today', `${chk} of ${g.clients.length}`)}${tile('Reports to send', rep)}${tile('Not boosting', g.idle.length)}",
+"${tile('ចំណាយថ្ងៃនេះ', money(sp))}${tile('កំពុង Boost', g.clients.length)}${tile('បានពិនិត្យថ្ងៃនេះ', `${chk} នៃ ${g.clients.length}`)}${tile('របាយការណ៍ត្រូវផ្ញើ', rep)}${tile('មិនកំពុង Boost', g.idle.length)}"
+],
+[
+"Every client of this team is boosting.",
+"ភ្ញៀវទាំងអស់របស់ក្រុមនេះកំពុង Boost។"
+],
+[
+"No client with this status in this team.",
+"ក្រុមនេះគ្មានភ្ញៀវក្នុងស្ថានភាពនេះទេ។"
+],
+[
+"<h3>Teams · ${teams.length}</h3><span class=\"hint\">tap a team to open its clients</span>",
+"<h3>ក្រុម · ${teams.length}</h3><span class=\"hint\">ចុចក្រុមដើម្បីបើកភ្ញៀវរបស់វា</span>"
+],
+[
+">Needs attention first</button><button type=\"button\" data-tcsort=\"spend\"",
+">ត្រូវមើលមុន</button><button type=\"button\" data-tcsort=\"spend\""
+],
+[
+"aria-pressed=\"${ctTeamSort === 'spend'}\">Most spend</button>",
+"aria-pressed=\"${ctTeamSort === 'spend'}\">ចំណាយច្រើន</button>"
 ]
 ]

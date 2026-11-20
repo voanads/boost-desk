@@ -3957,3 +3957,23 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 
 /* report dialog: All · Live only · Post only */
 .ckkind{align-items:center}.ckkind .hint{margin-right:4px}
+
+/* Main Dashboard: short team cards, a tap opens the team's clients under them (20 Nov 2026) */
+#ctBoard .tc-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin:var(--s-3) 0 var(--s-2)}#ctBoard .tc-top h3{margin:0;font-size:var(--fs-lg)}
+#ctBoard .tc-chips{display:flex;gap:6px;flex-wrap:wrap}
+#ctBoard .tc-chips button{min-height:40px!important;padding:0 14px!important;border-radius:999px!important;border:1px solid var(--line)!important;background:var(--surface)!important;color:var(--ink)!important;font-weight:500!important;box-shadow:none!important}
+#ctBoard .tc-chips button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text,var(--brand))!important;border-color:transparent!important;font-weight:600!important}
+#ctBoard .tc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--s-3)}
+#ctBoard button.tc-card{display:flex!important;flex-direction:column;align-items:stretch;gap:12px;padding:16px!important;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:0!important;height:auto!important;white-space:normal!important;border:1px solid var(--line)!important;border-radius:14px!important;background:var(--surface)!important;font-weight:400!important}
+#ctBoard button.tc-card:hover{border-color:var(--brand)!important}
+#ctBoard button.tc-card.on{border-color:var(--brand)!important;box-shadow:0 0 0 3px var(--brand-soft)!important}
+.tc-h,.tc-dh{display:flex;align-items:center;gap:12px;min-width:0}.tc-n{flex:1;min-width:0}.tc-n b{display:block;font-size:1.05rem;font-weight:700}.tc-n .hint{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tc-n h3{margin:0;font-size:1.15rem}
+.tc-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.tc-stats>span{min-width:0}.tc-stats b{display:block;font-size:1.2rem;font-weight:700;line-height:1.25;font-variant-numeric:tabular-nums}.tc-stats .hint{font-size:var(--fs-xs)}
+.tc-leg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:var(--fs-xs);color:var(--muted)}.tc-leg span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.tc-leg i{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted)}.tc-leg i.bad{background:var(--danger)}.tc-leg i.mid{background:var(--warn)}.tc-leg i.ok{background:var(--ok)}
+.tc-foot{display:flex;align-items:center;gap:8px;padding-top:12px;border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--muted)}.tc-foot span{margin-right:auto}.tc-foot b{color:var(--brand-text,var(--brand));font-weight:600}
+#ctBoard .tc-none{margin-top:var(--s-3);padding:20px;text-align:center;border-style:dashed}
+#ctBoard .tc-detail{margin-top:var(--s-3);padding:0!important;overflow:hidden}.tc-dh{padding:16px}
+.tc-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;padding:0 16px 14px}.tc-tiles>div{background:var(--bg-2);border-radius:12px;padding:10px 12px}.tc-tiles b{display:block;font-size:1.15rem}
+#ctBoard .tc-detail .tc-chips{padding:0 16px 14px;flex-wrap:nowrap;overflow-x:auto}#ctBoard .tc-detail .tc-chips button{flex:none}
+.tc-rows .ct-row,.tc-rows .ct-irow{padding-left:16px;padding-right:16px}

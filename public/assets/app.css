@@ -3954,3 +3954,6 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .bst-lsum b{font-size:1.25rem}.bst-lsum span{display:block;font-size:var(--fs-xs);color:var(--muted)}
 .bst-lt .is-ok{color:var(--ok);font-weight:600}.bst-lt .bst-p .hint .pill{margin-left:4px}
 @media (max-width:760px){.bst-lsum{grid-template-columns:repeat(2,minmax(0,1fr))}.bst-h .bst-kind{width:100%}.bst-h .bst-kind button{flex:1;justify-content:center}}
+
+/* report dialog: All · Live only · Post only */
+.ckkind{align-items:center}.ckkind .hint{margin-right:4px}

@@ -1822,13 +1822,15 @@ api.get('/client-report/:id', wrap(async (req, res) => {
   const kind = kindOf(req.query.kind), parts = partsOf(req.query.parts), skip = skipOf(req.query.skip), orders = req.query.orders !== '0';
   const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
   if (c && to === sync.todayIn()) { try { await sync.freshenToday(req.user, c.id, to); } catch (e) { console.error('[report] fresh spend:', e.message); } } // today's numbers straight from Meta, like the picture
+  // does the client have both Lives and posts in this period? Then the dialog offers "All · Live · Post" (20 Nov 2026)
+  let mix = null; if (c) { try { const m = await reportImage.clientCampaigns(req.user.fb_id, c.id, from, to); mix = { live: m.lives > 0, post: m.posts > 0 }; } catch (_) {} }
   const rts = c ? reports.routes(c) : [];
   if (rts.length > 1) { // Pages that report to their own topics: one text per Page
     const list = await reports.preview(req.user.fb_id, c, from, to, { kind, parts, skip, orders });
     const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
-    return res.json({ ...r, routes: list });
+    return res.json({ ...r, routes: list, mix });
   }
-  res.json(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders }));
+  res.json({ ...(await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders })), mix });
 }));
 // The ads picture for a client's report (PNG). 204 = no ads with spend in the period.
 const imgCache = new Map(); // short-lived, so the preview and the send use the same picture

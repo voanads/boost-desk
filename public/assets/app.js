@@ -4739,7 +4739,7 @@ Notes:
   })();
   async function openReportDlg(o) {
     const dlg = $('ckDlg'); ckTarget = o; $('ckOrdersLbl').hidden = o.kind !== 'client';
-    $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
+    $('ckTitle').textContent = 'Report'; $('ckTo').textContent = ''; $('ckPic').hidden = true; $('ckKind').hidden = true; $('ckText').value = 'Loading…'; $('ckSend').disabled = true;
     if (typeof dlg.showModal === 'function') { if (!dlg.open) dlg.showModal(); } else dlg.setAttribute('open', '');
     const bot = me.telegram && me.telegram.bot;
     try {
@@ -4748,6 +4748,12 @@ Notes:
         if (ckTarget !== o) return;
         $('ckTitle').textContent = `${r.client.name} · ${o.label}${o.only === 'post' ? ' · Boost posts only' : o.only === 'live' ? ' · Lives only' : ''}${o.parts ? ' · ticked only' : ''}${o.skip ? ' · some Pages left out' : ''}`;
         $('ckText').value = r.text;
+        // a client with both Lives and posts in the period: choose what this report covers (not when single lines were ticked)
+        const kb = $('ckKind'); kb.hidden = !(r.mix && r.mix.live && r.mix.post) || !!o.parts;
+        if (!kb.hidden) {
+          kb.innerHTML = `<span class="hint">Report covers</span><button type="button" data-ckkind="" aria-pressed="${!o.only}">All</button><button type="button" data-ckkind="live" aria-pressed="${o.only === 'live'}">Live only</button><button type="button" data-ckkind="post" aria-pressed="${o.only === 'post'}">Post only</button>`;
+          kb.querySelectorAll('[data-ckkind]').forEach((b) => b.onclick = () => { if ((o.only || '') !== b.dataset.ckkind) openReportDlg({ ...o, only: b.dataset.ckkind, routes: null, route: null }); });
+        }
         $('ckTo').textContent = !r.client.telegram ? 'No Telegram group for this client yet — copy the text, or pick a group in the Clients tab.'
           : !bot ? 'Telegram bot is not set up on the server, so you can only copy the text.'
           : `Sends to Telegram group: ${r.client.telegramTitle || r.client.telegram}`;

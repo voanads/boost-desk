@@ -33,7 +33,7 @@ async function clientCampaigns(owner, clientId, from, to, kind = '', only = null
     if (sync.isPostFor(c, r)) posts++; else livesN++;
     (byAccount[r.accountId] = byAccount[r.accountId] || new Set()).add(String(r.campaignId));
   }
-  return { client: c, byAccount, live: livesN > 0 && !posts }; // live: every campaign in the picture is a Live
+  return { client: c, byAccount, live: livesN > 0 && !posts, posts, lives: livesN }; // live: every campaign in the picture is a Live
 }
 
 async function fetchThumb(url) {

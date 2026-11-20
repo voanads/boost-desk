@@ -1143,7 +1143,7 @@
     if (x.level === 'idle') return `<section class="cd-st idle" id="cdStSec" aria-label="Client status"><div class="cd-st-h"><h4>ស្ថានភាពថ្ងៃនេះ</h4><span class="pill mute">មិនកំពុង Boost</span><span class="hint">${ctAgo(x.lastBoost, ctMineData.today)}${x.follow ? ` · <b>${esc(x.follow.text)}</b>${x.follow.detail ? ' — ' + esc(x.follow.detail) : ''}` : ' · គ្មានអ្វីត្រូវតាមដាន'}។ គ្មានការជូនដំណឹងពេលភ្ញៀវមិនកំពុង Boost។</span></div></section>`;
     const pill = x.level === 'bad' ? '<span class="pill bad"><i></i>បន្ទាន់</span>' : ctSeen(x) ? '<span class="pill mute">បានពិនិត្យ ✓</span>' : x.level === 'warn' ? '<span class="pill warn"><i></i>ត្រូវមើល</span>' : '<span class="pill ok"><i></i>ល្អ</span>';
     const go = { accounts: ['accounts', 'បើក Ad accounts'], plan: ['', 'See the Boost plan below'] };
-    const why = x.reasons.map((r) => `<div class="cd-st-why ${r.level}"><span class="ct-dot" aria-hidden="true"></span><div><b>${esc(r.text)}</b>${r.detail ? `<span class="hint">${esc(r.detail)}</span>` : ''}</div>${go[r.action] && go[r.action][0] ? `<button type="button" class="linkbtn" data-cdstgo="${go[r.action][0]}">${go[r.action][1]}</button>` : ''}</div>`).join('');
+    const why = x.reasons.map((r) => `<div class="cd-st-why ${r.level}"><span class="ct-dot" aria-hidden="true"></span><div><b>${esc(r.text)}</b>${r.detail ? `<span class="hint">${esc(r.detail)}</span>` : ''}</div>${go[r.action] && go[r.action][0] ? `<button type="button" class="linkbtn" data-cdstgo="${go[r.action][0]}">${go[r.action][1]}</button>` : /^report/.test(r.kind || '') ? '<button type="button" class="sm" data-cdstsend>ផ្ញើ</button>' : ''}</div>`).join('');
     const LOG = { checked: (l) => `${esc(l.by)} បានពិនិត្យភ្ញៀវនេះ`, onIt: (l) => `${esc(l.by)} កំពុងមើលបញ្ហា`, alert: (l) => `បានផ្ញើការជូនដំណឹងទៅ Telegram${l.text ? ' — ' + esc(l.text) : ''}`, solved: () => 'បញ្ហាដោះស្រាយហើយ', escalated: () => 'គ្មានអ្នកមើលក្នុង 30 នាទី — បានផ្ញើទៅថ្នាក់ដឹកនាំ' };
     const when = (at) => { try { const d = new Date(at); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Asia/Phnom_Penh' }) + ' · ' + ctTime(at); } catch (_) { return ''; } };
     const log = (x.log || []).filter((l) => LOG[l.kind]);
@@ -1157,6 +1157,7 @@
     const k = $('cdStChk'); if (k) k.onclick = () => post('checked', k.getAttribute('aria-pressed') !== 'true');
     const o = $('cdStOn'); if (o) o.onclick = () => post('on-it', o.getAttribute('aria-pressed') !== 'true');
     document.querySelectorAll('#cdStSec [data-cdstgo]').forEach((b) => b.onclick = () => { location.hash = b.dataset.cdstgo; showTab(b.dataset.cdstgo); });
+    document.querySelectorAll('#cdStSec [data-cdstsend]').forEach((b) => b.onclick = () => { const k = $('cdSendBtn'); if (k && !k.disabled) k.click(); });
   }
   function cdWeeklySection(c) {
     if (me && me.aiOn === false) return '';
@@ -1228,8 +1229,10 @@
   // The ad accounts that ran this client's ads in the chosen period (from the dashboard data).
   function cdAccounts(m) {
     const list = (m && m.accounts) || []; if (!list.length) return '';
-    const shown = list.slice(0, 3), more = list.length - shown.length;
-    return `<div class="cd-accts" title="Ad accounts that ran this client's ads in this period">${shown.map((a) => `<span class="chip acct" title="${esc(a.id)}">💳 ${esc(a.name)}${list.length > 1 ? ` <small>${money(a.spend)}</small>` : ''}</span>`).join('')}${more > 0 ? `<span class="chip meta">+${more} more</span>` : ''}</div>`;
+    const chip = (a) => `<span class="chip acct" title="${esc(a.id)}">💳 ${esc(a.name)}${list.length > 1 ? ` <small>${money(a.spend)}</small>` : ''}</span>`;
+    if (list.length <= 2) return `<div class="cd-accts" title="Ad accounts that ran this client's ads in this period">${list.map(chip).join('')}</div>`;
+    // three or more (owner's redesign, 20 Nov): one line with the total; the chips open on a tap, so they no longer push the buttons down
+    return `<details class="cd-accts cd-accts-more" title="Ad accounts that ran this client's ads in this period"><summary>💳 ${list.length} Ad accounts · ${money(list.reduce((t, a) => t + (Number(a.spend) || 0), 0))} <span class="linkbtn">មើល</span></summary><div class="cd-accts-list">${list.map(chip).join('')}</div></details>`;
   }
   // Merge a duplicate client into this one (after two accounts were merged the same client can be there twice).
   function openClientMerge(c) {
@@ -1268,7 +1271,7 @@
       ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
       <div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">ថ្ងៃនេះ<small>ស្ថានភាព · Boost plan · ការងារ</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>ដំបូន្មាន · យុទ្ធសាស្ត្រប្រចាំសប្ដាហ៍</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">ប្រវត្តិ និងការកំណត់<small>Notes · របាយការណ៍ · ការកំណត់</small></button></div>
       <div class="cd-pane" data-cdpane="today"${cTab === 'today' ? '' : ' hidden'}>
-      ${cdStatusSection(c)}
+      <div class="cd-top2">${cdStatusSection(c)}${workSection(c)}</div>
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
@@ -1278,7 +1281,6 @@
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       ${planStrip(c)}
-      ${workSection(c)}
       </div>
       <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
           ${cdAiSection(c)}
@@ -1413,12 +1415,25 @@
           ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> Group ក្រុមខ្ញុំ</label>` : ''}
           <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> គ្រាន់តែ Copy អក្សរ</label>
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy អក្សរ' : 'ផ្ញើឥឡូវ'}</button></div></div>` : '';
+    const today = (ctMineData && ctMineData.today) || (me && me.today) || new Date(Date.now() + 7 * 36e5).toISOString().slice(0, 10), endOf = (l) => (l.start ? addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1) : ''), starts = lines.map((l) => l.start).filter(Boolean).sort(), ends = lines.map(endOf).filter(Boolean).sort();
+    const nEnd = lines.filter((l) => endOf(l) === today).length, nAuto = lines.filter((l) => l.auto).length;
+    if (planView.id !== c.id) planView = { id: c.id, f: 'all', all: false };
+    if ((planView.f === 'end' && !nEnd) || (planView.f === 'auto' && !nAuto)) planView.f = 'all';
+    const rows = lines.map((l, i) => ({ l, i })).filter(({ l }) => (planView.f === 'end' ? endOf(l) === today : planView.f === 'auto' ? !!l.auto : true)), CAP = 6, shown = planView.all ? rows : rows.slice(0, CAP);
+    const sd = (d) => shortDay(d).replace(/^[A-Za-z]+,\s*/, ''); // "20 Nov" — the weekday takes a column's worth of room in a table
+    const chipB = (k, lab, n) => `<button type="button" class="bp-chip" data-bpf="${k}" aria-pressed="${planView.f === k}">${lab} · ${n}</button>`;
     return `<section class="bplan ${cls}"><div class="bp-top"><b>📣 Boost plan</b><span class="hint">${lines.length} Post</span>
-        <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">លាក់</button><button type="button" class="ghost sm" data-bp="edit">កែ</button><button type="button" class="ghost sm" data-bp="new">Plan ថ្មី</button><button type="button" class="ghost sm bp-rm" data-bp="clear" title="Delete this plan">លុប</button><button type="button" class="primary sm" data-bp="send">📤 ផ្ញើ Plan</button></div>
-      <div class="bp-list">${lines.map((l, i) => `<div class="bp-li">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}${(l.extra || []).filter((x) => x.img).slice(0, 3).map((x) => `<img class="bp-th bp-th2" src="/api/post-img/${esc(x.img)}" alt="">`).join('')}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span><span class="hint">${money(l.daily)}/ថ្ងៃ × ${l.days} ថ្ងៃ${l.start ? ' · ' + esc(shortDay(l.start)) + ' – ' + esc(shortDay(addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1))) : ''}${l.account ? ` · <span class="bp-ac" title="Ad account">${esc(l.accountName || l.account)}</span>` : ''}</span><b class="num">${money(l.daily * l.days)}</b></div>`).join('')}</div>
-      <div class="bp-tot"><span>ថវិកា Ad <b class="num">${money(t.budget)}</b></span>${t.rate ? `<span>ពន្ធ ${t.rate}% <b class="num">${money(t.tax)}</b></span>` : ''}<span class="bp-big">សរុបត្រូវបង់ <b class="num">${money(t.total)}</b></span></div>
-      ${p && p.started ? `<div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><div class="bp-nums"><span>ចំណាយ Post តាំងពី ${esc(shortDay(p.from))}៖ <b>${money(p.spent)}</b> នៃ <b>${money(p.budget)}</b> (${p.pct}%)</span>${p.to ? `<span>ចប់ ${esc(shortDay(p.to))}</span>` : ''}</div>` : ''}${send}${planPast(c)}</section>`;
+        <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">លាក់</button><button type="button" class="ghost sm" data-bp="edit">កែ</button><button type="button" class="ghost sm" data-bp="new">Plan ថ្មី</button><button type="button" class="ghost sm bp-rm" data-bp="clear" title="Delete this plan">លុប</button><button type="button" class="sm" data-bp="send">📤 ផ្ញើ Plan</button></div>
+      <div class="bp-sum">
+        <div class="bp-sbox"><span class="lbl">សរុបត្រូវបង់</span><b class="num">${money(t.total)}</b><span class="hint">ថវិកា Ad ${money(t.budget)}${t.rate ? ` + ពន្ធ ${t.rate}% ${money(t.tax)}` : ''}</span></div>
+        <div class="bp-sbox"><span class="lbl">ចំណាយ Post</span>${p && p.started ? `<b class="num">${money(p.spent)} <small>នៃ ${money(p.budget)} · ${p.pct}%</small></b><div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><span class="hint">តាំងពី ${esc(shortDay(p.from))}</span>` : '<b class="num">–</b><span class="hint">Plan មិនទាន់ចាប់ផ្ដើម</span>'}</div>
+        <div class="bp-sbox"><span class="lbl">កាលបរិច្ឆេទ</span><b class="num">${starts.length ? esc(shortDay(starts[0])) + ' – ' + esc(shortDay(ends[ends.length - 1])) : '–'}</b><span class="hint">${lines.length} Post${nEnd ? ` · ${nEnd} ចប់ថ្ងៃនេះ` : ''}</span></div>
+      </div>
+      ${lines.length > 3 && (nEnd || nAuto) ? `<div class="bp-chips" role="group" aria-label="Which posts">${chipB('all', 'ទាំងអស់', lines.length)}${nEnd ? chipB('end', 'ចប់ថ្ងៃនេះ', nEnd) : ''}${nAuto ? chipB('auto', 'បញ្ចូលស្វ័យប្រវត្តិ', nAuto) : ''}</div>` : ''}
+      <div class="bp-tw"><table class="bp-tbl"><thead><tr><th scope="col">Post</th><th scope="col" class="num">$ / ថ្ងៃ × ថ្ងៃ</th><th scope="col">ចាប់ផ្ដើម – បញ្ចប់</th><th scope="col">Ad account</th><th scope="col" class="num">សរុប</th></tr></thead><tbody>${shown.map(({ l, i }) => `<tr><td><div class="bp-pc">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span>${l.auto ? '<span class="bp-tag" title="បញ្ចូលស្វ័យប្រវត្តិពី Meta — សូមពិនិត្យ">Auto</span>' : ''}</div></td><td class="num">${money(l.daily)} × ${l.days}</td><td>${l.start ? esc(sd(l.start)) + (Number(l.days) > 1 ? ' – ' + esc(sd(endOf(l))) : '') : '–'}${endOf(l) === today ? ' <span class="bp-tag warn">ចប់ថ្ងៃនេះ</span>' : ''}</td><td><span class="bp-ac" title="Ad account">${esc(l.accountName || l.account || '–')}</span></td><td class="num"><b>${money(l.daily * l.days)}</b></td></tr>`).join('')}</tbody></table></div>
+      ${rows.length > CAP ? `<div class="bp-more"><button type="button" class="sm" data-bpall aria-expanded="${planView.all}">${planView.all ? 'បង្ហាញតិចវិញ' : `បង្ហាញ ${rows.length - CAP} Post ទៀត`}</button></div>` : ''}${send}${planPast(c)}</section>`;
   }
+  let planView = { id: 0, f: 'all', all: false }; // the plan table: which posts, and whether all of them are open
   function redrawPlan(c) { const sec = document.querySelector('#cDetail .bplan'); if (!sec) return; sec.outerHTML = planStrip(c); bindPlan(c); }
   async function loadPlanMsg(c) {
     planSend.text = ''; planSend.err = '';
@@ -1440,6 +1455,8 @@
     if ($('bpTax')) planDraft.tax = $('bpTax').checked;
   }
   function bindPlan(c) {
+    document.querySelectorAll('#cDetail .bplan [data-bpf]').forEach((b) => b.onclick = () => { planView.f = b.dataset.bpf; planView.all = false; redrawPlan(c); });
+    document.querySelectorAll('#cDetail .bplan [data-bpall]').forEach((b) => b.onclick = () => { planView.all = !planView.all; redrawPlan(c); });
     const sec = document.querySelector('#cDetail .bplan'); if (!sec) return;
     sec.querySelectorAll('[data-bpback]').forEach((b) => b.onclick = async () => { const has = ((c.plan && c.plan.lines) || []).length; if (has && !confirm('យក Plan នេះមកវិញ? Plan បច្ចុប្បន្នទៅក្នុង Plan ចាស់។')) return; try { await savePlan(c, { restore: Number(b.dataset.bpback) }); toast('បានយក Plan មកវិញ'); } catch (e) { toast(e.message); } });
     sec.querySelectorAll('[data-bpforget]').forEach((b) => b.onclick = async () => { if (!confirm('លុប Plan ចាស់នេះចោលរហូត?')) return; try { await savePlan(c, { forget: Number(b.dataset.bpforget) }); toast('បានលុប Plan ចាស់'); } catch (e) { toast(e.message); } });

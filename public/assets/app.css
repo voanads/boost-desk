@@ -3827,3 +3827,10 @@ body.tasks-off .co-tt th:nth-child(9),body.tasks-off .co-tt td:nth-child(9){disp
 .cd-pane[hidden]{display:none!important}
 .cd-pane{display:flex;flex-direction:column;gap:var(--s-3)}
 @media (max-width:640px){#cdTabs.cd-tabs button small{display:none}#cdTabs.cd-tabs button{min-height:44px;text-align:center;align-items:center;padding:6px 8px}}
+
+/* phone: short Dashboard (20 Nov) */
+#dMoreBtn.dmore{display:none}
+@media (max-width:760px){
+  #tab-dashboard:not(.dash-all)>.perbar,#tab-dashboard:not(.dash-all)>.summary,#tab-dashboard:not(.dash-all) .dgrid>.dmain,#tab-dashboard:not(.dash-all) #hoCard{display:none!important}
+  #dMoreBtn.dmore{display:flex!important;align-items:center;justify-content:center;width:100%;min-height:48px;margin-top:var(--s-3);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--brand-text);font-weight:600;text-align:center;white-space:normal;padding:8px 14px}
+}

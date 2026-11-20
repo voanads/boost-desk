@@ -1249,7 +1249,9 @@
     };
     dlg.showModal();
   }
+  let cTab = 'today', cTabFor = 0; // the client page's three parts; a newly opened client starts on Today
   function renderClientDetail(fresh) {
+    if (cSel !== cTabFor) { cTabFor = cSel; cTab = 'today'; }
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
     const pd = cPer === 'month' ? null : cPerData[cPer]; if (cPer !== 'month' && !pd) loadClientPeriod(cPer);
@@ -1264,6 +1266,8 @@
           <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span>${me && !me.buyer && clients.length > 1 ? '<button type="button" class="ghost sm" id="cdMergeBtn">Merge a duplicate…</button>' : ''}<button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
+      <div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">ថ្ងៃនេះ<small>ស្ថានភាព · Boost plan · ការងារ</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>ដំបូន្មាន · យុទ្ធសាស្ត្រប្រចាំសប្ដាហ៍</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">ប្រវត្តិ និងការកំណត់<small>Notes · របាយការណ៍ · ការកំណត់</small></button></div>
+      <div class="cd-pane" data-cdpane="today"${cTab === 'today' ? '' : ' hidden'}>
       ${cdStatusSection(c)}
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
@@ -1274,12 +1278,17 @@
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       ${planStrip(c)}
-      <div class="cd-cols">
-        <div class="cd-col">${workSection(c)}
-          <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
-            <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
+      ${workSection(c)}
+      </div>
+      <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
           ${cdAiSection(c)}
           ${cdWeeklySection(c)}
+      </div>
+      <div class="cd-pane" data-cdpane="more"${cTab === 'more' ? '' : ' hidden'}>
+      <div class="cd-cols">
+        <div class="cd-col">
+          <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
+            <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
           ${cdPagesSection(c)}
         </div>
         <div class="cd-col">${histSection(c)}</div>
@@ -1293,7 +1302,9 @@
           <div><span class="hint">Service fee</span><b>${c.service && Number(c.service.price) > 0 ? money(c.service.price) + (c.service.day ? ' · pay day ' + esc(String(c.service.day)) : '') : '—'}</b></div>
           <div><span class="hint">Status</span><b>${c.archived ? 'Paused' : 'Active'}</b></div>
         </div></details>
+      </div>
     </div>`;
+    box.querySelectorAll('#cdTabs [data-cdtab]').forEach((b) => b.onclick = () => { cTab = b.dataset.cdtab; box.querySelectorAll('#cdTabs [data-cdtab]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); box.querySelectorAll('[data-cdpane]').forEach((x) => { x.hidden = x.dataset.cdpane !== cTab; }); });
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);
@@ -1996,25 +2007,24 @@
       const A = d.attention || {}, unsent = Math.max(0, (A.reportsDue || 0) - (A.reportsSent || 0)), fb = [...(A.fbExpired || []), ...(A.fbSoon || [])], late = (A.hour || 0) >= 20;
       const tile = (cls, n, label, sub, go) => `<button type="button" class="ca ${cls}" data-cago="${go}"><b class="num">${n}</b><span class="ca-l">${label}</span><span class="ca-s">${sub}</span></button>`;
       const tiles = [
-        tile(unsent ? (late ? 'bad' : 'mid') : 'ok', unsent || '✓', unsent ? `report${unsent === 1 ? '' : 's'} not sent yet` : A.reportsDue ? 'All reports sent' : 'No reports due yet', `${A.reportsSent || 0} of ${A.reportsDue || 0} clients with spend today`, 'teams'),
-        tile(d.alerts.length ? 'bad' : 'ok', d.alerts.length || '✓', d.alerts.length ? `urgent on client${d.alerts.length === 1 ? '' : 's'}` : 'No urgent client items', 'unpaid, overspend, no boost…', 'alerts'),
-        tile((A.fbExpired || []).length ? 'bad' : fb.length || (A.buyersUnlinked || []).length ? 'mid' : 'ok', fb.length + (A.buyersUnlinked || []).length || '✓', fb.length ? `Facebook login${fb.length === 1 ? '' : 's'} to renew` : (A.buyersUnlinked || []).length ? ((A.buyersUnlinked || []).length === 1 ? 'media buyer not on Telegram' : 'media buyers not on Telegram') : 'Logins and Telegram fine', fb.length ? esc(fb.slice(0, 3).join(', ')) + (fb.length > 3 ? '…' : '') : (A.buyersUnlinked || []).length ? esc(A.buyersUnlinked.slice(0, 3).join(', ')) : `${d.people.users} people · ${d.people.buyers} media buyers`, 'users'),
+        tile(unsent ? (late ? 'bad' : 'mid') : 'ok', unsent || '✓', unsent ? 'របាយការណ៍មិនទាន់ផ្ញើ' : A.reportsDue ? 'របាយការណ៍ផ្ញើអស់ហើយ' : 'មិនទាន់មានរបាយការណ៍ត្រូវផ្ញើ', `${A.reportsSent || 0} / ${A.reportsDue || 0} ភ្ញៀវដែលមានចំណាយថ្ងៃនេះ`, 'teams'),
+        tile((A.fbExpired || []).length ? 'bad' : fb.length || (A.buyersUnlinked || []).length ? 'mid' : 'ok', fb.length + (A.buyersUnlinked || []).length || '✓', fb.length ? 'Facebook login ត្រូវបន្ត' : (A.buyersUnlinked || []).length ? 'Media buyer មិនទាន់ភ្ជាប់ Telegram' : 'Login និង Telegram ល្អ', fb.length ? esc(fb.slice(0, 3).join(', ')) + (fb.length > 3 ? '…' : '') : (A.buyersUnlinked || []).length ? esc(A.buyersUnlinked.slice(0, 3).join(', ')) : `${d.people.users} នាក់ · Media buyer ${d.people.buyers}`, 'users'),
       ];
-      $('coAttn').innerHTML = d.isThisMonth ? tiles.join('') : `<div class="ca-past">You are looking at ${esc($('coMonth').textContent || d.month)} — the tiles for today show on the current month.</div>`;
+      $('coAttn').innerHTML = d.isThisMonth ? tiles.join('') : `<div class="ca-past">អ្នកកំពុងមើល ${esc($('coMonth').textContent || d.month)} — ប្រអប់សម្រាប់ថ្ងៃនេះបង្ហាញតែក្នុងខែបច្ចុប្បន្ន។</div>`;
       $('coAttn').querySelectorAll('[data-cago]').forEach((b) => b.onclick = () => { const g = b.dataset.cago;
         if (g === 'users') { admSec = 'users'; showTab('admin'); try { history.replaceState(null, '', '#admin'); } catch (_) {} return; }
         const el = g === 'teams' ? document.querySelector('.co-teams') : $(g === 'overdue' ? 'coOdSec' : 'coAlSec'); if (el) { el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1200); } });
     }
     $('coKpis').innerHTML = `
-      <div class="mk hero"><span class="lbl">Revenue · invoiced</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">${money(d.money.revenue.paid)} paid · ${money(d.money.revenue.outstanding)} to collect · ${d.money.revenue.count} invoices</span></div>
-      <div class="mk"><span class="lbl">Boost spend</span><b class="num">${money(d.money.spend)}</b><span class="sub">all teams, ${d.isThisMonth ? 'so far this month' : 'whole month'}</span></div>
-      <div class="mk"><span class="lbl">Clients</span><b class="num">${d.clients.active}<small> active</small></b><span class="sub">${d.clients.new} new this month · ${d.clients.paused} paused</span></div>`;
-    $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th scope="col">Team</th><th scope="col">People</th><th scope="col" class="r">Clients</th><th scope="col" class="r">Spend</th><th scope="col" class="r">Revenue</th><th scope="col" class="r">Reports today</th><th scope="col">Last active</th></tr></thead><tbody>${d.teams.map((t) => { const tt = t.tasks.done + t.tasks.open, tp = tt ? Math.round(t.tasks.done / tt * 100) : null, rp = t.reports || { due: 0, sent: 0 }, la = t.lastActive, rl = rp.due && rp.sent < rp.due ? (((d.attention || {}).hour || 0) >= 20 ? 'bad' : 'mid') : 'good';
+      <div class="mk hero"><span class="lbl">ចំណូល · តាម Invoice</span><b class="num">${money(d.money.revenue.invoiced)}</b><span class="sub">បានបង់ ${money(d.money.revenue.paid)} · ត្រូវប្រមូល ${money(d.money.revenue.outstanding)} · Invoice ${d.money.revenue.count}</span></div>
+      <div class="mk"><span class="lbl">ចំណាយ Boost</span><b class="num">${money(d.money.spend)}</b><span class="sub">គ្រប់ក្រុម · ${d.isThisMonth ? 'មកដល់ថ្ងៃនេះ' : 'ពេញមួយខែ'}</span></div>
+      <div class="mk"><span class="lbl">ភ្ញៀវ</span><b class="num">${d.clients.active}<small> សកម្ម</small></b><span class="sub">ថ្មីខែនេះ ${d.clients.new} · ផ្អាក ${d.clients.paused}</span></div>`;
+    $('coTeams').innerHTML = d.teams.length ? `<table class="mtt co-tt"><thead><tr><th scope="col">ក្រុម</th><th scope="col">សមាជិក</th><th scope="col" class="r">ភ្ញៀវ</th><th scope="col" class="r">ចំណាយ</th><th scope="col" class="r">ចំណូល</th><th scope="col" class="r">របាយការណ៍ថ្ងៃនេះ</th><th scope="col">សកម្មចុងក្រោយ</th></tr></thead><tbody>${d.teams.map((t) => { const tt = t.tasks.done + t.tasks.open, tp = tt ? Math.round(t.tasks.done / tt * 100) : null, rp = t.reports || { due: 0, sent: 0 }, la = t.lastActive, rl = rp.due && rp.sent < rp.due ? (((d.attention || {}).hour || 0) >= 20 ? 'bad' : 'mid') : 'good';
       return `<tr class="co-team" data-coteam="${esc(t.id || '')}" tabindex="0" role="link" title="Open ${esc(t.name)} on the Clients Board">
-      <th scope="row"><span class="co-light ${rl}" title="${rl === 'bad' ? 'Reports not sent after 20:00' : rl === 'mid' ? 'Reports still to send' : 'Reports sent'}"></span><b>${esc(t.name)}</b></th>
+      <th scope="row"><span class="co-light ${rl}" title="${rl === 'bad' ? 'របាយការណ៍មិនទាន់ផ្ញើក្រោយម៉ោង 20:00' : rl === 'mid' ? 'នៅមានរបាយការណ៍ត្រូវផ្ញើ' : 'របាយការណ៍ផ្ញើហើយ'}"></span><b>${esc(t.name)}</b></th>
       <td class="hint">${t.people.map((p) => esc(p.name)).join(', ') || '—'}${(t.buyerNames || []).length ? ` · MB: ${t.buyerNames.map(esc).join(', ')}` : ''}</td><td class="r num">${t.clients}</td><td class="r num">${money(t.spend)}</td><td class="r num">${money(t.revenue)}</td>
       <td class="r num ${rp.due && rp.sent < rp.due ? 'bad' : rp.due ? 'good' : ''}">${rp.due ? `${rp.sent} / ${rp.due}` : '–'}</td>
-      <td class="hint">${la ? `${esc(ago(la.at))} · ${esc(la.name)}` : '—'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">No teams yet — make them in Admin → Teams.</div>';
+      <td class="hint">${la ? `${esc(ago(la.at))} · ${esc(la.name)}` : '—'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">មិនទាន់មានក្រុម — បង្កើតក្នុង Admin → Teams។</div>';
     $('coTeams').querySelectorAll('[data-coteam]').forEach((r) => { const go = () => { bTeam = r.dataset.coteam === '' ? '__none' : r.dataset.coteam; bPicked = false; showTab('board'); try { history.replaceState(null, '', '#board'); } catch (_) {} if (bData) renderBoard(); }; r.onclick = go; r.onkeydown = (ev) => { if (ev.key === 'Enter') go(); }; });
     const K = d.kpis.rows; $('coTgHint').textContent = K.length ? `${K.length} KPIs with a target this month` : '';
     $('coTargets').innerHTML = K.length ? `<div class="co-list">${K.slice(0, 14).map((k) => `<div class="co-row"><div class="co-rt"><b>${esc(k.name)}</b><span class="hint">${esc(k.person)}${k.buyer ? ' · media buyer' : ''}</span></div><div class="co-rb"><i style="width:${Math.min(100, Math.round(k.score))}%" class="${col(k.score)}"></i></div><span class="num co-rv ${col(k.score)}">${k.unit === '%' ? `${k.result}%<small> · ${k.done || 0} of ${k.due || 0} done · target ${k.target}%</small>` : `${k.result}<small> / ${k.target}${k.unit ? ' ' + esc(k.unit) : ''}</small>`}</span><span class="kpi-score ${k.score >= 100 ? 'ok' : k.score >= 60 ? 'mid' : 'bad'}">${Math.round(k.score)}%</span></div>`).join('')}</div>` : '<div class="empty">No monthly KPIs with a target yet. People set them on their Dashboard (📊 My KPIs); the Target page shows everyone.</div>';
@@ -2025,8 +2035,8 @@
       $('coOdHint').textContent = d.overdue.length ? `${d.tasks.overdue} open from earlier days · ${groups.length} ${groups.length === 1 ? 'person' : 'people'}` : 'Open tasks from earlier days, by person';
       $('coOverdue').innerHTML = groups.length ? `<div class="co-od">${groups.map((g, gi) => `<details class="co-odg" ${gi === 0 ? 'open' : ''}><summary><span class="avatar">${initials(g.name)}</span><span class="co-odn"><b>${esc(g.name)}</b>${g.via ? `<span class="hint">media buyer · PM ${esc(g.via)}</span>` : ''}</span><span class="co-odc">${g.items.length}</span></summary>
         <div class="co-list">${g.items.slice(0, 8).map((o) => `<div class="co-row"><div class="co-rt"><b>${esc(o.text)}</b><span class="hint">${esc(o.client)} · since ${esc(nice(o.day).replace(/ \d{4}$/, ''))}</span></div></div>`).join('')}${g.items.length > 8 ? `<div class="hint co-more">+ ${g.items.length - 8} more</div>` : ''}</div></details>`).join('')}</div>` : '<div class="empty ok">✅ No overdue tasks.</div>'; }
-    $('coNewHint').textContent = `${d.clients.new} added in ${monLbl(d.month)}`;
-    $('coNew').innerHTML = d.clients.newList.length ? `<div class="co-list">${d.clients.newList.map((c) => `<div class="co-row"><div class="co-rt"><b>${esc(c.name)}</b><span class="hint">${esc(c.owner)}</span></div></div>`).join('')}</div>` : '<div class="empty">No new clients this month.</div>';
+    $('coNewHint').textContent = `បន្ថែម ${d.clients.new} ក្នុង ${monLbl(d.month)}`;
+    $('coNew').innerHTML = d.clients.newList.length ? `<div class="co-list">${d.clients.newList.map((c) => `<div class="co-row"><div class="co-rt"><b>${esc(c.name)}</b><span class="hint">${esc(c.owner)}</span></div></div>`).join('')}</div>` : '<div class="empty">ខែនេះគ្មានភ្ញៀវថ្មី។</div>';
   }
   async function loadMain() { setMainMode(mMode); }
   async function loadMainPages() {

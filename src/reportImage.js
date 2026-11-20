@@ -128,12 +128,12 @@ async function render({ client, ads, reach }, from, to, { live = false } = {}) {
     { k: 'reach', label: 'Reach', x: 1060, align: 'end' },
     { k: 'msg', label: 'Messages', x: W - pad - 16, align: 'end' },
   ];
-  // A Live report also shows the comments each ad brought in (20 Nov 2026): the other columns move left to make room.
-  if (live) { const xs = { res: 520, cpr: 650, spend: 780, imp: 890, reach: 975 }; for (const c of cols) if (xs[c.k]) c.x = xs[c.k]; cols.splice(6, 0, { k: 'cm', label: 'Comments', x: 1068, align: 'end' }); }
+  // A Live report shows the comments each ad brought in instead of messages (owner, 20 Nov 2026).
+  if (live) cols[6] = { k: 'cm', label: 'Comments', x: W - pad - 16, align: 'end' };
   const X = Object.fromEntries(cols.map((c) => [c.k, c.x]));
   const tot = ads.reduce((t, a) => ({ cm: t.cm + (a.comments || 0), spend: t.spend + a.spend, imp: t.imp + a.impressions, msg: t.msg + (a.messages || 0), res: t.res + (a.results || 0), type: !a.results ? t.type : !t.type || t.type === a.resultType ? a.resultType : 'result' }), { cm: 0, spend: 0, imp: 0, msg: 0, res: 0, type: '' });
   const txt = (x, y, s, { size = 17, weight = 400, fill = '#1c1e21', anchor = 'start' } = {}) => svgText(s, x, y, { size, weight, fill, anchor });
-  const names = await Promise.all(shown.map((a) => fit(a.name, live ? 340 : 400, 16, 600)));
+  const names = await Promise.all(shown.map((a) => fit(a.name, 400, 16, 600)));
   const title = await fit(client.name, 620, 22, 600);
   let y = headH;
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -165,7 +165,7 @@ async function render({ client, ads, reach }, from, to, { live = false } = {}) {
     svg += await txt(X.imp, y + 38, int(a.impressions), { anchor: 'end' });
     svg += await txt(X.reach, y + 38, a.reach ? int(a.reach) : '—', { anchor: 'end' });
     if (live) svg += await txt(X.cm, y + 38, a.comments ? int(a.comments) : '—', { fill: a.comments ? '#1c1e21' : '#8a8d91', anchor: 'end' });
-    svg += await txt(X.msg, y + 38, a.messages ? int(a.messages) : '—', { fill: a.messages ? '#1c1e21' : '#8a8d91', anchor: 'end' });
+    else svg += await txt(X.msg, y + 38, a.messages ? int(a.messages) : '—', { fill: a.messages ? '#1c1e21' : '#8a8d91', anchor: 'end' });
     svg += `<line x1="${pad}" y1="${y + rowH}" x2="${W - pad}" y2="${y + rowH}" stroke="#ebedf0"/>`;
     y += rowH;
   }
@@ -178,7 +178,7 @@ async function render({ client, ads, reach }, from, to, { live = false } = {}) {
   svg += await txt(X.imp, y + 38, int(tot.imp), { weight: 600, anchor: 'end' });
   svg += await txt(X.reach, y + 38, reach ? int(reach) : '—', { weight: 600, anchor: 'end' });
   if (live) svg += await txt(X.cm, y + 38, tot.cm ? int(tot.cm) : '—', { weight: 600, anchor: 'end' });
-  svg += await txt(X.msg, y + 38, tot.msg ? int(tot.msg) : '—', { weight: 600, anchor: 'end' });
+  else svg += await txt(X.msg, y + 38, tot.msg ? int(tot.msg) : '—', { weight: 600, anchor: 'end' });
   y += totH;
   if (more > 0) svg += await txt(pad + 16, y + 24, `+ ${more} more ad${more === 1 ? '' : 's'} included in the total`, { size: 13, fill: '#65676b' });
   svg += '</svg>';

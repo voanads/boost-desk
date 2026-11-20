@@ -66,7 +66,11 @@ async function byClient(owner, from, to, src = 'all', given = null) {
 // ---------- adsbox.biz API ----------
 // The address and key are entered on the Orders page and saved encrypted (Railway variables also work).
 const { encrypt, decrypt } = require('./crypto');
-async function apiConfig() {
+// When Boost Desk counts orders itself (ordersOwn.on), orders are no longer read from adsbox.biz: the address and key
+// look empty to every reader, so no pull, webhook re-read, compare or test runs. Only sending boost spend TO adsbox.biz
+// (pushSpend) still sees them.
+async function apiConfig(forPush = false) {
+  if (!forPush && ((await db.getSetting('ordersOwn', null)) || {}).on) return { url: '', key: '', hint: '', by: '', at: '', listUrl: '', own: true };
   const c = (await db.getSetting('adsboxApi', null)) || {};
   let key = '';
   try { key = c.keyEnc ? decrypt(c.keyEnc) : ''; } catch (_) { key = ''; }
@@ -86,8 +90,8 @@ async function saveApiConfig({ url, key, listUrl }, by) {
   return publicConfig();
 }
 async function publicConfig() {
-  const c = await apiConfig();
-  return { url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, hookLast: ((await db.getSetting('adsboxApi', null)) || {}).hookLast || null, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null), listError: await db.getSetting('ordersListError', null) };
+  const c = await apiConfig(), own = (await db.getSetting('ordersOwn', null)) || { on: false };
+  return { own, url: c.url, listUrl: c.listUrl, hasKey: !!c.key, keyHint: c.hint, savedBy: c.by, savedAt: c.at, hookLast: ((await db.getSetting('adsboxApi', null)) || {}).hookLast || null, last: await db.getSetting('ordersLastImport', null), lastError: await db.getSetting('ordersLastError', null), listError: await db.getSetting('ordersListError', null) };
 }
 // DM · NEW / DM · OLD: either counts on a summary row (dm_new, new_dm, dmNew, new_customers…) or, on a
 // per-order row, a type field saying "new" / "old" (or is_new true/false).
@@ -418,7 +422,7 @@ async function spendRows(from, to) {
 // Re-sending a day corrects it (adsbox upserts on date + page + ad account + ad id), so the last 7 days go
 // out every 30 minutes. Campaigns synced by two people are sent once.
 async function pushSpend(days = 7) {
-  const c = await apiConfig();
+  const c = await apiConfig(true);
   const on = await db.getSetting('adspendPush', false);
   if (!on || !c.url || !c.key) return null;
   const to = sync.todayIn(), from = sync.addDays(to, -(days - 1));

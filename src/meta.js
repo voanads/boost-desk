@@ -57,16 +57,19 @@ async function getAll(path, params, token, cap = 50) {
 }
 
 // ---- OAuth ----
-function loginUrl(state) {
+const LOGIN_SCOPES = 'ads_read,business_management,pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,pages_read_user_content';
+function loginUrl(state, opts = {}) {
   // Same shape as the link Facebook accepted in testing: client_id, redirect_uri, response_type, scope, state.
   // (config_id is not used — Facebook rejected every link that carried it for this app.)
   const q = [
     ['client_id', cfg.fbAppId],
     ['redirect_uri', `${cfg.baseUrl}/auth/facebook/callback`],
     ['response_type', 'code'],
-    ['scope', 'ads_read,business_management'],
+    // Page permissions too (20 Nov 2026): Boost Desk connects the team's client Pages for order counting by itself.
+    // loginUrl(state, { noPages: true }) leaves them out (fallback if Facebook refuses them for someone).
+    ['scope', opts.noPages ? 'ads_read,business_management' : LOGIN_SCOPES],
     ['state', state],
-  ].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&').replace('ads_read%2Cbusiness_management', 'ads_read,business_management');
+  ].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&').replace(/%2C/g, ',');
   return `https://www.facebook.com/${cfg.graphVersion}/dialog/oauth?${q}`;
 }
 

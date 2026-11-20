@@ -138,6 +138,14 @@ function start(deps = {}) {
   H.register('adsbox.biz today', 5, 'every 5 minutes');
   cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => H.track('adsbox.biz today', () => require('./orders').pullApi(1)).catch((e) => log('adsbox today failed:', e.message)), opts);
   cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
+  // Boost Desk's own order counting: comments of a running Live on each connected Page, every minute
+  // (Messenger messages and other comments arrive by webhook straight away).
+  // Connect the team's client Pages for order counting with every saved Facebook login (new clients' Pages too).
+  H.register('Connect client Pages (orders)', 180, 'every 3 hours');
+  cron.schedule('17 */3 * * *', () => H.track('Connect client Pages (orders)', () => require('./pageOrders').autoConnect()).then((r) => { if (r && r.connected.length) log('client Pages connected:', r.connected.length); }).catch((e) => log('Connect client Pages failed:', e.message)), opts);
+  setTimeout(() => require('./pageOrders').autoConnect().catch((e) => log('Connect client Pages failed:', e.message)), 90e3);
+  H.register('Live comments (orders)', 1, 'every minute');
+  cron.schedule('* * * * *', () => H.track('Live comments (orders)', () => require('./pageOrders').pollLives()).then((n) => { if (n) log('orders from Live comments:', n); }).catch((e) => log('Live comments failed:', e.message)), opts);
   // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
   H.register('AI daily plans', 1440, 'daily at 06:40');
   cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);

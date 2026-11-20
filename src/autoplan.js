@@ -51,6 +51,7 @@ async function candidates(owner, today) {
   const linked = new Set(all.flatMap((c) => ((c.plan && c.plan.lines) || []).map((l) => l.camp).filter(Boolean)));
   const out = [];
   for (const c of all) {
+    if (c.plan && c.plan.hidden) continue; // the PM chose not to use a plan for this client
     const skip = new Set(((c.plan && c.plan.noAuto) || []).map(String));
     const e = await db.getEntry(today, c.id);
     for (const id of ((e && e.post && e.post.ids) || []).map(String)) {

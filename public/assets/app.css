@@ -3902,3 +3902,18 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
   .bp-tbl td:nth-child(2),.bp-tbl td:nth-child(3),.bp-tbl td:nth-child(4){grid-column:1}
   .bp-tbl td:nth-child(5){grid-column:2;grid-row:2/span 3;align-self:center;color:var(--ink)}
 }
+
+/* Clients page: easier to read (owner, 20 Nov) — a bigger page switch and three clear, equal tabs on the client page */
+#cViewSeg.cview{padding:4px;gap:4px;background:var(--bg-2);border-radius:12px}
+#cViewSeg.cview button{min-height:44px;padding:0 22px;font-size:var(--fs-lg,1.05rem);font-weight:600;border-radius:9px;color:var(--ink)}
+#cViewSeg.cview button[aria-pressed="true"]{background:var(--surface)!important;color:var(--brand-text)!important;box-shadow:0 0 0 1.5px var(--brand) inset}
+#cSortSeg.csort button{min-height:40px;font-size:var(--fs-md,.95rem)}
+#cdTabs.cd-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;border-bottom:2px solid var(--line);margin:var(--s-3) 0;align-items:stretch}
+#cdTabs.cd-tabs button{min-height:48px;padding:0 10px;font-size:var(--fs-lg,1.05rem);font-weight:600;color:var(--ink);background:var(--bg-2)!important;border-radius:10px 10px 0 0!important;border-bottom:3px solid transparent!important;margin-bottom:-2px;justify-content:center;align-items:center}
+#cdTabs.cd-tabs button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text);border-bottom-color:var(--brand)!important}
+@media (max-width:600px){#cdTabs.cd-tabs button{font-size:var(--fs-md,.95rem);padding:0 4px}}
+.wrap #cViewSeg.cview{background:var(--bg-2)!important;border:1px solid var(--line)}
+.wrap #cViewSeg.cview button{background:transparent!important;border:0!important;box-shadow:none!important}
+.wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text)!important;box-shadow:0 0 0 1.5px var(--brand) inset!important}
+.wrap #cViewSeg.cview{border-radius:12px!important;padding:4px!important;gap:4px}
+.wrap #cViewSeg.cview button{border-radius:9px!important;padding:0 22px!important;min-width:104px;min-height:44px!important;font-size:var(--fs-lg,1.05rem)!important}

@@ -3983,3 +3983,7 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .co-bars{display:flex;flex-direction:column}.co-bar{display:grid;grid-template-columns:minmax(90px,150px) minmax(0,1fr) 110px minmax(0,220px);gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}.co-bar:first-child{border-top:0}
 .co-bar-t{height:10px;border-radius:999px;background:var(--bg-2);overflow:hidden;display:block}.co-bar-t i{display:block;height:100%;background:var(--brand);border-radius:999px}.co-bar .num{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 @media (max-width:760px){.co-bar{grid-template-columns:minmax(0,1fr) 100px}.co-bar-t{grid-column:1/-1;order:3}.co-bar .hint{grid-column:1/-1;order:4}.tc-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Pages & spend (owner, 20 Nov 2026): the Teams share table, Needs attention, People and "Not linked to a client" are taken off the page */
+#mPagesView .mteams3,#mPagesView .mside{display:none!important}
+#mPagesView .mbody{display:block!important}

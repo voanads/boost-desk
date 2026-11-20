@@ -3940,3 +3940,17 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 @media (max-width:760px){.chead2 #cSortSeg.csort{flex:1 1 100%;order:5}.chead2 #cSortSeg.csort button{flex:1}}
 #tab-clients .chead2>div:first-child .hint{display:none}
 #tab-clients .chead2 #cSearch{flex:1 1 180px;min-width:150px;max-width:300px}
+
+/* Boosts: Post / Live switch and the Live boosts table (20 Nov 2026) */
+.bst-h .bst-kind{display:inline-flex;gap:4px;padding:4px;border-radius:10px;background:var(--bg-2)}
+.bst-h .bst-kind button{display:inline-flex!important;align-items:center;gap:8px;min-height:36px!important;padding:0 14px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:var(--muted)!important;font-weight:600!important;box-shadow:none!important}
+.bst-h .bst-kind button[aria-pressed="true"]{background:var(--surface)!important;color:var(--ink)!important;box-shadow:0 1px 2px rgba(15,23,42,.14)!important}
+.bst-kind i{font-style:normal;font-size:var(--fs-xs);padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted)}
+.bst-kind button[data-bstkind="live"][aria-pressed="true"] i{background:var(--danger-soft);color:var(--danger)}
+.bst-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block}
+.bst-lsum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s-2);padding:0 18px 16px}
+.bst-lsum>div{border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-width:0}
+.bst-lsum small{display:block;font-size:var(--fs-xs);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.bst-lsum b{font-size:1.25rem}.bst-lsum span{display:block;font-size:var(--fs-xs);color:var(--muted)}
+.bst-lt .is-ok{color:var(--ok);font-weight:600}.bst-lt .bst-p .hint .pill{margin-left:4px}
+@media (max-width:760px){.bst-lsum{grid-template-columns:repeat(2,minmax(0,1fr))}.bst-h .bst-kind{width:100%}.bst-h .bst-kind button{flex:1;justify-content:center}}

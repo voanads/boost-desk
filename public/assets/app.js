@@ -1004,7 +1004,7 @@
     return { n: w.openTasks || 0, urgent: false };
   }
   // ---- Boosts: one row per post in a boost plan, across every client (the team's old status sheet, filled by itself) ----
-  let cView = 'clients', bstData = null, bstTab = 'run', bstQ = '';
+  let cView = 'clients', bstData = null, bstTab = 'run', bstQ = '', bstKind = 'post', bstLive = null, bstLiveP = 't';
   function setCView(v) {
     cView = v; $('cViewSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
     $('cWrap').hidden = v !== 'clients'; $('cBoosts').hidden = v !== 'boosts'; if ($('cSortSeg')) $('cSortSeg').hidden = v !== 'clients'; // the sort is for the clients list only $('cSortSeg') && ($('cSearch').placeholder = v === 'boosts' ? 'Search post, client or ad account' : 'Search client or Page');
@@ -1012,8 +1012,9 @@
   }
   async function loadBoosts() {
     const host = $('cBoosts'); if (!bstData) host.innerHTML = '<div class="panel"><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>';
+    const lv = api('/boosts/lives').then((x) => { bstLive = x; }).catch(() => {}); // the Live table loads beside the post table; a failure there does not block posts
     try { bstData = await api('/boosts'); } catch (e) { host.innerHTML = `<div class="panel"><div class="muted">${esc(e.message)}</div></div>`; return; }
-    paintBoosts();
+    await lv; paintBoosts();
   }
   function paintBoosts() {
     const host = $('cBoosts'), d = bstData; if (!d) return;
@@ -1023,7 +1024,11 @@
       .sort((a, b) => (rank[a.state] - rank[b.state]) || (a.state === 'ended' ? String(b.end).localeCompare(String(a.end)) : String(a.end || '9').localeCompare(String(b.end || '9'))) || a.client.localeCompare(b.client));
     const pill = (r) => r.noSpend ? '<span class="pill bad"><i></i>No spend</span>' : r.state === 'active' ? '<span class="pill ok"><i></i>Active</span>' : r.state === 'new' ? '<span class="pill mute">New</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : '<span class="pill warn"><i></i>No start date</span>';
     const left = (r) => r.left == null ? '–' : r.state === 'ended' ? `ended ${-r.left} day${r.left === -1 ? '' : 's'} ago` : r.state === 'new' ? `starts in ${Math.round((Date.parse(r.start) - Date.parse(d.today)) / 864e5)} d` : r.left === 0 ? '<b class="is-warn">ends today</b>' : r.left <= 2 ? `<b class="is-warn">${r.left} day${r.left === 1 ? '' : 's'} left</b>` : `${r.left} days left`;
-    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2><span class="hint">one row per post in a boost plan · state and spend fill in by themselves</span><span class="spacer"></span><button type="button" class="primary sm" id="bstAdd">+ Add boost</button>
+    const lvT = ((bstLive && bstLive.rows) || []).filter((r) => r.day === d.today).length;
+    const kindSeg = `<div class="bst-kind" role="group" aria-label="Post or Live"><button type="button" data-bstkind="post" aria-pressed="${bstKind === 'post'}">Post boosts <i>${n.run}</i></button><button type="button" data-bstkind="live" aria-pressed="${bstKind === 'live'}"><span class="bst-dot" aria-hidden="true"></span>Live boosts <i>${lvT}</i></button></div>`;
+    const kindWire = () => host.querySelectorAll('[data-bstkind]').forEach((b) => b.onclick = () => { bstKind = b.dataset.bstkind; paintBoosts(); });
+    if (bstKind === 'live') { paintLiveBoosts(host, kindSeg, q); kindWire(); return; }
+    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2>${kindSeg}<span class="hint">one row per post in a boost plan · state and spend fill in by themselves</span><span class="spacer"></span><button type="button" class="primary sm" id="bstAdd">+ Add boost</button>
         <div class="seg" role="group" aria-label="Which boosts"><button type="button" data-bst="run" aria-pressed="${bstTab === 'run'}">Running · ${n.run}</button><button type="button" data-bst="ended" aria-pressed="${bstTab === 'ended'}">Ended · ${n.ended}</button><button type="button" data-bst="all" aria-pressed="${bstTab === 'all'}">All · ${n.all}</button></div></div>
       ${d.noPlan.length ? `<div class="note bst-np"><b>${d.noPlan.length} client${d.noPlan.length === 1 ? ' is' : 's are'} boosting without a plan</b> — no end date, no budget and no “no spend” alert for ${d.noPlan.length === 1 ? 'it' : 'them'}: ${d.noPlan.slice(0, 12).map((c) => `<button type="button" class="linkbtn" data-bstopen="${c.id}">${esc(c.name)}</button>`).join(', ')}${d.noPlan.length > 12 ? ` … +${d.noPlan.length - 12}` : ''}. Open a client and add its posts under “Boost plan”.</div>` : ''}
       ${(d.found || []).length ? `<details class="bst-found" ${bstFoundOpen ? 'open' : ''}><summary><b>Found on Meta today, not in a plan · ${d.found.length}</b><span class="hint">campaigns that are spending but could not be added by themselves (no budget or number of days) — add them by hand</span></summary>
@@ -1036,10 +1041,41 @@
           <td>${r.planPct != null ? `<span class="bst-pl"><i class="ct-bar${r.planPct > 100 ? ' over' : ''}" aria-hidden="true"><i style="width:${Math.min(100, Math.max(0, r.planPct))}%"></i></i>${r.planPct}%</span><span class="hint">${money(r.planSpent)} of ${money(r.planBudget)}</span>` : '–'}</td>
           <td>${r.sent ? esc(new Date(r.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })) : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>`
         : `<div class="empty">${d.rows.length ? 'No boost matches.' : '<b>No boost plan yet.</b><br>Open a client and add the posts you boost under “Boost plan” — they show up here.'}</div>`}</section>`;
-    host.querySelectorAll('[data-bst]').forEach((b) => b.onclick = () => { bstTab = b.dataset.bst; paintBoosts(); });
+    host.querySelectorAll('[data-bst]').forEach((b) => b.onclick = () => { bstTab = b.dataset.bst; paintBoosts(); }); kindWire();
     if ($('bstAdd')) $('bstAdd').onclick = () => openBoostAdd(null);
     host.querySelectorAll('[data-bstfound]').forEach((b) => b.onclick = () => openBoostAdd(d.found[Number(b.dataset.bstfound)]));
     const fd = host.querySelector('.bst-found'); if (fd) fd.addEventListener('toggle', () => { bstFoundOpen = fd.open; });
+    host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
+  }
+  // Live boosts: one row per boosted Live. A Live has no plan, so the columns are start time, budget on Meta, spend, comments,
+  // messages and whether the client's report for that day was sent.
+  function paintLiveBoosts(host, kindSeg, q) {
+    const d = bstLive, all = (d && d.rows) || [], inP = (r, p) => p === 't' ? r.day === d.today : p === 'y' ? r.day === d.yesterday : true;
+    const cnt = (p) => all.filter((r) => inP(r, p)).length, sum = (rs, f) => Math.round(rs.reduce((a, r) => a + (Number(r[f]) || 0), 0) * 100) / 100;
+    const per = all.filter((r) => inP(r, bstLiveP)), rows = per.filter((r) => !q || [r.client, r.page, r.account].some((x) => String(x || '').toLowerCase().includes(q)));
+    const prev = bstLiveP === 't' ? all.filter((r) => inP(r, 'y')) : null, days = new Set(per.map((r) => r.clientId + '|' + r.day)), sentDays = new Set(per.filter((r) => r.sent).map((r) => r.clientId + '|' + r.day));
+    const sp = sum(per, 'spend'), cm = sum(per.filter((r) => r.comments != null), 'comments'), cmSp = sum(per.filter((r) => r.comments), 'spend'), nCl = new Set(per.map((r) => r.clientId)).size;
+    const pName = bstLiveP === 't' ? 'today' : bstLiveP === 'y' ? 'yesterday' : 'in 7 days';
+    const tm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const pill = (r) => r.state === 'on' ? '<span class="pill bad"><i></i>On now</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : '';
+    host.innerHTML = `<section class="panel bst-card"><div class="bst-h"><h2>Boosts</h2>${kindSeg}<span class="hint">one row per Live · spend and comments fill in by themselves</span><span class="spacer"></span>
+        <div class="seg" role="group" aria-label="Which days"><button type="button" data-bstlp="t" aria-pressed="${bstLiveP === 't'}">Today · ${cnt('t')}</button><button type="button" data-bstlp="y" aria-pressed="${bstLiveP === 'y'}">Yesterday · ${cnt('y')}</button><button type="button" data-bstlp="w" aria-pressed="${bstLiveP === 'w'}">7 days · ${cnt('w')}</button></div></div>
+      ${!d ? '<div class="empty">The Live table could not be loaded. Reload the page.</div>' : `<div class="bst-lsum">
+        <div><small>Clients on Live ${pName}</small><b>${nCl}</b>${prev ? `<span>yesterday ${new Set(prev.map((r) => r.clientId)).size}</span>` : ''}</div>
+        <div><small>Live spend ${pName}</small><b>${money(sp)}</b>${prev ? `<span>yesterday ${money(sum(prev, 'spend'))}</span>` : ''}</div>
+        <div><small>Comments</small><b>${cm.toLocaleString('en-US')}</b><span>${cm ? '$' + (cmSp / cm).toFixed(3) + ' per comment' : 'no comment counted'}</span></div>
+        <div><small>Report to client</small><b>${sentDays.size} of ${days.size} sent</b><span>${days.size - sentDays.size ? (days.size - sentDays.size) + ' not sent yet' : days.size ? 'all sent' : '–'}</span></div></div>
+      ${rows.length ? `<div class="tablewrap"><table class="bst-t bst-lt"><thead><tr><th scope="col">Live</th><th scope="col">Client</th><th scope="col">Ad account</th><th scope="col">Started</th><th scope="col" class="num">Budget</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Comments</th><th scope="col" class="num">Messages</th><th scope="col" class="num">$ / comment</th><th scope="col">Report</th></tr></thead><tbody>
+        ${rows.map((r) => `<tr><td class="bst-p"><b>${esc(r.page || r.client)}${r.time ? ' — Live ' + esc(r.time) : ''}</b><span class="hint">${r.camps} campaign${r.camps === 1 ? '' : 's'} ${pill(r)}</span></td>
+          <td><button type="button" class="linkbtn" data-bstopen="${r.clientId}">${esc(r.client)}</button></td><td>${esc(r.account || '–')}</td>
+          <td>${r.time ? esc(r.time) : '–'}${bstLiveP === 't' ? '' : `<span class="hint">${esc(shortDay(r.day))}</span>`}</td>
+          <td class="num">${r.budget != null ? `${money(r.budget)}<span class="hint">from Meta</span>` : '–<span class="hint">not known</span>'}</td>
+          <td class="num"><b>${money(r.spend)}</b>${r.budget ? `<span class="hint">${Math.round(r.spend / r.budget * 100)}% of budget</span>` : ''}</td>
+          <td class="num">${r.comments != null ? r.comments.toLocaleString('en-US') : '–'}</td><td class="num">${r.messages != null ? r.messages.toLocaleString('en-US') : '–'}</td>
+          <td class="num">${r.perComment != null ? '$' + Number(r.perComment).toFixed(3) : '–'}</td>
+          <td>${r.sent ? `<span class="is-ok">sent ${esc(tm(r.sent))}</span>` : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty">${per.length ? 'No Live matches.' : `<b>No boosted Live ${pName}.</b><br>A Live shows up here by itself after the next sync from Meta.`}</div>`}`}</section>`;
+    host.querySelectorAll('[data-bstlp]').forEach((b) => b.onclick = () => { bstLiveP = b.dataset.bstlp; paintBoosts(); });
     host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
   }
   // Add one post to a client's boost plan without leaving the Boosts page. From "found on Meta" the campaign, the client and

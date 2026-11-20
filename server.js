@@ -2302,8 +2302,30 @@ api.get('/boosts', wrap(async (req, res) => {
         camp: l.camp || '', auto: l.auto || '', campSpend: l.camp && raw[l.camp] ? Math.round(Number(raw[l.camp].spend) * 100) / 100 : null, postToday: x.postToday || 0, level: x.level || 'ok', planPct: x.plan ? x.plan.pct : null, planSpent: x.plan ? x.plan.spent : null, planBudget: x.plan ? x.plan.budget : null, telegram: !!c.telegram });
     });
   }
-  const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));
+  // only clients that boost posts: a client that spends on Live only today has its own table (Live boosts) and needs no plan
+  const noPlan = st.clients.filter((x) => x.level !== 'idle' && !(x.spend > 0 && !(x.postToday > 0)) && !(rows.some((r) => r.clientId === x.id && (r.state === 'active' || r.state === 'new')))).map((x) => ({ id: x.id, name: x.name, spend: x.spend }));
   res.json({ today, rows, noPlan, found: found.sort((a, b) => b.spend - a.spend) });
+}));
+// Live boosts (20 Nov 2026): one row per boosted Live of the last 7 days, next to the post table. A Live has no plan, no end
+// date and no $ per day, so it gets its own columns: start time, budget on Meta, spend, comments, messages, report sent.
+api.get('/boosts/lives', wrap(async (req, res) => {
+  const owner = req.user.fb_id, today = sync.todayIn(), from = sync.addDays(today, -6), now = Date.now();
+  const list = await lives.listLives(owner, from, today);
+  let setups = {}; try { setups = await lives.setupsFor({ fb_id: owner }, list.flatMap((l) => l.campaigns), { fetch: false }); } catch (_) {}
+  const acc = {}; try { for (const a of await db.listAccounts(owner)) acc[String(a.id).replace(/^act_/, '')] = a; } catch (_) {}
+  const sentOf = {}, rows = [];
+  for (const l of list) {
+    const k = l.clientId + '|' + l.day;
+    if (!(k in sentOf)) { try { const e = await db.getEntry(l.day, l.clientId); sentOf[k] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sentOf[k] = ''; } }
+    const ids = [...new Set(l.campaigns.map((c) => String(c.accountId || '').replace(/^act_/, '')).filter(Boolean))];
+    // the budget is only shown when every campaign of the Live has one on Meta and the account is in USD
+    const bs = l.campaigns.map((c) => { const s = setups[c.id], a = acc[String(c.accountId || '').replace(/^act_/, '')]; const usd = a && ((a.info || {}).currency || a.currency || '') === 'USD'; return s && usd ? Number(s.lifetimeBudget) || Number(s.dailyBudget) || 0 : 0; });
+    rows.push({ key: l.key, clientId: l.clientId, client: l.client, page: l.page, day: l.day, time: l.time, start: l.start, spend: l.spend, comments: l.comments, messages: l.messages, perComment: l.perComment,
+      camps: l.campaigns.length, account: ids.map((id) => (acc[id] && acc[id].name) || 'act_' + id).join(', '), budget: bs.length && bs.every((b) => b > 0) ? Math.round(bs.reduce((a, b) => a + b, 0) * 100) / 100 : null,
+      state: l.day !== today || (l.end != null && l.end <= now) ? 'ended' : l.end != null ? 'on' : '', sent: sentOf[k] });
+  }
+  rows.sort((a, b) => String(b.day).localeCompare(String(a.day)) || (b.start || 0) - (a.start || 0));
+  res.json({ today, yesterday: sync.addDays(today, -1), rows });
 }));
 // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
 const STATUS = () => require('./src/status');

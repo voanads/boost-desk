@@ -47,6 +47,8 @@ function finish(client, day, rows) {
     key: `${client.id}|${day}|${rows[0].campaignId || rows[0].name}`,
     clientId: client.id, client: client.name, page, day,
     start: rows[0].start ?? null, time: rows[0].start != null ? sync.hhmm(rows[0].start) : '',
+    // when the boost is scheduled to stop (the latest campaign); null when a campaign has no start or no run time
+    end: rows.every((r) => r.start != null && typeof r.runMinutes === 'number') ? Math.max(...rows.map((r) => r.start + r.runMinutes * 60000)) : null,
     spend, comments, messages,
     perComment: comments ? round2(spend / comments * 1000) / 1000 : null,
     campaigns: rows.map((r) => ({

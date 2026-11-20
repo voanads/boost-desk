@@ -85,14 +85,17 @@ app.get('/auth/facebook', (req, res) => {
 });
 
 // Orders → Connect Pages: the same Facebook login, asking for the Page permissions. The callback below sees pagesFor
-// and saves the Pages instead of logging in. Only a logged-in team member (not a media buyer) can start it.
-app.get('/auth/facebook/pages', (req, res) => {
+// and saves the Pages instead of logging in. A media buyer (owner, 20 Nov 2026) can start it too: the Pages are saved
+// in their PM's workspace, and the media buyer's own Facebook login is used for nothing else.
+const mbPmId = async (mbId) => { const b = mbId && (await MB().get(mbId)); return (b && (b.addedById || ((await db.allUsers()).find((u) => u.name === b.addedBy) || {}).fb_id)) || ''; };
+app.get('/auth/facebook/pages', wrap(async (req, res) => {
   // Facebook/username login, or an owner who signs in with Gmail on the admin site (e.g. Hor Vannak).
-  const who = req.session && !req.session.mb ? req.session.fbId || (req.session.gEmail ? 'g:' + req.session.gEmail : '') : '';
+  const pm = req.session && req.session.mb ? await mbPmId(req.session.mb) : '';
+  const who = req.session && req.session.mb ? (pm ? 'mb:' + pm : '') : req.session ? req.session.fbId || (req.session.gEmail ? 'g:' + req.session.gEmail : '') : '';
   if (!who) return res.redirect('/login');
   req.session.pagesFor = who; req.session.linkFor = null;
   res.redirect(pageOrders.connectUrl(newState()));
-});
+}));
 app.get('/auth/facebook/callback', wrap(async (req, res) => {
   const { code, state, error_description } = req.query;
   if (error_description && !req.session.pagesFor && !req.session.noPageScopes && /scope|permission/i.test(String(error_description))) {
@@ -116,12 +119,13 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   // Connecting Pages for order counting (Orders → Connect Pages): save the Pages, stay logged in as myself.
   const pagesFor = req.session.pagesFor; req.session.pagesFor = null;
   const viaGmail = !!(pagesFor && req.session.gEmail && pagesFor === 'g:' + req.session.gEmail);
-  const pagesUser = pagesFor && req.session.fbId === pagesFor ? await db.getUser(pagesFor) : null;
+  const viaMb = !!(pagesFor && pagesFor.startsWith('mb:') && req.session.mb && (await mbPmId(req.session.mb)) === pagesFor.slice(3)); // a media buyer, for their PM's workspace
+  const pagesUser = viaMb ? await db.getUser(pagesFor.slice(3)) : pagesFor && req.session.fbId === pagesFor ? await db.getUser(pagesFor) : null;
   if (pagesFor && (pagesUser || viaGmail)) {
-    const back = (msg, ok) => res.redirect('/?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
+    const back = (msg, ok) => res.redirect((viaMb ? '/mediabuyer' : '/') + '?pg=' + (ok ? 'ok' : 'err') + '&pgmsg=' + encodeURIComponent(msg) + '#orders');
     try {
       const who = pagesUser ? pagesUser.name : req.session.gName || req.session.gEmail;
-      const r = await pageOrders.connectFromUserToken(token, { id: pagesFor, name: who + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
+      const r = await pageOrders.connectFromUserToken(token, { id: viaMb ? pagesFor.slice(3) : pagesFor, name: viaMb ? who + ' (' + profile.name + ')' : who + (profile.id !== pagesFor ? ' (' + profile.name + ')' : '') });
       if (r.missing.length && !r.connected.length) return back(`Facebook did not give Boost Desk the Page permissions (${r.missing.join(', ')}). Tap Connect Pages again and allow everything.`, false);
       if (!r.connected.length && !r.failed.length) return back(`${profile.name} does not manage any Facebook Page.`, false);
       return back(`${r.connected.length} Page${r.connected.length === 1 ? '' : 's'} connected — new orders are counted from now.${r.failed.length ? ` ${r.failed.length} could not be connected: ${r.failed[0].name} (${r.failed[0].error}).` : ''}`, r.connected.length > 0);
@@ -482,16 +486,17 @@ app.use(wrap(async (req, res, next) => {
     else { user = { fb_id: 'g:' + p.email, name: req.session.gName || p.name || p.email, token_expires: null, google: true }; req.adminSite = true; }
   }
   // A media buyer (signed in from the Telegram link) works inside their PM's account, with limits:
-  // no deleting clients, no client settings, no Sync from Meta, nothing in Admin / Profit / KPIs.
+  // no deleting, pausing or merging clients, nothing in Admin / Profit / KPIs / team. Since 20 Nov 2026 (owner) they do the
+  // daily client work like their PM: Sync from Meta, client settings, ad accounts, the weekly strategy. Connecting Pages for orders too (removing one stays with the PM).
   if (!user && req.session.mb) {
     const b = await MB().get(req.session.mb);
     const pmId = b && (b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy]);
     const pm = pmId && (await db.getUser(pmId));
     if (b && pm) {
       if (req.method !== 'GET' && req.path.startsWith('/api/') && (
-        /^\/api\/(sync|sync-recent|sync-range|admin|auto-sync|profit|media-buyers|kpis|accounts|main|company|team|targets)/.test(req.path)
+        /^\/api\/(admin|auto-sync|profit|media-buyers|kpis|main|company|team|targets)/.test(req.path)
         || (req.method === 'DELETE' && /^\/api\/clients\/\d+$/.test(req.path))
-        || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path))
+        || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path) && req.body && 'archived' in req.body) // pausing a client stays with the PM
       )) return res.status(403).json({ error: 'Media buyers can\'t do this — ask your PM.' });
       if (req.path.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(req.path)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
       if (!req.path.startsWith('/api/') && !req.path.startsWith('/mediabuyer') && !req.path.startsWith('/mb')) return res.redirect('/mediabuyer');
@@ -2175,10 +2180,10 @@ const pmOnly = (req, res) => { if (req.user.buyer) { res.status(403).json({ erro
 api.get('/clients/:id/strategy', wrap(async (req, res) => {
   if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
-  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly: w, week: AI().weekRange(), canSend: !req.user.buyer });
+  res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly: w, week: AI().weekRange(), canSend: true });
 }));
 api.put('/clients/:id/strategy', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const b = req.body || {};
   if ('on' in b) await AI().setWeeklyPick(req.user.fb_id, req.params.id, !!b.on);
   let weekly = (await AI().workbook(req.user.fb_id, req.params.id)).weekly;
@@ -2186,12 +2191,12 @@ api.put('/clients/:id/strategy', wrap(async (req, res) => {
   res.json({ on: (await AI().weeklyPick(req.user.fb_id)).includes(Number(req.params.id)), weekly });
 }));
 api.post('/clients/:id/strategy/run', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   try { res.json({ weekly: await AI().weeklyStrategy(req.user.fb_id, req.params.id, { force: !!(req.body || {}).force }) }); } catch (e) { return aiErr(res, e); }
 }));
 // The three actions become Clients Tasks of this client (once).
 api.post('/clients/:id/strategy/tasks', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
+  if (!(await ownClient(req))) return res.status(404).json({ error: 'Client not found.' });
   const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk) return res.status(400).json({ error: 'There is no weekly strategy yet.' });
   const acts = ((req.body || {}).lang === 'en' ? wk.actionsEn : wk.actionsKm) || []; if (!acts.length) return res.status(400).json({ error: 'This strategy has no actions to add.' });
   const today = sync.todayIn(); let added = 0;
@@ -2201,7 +2206,7 @@ api.post('/clients/:id/strategy/tasks', wrap(async (req, res) => {
 }));
 // Send to the client's Telegram group — the PM's decision, in Khmer, English or both.
 api.post('/clients/:id/strategy/send', wrap(async (req, res) => {
-  if (!pmOnly(req, res)) return; const c = await ownClient(req); if (!c) return res.status(404).json({ error: 'Client not found.' });
+  const c = await ownClient(req); if (!c) return res.status(404).json({ error: 'Client not found.' });
   if (!telegram.hasBot()) return res.status(400).json({ error: 'Telegram is not set up yet.' });
   if (!c.telegram) return res.status(400).json({ error: `${c.name} has no Telegram group yet. Pick one in the Clients tab.` });
   const w = await AI().workbook(req.user.fb_id, req.params.id), wk = w.weekly; if (!wk || !wk.km) return res.status(400).json({ error: 'There is no weekly strategy yet.' });
@@ -2862,7 +2867,7 @@ api.post('/orders/use-live', adminOnly, wrap(async (req, res) => {
   const n = await orders.useLive(from, to > today ? today : to); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json({ ok: true, rows: n });
 }));
 // Boost Desk's own order counting: connected Pages, and the switch between it and adsbox.biz.
-api.get('/orders/pages', wrap(async (req, res) => { if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM to connect Pages.' }); res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
+api.get('/orders/pages', wrap(async (req, res) => { res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
 api.delete('/orders/pages/:id', wrap(async (req, res) => {
   if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
   const id = String(req.params.id || ''); if (!/^\d{5,30}$/.test(id)) return res.status(400).json({ error: 'Pick a Page.' });

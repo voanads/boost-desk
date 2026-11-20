@@ -2298,12 +2298,12 @@
         api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
       }
       const own = !!(cfg.own && cfg.own.on);
-      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = !!(me && me.buyer);
+      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = false;
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
       if (own) { if (oPgN === null) api('/orders/pages').then((r) => { oPgN = r.pages.length; if (!oPgN) loadOrders(); }).catch(() => { oPgN = -1; });
-        if (oPgN === 0) msg = me && me.buyer ? 'No Facebook Page is connected for orders yet — ask your PM.' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
+        if (oPgN === 0) msg = false ? '' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
         else if (!d.hasData) msg = 'No orders in this period yet. New orders show here within seconds.'; }
       else if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
       else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
@@ -3243,6 +3243,7 @@
   // table and the Handoff open with one button, and the choice is kept for the visit.
   function dashMore() {
     const b = $('dMoreBtn'), tab = $('tab-dashboard'); if (!b || !tab || b.dataset.wired) return; b.dataset.wired = '1';
+    const grid = tab.querySelector('.dgrid'); if (grid) grid.after(b); // under the whole page, so it is there for a media buyer too (their side column is hidden)
     const paint = () => { const all = tab.classList.contains('dash-all'); b.setAttribute('aria-expanded', String(all)); b.textContent = all ? 'បង្ហាញតែភ្ញៀវថ្ងៃនេះ និងការងារខ្ញុំ' : 'មើលបន្ថែម៖ ប្រគល់វេន · លេខចំណាយ · តារាងភ្ញៀវ'; };
     b.onclick = () => { tab.classList.toggle('dash-all'); paint(); if (tab.classList.contains('dash-all')) { const h = $('hoCard'); (h && !h.hidden ? h : tab.querySelector('.perbar')).scrollIntoView({ block: 'start', behavior: calm ? 'auto' : 'smooth' }); } else window.scrollTo({ top: 0 }); };
     paint();
@@ -4445,7 +4446,7 @@ Notes:
     $('dRes').textContent = t.res ? (t.type === 'result' ? `${Math.round(t.res).toLocaleString('en-US')} results (mixed types)` : resText(t.res, t.type)) : 'Sync from Meta to load results';
     // empty period: say what to do instead of a row of zeros
     { const sum = $('dSpend').closest('.summary'); if (sum) { sum.classList.toggle('is-empty', !(t.spend > 0)); let n = $('dEmptyNote'); if (!n) { n = document.createElement('div'); n.id = 'dEmptyNote'; n.className = 'sum-empty'; sum.insertAdjacentElement('afterend', n); }
-      n.hidden = t.spend > 0; n.innerHTML = t.spend > 0 ? '' : (me && me.buyer ? 'Nothing synced for this period yet — ask your PM to tap <b>Sync from Meta</b>.' : 'Nothing synced for this period yet — tap <b>Sync from Meta</b> to pull the spend.'); } }
+      n.hidden = t.spend > 0; n.innerHTML = t.spend > 0 ? '' : (false ? '' : 'Nothing synced for this period yet — tap <b>Sync from Meta</b> to pull the spend.'); } }
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';
@@ -5443,7 +5444,7 @@ Thank you for working with Ads Box!`,
       const h = location.hash.slice(1), cm = h.match(/^client:(\d+)$/);
       const bn = document.querySelector('.bname small'); if (bn && SITE) bn.textContent = OWNER_SITE ? 'Owner' : ADMIN_SITE ? ({ coo: 'COO', cmo: 'CMO', ceo: 'CEO · Admin' }[me.role] || 'Admin') : MB_SITE ? 'Media buyer' : 'Project Manager';
       if (SITE) document.querySelector('.brand').setAttribute('href', OWNER_SITE ? '/owner#main' : ADMIN_SITE ? '/admin#main' : MB_SITE ? '/mediabuyer#dashboard' : '/projectmanager#dashboard');
-      if (MB_SITE) { // the media buyer site: no sync, no ad accounts, no Profit, no client settings or delete, no task options; a My tasks link
+      if (MB_SITE) { // the media buyer site: no Profit, no deleting / pausing / merging clients, no team panels; a My tasks link. Sync, client settings and ad accounts work as for the PM (owner, 20 Nov)
         document.documentElement.classList.add('asbuyer'); me.profitRole = null;
         if (me.buyer) { $('whoName').textContent = me.buyer.name; $('whoName').title = 'Working in ' + me.name + "'s account"; if (me.buyer.photo) setTimeout(() => { $('whoAvatar').innerHTML = `<img src="/mb-pic/${esc(me.buyer.id)}" alt="">`; }, 0); }
         const g = $('dGreet'); if (g) g.textContent = `${me.buyer ? me.buyer.name : me.name} · ${me.name}'s clients`;

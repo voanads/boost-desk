@@ -1249,7 +1249,9 @@
     };
     dlg.showModal();
   }
+  let cTab = 'today', cTabFor = 0; // the client page's three parts; a newly opened client starts on Today
   function renderClientDetail(fresh) {
+    if (cSel !== cTabFor) { cTabFor = cSel; cTab = 'today'; }
     const box = $('cDetail'), c = clients.find((x) => x.id === cSel);
     if (!c) { parkForm(); box.innerHTML = '<div class="cd-empty"><b>Pick a client</b><span class="hint">See this month\'s numbers, today\'s plan from AI, your notes and tasks, and the client\'s settings in one place.</span></div>'; return; }
     const pd = cPer === 'month' ? null : cPerData[cPer]; if (cPer !== 'month' && !pd) loadClientPeriod(cPer);
@@ -1264,6 +1266,8 @@
           <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span>${me && !me.buyer && clients.length > 1 ? '<button type="button" class="ghost sm" id="cdMergeBtn">Merge a duplicate…</button>' : ''}<button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
+      <div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">ថ្ងៃនេះ<small>ស្ថានភាព · Boost plan · ការងារ</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>ដំបូន្មាន · យុទ្ធសាស្ត្រប្រចាំសប្ដាហ៍</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">ប្រវត្តិ និងការកំណត់<small>Notes · របាយការណ៍ · ការកំណត់</small></button></div>
+      <div class="cd-pane" data-cdpane="today"${cTab === 'today' ? '' : ' hidden'}>
       ${cdStatusSection(c)}
       <div class="cd-per"><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div>
       <div class="cd-stats">
@@ -1274,12 +1278,17 @@
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       ${planStrip(c)}
-      <div class="cd-cols">
-        <div class="cd-col">${workSection(c)}
-          <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
-            <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
+      ${workSection(c)}
+      </div>
+      <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
           ${cdAiSection(c)}
           ${cdWeeklySection(c)}
+      </div>
+      <div class="cd-pane" data-cdpane="more"${cTab === 'more' ? '' : ' hidden'}>
+      <div class="cd-cols">
+        <div class="cd-col">
+          <section class="cd-sec notesec"><div class="cd-sec-h"><h4>📝 Notes</h4><span class="hint" id="cdNotesSt">${cWb[c.id] && cWb[c.id].notesAt ? 'Saved ' + esc(ago(cWb[c.id].notesAt)) : 'Only you see your notes'}</span></div>
+            <textarea id="cdNotes" rows="5" maxlength="5000" placeholder="Notes about this client — what they like, budget agreed, best live times, things to remember…">${esc(notesVal != null ? notesVal : (cWb[c.id] && cWb[c.id].notes) || '')}</textarea></section>
           ${cdPagesSection(c)}
         </div>
         <div class="cd-col">${histSection(c)}</div>
@@ -1293,7 +1302,9 @@
           <div><span class="hint">Service fee</span><b>${c.service && Number(c.service.price) > 0 ? money(c.service.price) + (c.service.day ? ' · pay day ' + esc(String(c.service.day)) : '') : '—'}</b></div>
           <div><span class="hint">Status</span><b>${c.archived ? 'Paused' : 'Active'}</b></div>
         </div></details>
+      </div>
     </div>`;
+    box.querySelectorAll('#cdTabs [data-cdtab]').forEach((b) => b.onclick = () => { cTab = b.dataset.cdtab; box.querySelectorAll('#cdTabs [data-cdtab]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); box.querySelectorAll('[data-cdpane]').forEach((x) => { x.hidden = x.dataset.cdpane !== cTab; }); });
     box.querySelectorAll('#cdPer button').forEach((b) => b.onclick = () => { cPer = b.dataset.per; try { localStorage.setItem('cPer', cPer); } catch (_) {} renderClientDetail(); });
     const setOpen = (on) => { cSetOpen = on; $('cdSettings').hidden = !on; $('cdSetBtn').setAttribute('aria-expanded', String(on)); if (on && !calm && $('cdSettings').animate) $('cdSettings').animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' }); };
     $('cdSetBtn').onclick = () => setOpen(!cSetOpen); $('cdSetClose').onclick = () => setOpen(false);

@@ -30,10 +30,13 @@ function clean(b, cur = {}) {
     account: /^(act_)?\d{1,20}$/.test(String(l.account || '')) ? String(l.account) : '',
     accountName: String(l.accountName || '').trim().slice(0, 120),
     sent: /^\d{4}-\d{2}-\d{2}T/.test(String(l.sent || '')) ? String(l.sent).slice(0, 24) : '', // when this post was sent to the client
+    auto: ['meta', 'name'].includes(l.auto) ? l.auto : '', // added by itself from a Meta campaign (src/autoplan.js); cleared once a person changes the line
     camp: /^[\w-]{3,40}$/.test(String(l.camp || '')) ? String(l.camp) : '', // the Meta campaign this post is (set when added from "found on Meta"): gives the post its own spend
   })).filter((l) => l.daily > 0);
   // Editing the plan keeps "sent to the client" on the posts that did not change (the form does not carry it).
   if (Array.isArray(b.lines) && b.sentAt !== null) { const key = (l) => [l.post, l.link, l.daily, l.days, l.start].join('|'), was = new Map(((cur.lines || []).filter((l) => l.sent)).map((l) => [key(l), l.sent])); for (const l of p.lines) if (!l.sent && was.has(key(l))) l.sent = was.get(key(l)); }
+  // "added by itself" stays on a line a person did not change (the form does not carry it), and goes once they do
+  if (Array.isArray(b.lines)) { const was = new Map((cur.lines || []).filter((l) => l.auto && l.camp).map((l) => [l.camp, l])); for (const l of p.lines) { const o = l.camp && was.get(l.camp); l.auto = o && o.daily === l.daily && o.days === l.days && (o.start || '') === l.start ? o.auto : ''; } }
   if (b.tax != null) p.tax = !!b.tax;
   if (b.hidden != null) p.hidden = !!b.hidden;
   if (b.lang != null) p.lang = b.lang === 'km' ? 'km' : 'en';

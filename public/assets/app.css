@@ -3917,3 +3917,18 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 .wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-soft)!important;color:var(--brand-text)!important;box-shadow:0 0 0 1.5px var(--brand) inset!important}
 .wrap #cViewSeg.cview{border-radius:12px!important;padding:4px!important;gap:4px}
 .wrap #cViewSeg.cview button{border-radius:9px!important;padding:0 22px!important;min-width:104px;min-height:44px!important;font-size:var(--fs-lg,1.05rem)!important}
+
+/* tabs on the left, the period on the right of the same row; the page switch in colour with icons (owner, 20 Nov) */
+.cd-tabrow{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 16px;border-bottom:2px solid var(--line);margin:var(--s-3) 0}
+.cd-tabrow #cdTabs.cd-tabs{display:flex!important;flex:0 1 auto;border-bottom:0;margin:0 0 -2px;gap:6px}
+.cd-tabrow #cdTabs.cd-tabs button{flex:0 0 auto;padding:0 20px;margin-bottom:0}
+.cd-tabrow .cd-per{margin:0 0 6px auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cd-tabrow .cd-per[hidden]{display:none}
+@media (max-width:600px){.cd-tabrow #cdTabs.cd-tabs{flex:1 1 100%}.cd-tabrow #cdTabs.cd-tabs button{flex:1 1 0;padding:0 6px}.cd-tabrow .cd-per{margin:0 0 6px 0}}
+.wrap #cViewSeg.cview{background:none!important;border:0;padding:0!important;gap:8px}
+.wrap #cViewSeg.cview button{display:inline-flex;align-items:center;gap:8px;background:var(--surface)!important;border:1.5px solid var(--line)!important;color:var(--ink)!important}
+.wrap #cViewSeg.cview button .ic{width:20px;height:20px;flex:none;color:var(--brand)}
+.wrap #cViewSeg.cview button[data-v="boosts"] .ic{color:var(--warn)}
+.wrap #cViewSeg.cview button[aria-pressed="true"]{background:var(--brand-fill)!important;border-color:transparent!important;color:var(--on-brand,#fff)!important;box-shadow:none!important}
+.wrap #cViewSeg.cview button[aria-pressed="true"] .ic{color:currentColor}
+.wrap #cViewSeg.cview button{min-width:0;padding:0 16px!important}

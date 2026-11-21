@@ -4716,13 +4716,18 @@ Notes:
     arDay = arData.day; paintAllRep();
   }
   function paintAllRep() {
-    const d = arData, t = d.totals, isToday = d.day === d.today, hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), due = t.sent + t.unsent;
+    const d = arData, tmOf = (g) => g.team || g.name, tms = [...new Set(d.teams.map(tmOf))]; // several Project Managers can share one team
+    if (arTeam && !tms.includes(arTeam)) arTeam = '';
+    // the numbers on top follow the chosen team
+    const sel = d.teams.filter((g) => tmOf(g) === arTeam), add = (f) => sel.reduce((n, g) => n + (Number(g.totals[f]) || 0), 0), sp = Math.round(add('spend') * 100) / 100;
+    const t = arTeam ? { sent: add('sent'), unsent: add('unsent'), nogroup: add('nogroup'), nospend: add('nospend'), clients: add('clients'), spend: sp, orders: add('orders'), cpo: add('orders') ? sp / add('orders') : null, teams: sel.length, teamsDone: sel.filter((g) => !g.totals.unsent).length } : d.totals;
+    const isToday = d.day === d.today, hm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), due = t.sent + t.unsent;
     $('arDay').value = d.day; $('arDay').max = d.today; $('arNext').disabled = isToday;
     $('arSub').textContent = `${nice(d.day)} · ${t.teams} team${t.teams === 1 ? '' : 's'} · ${t.clients} clients`;
-    const nb = $('allRepN'); if (nb) nb.textContent = isToday && t.unsent ? t.unsent : '';
+    const nb = $('allRepN'); if (nb) nb.textContent = isToday && d.totals.unsent ? d.totals.unsent : '';
     const tile = (k, cls, big, lab, sub) => `<button type="button" class="ca ${cls}" data-arf="${k}"${k === 'all' ? '' : ` aria-pressed="${arFilter === k}"`}><span class="ca-l">${lab}</span><b>${big}</b><small>${sub}</small></button>`;
     $('arTiles').innerHTML = tile('sent', due && t.sent === due ? '' : 'mid', `${t.sent} / ${due}`, 'Reports sent', due ? `${Math.round(t.sent / due * 100)}% of clients with spend` : 'no spend yet')
-      + tile('unsent', t.unsent ? 'bad' : '', t.unsent, 'Not sent yet', t.unsent ? `in ${d.teams.filter((x) => x.totals.unsent).length} team${d.teams.filter((x) => x.totals.unsent).length === 1 ? '' : 's'}` : 'all done ✓')
+      + tile('unsent', t.unsent ? 'bad' : '', t.unsent, 'Not sent yet', t.unsent ? `in ${(arTeam ? sel : d.teams).filter((x) => x.totals.unsent).length} team${(arTeam ? sel : d.teams).filter((x) => x.totals.unsent).length === 1 ? '' : 's'}` : 'all done ✓')
       + tile('nogroup', t.nogroup ? 'mid' : '', t.nogroup, 'No Telegram group', t.nogroup ? 'cannot get a report' : 'every client linked')
       + tile('all', '', `${t.teamsDone} / ${t.teams}`, 'Teams finished', 'no report left to send')
       + tile('all', '', money(t.spend), 'Spend', d.anyOrders ? `${t.orders} orders${t.cpo != null ? ' · ' + money(t.cpo) + '/order' : ''}` : 'all teams');
@@ -4731,8 +4736,6 @@ Notes:
     const ST = { sent: (r) => `<span class="rp-st ok">✓ Sent ${hm(r.sent.at)}${r.sent.by ? ' · ' + esc(r.sent.by) : ''}</span>`, unsent: () => '<span class="rp-st bad">● Not sent</span>', nogroup: (r) => `<span class="rp-st warn">⚠ No Telegram group</span>${r.spend > 0 ? '<small class="hint">has spend</small>' : ''}`, nospend: () => '<span class="rp-st mute">No spend</span>' };
     // One row of teams (21 Nov 2026): a tap shows only that team, opened, with one row per client
     const byF = (g) => g.rows.filter((r) => arFilter === 'all' || r.status === arFilter);
-    const tmOf = (g) => g.team || g.name, tms = [...new Set(d.teams.map(tmOf))]; // several Project Managers can share one team
-    if (arTeam && !tms.includes(arTeam)) arTeam = '';
     $('arTeams').innerHTML = `<button type="button" class="bchip" data-arteam="" aria-pressed="${!arTeam}">All teams <span class="num">${d.teams.reduce((n, g) => n + byF(g).length, 0)}</span></button>` + tms.map((t) => { const gs = d.teams.filter((g) => tmOf(g) === t); return `<button type="button" class="bchip${gs.some((g) => g.totals.unsent) ? ' has-bad' : ''}" data-arteam="${esc(t)}" aria-pressed="${arTeam === t}">${esc(t)} <span class="num">${gs.reduce((n, g) => n + byF(g).length, 0)}</span></button>`; }).join('');
     const groups = d.teams.filter((g) => !arTeam || tmOf(g) === arTeam).map((g) => ({ g, rows: byF(g) })).filter((x) => x.rows.length || arTeam);
     $('arList').innerHTML = groups.length ? groups.map(({ g, rows }) => {

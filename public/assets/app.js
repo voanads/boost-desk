@@ -247,7 +247,7 @@
 
   // ---------- tabs ----------
   // Every page has its own address (#clients, #mytasks…), so the browser's Back and Forward buttons move between pages.
-  const TAB_NAMES = ['main', 'board', 'allrep', 'adaccts', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'];
+  const TAB_NAMES = ['main', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'];
   let tabHash = '';
   document.querySelectorAll('nav.tabs button').forEach((b) => b.onclick = () => { if (b.dataset.tab) location.hash = b.dataset.tab; showTab(b.dataset.tab); });
   window.addEventListener('hashchange', () => {
@@ -263,11 +263,11 @@
   }
   addEventListener('resize', () => { ink.style.transition = 'none'; moveInk(); requestAnimationFrame(() => { ink.style.transition = ''; }); });
   // Phone: the bottom bar keeps 4 tabs; the rest open from "More". Desktop: sidebar groups fold.
-  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'adaccts', 'admin'] : ['dashboard', 'clients', 'lives', 'payments'];
+  const KEEP = document.body.dataset.site === 'admin' ? ['main', 'allrep', 'adaccts', 'admin'] : ['dashboard', 'clients', 'lives', 'payments'];
   function moreTabs() { return [...document.querySelectorAll('nav.tabs button[data-tab]')].filter((b) => !b.hidden && !b.classList.contains('nav-sub') && !KEEP.includes(b.dataset.tab)); }
   // A shorter menu: pages that belong together share one menu item and switch with a strip at the top of the page.
   //   Main Dashboard = Overview · Clients Board · Team reports        Ad accounts = My ad accounts · All ad accounts
-  const SUBS = { main: ['main', 'board', 'allrep'], accounts: ['accounts', 'adaccts'] };
+  const SUBS = { main: document.body.dataset.site === 'admin' ? ['main', 'board'] : ['main', 'board', 'allrep'], accounts: ['accounts', 'adaccts'] };
   const SUB_LABEL = { main: 'Overview', board: 'Clients Board', allrep: 'Team reports', accounts: 'My ad accounts', adaccts: 'All ad accounts' };
   const navBtn = (t) => document.querySelector(`nav.tabs button[data-tab="${t}"]`);
   const subGroup = (name) => { for (const [p, list] of Object.entries(SUBS)) { if (!list.includes(name)) continue; const on = list.filter((t) => navBtn(t) && !navBtn(t).hidden); if (on.includes(p) && on.length > 1 && on.includes(name)) return { parent: p, tabs: on }; } return null; };
@@ -309,10 +309,11 @@
     tabHash = name;
     document.body.dataset.tab = name; // the Clients tab uses the full width
     paintMore();
-    if (['admin', 'main', 'board', 'allrep', 'adaccts', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
+    if (['admin', 'main', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'target'].includes(name) && (!(me && me.canAdmin) || document.body.dataset.site === 'pm')) name = 'dashboard';
     if (name === 'profit') name = 'dashboard'; // the Profit panel was removed
-    if (document.body.dataset.site === 'admin' && !['main', 'board', 'allrep', 'adaccts', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
-    ['main', 'board', 'allrep', 'adaccts', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
+    if (document.body.dataset.site !== 'admin' && (name === 'allpay' || name === 'alllive')) name = 'main'; // these two pages are on the admin website only
+    if (document.body.dataset.site === 'admin' && !['main', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'admin', 'target', 'mytasks', 'settings'].includes(name)) name = 'main';
+    ['main', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'target', 'dashboard', 'clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'admin', 'mytasks', 'settings'].forEach((t) => $('tab-' + t).hidden = t !== name);
     if (name !== 'dashboard' && typeof setDock === 'function') setDock(false);
     paintSubnav(name);
     moveInk();
@@ -328,6 +329,8 @@
     if (name === 'board') loadBoard();
     if (name === 'allrep') loadAllRep();
     if (name === 'adaccts') loadAdAccounts();
+    if (name === 'allpay') loadAllPay();
+    if (name === 'alllive') loadAllLive();
     if (name === 'target') loadTargets();
     if (name === 'dashboard') { loadMyTargets(); loadMyTasks(); loadMyTeam(); loadMyBuyerTasks(); }
     if (name === 'mytasks') loadMyTaskPage();
@@ -1081,6 +1084,21 @@
     host.querySelectorAll('[data-bstlp]').forEach((b) => b.onclick = () => { bstLiveP = b.dataset.bstlp; paintBoosts(); });
     host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
   }
+  // Admin website: invoices and Live boosts of every team (read only).
+  const admTeamSeg = (rows, cur, attr) => { const ts = [...new Set(rows.map((r) => r.team))].sort(); return ts.length > 1 ? `<div class="adm-seg" role="group" aria-label="Team"><button type="button" ${attr}="" aria-pressed="${!cur}">All teams</button>${ts.map((t) => `<button type="button" ${attr}="${esc(t)}" aria-pressed="${cur === t}">${esc(t)}</button>`).join('')}</div>` : ''; };
+  let allPayD = null, allPayT = '', allLiveD = null, allLiveT = '';
+  async function loadAllPay() { const host = $('allPayBody'); if (!host) return; try { allPayD = await api('/admin/invoices'); } catch (e) { host.innerHTML = `<div class="panel"><div class="muted">${esc(e.message)}</div></div>`; return; } paintAllPay(); }
+  function paintAllPay() { const host = $('allPayBody'), all = allPayD.rows, rows = all.filter((r) => !allPayT || r.team === allPayT), open = rows.filter((r) => !r.paid), late = open.filter((r) => r.days > 14);
+    const sum = (rs) => rs.reduce((t, r) => t + r.total, 0), st = (r) => r.paid ? '<span class="is-ok">paid</span>' : r.days > 14 ? `<span class="is-bad">not paid · ${r.days} days</span>` : `<span class="is-warn">waiting · ${r.days} days</span>`;
+    host.innerHTML = `${admTeamSeg(all, allPayT, 'data-apt')}<div class="adm-tiles"><div><span class="lb-lab">Not paid</span><b>${money(sum(open))}</b><span class="hint">${open.length} open</span></div><div><span class="lb-lab">Older than 14 days</span><b>${money(sum(late))}</b><span class="hint">${late.length} late</span></div><div><span class="lb-lab">Paid</span><b>${money(sum(rows.filter((r) => r.paid)))}</b><span class="hint">${rows.filter((r) => r.paid).length} paid</span></div></div>
+      <section class="panel adm-p">${rows.length ? `<div class="tablewrap"><table class="mtt adm-t"><thead><tr><th scope="col">Invoice</th><th scope="col">Client</th><th scope="col">Team</th><th scope="col">Date</th><th scope="col" class="num">Amount</th><th scope="col">Sent</th><th scope="col">Status</th></tr></thead><tbody>${rows.map((r) => `<tr><td data-l="Invoice"><b>${esc(r.number)}</b></td><td data-l="Client">${esc(r.client || '–')}</td><td data-l="Team">${esc(r.team)}</td><td data-l="Date">${esc(shortDay(r.date))}</td><td class="num" data-l="Amount">${money(r.total)}</td><td data-l="Sent">${r.sent ? 'sent' : '<span class="is-warn">not sent</span>'}</td><td data-l="Status">${st(r)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No invoice in the last 60 days.</div>'}</section>`;
+    host.querySelectorAll('[data-apt]').forEach((b) => b.onclick = () => { allPayT = b.dataset.apt; paintAllPay(); }); }
+  async function loadAllLive() { const host = $('allLiveBody'); if (!host) return; try { allLiveD = await api('/admin/lives'); } catch (e) { host.innerHTML = `<div class="panel"><div class="muted">${esc(e.message)}</div></div>`; return; } paintAllLive(); }
+  function paintAllLive() { const host = $('allLiveBody'), all = allLiveD.rows, rows = all.filter((r) => !allLiveT || r.team === allLiveT), sum = (f) => Math.round(rows.reduce((t, r) => t + (Number(r[f]) || 0), 0) * 100) / 100;
+    const tm = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), cl = new Set(rows.map((r) => r.team + '|' + r.client)), sent = new Set(rows.filter((r) => r.sent).map((r) => r.team + '|' + r.client));
+    host.innerHTML = `${admTeamSeg(all, allLiveT, 'data-alt')}<div class="adm-tiles"><div><span class="lb-lab">Clients on Live today</span><b>${cl.size}</b><span class="hint">Lives: ${rows.length}</span></div><div><span class="lb-lab">Live spend today</span><b>${money(sum('spend'))}</b></div><div><span class="lb-lab">Comments</span><b>${sum('comments').toLocaleString('en-US')}</b></div><div><span class="lb-lab">Report to client</span><b>${sent.size} of ${cl.size} sent</b></div></div>
+      <section class="panel adm-p">${rows.length ? `<div class="tablewrap"><table class="mtt adm-t"><thead><tr><th scope="col">Live</th><th scope="col">Team</th><th scope="col">Started</th><th scope="col" class="num">Spend</th><th scope="col" class="num">Comments</th><th scope="col" class="num">Messages</th><th scope="col" class="num">$ / comment</th><th scope="col">Report</th></tr></thead><tbody>${rows.map((r) => `<tr><td data-l="Live"><b>${esc(r.page || r.client)}</b><span class="hint">${esc(r.client)} ${r.state === 'on' ? '<span class="pill bad"><i></i>On now</span>' : r.state === 'ended' ? '<span class="pill mute">Ended</span>' : ''}</span></td><td data-l="Team">${esc(r.team)}</td><td data-l="Started">${esc(r.time || '–')}</td><td class="num" data-l="Spend"><b>${money(r.spend)}</b></td><td class="num" data-l="Comments">${r.comments != null ? r.comments.toLocaleString('en-US') : '–'}</td><td class="num" data-l="Messages">${r.messages != null ? r.messages.toLocaleString('en-US') : '–'}</td><td class="num" data-l="$ / comment">${r.perComment != null ? '$' + Number(r.perComment).toFixed(3) : '–'}</td><td data-l="Report">${r.sent ? `<span class="is-ok">sent ${esc(tm(r.sent))}</span>` : '<span class="is-warn">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty"><b>No boosted Live today.</b><br>A Live shows up here by itself after the next sync from Meta.</div>'}</section>`;
+    host.querySelectorAll('[data-alt]').forEach((b) => b.onclick = () => { allLiveT = b.dataset.alt; paintAllLive(); }); }
   // Add one post to a client's boost plan without leaving the Boosts page. From "found on Meta" the campaign, the client and
   // the ad account are filled in already; only the $ per day and the number of days are left to type.
   let bstFoundOpen = true;
@@ -5498,7 +5516,7 @@ Thank you for working with Ads Box!`,
       if (me.login && me.login.must) setTimeout(() => { location.hash = 'settings'; toast('Welcome — choose your own password in Settings → Username & password.'); }, 1500); // a temporary password must be replaced
       if (ADMIN_SITE && me.google) { // Google-only people on the admin website: only the Main Dashboard and Admin
         document.documentElement.classList.add('adminsite');
-        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'allrep', 'adaccts', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });
+        document.querySelectorAll('nav.tabs [data-tab]').forEach((b) => { b.hidden = !['main', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'admin', 'mytasks', 'settings'].includes(b.dataset.tab) ; });
         const al = document.querySelector('nav.tabs [data-tab=adaccts] .full'); if (al) al.textContent = 'Ad accounts';
         $('navGrpWork').hidden = true; $('navGrpAdmin').hidden = false; $('navGrpAdmin').textContent = 'Overview'; $('navGrpManage').hidden = false;
         const bn = document.querySelector('.bname small'); if (bn) bn.textContent = 'Admin';
@@ -5507,7 +5525,7 @@ Thank you for working with Ads Box!`,
         $('whoAvatar').textContent = (me.name || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
         if (me.google && me.google.picture) $('whoAvatar').innerHTML = `<img src="${esc(me.google.picture)}" alt="" referrerpolicy="no-referrer">`;
         $('whoName').title = me.google ? me.google.email : '';
-        showTab(['admin', 'board', 'allrep', 'adaccts', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
+        showTab(['admin', 'board', 'allrep', 'adaccts', 'allpay', 'alllive', 'mytasks', 'settings'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'main');
         window.scrollTo(0, 0); return;
       }
       { const h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: me.tz || undefined })) % 24; const g = $('dGreet'); if (g) g.textContent = `Good ${h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'}, ${String(me.name || '').split(/\s+/)[0]}`; }
@@ -5545,7 +5563,12 @@ Thank you for working with Ads Box!`,
       if (showAdmin) $('navGrpManage').hidden = false;
       if (showAdmin) ['admin', 'main', 'board', 'allrep', 'adaccts'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
       if (showAdmin) $('navGrpAdmin').hidden = false;
-      const adminTabs = ['main', 'board', 'allrep', 'adaccts', 'admin'];
+      if (showAdmin && ADMIN_SITE) { // the admin website's own menu (21 Nov 2026): six plain names, two pages of their own
+        ['allpay', 'alllive'].forEach((k) => { document.querySelector(`nav.tabs [data-tab=${k}]`).hidden = false; });
+        const nm = { main: 'Dashboard', admin: 'Teams and people', adaccts: 'Ad accounts' };
+        for (const [k, t] of Object.entries(nm)) { const el = document.querySelector(`nav.tabs [data-tab=${k}] .full`); if (el) el.textContent = t; }
+      }
+      const adminTabs = ['main', 'board', 'allrep', 'adaccts', 'admin', ...(ADMIN_SITE ? ['allpay', 'alllive'] : [])];
       if (cm) { showTab('clients'); selectClient(Number(cm[1])); setTimeout(() => { const w = document.querySelector('#cDetail .worksec'); if (w) w.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 500); } // from a Telegram task message: that client's page
       else showTab(['clients', 'accounts', 'lives', 'orders', 'reports', 'payments', 'team', 'mytasks', 'settings', ...(showAdmin ? adminTabs : [])].includes(h) ? h : (ADMIN_SITE || OWNER_SITE ? 'main' : 'dashboard'));
       window.scrollTo(0, 0);

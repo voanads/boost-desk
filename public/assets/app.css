@@ -4047,3 +4047,6 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
   body[data-site="admin"] nav.tabs button[data-tab=allrep]:not([hidden]){display:inline-flex!important}
 }
 @media (max-width:760px){.adm-t{display:block!important;min-width:0!important;width:100%!important}.adm-t tr{width:100%;box-sizing:border-box}.adm-t td{overflow-wrap:anywhere;white-space:normal!important}}
+
+/* Team reports: one row of teams */
+#arTeams{margin:var(--s-3) 0 var(--s-2)}#arTeams .bchip.has-bad .num{color:var(--danger)}

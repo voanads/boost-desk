@@ -4709,7 +4709,7 @@ Notes:
   }
 
   // ---- Team reports (leaders): the day's reports of every team, grouped by Project Manager ----
-  let arDay = '', arFilter = 'all', arData = null; const arShut = {};
+  let arDay = '', arFilter = 'all', arData = null, arTeam = ''; const arShut = {};
   async function loadAllRep() {
     const host = $('arList'); if (!arData) host.innerHTML = '<div class="card hint">Loading…</div>';
     try { arData = await api('/admin/reports' + (arDay ? '?day=' + arDay : '')); } catch (e) { host.innerHTML = `<div class="card hint">${esc(e.message)}</div>`; return; }
@@ -4729,9 +4729,14 @@ Notes:
     const F = [['all', 'All', t.clients, ''], ['unsent', 'Not sent', t.unsent, 'bad'], ['sent', 'Sent', t.sent, 'ok'], ['nogroup', 'No Telegram group', t.nogroup, 'warn'], ['nospend', 'No spend', t.nospend, '']];
     $('arFilters').innerHTML = F.filter((f) => f[0] === 'all' || f[2]).map(([k, l, n, c]) => `<button type="button" class="rp-f ${c}" data-arf="${k}" aria-pressed="${arFilter === k}">${l} <b>${n}</b></button>`).join('') + '<span class="hint rp-auto">View only — each Project Manager sends from their own Reports page</span>';
     const ST = { sent: (r) => `<span class="rp-st ok">✓ Sent ${hm(r.sent.at)}${r.sent.by ? ' · ' + esc(r.sent.by) : ''}</span>`, unsent: () => '<span class="rp-st bad">● Not sent</span>', nogroup: (r) => `<span class="rp-st warn">⚠ No Telegram group</span>${r.spend > 0 ? '<small class="hint">has spend</small>' : ''}`, nospend: () => '<span class="rp-st mute">No spend</span>' };
-    const groups = d.teams.map((g) => ({ g, rows: g.rows.filter((r) => arFilter === 'all' || r.status === arFilter) })).filter((x) => x.rows.length);
+    // One row of teams (21 Nov 2026): a tap shows only that team, opened, with one row per client
+    const byF = (g) => g.rows.filter((r) => arFilter === 'all' || r.status === arFilter);
+    const tmOf = (g) => g.team || g.name, tms = [...new Set(d.teams.map(tmOf))]; // several Project Managers can share one team
+    if (arTeam && !tms.includes(arTeam)) arTeam = '';
+    $('arTeams').innerHTML = `<button type="button" class="bchip" data-arteam="" aria-pressed="${!arTeam}">All teams <span class="num">${d.teams.reduce((n, g) => n + byF(g).length, 0)}</span></button>` + tms.map((t) => { const gs = d.teams.filter((g) => tmOf(g) === t); return `<button type="button" class="bchip${gs.some((g) => g.totals.unsent) ? ' has-bad' : ''}" data-arteam="${esc(t)}" aria-pressed="${arTeam === t}">${esc(t)} <span class="num">${gs.reduce((n, g) => n + byF(g).length, 0)}</span></button>`; }).join('');
+    const groups = d.teams.filter((g) => !arTeam || tmOf(g) === arTeam).map((g) => ({ g, rows: byF(g) })).filter((x) => x.rows.length || arTeam);
     $('arList').innerHTML = groups.length ? groups.map(({ g, rows }) => {
-      const gt = g.totals, gd = gt.sent + gt.unsent, pct = gd ? Math.round(gt.sent / gd * 100) : 100, cls = gt.unsent ? 'bad' : gt.nogroup ? 'mid' : 'ok', shut = arShut[g.owner] != null ? arShut[g.owner] : (arFilter === 'all' && !gt.unsent && !gt.nogroup);
+      const gt = g.totals, gd = gt.sent + gt.unsent, pct = gd ? Math.round(gt.sent / gd * 100) : 100, cls = gt.unsent ? 'bad' : gt.nogroup ? 'mid' : 'ok', shut = arShut[g.owner] != null ? arShut[g.owner] : arTeam ? false : (arFilter === 'all' && !gt.unsent && !gt.nogroup);
       return `<section class="card ar-g ${cls}${shut ? ' shut' : ''}" data-arg="${esc(g.owner)}">
         <button type="button" class="ar-h" aria-expanded="${!shut}"><span class="avatar">${initials(g.name)}</span>
           <span class="ar-who"><b>${esc(g.name)}</b><span class="hint">${[g.team ? esc(g.team) : '', g.buyers.length ? 'MB ' + g.buyers.map(esc).join(', ') : 'no media buyer', g.auto.on ? 'auto ' + esc(g.auto.time) : 'auto report off'].filter(Boolean).join(' · ')}</span></span>
@@ -4750,6 +4755,7 @@ Notes:
     document.addEventListener('click', (ev) => {
       if (ev.target.closest('#arPrev')) return go(-1);
       if (ev.target.closest('#arNext')) return go(1);
+      const tmb = ev.target.closest('#tab-allrep [data-arteam]'); if (tmb && arData) { arTeam = tmb.dataset.arteam; for (const k of Object.keys(arShut)) delete arShut[k]; paintAllRep(); return; }
       const f = ev.target.closest('#tab-allrep [data-arf]'); if (f && arData) { arFilter = arFilter === f.dataset.arf ? 'all' : f.dataset.arf; for (const k of Object.keys(arShut)) delete arShut[k]; paintAllRep(); return; }
       const h = ev.target.closest('#arList .ar-h'); if (h) { const s = h.closest('[data-arg]'), shut = !s.classList.contains('shut'); arShut[s.dataset.arg] = shut; s.classList.toggle('shut', shut); h.setAttribute('aria-expanded', String(!shut)); }
     });

@@ -1298,5 +1298,9 @@
 [
 "const nm = { main: 'Dashboard', admin: 'Teams and people', adaccts: 'Ad accounts' };",
 "const nm = { main: 'Dashboard', admin: 'ក្រុម និងបុគ្គលិក', adaccts: 'Ad accounts' };"
+],
+[
+"aria-pressed=\"${!arTeam}\">All teams <span class=\"num\">",
+"aria-pressed=\"${!arTeam}\">គ្រប់ក្រុម <span class=\"num\">"
 ]
 ]

@@ -134,7 +134,7 @@ app.get('/auth/facebook/callback', wrap(async (req, res) => {
   // Connecting an extra Facebook account to my workspace: keep me logged in as myself, save the other login beside mine.
   const linkFor = req.session.linkFor; req.session.linkFor = null;
   if (linkFor && req.session.fbId === linkFor && (await db.getUser(linkFor))) {
-    const back = (msg, ok) => res.redirect('/?fb=' + (ok ? 'ok' : 'err') + '&fbmsg=' + encodeURIComponent(msg) + '#settings');
+    const back = (msg, ok) => { console.log(`[fb link] ${ok ? 'connected' : 'not connected'}: ${msg}`); return res.redirect('/?fb=' + (ok ? 'ok' : 'err') + '&fbmsg=' + encodeURIComponent(msg) + '#settings'); };
     if (profile.id === linkFor) { await saveFbLogin(profile, encrypt(token), expires); return back('That is the Facebook account you are already logged in with. On facebook.com switch to your other account first, then tap Connect again.', false); }
     if ((await db.blockedUsers())[profile.id]) return back(`${profile.name}'s access to Boost Desk was removed, so it can't be connected.`, false);
     const other = await db.getUser(profile.id);
@@ -539,8 +539,10 @@ app.get('/', wrap(async (req, res) => {
   if (req.user.google) return res.redirect('/admin');
   // The front door opens the Project Manager site for everyone with a Facebook login; the owner and
   // CEO / COO switch to /owner or /admin from the menu or by typing the address.
-  if ((await roleOf(req.user.fb_id)) === 'mb') return res.redirect('/mediabuyer');
-  res.redirect('/projectmanager');
+  // keep ?fb=…&fbmsg=… (the result of connecting a Facebook account): without it the person never saw why a connect failed
+  const qi = req.originalUrl.indexOf('?'), qs = qi >= 0 ? req.originalUrl.slice(qi) : '';
+  if ((await roleOf(req.user.fb_id)) === 'mb') return res.redirect('/mediabuyer' + qs);
+  res.redirect('/projectmanager' + qs);
 }));
 // /owner: the app owner's site — every page (Work + Admin). Anyone else is sent to their own site.
 app.get(['/owner', '/owner/'], wrap(async (req, res) => {

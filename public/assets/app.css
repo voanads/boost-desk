@@ -4030,3 +4030,20 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 @media (max-width:760px){
   .bst-h .bst-kind button{white-space:nowrap;padding:0 10px!important;font-size:.9rem}
 }
+
+/* Admin website: Payments and invoices, Live boosts of every team (21 Nov 2026) */
+.adm-seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--s-3)}
+.wrap .adm-seg button{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:500;box-shadow:none}
+.wrap .adm-seg button[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand-text,var(--brand));border-color:transparent;font-weight:600}
+.adm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--s-2);margin-bottom:var(--s-3)}
+.adm-tiles>div{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px}.adm-tiles b{display:block;font-size:1.3rem}.adm-tiles .hint{display:block}
+.adm-p{padding:0!important;overflow:hidden}.adm-t{width:100%}.adm-t td .hint{display:block}.adm-t .is-ok{color:var(--ok);font-weight:600}.adm-t .is-bad{color:var(--danger);font-weight:600}.adm-t .is-warn{color:var(--warn);font-weight:600}
+@media (max-width:760px){
+  .adm-t thead{display:none}.adm-t tbody{display:block}
+  .adm-t tr{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px 14px;padding:14px 16px;border-top:1px solid var(--line)}
+  .adm-t td{display:block!important;padding:0!important;border:0!important;text-align:left!important;min-width:0}.adm-t td:first-child{grid-column:1/-1}
+  .adm-t td:not(:first-child)::before{content:attr(data-l);display:block;font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .adm-p .tablewrap{overflow-x:visible}
+  body[data-site="admin"] nav.tabs button[data-tab=allrep]:not([hidden]){display:inline-flex!important}
+}
+@media (max-width:760px){.adm-t{display:block!important;min-width:0!important;width:100%!important}.adm-t tr{width:100%;box-sizing:border-box}.adm-t td{overflow-wrap:anywhere;white-space:normal!important}}

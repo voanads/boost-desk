@@ -1238,5 +1238,65 @@
 [
 "${t.clients} clients · revenue ${money(t.revenue)}",
 "ភ្ញៀវ ${t.clients} · ចំណូល ${money(t.revenue)}"
+],
+[
+">All teams</button>${ts.map(",
+">គ្រប់ក្រុម</button>${ts.map("
+],
+[
+"'<span class=\"is-ok\">paid</span>' : r.days > 14 ? `<span class=\"is-bad\">not paid · ${r.days} days</span>` : `<span class=\"is-warn\">waiting · ${r.days} days</span>`",
+"'<span class=\"is-ok\">បង់ហើយ</span>' : r.days > 14 ? `<span class=\"is-bad\">មិនទាន់បង់ · ${r.days} ថ្ងៃ</span>` : `<span class=\"is-warn\">រង់ចាំ · ${r.days} ថ្ងៃ</span>`"
+],
+[
+"<span class=\"lb-lab\">Not paid</span><b>${money(sum(open))}</b><span class=\"hint\">${open.length} open</span>",
+"<span class=\"lb-lab\">មិនទាន់បង់</span><b>${money(sum(open))}</b><span class=\"hint\">${open.length} Invoice</span>"
+],
+[
+"<span class=\"lb-lab\">Older than 14 days</span><b>${money(sum(late))}</b><span class=\"hint\">${late.length} late</span>",
+"<span class=\"lb-lab\">ចាស់ជាង 14 ថ្ងៃ</span><b>${money(sum(late))}</b><span class=\"hint\">${late.length} Invoice</span>"
+],
+[
+"<span class=\"lb-lab\">Paid</span>",
+"<span class=\"lb-lab\">បង់ហើយ</span>"
+],
+[
+"${rows.filter((r) => r.paid).length} paid</span>",
+"${rows.filter((r) => r.paid).length} Invoice</span>"
+],
+[
+"<th scope=\"col\">Invoice</th><th scope=\"col\">Client</th><th scope=\"col\">Team</th><th scope=\"col\">Date</th><th scope=\"col\" class=\"num\">Amount</th><th scope=\"col\">Sent</th><th scope=\"col\">Status</th>",
+"<th scope=\"col\">Invoice</th><th scope=\"col\">ភ្ញៀវ</th><th scope=\"col\">ក្រុម</th><th scope=\"col\">ថ្ងៃ</th><th scope=\"col\" class=\"num\">ចំនួនទឹកប្រាក់</th><th scope=\"col\">ផ្ញើ</th><th scope=\"col\">ស្ថានភាព</th>"
+],
+[
+"${r.sent ? 'sent' : '<span class=\"is-warn\">not sent</span>'}</td><td data-l=\"Status\">",
+"${r.sent ? 'ផ្ញើហើយ' : '<span class=\"is-warn\">មិនទាន់ផ្ញើ</span>'}</td><td data-l=\"Status\">"
+],
+[
+"No invoice in the last 60 days.",
+"គ្មាន Invoice ក្នុង 60 ថ្ងៃចុងក្រោយ។"
+],
+[
+"<span class=\"lb-lab\">Clients on Live today</span><b>${cl.size}</b><span class=\"hint\">Lives: ${rows.length}</span>",
+"<span class=\"lb-lab\">ភ្ញៀវ Live ថ្ងៃនេះ</span><b>${cl.size}</b><span class=\"hint\">${rows.length} Live</span>"
+],
+[
+"<span class=\"lb-lab\">Live spend today</span>",
+"<span class=\"lb-lab\">ចំណាយ Live ថ្ងៃនេះ</span>"
+],
+[
+"<span class=\"lb-lab\">Report to client</span><b>${sent.size} of ${cl.size} sent</b>",
+"<span class=\"lb-lab\">របាយការណ៍ទៅភ្ញៀវ</span><b>ផ្ញើ ${sent.size} នៃ ${cl.size}</b>"
+],
+[
+"<th scope=\"col\">Live</th><th scope=\"col\">Team</th><th scope=\"col\">Started</th><th scope=\"col\" class=\"num\">Spend</th>",
+"<th scope=\"col\">Live</th><th scope=\"col\">ក្រុម</th><th scope=\"col\">ចាប់ផ្ដើម</th><th scope=\"col\" class=\"num\">ចំណាយ</th>"
+],
+[
+"'<span class=\"is-warn\">not sent</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class=\"empty\"><b>No boosted Live today.</b><br>A Live shows up here by itself after the next sync from Meta.</div>'",
+"'<span class=\"is-warn\">មិនទាន់ផ្ញើ</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class=\"empty\"><b>គ្មាន Live ដែល Boost ថ្ងៃនេះ។</b><br>Live បង្ហាញទីនេះដោយខ្លួនឯង ក្រោយ Sync ពី Meta លើកក្រោយ។</div>'"
+],
+[
+"const nm = { main: 'Dashboard', admin: 'Teams and people', adaccts: 'Ad accounts' };",
+"const nm = { main: 'Dashboard', admin: 'ក្រុម និងបុគ្គលិក', adaccts: 'Ad accounts' };"
 ]
 ]

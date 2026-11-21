@@ -2367,6 +2367,33 @@ api.get('/admin/clients-today', adminOnly, wrap(async (req, res) => {
   }
   res.json({ today: sync.todayIn(), hour: STATUS().hourNow(), teams: out });
 }));
+// Admin menu (21 Nov 2026): Live boosts and invoices of every team on one page each. Read only.
+api.get('/admin/lives', adminOnly, wrap(async (req, res) => {
+  const teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const today = sync.todayIn(), now = Date.now(), rows = [];
+  for (const u of await db.allUsers()) {
+    let list = []; try { list = await lives.listLives(u.fb_id, today, today); } catch (_) {}
+    const sent = {};
+    for (const l of list) {
+      if (!(l.clientId in sent)) { try { const e = await db.getEntry(today, l.clientId); sent[l.clientId] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sent[l.clientId] = ''; } }
+      rows.push({ team: teamOf[u.fb_id] || u.name, client: l.client, page: l.page, time: l.time, start: l.start, spend: l.spend, comments: l.comments, messages: l.messages, perComment: l.perComment, camps: l.campaigns.length,
+        state: l.end != null && l.end <= now ? 'ended' : l.end != null ? 'on' : '', sent: sent[l.clientId] });
+    }
+  }
+  rows.sort((a, b) => (b.start || 0) - (a.start || 0));
+  res.json({ today, rows });
+}));
+api.get('/admin/invoices', adminOnly, wrap(async (req, res) => {
+  const teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
+  const today = sync.todayIn(), from = sync.addDays(today, -60), rows = [];
+  for (const u of await db.allUsers()) {
+    let inv = [], names = {}; try { inv = await db.listInvoices(u.fb_id, from, today); if (inv.length) for (const c of await db.listClients(u.fb_id)) names[c.id] = c.name; } catch (_) {}
+    for (const i of inv) rows.push({ team: teamOf[u.fb_id] || u.name, client: names[i.client_id] || '', number: i.number, date: i.date, total: Number(i.total) || 0, sent: !!i.sent_at, paid: !!i.paid_at,
+      days: i.paid_at ? 0 : Math.max(0, Math.round((new Date(today) - new Date(i.date)) / 864e5)) });
+  }
+  rows.sort((a, b) => (a.paid - b.paid) || (b.days - a.days) || String(b.date).localeCompare(String(a.date)));
+  res.json({ today, from, rows });
+}));
 // Telegram for red clients: every 5 minutes (8:00–21:00). Leaders = the alert chat and every CEO / COO / CMO with Telegram.
 async function leaderChats() {
   const out = new Set(); const a = await db.getSetting('alertChat', null); if (a && a.id) out.add(String(a.id));

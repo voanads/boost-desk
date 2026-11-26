@@ -16,7 +16,7 @@ module.exports = function mountTeam(app, api, deps) {
     [/^POST \/clients$/, 'Added a client'], [/^PATCH \/clients\/\d+$/, 'Changed a client\'s details'], [/^DELETE \/clients\/\d+$/, 'Deleted a client'],
     [/^PUT \/clients\/\d+\/boost-plan$/, 'Changed a client\'s boost plan'], [/^PUT \/kpis$/, 'Changed KPIs'], [/^POST \/kpis\/copy/, 'Copied KPIs to other people'],
     [/^POST \/media-buyers$/, 'Added a media buyer'], [/^DELETE \/media-buyers\/[^/]+$/, 'Removed a media buyer'], [/^POST \/media-buyers\/[^/]+\/make-pm$/, 'Marked a media buyer\'s Telegram as the PM'],
-    [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^PUT \/auto-report-all$/, 'Turned auto report on or off for everyone'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/merge-from$/, 'Merged a duplicate client'], [/^POST \/clients\/\d+\/strategy\/send$/, 'Sent a weekly strategy to a client'], [/^PUT \/clients\/\d+\/strategy$/, 'Changed a client\'s weekly strategy'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
+    [/^PATCH \/media-buyers\//, 'Changed a media buyer'], [/^PUT \/admin\/auto-report-all$/, 'Turned auto report on or off for everyone'], [/^POST \/nudge$/, 'Sent a reminder on Telegram'], [/^POST \/clients\/\d+\/checked$/, 'Checked a client'], [/^POST \/clients\/\d+\/merge-from$/, 'Merged a duplicate client'], [/^POST \/clients\/\d+\/strategy\/send$/, 'Sent a weekly strategy to a client'], [/^PUT \/clients\/\d+\/strategy$/, 'Changed a client\'s weekly strategy'], [/^POST \/clients\/\d+\/on-it$/, 'Took a client\'s problem'], [/^POST \/nudge\/no-plan$/, 'Reminded everyone without a plan'],
     [/^(POST|PUT|DELETE) \/menu\/(item|reset)/, 'Changed a task menu'], [/^PUT \/admin\/menu$/, 'Changed the standard task menu'],
     [/^POST \/logins$/, 'Made a username'], [/^POST \/logins\/[^/]+\/reset$/, 'Reset a password'], [/^DELETE \/logins\//, 'Removed a username'], [/^POST \/me\/password$/, 'Changed their own password'],
     [/^DELETE \/fb-accounts\//, 'Removed a Facebook account from the team'], [/^POST \/admin\/merge$/, 'Merged two accounts'], [/^POST \/admin\/teams\/share-fb$/, 'Shared a Facebook account with a team'],
@@ -91,10 +91,12 @@ module.exports = function mountTeam(app, api, deps) {
     await jobs.setEnabled(req.params.id, !!req.body.enabled);
     res.json({ ok: true });
   }));
-  api.put('/auto-sync', ownerOnly, wrap(async (req, res) => {
+  const autoSyncAll = wrap(async (req, res) => {
     for (const u of await db.allUsers()) await jobs.setEnabled(u.fb_id, !!req.body.enabled);
     res.json({ ok: true });
-  }));
+  });
+  api.put('/auto-sync', ownerOnly, autoSyncAll);
+  api.put('/admin/auto-sync', ownerOnly, autoSyncAll); // the admin website (Google sign-in) only reaches /api/admin/…
   // Auto report for every Project Manager at once (Admin → App settings). Each person keeps their own time; someone who never
   // set one gets 20:00. Turning it on after today's time has passed starts tomorrow (extras.saveAutoSettings), so this never
   // sends a burst of reports the moment it is tapped.
@@ -104,8 +106,8 @@ module.exports = function mountTeam(app, api, deps) {
     for (const u of await db.allUsers()) { const s = await EXTRAS().autoSettings(u.fb_id); out.push({ id: u.fb_id, name: u.name, on: !!s.on, time: s.time }); }
     return { users: out, on: out.filter((x) => x.on).length, total: out.length };
   };
-  api.get('/auto-report-all', ownerOnly, wrap(async (req, res) => res.json(await autoReportAll())));
-  api.put('/auto-report-all', ownerOnly, wrap(async (req, res) => {
+  api.get('/admin/auto-report-all', ownerOnly, wrap(async (req, res) => res.json(await autoReportAll())));
+  api.put('/admin/auto-report-all', ownerOnly, wrap(async (req, res) => {
     for (const u of await db.allUsers()) await EXTRAS().saveAutoSettings(u.fb_id, { on: !!(req.body && req.body.on) });
     res.json(await autoReportAll());
   }));

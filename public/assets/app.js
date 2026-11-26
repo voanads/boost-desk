@@ -3781,7 +3781,7 @@
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
       d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
-    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); api('/auto-report-all').then(paintArAll).catch((e) => { const b = $('arAllBox'); if (b) b.textContent = e.message; }); }
+    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); api('/admin/auto-report-all').then(paintArAll).catch((e) => { const b = $('arAllBox'); if (b) b.textContent = e.message; }); }
   }
   // Admin → App settings → Auto report: how many Project Managers have it on, and who does not.
   function paintArAll(r) {
@@ -3917,9 +3917,9 @@ Notes:
     if (k === 'aikeydel') { if (!confirm('Remove the AI key? AI advice stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); aiReady = false; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'aron' || k === 'aroff') {
       if (k === 'aroff' && !confirm('Turn auto report off for every Project Manager? Clients stop getting their daily report unless someone sends it by hand.')) return;
-      try { paintArAll(await api('/auto-report-all', { method: 'PUT', body: { on: k === 'aron' } })); successBadge('Auto report ' + (k === 'aron' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } return;
+      try { paintArAll(await api('/admin/auto-report-all', { method: 'PUT', body: { on: k === 'aron' } })); successBadge('Auto report ' + (k === 'aron' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } return;
     }
-    if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
+    if (k === 'syncon' || k === 'syncoff') { try { await api('/admin/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
   });
   $('sGrid').addEventListener('change', async (ev) => {
     if (ev.target.id !== 'sQrFile') return;

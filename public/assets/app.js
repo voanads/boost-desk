@@ -3771,7 +3771,7 @@
         d.telegram.bot ? `Bot: <b>@${esc(d.telegram.username || '…')}</b><div class="hint">Clients' groups are linked with the /link code in each client's window. ${d.telegram.teamGroup ? 'Team report group is set.' : 'No team report group (TELEGRAM_CHAT_ID).'}</div>` : 'Add <code>TELEGRAM_BOT_TOKEN</code> in Railway to send reports.', ''),
       card('🧾', 'Invoice', '', `<div class="sc-inv"><div><b>${esc(d.invoice.company)}</b><br>${esc(d.invoice.bankName)}<br>${esc(d.invoice.accountName)}<br><span class="num">${esc(d.invoice.accountNo)}</span></div>${d.invoice.qr ? `<img class="sc-qr" src="${d.invoice.qr}" alt="Payment QR">` : ''}</div><div class="hint">The payment QR is the same on every user's invoices.</div>`,
         `${d.canEdit ? '<button class="sm" data-sgo="qr">Change QR for everyone</button><input type="file" id="sQrFile" accept="image/png,image/jpeg" hidden>' : ''}<button class="sm ghost" data-sgo="invoice">My invoice details</button>`),
-      card('⏰', 'My auto report', '', 'Sends each client’s report to their Telegram group at a set time every day. Each person sets their own.', '<button class="sm" data-sgo="autoreport">Open auto report</button>'),
+      card('⏰', d.canEdit ? 'Auto report' : 'My auto report', d.canEdit ? '<span id="arAllState"></span>' : '', `Sends each client’s report to their Telegram group at a set time every day. Each person sets their own time.${d.canEdit ? '<div id="arAllBox" class="hint">Loading…</div>' : ''}`, `<button class="sm" data-sgo="autoreport">Open my auto report</button>${d.canEdit ? '<button class="sm" data-sgo="aron">Turn on for everyone</button><button class="sm ghost" data-sgo="aroff">Turn off for everyone</button>' : ''}`),
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
       d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.${d.ai.usage ? `<br>This month: ${Number(d.ai.usage.calls).toLocaleString('en-US')} requests · ${Math.round((d.ai.usage.input + d.ai.usage.output) / 1000).toLocaleString('en-US')}K tokens${d.ai.usage.priced ? ` · about ${money(d.ai.usage.cost)}` : ''}` : ''}<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
@@ -3781,7 +3781,14 @@
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
       d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
-    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); }
+    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); api('/auto-report-all').then(paintArAll).catch((e) => { const b = $('arAllBox'); if (b) b.textContent = e.message; }); }
+  }
+  // Admin → App settings → Auto report: how many Project Managers have it on, and who does not.
+  function paintArAll(r) {
+    const box = $('arAllBox'), stt = $('arAllState'); if (!box || !r) return;
+    if (stt) stt.innerHTML = `<span class="sc-st ${r.on === r.total ? 'ok' : 'bad'}">${r.on} of ${r.total} on</span>`;
+    const off = r.users.filter((u) => !u.on);
+    box.innerHTML = off.length ? `Off for: ${off.map((u) => esc(u.name)).join(', ')}<br>Turning it on after today's time has passed starts tomorrow.` : 'On for everyone. Each person can still change their own time.';
   }
   // Task menu editor: one line per duty, for PMs and for media buyers.
   async function openMenuEditor() {
@@ -3908,6 +3915,10 @@ Notes:
     if (k === 'menu') { openMenuEditor(); return; }
     if (k === 'aikey') { const v = prompt('Paste your Gemini key (from aistudio.google.com) or Claude key (starts with sk-ant-)'); if (!v) return; try { await api('/admin/ai', { method: 'PUT', body: { key: v.trim() } }); successBadge('AI advice is on'); aiReady = true; loadSettings(); } catch (e) { toast(e.message); } return; }
     if (k === 'aikeydel') { if (!confirm('Remove the AI key? AI advice stops working.')) return; try { await api('/admin/ai', { method: 'PUT', body: { key: null } }); toast('AI key removed'); aiReady = false; loadSettings(); } catch (e) { toast(e.message); } return; }
+    if (k === 'aron' || k === 'aroff') {
+      if (k === 'aroff' && !confirm('Turn auto report off for every Project Manager? Clients stop getting their daily report unless someone sends it by hand.')) return;
+      try { paintArAll(await api('/auto-report-all', { method: 'PUT', body: { on: k === 'aron' } })); successBadge('Auto report ' + (k === 'aron' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } return;
+    }
     if (k === 'syncon' || k === 'syncoff') { try { await api('/auto-sync', { method: 'PUT', body: { enabled: k === 'syncon' } }); successBadge('Auto sync ' + (k === 'syncon' ? 'on' : 'off') + ' for everyone'); } catch (e) { toast(e.message); } }
   });
   $('sGrid').addEventListener('change', async (ev) => {

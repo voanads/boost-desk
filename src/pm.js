@@ -46,6 +46,12 @@ async function todo(user) {
     if (days >= 3) items.push({ kind: 'unpaid', level: days > 10 ? 'bad' : 'warn', clientId: c.id, title: `${c.name} មិនទាន់បង់វិក្កយបត្រ ${v.number}`, detail: `${money(v.total)} · បានផ្ញើ ${days} ថ្ងៃមុន`, action: 'payments' });
   }
 
+  // Client setup (Nov 2026 review): boosting clients without a service price get no invoice, and clients whose orders are
+  // not counted get no cost per order. Both are to-dos for the PM, never a red / amber status (see status.js).
+  try { for (const x of await setup(owner)) for (const k of x.missing) items.push(k === 'price'
+    ? { kind: 'setup-price', level: 'todo', clientId: x.clientId, title: `${x.name} មិនទាន់មានតម្លៃសេវា`, detail: `ចំណាយ ${money(x.spend7)} ក្នុង 7 ថ្ងៃ · កំណត់តម្លៃសេវា និងថ្ងៃបង់ ដើម្បីឲ្យវិក្កយបត្រ និងការរំលឹកដំណើរការ`, action: 'client' }
+    : { kind: 'setup-orders', level: 'todo', clientId: x.clientId, title: `${x.name}៖ មិនទាន់រាប់ Order បាន`, detail: `ចំណាយ ${money(x.spend7)} ក្នុង 7 ថ្ងៃ តែ 0 order · ភ្ជាប់ Page របស់ភ្ញៀវក្នុង Orders → Connect Pages`, action: 'orders' }); } catch (_) {}
+
   const order = { bad: 0, warn: 1, todo: 2 };
   items.sort((a, b) => order[a.level] - order[b.level]);
   // Post boost plans: spend went over the planned budget.
@@ -106,4 +112,28 @@ async function suggestions(owner, clients, today) {
 }
 const money3 = (n) => '$' + (Number(n) || 0).toFixed(3);
 
-module.exports = { todo };
+// Which boosting clients are not fully set up: no service price, or spend with no order counted. Cached 30 minutes per
+// account (todo() runs every few minutes for the status alerts). Only clients with $20+ spend in the last 7 days.
+const SETUP_MIN = 20, setupCache = new Map();
+function setupGaps(clients, spend7, orders7, countingOrders) {
+  const out = [];
+  for (const c of clients) {
+    const sp = round2(spend7[c.id] || 0); if (c.archived || sp < SETUP_MIN) continue;
+    const missing = [];
+    if (!(Number((c.service || {}).price) > 0)) missing.push('price');
+    if (countingOrders && !((orders7[c.id] || {}).orders > 0)) missing.push('orders');
+    if (missing.length) out.push({ clientId: c.id, name: c.name, spend7: sp, missing });
+  }
+  return out.sort((a, b) => b.spend7 - a.spend7);
+}
+async function setup(owner) {
+  const hit = setupCache.get(owner); if (hit && Date.now() - hit.at < 30 * 60e3) return hit.v;
+  const today = sync.todayIn(), from = sync.addDays(today, -6), O = require('./orders');
+  const clients = (await db.listClients(owner)).filter((c) => !c.archived);
+  const spend7 = {}; for (const r of await db.monthEntries(owner, from, today)) { const c = clients.find((x) => x.id === r.client_id); if (!c) continue; const e = r.data || {};
+    spend7[c.id] = (spend7[c.id] || 0) + (hasLive(c) ? Object.values(e.lives || {}).reduce((t, l) => t + (Number(l && l.spend) || 0), 0) : 0) + (hasPost(c) ? Number((e.post || {}).spend) || 0 : 0); }
+  let counting = false, orders7 = {}; try { const oc = await O.publicConfig(); counting = !!((oc.own && oc.own.on) || oc.hasKey); if (counting) orders7 = (await O.byClient(owner, from, today)).clients || {}; } catch (_) { counting = false; }
+  const v = setupGaps(clients, spend7, orders7, counting); setupCache.set(owner, { at: Date.now(), v }); return v;
+}
+
+module.exports = { todo, setup, setupGaps };

@@ -56,6 +56,8 @@ module.exports = function mountAdminPanel(app, api, deps) {
       const na = Object.values((await db.getUserSetting(u.id, 'acctNoAccess', {})) || {});
       if (na.length) add('warn', 'Sync', `${u.name}: ${na.length} ad account(s) Boost Desk can't read`, `${na.map((x) => x.name).join(', ')} — Meta says no permission. Untick it in Ad accounts, or ask the account's owner to give ${u.name} access again. Boost Desk retries every 6 hours.`, null);
       const ar = await db.getUserSetting(u.id, 'autoReportLast', null);
+      try { const gaps = await require('../pm').setup(u.id), np = gaps.filter((x) => x.missing.includes('price')), no = gaps.filter((x) => x.missing.includes('orders'));
+        if (gaps.length) add('info', 'Setup', `${u.name}: ${gaps.length} boosting client${gaps.length === 1 ? '' : 's'} not fully set up`, [np.length ? `No service price (no invoice): ${np.slice(0, 6).map((x) => x.name).join(', ')}${np.length > 6 ? ` +${np.length - 6}` : ''}` : '', no.length ? `Spend but 0 orders counted: ${no.slice(0, 6).map((x) => x.name).join(', ')}${no.length > 6 ? ` +${no.length - 6}` : ''}` : ''].filter(Boolean).join(' · '), null); } catch (_) {}
       if (ar && ar.failed && ar.failed.length) add('bad', 'Reports', `${ar.failed.length} auto report(s) failed for ${u.name}`, ar.failed.slice(0, 3).map((f) => `${f.name}: ${f.error}`).join(' · '), null);
     }
     if (!telegram.hasBot()) add('bad', 'Telegram', 'The Telegram bot is not set up', 'Add TELEGRAM_BOT_TOKEN in Railway so reports can be sent.', null);

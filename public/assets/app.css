@@ -4050,3 +4050,442 @@ a.btnlink.primary:hover{filter:brightness(1.05);background:var(--brand)}
 
 /* Team reports: one row of teams */
 #arTeams{margin:var(--s-3) 0 var(--s-2)}#arTeams .bchip.has-bad .num{color:var(--danger)}
+
+
+/* ==========================================================================
+   Restyle layer (Oct 2026), formerly restyle.css loaded right after this file.
+   Kept last so it still overrides the rules above.
+   ========================================================================== */
+/* Boost Desk — clean restyle (Oct 2026). Loaded after app.css; only overrides.
+   Same tokens, same menu, same pages — tidier labels, pills and tiles.
+   Source of truth: the "Boost Desk — new look" Design canvas. */
+
+/* ---------- Section labels: small, uppercase, muted (stat tiles, table heads, form labels) ---------- */
+.summary .lbl,.mk .lbl,.bk .lbl,.cd-stat .lbl,.ost .lbl,.ost-main .lbl,
+th,.dtable td[data-l]::before,
+.fld>span,.lv .st span,.lv .kv span,.paydate span,.payprice span,.pgsplit-h,.invitems-h{
+  text-transform:uppercase!important;letter-spacing:.05em!important;
+  font-size:var(--fs-2xs)!important;font-weight:500!important;color:var(--muted)!important}
+th{padding-top:8px;padding-bottom:8px;white-space:nowrap}
+thead tr,.dtable thead tr{background:var(--bg)}
+
+/* ---------- Stat tiles: hero 1.6rem, every other number 1.2rem, both 700 ---------- */
+.summary .val,.mk b,.bk b,.cd-stat b,.ost .val{font-size:var(--fs-h2)!important;font-weight:700!important;letter-spacing:0!important;line-height:1.3!important;font-variant-numeric:tabular-nums}
+.summary .hero .val,.mk.hero b,.bk.bk-hero b,.cd-stat.hero b,.ost-main .val{font-size:var(--fs-hero)!important;font-weight:700!important;letter-spacing:-.01em!important;line-height:1.2!important}
+.summary>div{gap:4px!important;padding:16px 20px!important}
+.summary .sub{font-size:var(--fs-md)!important;font-weight:400!important}
+.summary>div.hero,.mk.hero,.bk.bk-hero,.cd-stat.hero,#oSum>.ost-main{
+  background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;
+  box-shadow:inset 3px 0 0 var(--brand),var(--shadow-sm)!important}
+.mk.hero .lbl,.mk.hero .sub,.bk.bk-hero .lbl,.bk.bk-hero .sub,.cd-stat.hero .lbl{color:var(--muted)!important;opacity:1!important}
+
+/* ---------- Chips: bordered pills on surface; selected = soft blue ---------- */
+.chips button,.pb-chips button,.seg button,.csort button,.bfilter button{
+  height:32px;padding:0 12px!important;border:1px solid var(--line)!important;border-radius:var(--r-pill)!important;
+  background:var(--surface)!important;color:var(--ink)!important;font-size:var(--fs-sm)!important;font-weight:500!important;
+  line-height:1;white-space:nowrap;box-shadow:none!important}
+.chips button:hover,.pb-chips button:hover,.seg button:hover{background:var(--bg-2)!important}
+.chips button[aria-pressed=true],.pb-chips button[aria-pressed=true],.chips button.on,
+.seg button[aria-pressed=true],.csort button[aria-pressed=true],.bfilter button[aria-pressed=true]{
+  background:var(--brand-soft)!important;color:var(--brand-text)!important;border-color:var(--line)!important;font-weight:500!important}
+/* the segment becomes a row of pills */
+.seg{border:none!important;background:none!important;overflow:visible!important;gap:4px;border-radius:0!important;padding:0!important}
+.seg-lg{gap:6px}
+.seg-lg button{flex:1;height:36px}
+/* big admin section tabs keep a joined look but in the same colours */
+.admnav{border:1px solid var(--line)!important;border-radius:var(--r-md)!important;overflow:hidden!important;gap:0!important}
+.admnav button{border:none!important;border-radius:0!important;height:36px;font-weight:600!important}
+.admnav button+button{border-left:1px solid var(--line)!important}
+
+/* ---------- Period bar: no box, pick button bordered ---------- */
+.perbar{background:none!important;border:none!important;box-shadow:none!important;padding:0!important;gap:var(--s-2) var(--s-3)!important}
+.perbar .navbtn{width:36px!important;height:36px!important;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-md)!important}
+.pb-pick{height:36px!important;border:1px solid var(--line)!important;background:var(--surface)!important;font-weight:600!important;font-size:var(--fs-lg)!important}
+.pb-pick .ic{color:currentColor!important}
+.pb-chips{margin-left:0!important;gap:6px!important}
+.navbtn{width:36px;height:36px;border-radius:var(--r-md);font-size:var(--fs-base)}
+
+/* ---------- Inputs: surface, 1px line, search icon ---------- */
+input[type=search],.filters input[type=search],.chead2 input[type=search],.otools input,.mtools2 input,.cside input[type=search]{
+  background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:var(--r-md)!important;
+  height:36px;padding:0 12px 0 32px!important;font-size:var(--fs-lg)!important;color:var(--ink)!important;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6b82' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important;
+  background-repeat:no-repeat!important;background-position:10px center!important;background-size:16px 16px!important}
+input[type=search]:focus,.filters input[type=search]:focus,.chead2 input[type=search]:focus,.otools input:focus{
+  border-color:var(--brand)!important;box-shadow:0 0 0 3px var(--brand-soft)!important;outline:none}
+input[type=text],input[type=url],input[type=number],input[type=date],input[type=time],select,textarea{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;color:var(--ink)}
+
+/* ---------- Buttons: 38px, 600; one solid blue per screen ---------- */
+button{border-radius:var(--r-md)}
+button.primary{background:var(--brand-fill)!important;color:var(--on-brand)!important;border:none!important;font-weight:600!important;padding:0 16px!important;height:38px;box-shadow:none!important;filter:none!important}
+button.primary:hover{background:var(--brand-hover)!important;filter:none!important}
+button.sm,.sm{height:32px;padding:0 12px;font-size:var(--fs-sm);font-weight:600}
+button.ghost{color:var(--muted)}
+button.ghost:hover{background:var(--bg-2)}
+:focus-visible{outline:2px solid var(--brand)!important;outline-offset:2px}
+
+/* ---------- Cards, panels, tables ---------- */
+.card,.panel{border-radius:var(--r-xl)!important;box-shadow:var(--shadow-sm)!important}
+.panel{padding:16px 20px!important;gap:12px!important}
+.panel>.top h2,.panel>.thead h2,.sechead h2,.msec-h h3{font-size:var(--fs-h3)!important;font-weight:600!important;line-height:1.35}
+.dtable th,.dtable td{padding:10px 12px!important}
+.dtable tbody tr:hover td{background:var(--bg)!important}
+.dtable tfoot td{background:var(--bg);border-top:1px solid var(--line)!important;padding-top:10px!important;font-weight:600}
+td{font-variant-numeric:tabular-nums}
+.dtable .cname b{font-weight:600}
+.dtable .rbtn{height:30px;padding:0 10px!important;font-size:var(--fs-sm)!important;border-radius:var(--r-md)}
+
+/* ---------- Pills always soft ground + word ---------- */
+.pill,.chip,.countpill,.navbadge,.admbadge{border-radius:var(--r-pill);font-size:var(--fs-sm);font-weight:500;padding:3px 10px;line-height:1.3}
+.countpill{font-weight:600;font-size:var(--fs-xs);background:var(--bg-2);color:var(--muted)}
+
+/* ---------- Progress bars: 8px, track bg-2, status fill ---------- */
+.meter,.tgt-bar,.pbar{height:8px!important;border-radius:var(--r-pill)!important;background:var(--bg-2)!important}
+.meter i,.tgt-bar i,.pbar i{border-radius:var(--r-pill)}
+.meter i{background:var(--ok)}
+.meter i.over{background:var(--danger)}
+
+/* ---------- Sidebar (desktop ≥1100px) ---------- */
+@media (min-width:1100px){
+  nav.tabs button{height:40px;padding:0 12px!important;font-size:var(--fs-2xl)!important;font-weight:500!important;border-radius:var(--r-md)!important;color:var(--ink)!important}
+  nav.tabs button:hover{background:var(--bg-2)!important}
+  nav.tabs button[aria-selected=true]{background:var(--brand-soft)!important;color:var(--brand-text)!important;font-weight:600!important}
+  .navgrp:not([hidden]){font-weight:700!important;letter-spacing:.08em!important;padding:14px 12px 6px!important}
+  header.appbar .who{gap:6px;padding:12px 8px 0!important;border-top:1px solid var(--line)}
+  header.appbar .themebtn{width:36px;height:36px;border:1px solid var(--line);border-radius:var(--r-md)}
+  #logoutBtn{height:36px;font-size:var(--fs-md);color:var(--muted)}
+}
+/* ---------- Phone bottom bar ---------- */
+@media (max-width:760px){
+  nav.tabs{background:var(--surface)!important;backdrop-filter:none!important}
+  nav.tabs button{min-height:44px;color:var(--muted)!important;font-weight:500!important;border:none!important}
+  nav.tabs button[aria-selected=true]{color:var(--brand)!important;font-weight:600!important;background:none!important}
+  .summary>div{padding:12px 14px!important}
+}
+
+/* ---------- Dialogs ---------- */
+.dlg-in{border-radius:var(--r-xl)!important;box-shadow:var(--shadow-md)!important;padding:20px!important}
+
+/* ---------- Dark mode: the search icon follows muted ---------- */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) input[type=search],:root:not([data-theme=light]) .otools input{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important}}
+:root[data-theme=dark] input[type=search],:root[data-theme=dark] .otools input{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>")!important}
+@media (max-width:760px){
+  .perbar{width:100%}
+  .pb-nav{width:100%}
+  .pb-pick{flex:1;justify-content:center}
+  .pb-chips{flex:1 1 100%;width:100%;min-width:0;flex-wrap:wrap}
+  .pb-chips button{flex:0 1 auto!important}
+}
+
+/* ---------- SMIT AdsCheck Pro Table UI (#tab-accounts) ---------- */
+.smit-table-card {
+  background: var(--surface, #ffffff);
+  border: 1.5px solid #22c55e;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+.smit-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.smit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+}
+.smit-table thead tr:first-child {
+  background: var(--surface, #ffffff) !important;
+  border-bottom: 1px solid var(--line, #e2e8f0);
+}
+.smit-table th {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: var(--ink, #1e293b) !important;
+  padding: 10px 12px !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  user-select: none;
+  cursor: pointer;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.smit-table th:last-child {
+  border-right: none;
+}
+.smit-table th:hover {
+  background: var(--bg-2, #f8fafc);
+}
+.smit-col-chk {
+  width: 42px;
+  text-align: center !important;
+  cursor: default !important;
+}
+.smit-col-tt {
+  width: 105px;
+}
+.smit-col-acct {
+  min-width: 220px;
+  text-align: left !important;
+}
+.smit-col-orig {
+  width: 175px;
+}
+.smit-col-num {
+  width: 145px;
+}
+.smit-th-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.smit-th-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.smit-th-lbl {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.smit-col-orig .smit-th-lbl {
+  margin: 0 auto;
+}
+.smit-grip {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0.75;
+}
+.smit-sort {
+  font-style: normal;
+  font-size: 11px;
+  color: #64748b;
+  margin-left: 2px;
+}
+.smit-caret {
+  font-style: normal;
+  font-size: 10px;
+  color: #64748b;
+}
+.smit-shield {
+  font-size: 12px;
+  line-height: 1;
+  background: #dcfce7;
+  color: #16a34a;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* Yellow Info Banner Row */
+.smit-banner-row td {
+  background: #fef3c7 !important;
+  padding: 6px 14px !important;
+  border-bottom: 1px solid #fde68a !important;
+}
+.smit-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.smit-bell {
+  font-size: 13px;
+  line-height: 1;
+}
+.smit-banner-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.smit-banner-txt {
+  color: #d97706;
+  font-weight: 500;
+}
+.smit-learn-link {
+  color: #16a34a;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.smit-dont-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-weight: 500;
+  cursor: pointer;
+}
+.smit-banner-close {
+  background: none !important;
+  border: none !important;
+  padding: 0 4px !important;
+  height: auto !important;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+}
+
+/* Body Rows */
+.smit-table tbody tr {
+  border-bottom: 1px solid var(--line, #f1f5f9);
+  transition: background 0.1s ease;
+}
+.smit-table tbody tr:hover {
+  background: var(--bg-2, #f8fafc) !important;
+}
+.smit-table tbody td {
+  padding: 9px 12px !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--ink, #1e293b);
+  font-variant-numeric: tabular-nums;
+}
+.smit-table tbody td:last-child {
+  border-right: none;
+}
+.smit-td-chk {
+  text-align: center;
+}
+.smit-td-orig {
+  text-align: center;
+  color: var(--ink, #334155);
+}
+.smit-td-num {
+  text-align: right;
+  font-weight: 500;
+}
+.smit-acct-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.12s ease;
+}
+.smit-acct-link:hover .smit-acct-name {
+  color: #10b981;
+  text-decoration: underline;
+}
+.smit-acct-link:hover .smit-acct-id {
+  color: #0f172a;
+}
+.smit-billing-link,
+.smit-orig-link,
+.smit-acct-link-num {
+  display: inline-block;
+  width: 100%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.smit-billing-link:hover {
+  color: #10b981;
+  text-decoration: underline;
+  font-weight: 600;
+}
+.smit-orig-link:hover,
+.smit-acct-link-num:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+.smit-tt {
+  text-decoration: none;
+  cursor: pointer;
+}
+.smit-tt:hover {
+  text-decoration: underline;
+  opacity: 0.88;
+}
+.smit-acct-name {
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  font-size: 13px;
+  line-height: 1.3;
+}
+.smit-acct-id {
+  font-size: 11.5px;
+  color: var(--muted, #64748b);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* TT Status Dot + Label */
+.smit-tt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.smit-tt .smit-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.smit-tt.is-active {
+  color: #10b981;
+}
+.smit-tt.is-active .smit-dot {
+  background: #10b981;
+}
+.smit-tt.is-disabled {
+  color: #ef4444;
+}
+.smit-tt.is-disabled .smit-dot {
+  background: #ef4444;
+}
+.smit-tt.is-warn {
+  color: #f59e0b;
+}
+.smit-tt.is-warn .smit-dot {
+  background: #f59e0b;
+}
+
+/* Footer Summary Row */
+.smit-table tfoot tr {
+  background: var(--surface, #ffffff) !important;
+  border-top: 1.5px solid var(--line, #e2e8f0) !important;
+}
+.smit-table tfoot td {
+  padding: 11px 12px !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  color: var(--ink, #0f172a) !important;
+  border-right: 1px solid var(--line, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+}
+.smit-table tfoot td:last-child {
+  border-right: none;
+}
+.smit-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: -0.03em;
+  font-family: "Inter", system-ui, sans-serif;
+}
+.smit-logo-badge .s1 { color: #0ea5e9; }
+.smit-logo-badge .s2 { color: #10b981; }
+.smit-logo-badge .s3 { color: #f59e0b; }
+.smit-logo-badge .s4 { color: #ef4444; }

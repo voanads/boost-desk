@@ -275,10 +275,10 @@ app.get('/login', wrap(async (req, res) => {
 }));
 // Public standalone AdsCheck Pro page (no Boost Desk login required):
 app.get(['/adscheck', '/adscheck/', '/adscheck.html', '/check', '/smit'], (req, res) => {
-  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.html'));
+  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'extension', 'adscheck.html')); // the same page ships inside the extension
 });
 app.get(['/adscheck.js', '/adscheck/adscheck.js'], (req, res) => {
-  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'public', 'adscheck.js'));
+  res.set('Cache-Control', 'no-cache').sendFile(path.join(__dirname, 'extension', 'adscheck.js'));
 });
 // Always revalidate so a new deploy shows up on the next refresh.
 // Khmer mode: the same address serves the Khmer build of app.js (src/km.js). The page is reloaded on a language switch and
@@ -287,13 +287,19 @@ app.get('/assets/app.js', (req, res, next) => {
   res.setHeader('Vary', 'Cookie');
   if (!/(?:^|;\s*)bd_lang=km(?:;|$)/.test(req.headers.cookie || '')) return next();
   const b = require('./src/km').build(); if (!b) return next();
-  res.setHeader('Cache-Control', 'no-cache'); res.setHeader('ETag', b.etag);
+  res.setHeader('Cache-Control', require('./src/assets').cacheHeader(req, 'app.js')); res.setHeader('ETag', b.etag);
   if (req.headers['if-none-match'] === b.etag) return res.status(304).end();
   res.type('application/javascript').send(b.text);
 });
-app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+// index.html asks for /assets/x?v=<content hash> (src/assets.js): that exact version is kept by the browser for a year;
+// anything else (old hash, no hash, logo, pictures) is always revalidated.
+app.use('/assets', (req, res, next) => { res.locals.assetCache = require('./src/assets').cacheHeader(req, path.basename(req.path)); next(); },
+  express.static(path.join(__dirname, 'public', 'assets'), { maxAge: 0, etag: true, setHeaders: (res) => res.setHeader('Cache-Control', res.locals.assetCache || 'no-cache') }));
+// The extension download is zipped from extension/ once per start, so it always matches the code in git.
+let extZip = null;
 app.get(['/adscheck-connect-extension.zip', '/assets/adscheck-connect-extension.zip', '/AdsCheck-Pro-NoLogin-Extension.zip'], (req, res) => {
-  res.download(path.join(__dirname, 'public', 'adscheck-connect-extension.zip'), 'AdsCheck-Pro-NoLogin-Extension.zip');
+  extZip = extZip || require('./src/zip').zipDir(path.join(__dirname, 'extension'));
+  res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="AdsCheck-Pro-NoLogin-Extension.zip"', 'Cache-Control': 'no-cache' }).send(extZip);
 });
 
 app.use(health.middleware);
@@ -391,7 +397,7 @@ app.get(['/mediabuyer', '/mediabuyer/'], wrap(async (req, res) => {
   const b = req.session && req.session.mb ? await MB().get(req.session.mb) : null;
   const fbUser = !b && req.session && req.session.fbId ? await db.getUser(req.session.fbId) : null; // a PM / owner looking at the buyer site
   if (!b && !fbUser) return res.status(401).send(MB_LOGIN_PAGE);
-  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="mb">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Media buyer</title>');
+  const html = require('./src/assets').sitePage(req, 'mb', 'Ads Box · Media buyer');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
 // The old one-page media buyer dashboard (/mb) was removed: the media buyer site is /mediabuyer. Old links land on My Task.
@@ -553,18 +559,18 @@ app.get('/', wrap(async (req, res) => {
 // /owner: the app owner's site — every page (Work + Admin). Anyone else is sent to their own site.
 app.get(['/owner', '/owner/'], wrap(async (req, res) => {
   if (req.user.google || (await db.ownerId()) !== req.user.fb_id) return res.redirect('/');
-  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="owner">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Owner</title>');
+  const html = require('./src/assets').sitePage(req, 'owner', 'Ads Box · Owner');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
 app.get(['/projectmanager', '/projectmanager/'], wrap(async (req, res) => {
   if (!req.user.google && (await roleOf(req.user.fb_id)) === 'mb') return res.redirect('/mediabuyer');
-  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="pm">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Project Manager</title>');
+  const html = require('./src/assets').sitePage(req, 'pm', 'Ads Box · Project Manager');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
 // The admin website: the same app, showing only the Main Dashboard and Admin.
 app.get(['/admin', '/admin/'], wrap(async (req, res) => {
   if (!req.user.google && !(await canSeeAdmin(req.user.fb_id))) return res.redirect('/projectmanager'); // a PM's site is /projectmanager
-  const html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8').replace('<body>', '<body data-site="admin">').replace(/<title>[^<]*<\/title>/, '<title>Ads Box · Admin</title>');
+  const html = require('./src/assets').sitePage(req, 'admin', 'Ads Box · Admin');
   res.set('Cache-Control', 'no-cache').send(html);
 }));
 

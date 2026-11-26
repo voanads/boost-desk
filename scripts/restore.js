@@ -1,5 +1,6 @@
-// Restore a Boost Desk backup (boost-desk-backup-YYYY-MM-DD.json.gz) into an EMPTY or replaceable database.
+// Restore a Boost Desk backup (boost-desk-backup-YYYY-MM-DD.json.gz, or .json.gz.enc) into an EMPTY or replaceable database.
 //   DATABASE_URL=postgres://… node scripts/restore.js boost-desk-backup-2026-10-23.json.gz
+//   DATABASE_URL=postgres://… BACKUP_KEY=… node scripts/restore.js boost-desk-backup-2026-10-23.json.gz.enc
 // It starts the app's own table setup, then for each table in the file: deletes what is there and inserts the
 // backed-up rows, and finally moves id counters past the highest id. Run it with the app stopped.
 const fs = require('fs');
@@ -9,7 +10,15 @@ const { Pool } = require('pg');
 (async () => {
   const file = process.argv[2];
   if (!file || !process.env.DATABASE_URL) { console.error('Usage: DATABASE_URL=… node scripts/restore.js <backup.json.gz>'); process.exit(1); }
-  const data = JSON.parse(zlib.gunzipSync(fs.readFileSync(file)).toString('utf8'));
+  // .enc files (BACKUP_KEY set when the backup was made) are decrypted first; BACKUP_KEY must be the same key
+  let raw = fs.readFileSync(file);
+  if (raw.subarray(0, 4).toString() === 'BDB1') {
+    const k = Buffer.from((process.env.BACKUP_KEY || '').trim(), 'hex');
+    if (k.length !== 32) { console.error('This backup is encrypted. Run with BACKUP_KEY=<the 64 hex characters it was made with>.'); process.exit(1); }
+    const d = require('crypto').createDecipheriv('aes-256-gcm', k, raw.subarray(4, 16)); d.setAuthTag(raw.subarray(16, 32));
+    raw = Buffer.concat([d.update(raw.subarray(32)), d.final()]);
+  }
+  const data = JSON.parse(zlib.gunzipSync(raw).toString('utf8'));
   if (data.app !== 'boost-desk') throw new Error('This is not a Boost Desk backup.');
   // Make the tables first, so a brand-new empty database works too (needs the app's usual environment variables).
   try { const db = require('../src/db'); await db.init(); try { await require('../src/profit').init(); } catch (_) {} await db.pool.end(); console.log('Tables are ready.'); }
@@ -19,7 +28,7 @@ const { Pool } = require('pg');
   try {
     await c.query('BEGIN');
     const here = new Set((await c.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public'`)).rows.map((r) => r.table_name));
-    const names = Object.keys(data.tables).filter((t) => here.has(t) || !console.log(`- ${t}: table not in this database, skipped`));
+    const names = Object.keys(data.tables).filter((t) => { if (here.has(t)) return true; console.log(`- ${t}: table not in this database, skipped`); return false; });
     names.sort((a, b) => (a === 'clients' ? -1 : b === 'clients' ? 1 : 0)); // clients first: day_entries points at them
     if (names.length) await c.query(`TRUNCATE ${names.map((t) => `"${t}"`).join(', ')} CASCADE`);
     for (const t of names) {

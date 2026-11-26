@@ -1703,7 +1703,7 @@ async function linkCode(fbId) {
 // One refresh at a time, so two requests never handle the same /link message twice.
 let chatsBusy = Promise.resolve();
 // Read new Telegram messages every minute, so /link works without opening the website and nothing expires.
-if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(() => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 15000).unref(); } // every 15 s so "Done" taps show quickly
+if (telegram.hasBot()) { health.register('Telegram check', 1, 'every minute'); setInterval(require('./src/runOnce').once('Telegram check', () => health.track('Telegram check', () => refreshChats()).catch((e) => console.error('[telegram] refresh:', e.message)), 15000), 15000).unref(); } // every 15 s so "Done" taps show quickly
 let chatsAt = 0; // when Telegram was last read
 function refreshChats() { const run = chatsBusy.then(refreshChatsNow, refreshChatsNow).then((r) => { chatsAt = Date.now(); return r; }); chatsBusy = run.catch(() => {}); return run; }
 // The saved list is at most ~15 s old (background check), so pages use it instead of waiting 3 s on Telegram every time.
@@ -2405,7 +2405,7 @@ async function leaderChats() {
 }
 if (telegram.hasBot()) {
   health.register('Client status alerts', 5, 'every 5 minutes, 8:00–21:00');
-  setInterval(() => health.track('Client status alerts', () => STATUS().tick({ leaders: leaderChats, log: (...a) => console.log('[status]', ...a) })).then((n) => { if (n) console.log('[status] client alerts sent:', n); }).catch((e) => console.error('[status]', e.message)), 5 * 60e3).unref();
+  setInterval(require('./src/runOnce').once('Client status alerts', () => health.track('Client status alerts', () => STATUS().tick({ leaders: leaderChats, log: (...a) => console.log('[status]', ...a) })).then((n) => { if (n) console.log('[status] client alerts sent:', n); }).catch((e) => console.error('[status]', e.message)), 5 * 60e3), 5 * 60e3).unref();
 }
 // Copy one person's KPI list for a month to others, replacing theirs:
 //   scope 'team' — the other Project Managers of the same team (a team's KPI is its PM's KPI)
@@ -3101,7 +3101,7 @@ db.init().then(() => pageOrders.init()).then(() => { profit.init().catch((e) => 
   setTimeout(async () => { try { if (await db.getSetting('autoPlanFix1', null)) return; await db.setSetting('autoPlanFix1', { at: new Date().toISOString(), running: true }); const n = await require('./src/autoplan').fixPastStarts(); await db.setSetting('autoPlanFix1', { at: new Date().toISOString(), lines: n }); console.log(`[autoplan] one-off: ${n} lines now start today`); } catch (e) { console.error('[autoplan] one-off', e.message); } }, 20e3).unref();
   setTimeout(() => require('./src/announce').run().catch((e) => console.error('[announce]', e.message)), 30e3).unref(); // one-off announcement of 19 Nov 2026
   setTimeout(() => require('./src/announce').runConnect().catch((e) => console.error('[announce]', e.message)), 45e3).unref(); // one-off of 20 Nov 2026 13:42: PMs connect client Pages (daytime only)
-  setInterval(() => require('./src/announce').runGuide().catch((e) => console.error('[announce]', e.message)), 5 * 60e3).unref(); // one-off guide of 20 Nov 2026: goes out once, from 08:10
+  setInterval(require('./src/runOnce').once('Announce guide', () => require('./src/announce').runGuide().catch((e) => console.error('[announce]', e.message)), 5 * 60e3), 5 * 60e3).unref(); // one-off guide of 20 Nov 2026: goes out once, from 08:10
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

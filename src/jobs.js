@@ -116,63 +116,65 @@ async function sendDailyReport(day = sync.todayIn()) {
 function start(deps = {}) {
   const opts = { timezone: cfg.tz };
   const H = require('./health'), T = (name, fn) => () => H.track(name, fn).catch(() => {});
+  // every copy of the app keeps its timers, but each run happens in one copy only (see runOnce.js)
+  const every = (name, expr, fn, o) => cron.schedule(expr, require('./runOnce').once(name, fn), o);
   if (process.env.AUTO_SYNC !== 'off') {
     let running = false;
     const guard = (fn) => async () => { if (running) return; running = true; try { await fn(); } finally { running = false; } };
     H.register('New campaigns check', 5, 'every 5 minutes'); H.register('Hourly sync', 60, 'every hour at :07'); H.register('Today sync', 15, 'every 15 minutes at :22, :37, :52'); H.register('30-day refresh', 1440, 'daily at 05:30');
-    cron.schedule('*/5 * * * *', guard(T('New campaigns check', async () => { await forEachAdmin(checkNewCampaigns, 'new-campaign check'); for (const u of await syncedAdmins()) { try { await require('./autoplan').run(u); } catch (e) { log(`auto boost plan failed for ${u.name}:`, e.message); } } })), opts);
-    cron.schedule('7 * * * *', guard(T('Hourly sync', () => forEachAdmin((u) => rangeFor(u, 2, 'hourly'), 'hourly sync'))), opts);
+    every('New campaigns check', '*/5 * * * *', guard(T('New campaigns check', async () => { await forEachAdmin(checkNewCampaigns, 'new-campaign check'); for (const u of await syncedAdmins()) { try { await require('./autoplan').run(u); } catch (e) { log(`auto boost plan failed for ${u.name}:`, e.message); } } })), opts);
+    every('Hourly sync', '7 * * * *', guard(T('Hourly sync', () => forEachAdmin((u) => rangeFor(u, 2, 'hourly'), 'hourly sync'))), opts);
     // Today alone every 15 minutes in between, so the Dashboard and reports are never more than a quarter hour behind Meta.
-    cron.schedule('22,37,52 * * * *', guard(T('Today sync', () => forEachAdmin((u) => rangeFor(u, 1, 'today'), 'today sync'))), opts);
-    cron.schedule('30 5 * * *', guard(T('30-day refresh', () => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync'))), opts);
+    every('Today sync', '22,37,52 * * * *', guard(T('Today sync', () => forEachAdmin((u) => rangeFor(u, 1, 'today'), 'today sync'))), opts);
+    every('30-day refresh', '30 5 * * *', guard(T('30-day refresh', () => forEachAdmin((u) => rangeFor(u, 30, 'daily 30-day'), '30-day sync'))), opts);
     log('Background auto sync on (new campaigns every 5 min, hourly refresh, 30-day refresh at 05:30)');
   }
   // Each account's own "auto daily report" (time chosen in the app): checked every minute.
   H.register('Auto reports', 1, 'every minute');
-  cron.schedule('* * * * *', () => H.track('Auto reports', () => require('./extras').tick()).catch((e) => log('auto report failed:', e.message)), opts);
+  every('Auto reports', '* * * * *', () => H.track('Auto reports', () => require('./extras').tick()).catch((e) => log('auto report failed:', e.message)), opts);
   // adsbox.biz order counts, every 30 minutes once the API is connected on the Orders page.
   H.register('adsbox.biz orders', 30, 'every 30 minutes');
   H.register('Spend to adsbox.biz', 30, 'every 30 minutes, at :15 and :45');
-  cron.schedule('15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
+  every('Spend to adsbox.biz', '15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
   // Today's count every 5 minutes (one small call), the last 3 days every 30 minutes.
   H.register('adsbox.biz today', 5, 'every 5 minutes');
-  cron.schedule('2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => H.track('adsbox.biz today', () => require('./orders').pullApi(1)).catch((e) => log('adsbox today failed:', e.message)), opts);
-  cron.schedule('*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
+  every('adsbox.biz today', '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => H.track('adsbox.biz today', () => require('./orders').pullApi(1)).catch((e) => log('adsbox today failed:', e.message)), opts);
+  every('adsbox.biz orders', '*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
   // Boost Desk's own order counting: comments of a running Live on each connected Page, every minute
   // (Messenger messages and other comments arrive by webhook straight away).
   // Connect the team's client Pages for order counting with every saved Facebook login (new clients' Pages too).
   H.register('Connect client Pages (orders)', 180, 'every 3 hours');
-  cron.schedule('17 */3 * * *', () => H.track('Connect client Pages (orders)', () => require('./pageOrders').autoConnect()).then((r) => { if (r && r.connected.length) log('client Pages connected:', r.connected.length); }).catch((e) => log('Connect client Pages failed:', e.message)), opts);
+  every('Connect client Pages (orders)', '17 */3 * * *', () => H.track('Connect client Pages (orders)', () => require('./pageOrders').autoConnect()).then((r) => { if (r && r.connected.length) log('client Pages connected:', r.connected.length); }).catch((e) => log('Connect client Pages failed:', e.message)), opts);
   setTimeout(() => require('./pageOrders').autoConnect().catch((e) => log('Connect client Pages failed:', e.message)), 90e3);
   H.register('Live comments (orders)', 1, 'every minute');
-  cron.schedule('* * * * *', () => H.track('Live comments (orders)', () => require('./pageOrders').pollLives()).then((n) => { if (n) log('orders from Live comments:', n); }).catch((e) => log('Live comments failed:', e.message)), opts);
+  every('Live comments (orders)', '* * * * *', () => H.track('Live comments (orders)', () => require('./pageOrders').pollLives()).then((n) => { if (n) log('orders from Live comments:', n); }).catch((e) => log('Live comments failed:', e.message)), opts);
   // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
   H.register('AI daily plans', 1440, 'daily at 06:40');
-  cron.schedule('40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
+  every('AI daily plans', '40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
   // AI: a weekly strategy for the clients each PM picked, Mondays at 07:00 (drafts for the team; nothing is sent to a client).
   H.register('AI weekly strategies', 10080, 'Mondays at 07:00');
-  cron.schedule('0 7 * * 1', () => H.track('AI weekly strategies', () => require('./ai').weeklyPlans(log)).then((n) => { if (n) log('AI weekly strategies:', n); }).catch((e) => log('AI weekly strategies failed:', e.message)), opts);
+  every('AI weekly strategies', '0 7 * * 1', () => H.track('AI weekly strategies', () => require('./ai').weeklyPlans(log)).then((n) => { if (n) log('AI weekly strategies:', n); }).catch((e) => log('AI weekly strategies failed:', e.message)), opts);
   // System health: check every 5 minutes, alert the owner on Telegram.
   H.register('Database backup', 1440, 'daily at 03:20');
   // Media buyers get their every-day tasks again each morning at 08:00, with a fresh Done button.
   H.register('Media buyer tasks', 1440, 'daily at 08:00');
-  cron.schedule('0 8 * * *', () => H.track('Media buyer tasks', () => require('./buyers').morning(log)).then((n) => { if (n) log('media buyer tasks sent:', n); }).catch((e) => log('media buyer tasks failed:', e.message)), opts);
-  cron.schedule('20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
+  every('Media buyer tasks', '0 8 * * *', () => H.track('Media buyer tasks', () => require('./buyers').morning(log)).then((n) => { if (n) log('media buyer tasks sent:', n); }).catch((e) => log('media buyer tasks failed:', e.message)), opts);
+  every('Database backup', '20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
 
   // Settings → "Alerts to my Telegram": each person's own picks, once a day per thing.
   H.register('Personal alerts', 60, 'every hour at :25');
-  cron.schedule('25 * * * *', () => H.track('Personal alerts', () => require('./myalerts').run(require('./pm'))).then((n) => { if (n) log('personal alerts sent:', n); }).catch((e) => log('personal alerts failed:', e.message)), opts);
+  every('Personal alerts', '25 * * * *', () => H.track('Personal alerts', () => require('./myalerts').run(require('./pm'))).then((n) => { if (n) log('personal alerts sent:', n); }).catch((e) => log('personal alerts failed:', e.message)), opts);
 
   // Handoff between media buyers (morning) and PMs (evening): brief 08:00, "before you leave" 16:45, digest 20:45.
   if (deps.handoff) {
     const HO = require('./handoff'), at = (t) => { const [h, m] = t.split(':').map(Number); return `${m} ${h} * * *`; };
     H.register('Morning brief', 1440, 'daily at ' + HO.TIMES.brief); H.register('Leave reminder', 1440, 'daily at ' + HO.TIMES.remind); H.register('Evening digest', 1440, 'daily at ' + HO.TIMES.digest);
-    cron.schedule(at(HO.TIMES.brief), () => H.track('Morning brief', () => HO.morningBrief(deps.handoff, log)).then((n) => { if (n) log('morning briefs sent:', n); }).catch((e) => log('morning brief failed:', e.message)), opts);
-    cron.schedule(at(HO.TIMES.remind), () => H.track('Leave reminder', () => HO.leaveReminder(deps.handoff, log)).then((n) => { if (n) log('leave reminders sent:', n); }).catch((e) => log('leave reminder failed:', e.message)), opts);
-    cron.schedule(at(HO.TIMES.digest), () => H.track('Evening digest', () => HO.eveningDigest(deps.handoff, log)).then((n) => { if (n) log('evening digests sent:', n); }).catch((e) => log('evening digest failed:', e.message)), opts);
+    every('Morning brief', at(HO.TIMES.brief), () => H.track('Morning brief', () => HO.morningBrief(deps.handoff, log)).then((n) => { if (n) log('morning briefs sent:', n); }).catch((e) => log('morning brief failed:', e.message)), opts);
+    every('Leave reminder', at(HO.TIMES.remind), () => H.track('Leave reminder', () => HO.leaveReminder(deps.handoff, log)).then((n) => { if (n) log('leave reminders sent:', n); }).catch((e) => log('leave reminder failed:', e.message)), opts);
+    every('Evening digest', at(HO.TIMES.digest), () => H.track('Evening digest', () => HO.eveningDigest(deps.handoff, log)).then((n) => { if (n) log('evening digests sent:', n); }).catch((e) => log('evening digest failed:', e.message)), opts);
   }
   H.register('Health check', 5, 'every 5 minutes');
-  cron.schedule('*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
+  every('Health check', '*/5 * * * *', T('Health check', () => H.checkAndAlert(db, telegram)), opts);
   // The 21:00 "Boost report" to the team group was removed on 19 Nov 2026 (owner's decision). The evening digest to each
   // PM, the per-client auto reports and Teams today cover it. sendDailyReport() stays for a manual run only.
 }

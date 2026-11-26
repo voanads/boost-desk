@@ -52,6 +52,9 @@ async function init() {
       name TEXT NOT NULL,                         -- Facebook Page names seen in synced campaigns
       last_seen DATE NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS job_runs (          -- one run per job and time slot across app copies (runOnce.js)
+      name TEXT NOT NULL, slot BIGINT NOT NULL, at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (name, slot)
+    );
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value JSONB NOT NULL

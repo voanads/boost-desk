@@ -31,10 +31,13 @@ function register(name, every, schedule) { jobs[name] = jobs[name] || { name, ev
 async function track(name, fn) {
   const j = jobs[name] || (register(name, 0, ''), jobs[name]);
   j.lastStart = new Date().toISOString(); j.running = true; const t = Date.now();
+  j.elsewhere = false;
   try { const r = await fn(); j.ok = true; j.error = ''; j.failStreak = 0; return r; }
   catch (e) { j.ok = false; j.error = String(e && e.message || e).slice(0, 200); j.fails++; j.failStreak++; noteError('job: ' + name, e); throw e; }
   finally { j.running = false; j.lastEnd = new Date().toISOString(); j.ms = Date.now() - t; j.runs++; }
 }
+// Another copy of the app claimed this run (runOnce.js): not late here, it ran there.
+function ranElsewhere(name) { const j = jobs[name]; if (j && !j.running) { j.lastEnd = new Date().toISOString(); j.elsewhere = true; } }
 function jobList() {
   const now = Date.now();
   return Object.values(jobs).map((j) => {
@@ -175,4 +178,4 @@ async function checkAndAlert(db, telegram) {
   } catch (e) { noteError('health check', e); }
 }
 
-module.exports = { noteError, register, track, middleware, noteMetaHeaders, noteService, snapshot, problems, checkAndAlert, startedAt };
+module.exports = { noteError, register, track, ranElsewhere, middleware, noteMetaHeaders, noteService, snapshot, problems, checkAndAlert, startedAt };

@@ -3655,6 +3655,10 @@
   }
   const aaOk = (a) => [1, 201].includes(a.statusCode);
   const aaWarn = (a) => [9, 3, 7, 8, 100].includes(a.statusCode);
+  // "Old": not running, no spend in the last 7 days and nothing owed — a dead account, not a problem to act on today.
+  // Kept apart so Problems shows only what needs someone now (before: 117 of 239 "problems", mostly long-dead accounts).
+  const aaOld = (a) => !aaOk(a) && !(Number(a.week) > 0) && !(Number(a.todaySpend) > 0) && !(Number(a.balance) > 0);
+  const aaBad = (a) => !aaOk(a) && !aaOld(a);
   // An account belongs to the teams of the people who sync it (or, if no one syncs it, of anyone who can open it).
   const aaTeams = (a) => { const on = a.people.filter((p) => p.enabled); return [...new Set((on.length ? on : a.people).map((p) => p.teamId || '__none'))]; };
   function renderAdAccounts() {
@@ -3663,19 +3667,19 @@
     const q = ($('aaSearch').value || '').trim().toLowerCase(), has = (x) => String(x || '').toLowerCase().includes(q);
     const all = d.accounts.map((a) => ({ ...a, tms: aaTeams(a) }));
     const scope = all.filter((a) => !aaTeam || a.tms.includes(aaTeam));
-    const k = { n: scope.length, ok: scope.filter(aaOk).length, bad: scope.filter((a) => !aaOk(a)).length, today: scope.reduce((t, a) => t + (Number(a.todaySpend) || 0), 0), week: scope.reduce((t, a) => t + (Number(a.week) || 0), 0), bal: scope.reduce((t, a) => t + (Number(a.balance) || 0), 0), off: scope.filter((a) => !a.people.some((p) => p.enabled)).length };
+    const k = { n: scope.length, ok: scope.filter(aaOk).length, bad: scope.filter(aaBad).length, old: scope.filter(aaOld).length, today: scope.reduce((t, a) => t + (Number(a.todaySpend) || 0), 0), week: scope.reduce((t, a) => t + (Number(a.week) || 0), 0), bal: scope.reduce((t, a) => t + (Number(a.balance) || 0), 0), off: scope.filter((a) => !a.people.some((p) => p.enabled)).length };
     $('aaKpis').innerHTML = `
       <div class="bk"><span class="lbl">Ad accounts</span><b class="num">${k.n}</b><span class="sub">${k.ok} active · ${k.off} not synced</span></div>
-      <div class="bk ${k.bad ? 'bad' : ''}"><span class="lbl">Problems</span><b class="num">${k.bad}</b><span class="sub">${k.bad ? 'disabled, unpaid, in review…' : 'all running'}</span></div>
+      <div class="bk ${k.bad ? 'bad' : ''}"><span class="lbl">Problems</span><b class="num">${k.bad}</b><span class="sub">${k.bad ? 'need action: spent recently or money owed' : 'nothing to act on'}${k.old ? ` · ${k.old} old, under Old` : ''}</span></div>
       <div class="bk bk-hero"><span class="lbl">Spent today</span><b class="num">${money(k.today)}</b><span class="sub">${money(k.week)} in the last 7 days</span></div>
       <div class="bk"><span class="lbl">Balance to pay</span><b class="num">${money(k.bal)}</b><span class="sub">across these accounts</span></div>`;
-    $('admAccN').textContent = all.filter((a) => !aaOk(a)).length || '';
+    $('admAccN').textContent = all.filter(aaBad).length || '';
     const cnt = (id) => all.filter((a) => a.tms.includes(id)).length;
     const chips = [['', 'All teams', all.length], ...d.teams.map((t) => [t.id, t.name, cnt(t.id)]), ...(cnt('__none') ? [['__none', 'No team', cnt('__none')]] : [])];
     $('aaTeams').innerHTML = chips.map(([id, n, c]) => `<button type="button" class="bchip" data-aateam="${esc(id)}" aria-pressed="${aaTeam === id}">${esc(n)} <span class="num">${c}</span></button>`).join('');
     document.querySelectorAll('#aaFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === aaF)));
     document.querySelectorAll('#aaSort button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === aaSortK)));
-    const list = scope.filter((a) => aaF === 'all' || (aaF === 'ok' ? aaOk(a) : aaF === 'bad' ? !aaOk(a) : !a.people.some((p) => p.enabled)))
+    const list = scope.filter((a) => (aaF === 'all' ? !aaOld(a) : aaF === 'ok' ? aaOk(a) : aaF === 'bad' ? aaBad(a) : aaF === 'old' ? aaOld(a) : !a.people.some((p) => p.enabled)))
       .filter((a) => !q || has(a.name) || has(a.id) || has(a.business) || a.people.some((p) => has(p.name)) || (a.pages || []).some((p) => has(p.page)));
     const srt = { today: (a, b) => (Number(b.todaySpend) || 0) - (Number(a.todaySpend) || 0), week: (a, b) => (b.week || 0) - (a.week || 0), balance: (a, b) => (b.balance || 0) - (a.balance || 0) }[aaSortK];
     const grp = (a) => (aaTeam ? aaTeam : a.tms[0]), tOrder = [...d.teams.map((t) => t.id), '__none'];
@@ -3855,6 +3859,8 @@
       + `<div class="hint">Every night at 03:20 the whole database is saved to one file and sent to your private Telegram chat${st.alertChat ? '' : ' — <b>turn on owner alerts (/alerts code on the Health page) first</b>'}. Facebook logins and API keys inside stay encrypted. Keep the file private: it has your clients and invoices.</div>`;
     const box = $('secBox'); if (!box) return;
     const r = st.rotated || {}, done = SEC_STEPS.filter((x) => r[x[0]]).length;
+    // All steps done (and nothing left on the old key): one line, the checklist folded away instead of a long card every visit.
+    if (done === SEC_STEPS.length && !(st.oldKey && st.leftOnOld)) { box.innerHTML = `<div class="ok-t">✓ All ${done} secrets changed after the Railway incident of 21 Oct 2026.${st.oldKey ? ' You can delete ENCRYPTION_KEY_OLD in Railway.' : ''}</div><details><summary class="hint">Show the steps</summary><ol class="secl">${SEC_STEPS.map(([k, t]) => `<li class="done"><label><input type="checkbox" data-secdone="${k}" checked> <b>${t}</b> <span class="hint">· done ${esc(new Date(r[k]).toLocaleDateString('en-GB'))}</span></label></li>`).join('')}</ol></details>`; return; }
     box.innerHTML = `<div>Railway had a security incident on 21 Oct 2026 — change these so old copies stop working. <b>${done} of ${SEC_STEPS.length} done.</b> Never paste the values into chat.</div>`
       + (st.oldKey ? `<div class="${st.leftOnOld ? 'over' : 'ok-t'}">ENCRYPTION_KEY_OLD is set · ${st.leftOnOld} value${st.leftOnOld === 1 ? '' : 's'} left on old key${st.leftOnOld ? '' : ' — you can delete ENCRYPTION_KEY_OLD now'}.</div>` : '')
       + `<ol class="secl">${SEC_STEPS.map(([k, t, how, gen]) => `<li class="${r[k] ? 'done' : ''}"><label><input type="checkbox" data-secdone="${k}" ${r[k] ? 'checked' : ''}> <b>${t}</b>${r[k] ? ` <span class="hint">· done ${esc(new Date(r[k]).toLocaleDateString('en-GB'))}</span>` : ''}</label><div class="hint">${how}</div>${gen ? `<div class="secgen"><button class="sm ghost" data-secgen="${gen}">Make new value</button><code class="lcode" data-copy="" hidden></code></div>` : ''}</li>`).join('')}</ol>`;

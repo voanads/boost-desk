@@ -57,7 +57,7 @@ async function forOwner(user) {
   const nowHM = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: cfg.tz || 'Asia/Phnom_Penh' });
   const repDue = new Set();
   for (const x of [...(t.items || []), ...(t.tips || [])]) {
-    if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid') continue; // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
+    if (!x.clientId || x.level === 'good' || x.kind === 'invoice' || x.kind === 'unpaid' || /^setup-/.test(x.kind)) continue; // setup gaps (no price / orders not counted) are to-dos, not a status colour // invoices are not part of the client's status (owner, 19 Nov); they stay in Payments and the to-do
     if (x.kind === 'report' || x.kind === 'nogroup') repDue.add(x.clientId); // for the leaders' "reports sent" count, at any hour
     if (x.kind === 'report' && nowHM < reportFrom) continue;
     if (x.kind === 'cpr-up' && !((spend[x.clientId] || {}).post >= CPR_MIN_SPEND)) continue;

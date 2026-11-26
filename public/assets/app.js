@@ -1996,7 +1996,7 @@
     $('todoToggle').textContent = todoHidden ? 'បង្ហាញ' : 'លាក់'; $('todoToggle').setAttribute('aria-expanded', String(!todoHidden));
     $('todoList').hidden = todoHidden;
     const btn = { plan: 'បើកអតិថិជន', report: 'ផ្ញើរបាយការណ៍', nogroup: 'ជ្រើសគ្រុប', invoice: 'បើកការទូទាត់', unpaid: 'បើកការទូទាត់', missing: 'បើកអតិថិជន', quiet: 'បើកអតិថិជន', high: 'បើកអតិថិជន', 'cpr-up': 'បើកអតិថិជន', 'cpr-down': 'បើកអតិថិជន', best: 'មើល Live' };
-    const IC = { ...TODO_IC, plan: '🎯', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆' };
+    const IC = { ...TODO_IC, plan: '🎯', missing: '🕒', quiet: '💤', high: '🔥', 'cpr-up': '📉', 'cpr-down': '📈', best: '🏆', 'setup-price': '🏷', 'setup-orders': '🛒' };
     const row = (it, i) => `<div class="todo-it ${it.level}${i >= items.length ? ' tip' : ''}" style="--i:${i}"><span class="todo-ic" aria-hidden="true">${IC[it.kind] || '•'}</span><div class="todo-t"><b>${esc(it.title)}</b><span class="hint">${esc(it.detail || '')}</span></div><button type="button" class="sm${it.kind === 'report' ? ' primary' : ''}" data-todo="${i}">${btn[it.kind] || 'បើក'}</button></div>`;
     $('todoList').innerHTML = (items.length ? items.map(row).join('') : '<div class="todo-done">🎉 ការងារអតិថិជនថ្ងៃនេះ រួចរាល់ហើយ</div>')
       + (tips.length ? `<div class="todo-sub">💡 ការណែនាំ</div>` + tips.map((t, j) => row(t, items.length + j)).join('') : '');
@@ -2006,6 +2006,7 @@
       else if (it.action === 'client' && c) { showTab('clients'); selectClient(c.id); }
       else if (it.action === 'payments') showTab('payments');
       else if (it.action === 'lives') showTab('lives');
+      else if (it.action === 'orders') showTab('orders');
     });
   }
   $('todoToggle').onclick = () => { todoHidden = !todoHidden; try { localStorage.setItem('bd-todo', todoHidden ? 'hide' : 'show'); } catch (_) {} loadTodo(); };

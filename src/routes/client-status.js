@@ -56,8 +56,10 @@ module.exports = function mountClientStatus(app, api, deps) {
     const today = sync.todayIn(), from = sync.addDays(today, -60), rows = [];
     for (const u of await db.allUsers()) {
       let inv = [], names = {}; try { inv = await db.listInvoices(u.fb_id, from, today); if (inv.length) for (const c of await db.listClients(u.fb_id)) names[c.id] = c.name; } catch (_) {}
-      for (const i of inv) rows.push({ team: teamOf[u.fb_id] || u.name, client: names[i.client_id] || '', number: i.number, date: i.date, total: Number(i.total) || 0, sent: !!i.sent_at, paid: !!i.paid_at,
-        days: i.paid_at ? 0 : Math.max(0, Math.round((new Date(today) - new Date(i.date)) / 864e5)) });
+      // db.listInvoices returns camelCase rows (clientId, sentAt, paidAt) — reading client_id / sent_at / paid_at here showed
+      // every invoice as "not sent · not paid" with no client name, and Paid as $0.
+      for (const i of inv) rows.push({ team: teamOf[u.fb_id] || u.name, client: names[i.clientId] || i.clientName || '', number: i.number, date: i.date, total: Number(i.total) || 0, sent: !!i.sentAt, paid: !!i.paidAt,
+        days: i.paidAt ? 0 : Math.max(0, Math.round((new Date(today) - new Date(i.date)) / 864e5)) });
     }
     rows.sort((a, b) => (a.paid - b.paid) || (b.days - a.days) || String(b.date).localeCompare(String(a.date)));
     res.json({ today, from, rows });

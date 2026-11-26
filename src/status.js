@@ -170,7 +170,12 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
         if (s.alert && !s.alert.key.startsWith(today)) { delete s.alert; dirty = true; touched.add(c.id); }
         if (!key) continue;
         if (!s.alert || s.alert.key !== key) {
-          if (!chats.length) continue; // nobody in this team has Telegram: the page still shows it
+          if (!chats.length) {
+            // Nobody in this team has Telegram. Before, nothing was recorded, so the 30-minute escalation never ran and a red
+            // client could stay red all day with nobody told. Now the alert is recorded (no team message) and the leaders get it.
+            log(`alert: ${c.name} (${u.name}) — ${push.map((x) => x.kind).join(', ')} → team has no Telegram, leaders in ${ESCALATE_MIN} min`);
+            touched.add(c.id); s.alert = { key, at: new Date().toISOString(), escalated: false, noTeam: true }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
+          }
           const text = alertText(c, u.name);
           for (const t of chats) { try { await telegram.sendButtons(text, t.chat, [[{ text: 'ខ្ញុំកំពុងមើល', data: `cs:on:${c.id}` }, { text: 'បើកភ្ញៀវ', url: t.link || `${cfg.baseUrl}/projectmanager#clients` }]]); sent++; } catch (e) { log('client alert failed:', c.name, e.message); } }
           if (sent === had) continue; // Telegram took none of them: try again on the next pass
@@ -178,7 +183,7 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
           touched.add(c.id); s.alert = { key, at: new Date().toISOString(), escalated: false }; note(s, 'alert', '', push.map((x) => x.text).join(' · ')); dirty = true; continue;
         }
         if (!s.alert.escalated && !c.onIt && Date.now() - Date.parse(s.alert.at) > ESCALATE_MIN * 60e3) {
-          const text = alertText(c, u.name) + `\n\n⏱ ${ESCALATE_MIN} នាទីហើយ មិនទាន់មានអ្នកមើល។`;
+          const text = alertText(c, u.name) + `\n\n⏱ ${ESCALATE_MIN} នាទីហើយ មិនទាន់មានអ្នកមើល។` + (s.alert.noTeam ? `\n⚠ ក្រុម ${u.name} មិនទាន់ភ្ជាប់ Telegram — មិនបានទទួលការជូនដំណឹងនេះទេ។` : '');
           for (const chat of await leaders()) { if (chats.some((t) => t.chat === chat)) continue; telegram.send(text, chat).catch(() => {}); }
           s.alert.escalated = true; note(s, 'escalated'); dirty = true; touched.add(c.id);
         }

@@ -1083,6 +1083,27 @@
     host.querySelectorAll('[data-bstlp]').forEach((b) => b.onclick = () => { bstLiveP = b.dataset.bstlp; paintBoosts(); });
     host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
   }
+  // Client link: one read-only page per client with their own results (/r/<token>). Copy it, make a new one (the old stops
+  // working), or turn it off. Once made, the link is also added under each Telegram report.
+  async function openClientLink(c) {
+    let dlg = $('clDlg'); if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'clDlg'; dlg.className = 'ho-dlg'; document.body.appendChild(dlg); dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-clclose]')) dlg.close(); }); }
+    const paint = (l) => {
+      dlg.innerHTML = `<div class="ho-dw"><div class="ho-dh"><h2>🔗 Client link · ${esc(c.name)}</h2><button type="button" class="ghost sm" data-clclose aria-label="Close">✕</button></div>
+        <p class="hint">A page only this client sees: spend, lives, posts, orders and cost per order by day, and their invoices. No login. Once made, the link is added under every Telegram report too.</p>
+        ${l ? `<p><code class="lcode" data-copy="${esc(l.url)}">${esc(l.url)}</code></p><p class="hint">Made ${esc(ago(l.at))}.</p>
+          <div class="sc-a"><button type="button" class="sm primary" data-cl="copy">Copy link</button><a class="sm ghost btn" href="${esc(l.url)}" target="_blank" rel="noopener">Open</a><button type="button" class="sm ghost" data-cl="new">New link</button><button type="button" class="sm ghost danger-t" data-cl="off">Turn off</button></div>`
+        : '<div class="sc-a"><button type="button" class="sm primary" data-cl="new">Make a link</button></div>'}</div>`;
+      dlg.querySelectorAll('[data-cl]').forEach((b) => b.onclick = async () => {
+        const k = b.dataset.cl;
+        try {
+          if (k === 'copy') { await navigator.clipboard.writeText(l.url); successBadge('Link copied'); return; }
+          if (k === 'new') { if (l && !confirm('Make a new link? The old one stops working.')) return; const r = await api(`/clients/${c.id}/link`, { method: 'POST' }); paint(r.link); try { await navigator.clipboard.writeText(r.link.url); successBadge('Link made and copied'); } catch (_) { successBadge('Link made'); } return; }
+          if (k === 'off') { if (!confirm('Turn this link off? The client can no longer open it.')) return; await api(`/clients/${c.id}/link`, { method: 'DELETE' }); paint(null); toast('Link turned off'); }
+        } catch (e) { toast(e.message); }
+      });
+    };
+    try { paint((await api(`/clients/${c.id}/link`)).link); dlg.showModal(); } catch (e) { toast(e.message); }
+  }
   // A cost per order 10× the average is almost always orders that were not counted (Page not connected for orders, comments
   // not read), not a real cost — say so instead of showing it as if it were true (e.g. $194 against an average of $3.23).
   const cpoOdd = (cpo, avg) => cpo != null && avg != null && avg > 0 && cpo >= avg * 10;
@@ -1326,7 +1347,7 @@
     box.innerHTML = `<div class="cd-in" data-cdid="${c.id}">
       <div class="cd-head"><button type="button" class="ghost sm cd-back" id="cdBack">← All clients</button>
         <div class="cd-head-row"><div class="cd-title"><span class="cr-av lg" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span><div class="cd-tw"><div class="cd-tline"><h3>${esc(c.name)}</h3><div class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${c.telegram ? `<span class="tgok">✈ ${esc(c.telegram_title || 'Telegram group')}</span>` : '<span class="cr-warn">No Telegram group</span>'}</div></div>${cdAccounts(m)}</div></div>
-          <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button><button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
+          <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button>${me && !me.buyer ? '<button type="button" class="sm" id="cdLinkBtn" title="A read-only page with this client\'s own results, to share with the client">🔗 Client link</button>' : ''}<button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span>${me && !me.buyer && clients.length > 1 ? '<button type="button" class="ghost sm" id="cdMergeBtn">Merge a duplicate…</button>' : ''}<button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
       <div class="cd-tabrow"><div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">Today<small>Status · Boost plan · Tasks</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>Advice · Weekly strategy</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">History and settings<small>Notes · Reports · Settings</small></button></div><div class="cd-per"${cTab === 'today' ? '' : ' hidden'}><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div></div>
@@ -1372,6 +1393,7 @@
     if ($('cdMergeBtn')) $('cdMergeBtn').onclick = () => openClientMerge(c);
     if ($('cdDupBtn')) $('cdDupBtn').onclick = () => openClientMerge(c);
     const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
+    const lnB = $('cdLinkBtn'); if (lnB) lnB.onclick = () => openClientLink(c);
     const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
     wireWeekly(c); wireCdStatus(c);

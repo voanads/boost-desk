@@ -42,7 +42,9 @@ async function send(user, c, from, to, { kind = '', parts = null, withImage = tr
       if (list.length === 1 || only != null) throw Object.assign(new Error(`${c.name} has no Telegram ${r.rest || list.length === 1 ? 'group' : 'topic'} for ${r.label} yet. Pick one in the Clients tab.`), { status: 400 });
       continue;
     }
-    const body = only != null && typeof text === 'string' && text.trim() ? text.slice(0, 12000) : rep.text;
+    let body = only != null && typeof text === 'string' && text.trim() ? text.slice(0, 12000) : rep.text;
+    // the client's own results page, when the PM made one (src/clientLink.js)
+    if (body === rep.text) { try { const l = await require('./clientLink').get(user.fb_id, c.id); if (l) body += `\n\n📈 មើលលទ្ធផលពេញ៖ ${l.url}`; } catch (_) {} }
     let png = null;
     if (withImage) { try { png = await reportImage.clientReportImage(user, c.id, from, to, kind, parts, r.scope); } catch (e) { if (e.needsLogin) throw e; console.error('[report image]', e.message); } }
     if (png) await telegram.sendPhoto(png, body, r.chat, track); else await telegram.send(body, r.chat, track);

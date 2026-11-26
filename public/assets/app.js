@@ -1201,6 +1201,41 @@
   const cdPerLabel = () => { const r = cdRange(); if (!r) return ''; return r[0] === r[1] ? nice(r[0]) : `${shortD(r[0])} – ${shortD(r[1])} ${r[1].slice(0, 4)}`; };
   const cdAi = {}, cdPg = {}; // AI answers / Page spend keyed by client + period + language
   const cdAiKey = (cid) => { const r = cdRange(); return r ? `${cid}|${r[0]}|${r[1]}|${aiLang}` : null; };
+  // 🩺 Ad Doctor: weak ads of this client (Meta's numbers, last 7 / 14 days), why, and a first fix; then ✨ AI on how to fix.
+  const cdDoc = {};
+  function cdDocSection(c) {
+    const st = cdDoc[c.id] || { days: 7 }, d = st.data, money2 = (n) => n == null ? '–' : money(n);
+    const seg = `<div class="seg" role="group" aria-label="Days">${[7, 14].map((n) => `<button type="button" data-docdays="${n}" aria-pressed="${st.days === n}">${n} ថ្ងៃ</button>`).join('')}</div>`;
+    const row = (a) => `<div class="doc-row ${a.level}">${a.thumb ? `<img class="doc-img" src="${esc(a.thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="doc-img"></span>'}
+      <div class="doc-main"><b>${esc(a.name || a.adId)}</b>${d.best.includes(a.adId) ? ' <span class="chip ok">⭐ ល្អបំផុត</span>' : ''}<div class="hint">${esc(a.campaign)}</div>
+        <div class="doc-nums"><span>${money(a.spend)}</span><span>${a.results ? `${a.results} ${esc(a.resultType)} · ${money2(a.cpr)}` : '0 លទ្ធផល'}</span><span>CTR ${a.ctr.toFixed(2)}%</span><span>CPM ${money(a.cpm)}</span><span>Freq ${a.frequency.toFixed(1)}</span></div>
+        ${(a.flags || []).map((f) => `<div class="doc-flag"><span class="chip ${f.level === 'bad' ? 'bad' : 'warn'}">${esc(f.title)}</span> <span class="hint">${esc(f.detail)}</span><div>${esc(f.fix)}</div></div>`).join('')}</div></div>`;
+    let body;
+    if (!d && !st.loading && !st.err) body = '<div class="hint">ពិនិត្យ ad នីមួយៗរបស់ភ្ញៀវនេះពី Meta៖ ad ណាថ្លៃ, គ្មានលទ្ធផល, audience ហត់ (frequency), CTR ទាប ឬ CPM ខ្ពស់ — ធៀបនឹង ad ល្អបំផុតរបស់ភ្ញៀវខ្លួនឯង។</div>';
+    else if (st.loading) body = '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> កំពុងអានលេខពី Meta…</div>';
+    else if (st.err) body = `<div class="note">${esc(st.err)}</div>`;
+    else {
+      const weak = d.ads.filter((a) => a.level !== 'ok'), ok = d.ads.filter((a) => a.level === 'ok'), t = d.totals;
+      const ai = st.ai || null;
+      body = `<div class="doc-sum">${t.ads} ads · <b class="${weak.length ? 'is-danger' : 'is-ok'}">${weak.length} មានបញ្ហា</b>${weak.length ? ` · ${money(t.weakSpend)} នៃ ${money(t.spend)} ចំណាយលើ ad ដែលមានបញ្ហា` : ' · ល្អទាំងអស់'}${d.skipped && d.skipped.length ? ` · <span class="is-warn">អាន ad account ${esc(d.skipped.join(', '))} មិនបាន</span>` : ''}</div>
+        ${weak.slice(0, 8).map(row).join('')}${weak.length > 8 ? `<div class="hint">+${weak.length - 8} ទៀត</div>` : ''}
+        ${ok.length ? `<details class="doc-ok"><summary class="hint">Ads ដែលដើរល្អ (${ok.length})</summary>${ok.slice(0, 12).map(row).join('')}</details>` : ''}
+        ${weak.length ? `<div class="doc-ai"><div class="cd-sec-h"><h4>✨ AI៖ កែ Ad យ៉ាងម៉េច</h4><span class="spacer"></span>${aiReady === false ? '' : `<button type="button" class="sm ${ai && ai.text ? 'ghost' : 'primary'}" data-docai ${ai && ai.loading ? 'disabled' : ''}>${ai && ai.text ? '↻ ម្ដងទៀត' : 'សួរ AI'}</button>`}</div>
+          ${!ai ? `<div class="hint">${aiReady === false ? 'AI មិនទាន់ដំឡើង — ម្ចាស់ app ដាក់ key ក្នុង Admin → Settings។' : 'AI មើលរូប, caption, audience និងលេខរបស់ ad ខ្សោយ ធៀបនឹង ad ល្អបំផុត ហើយប្រាប់ពីរបៀបកែ។ ប្រើ 1 AI request។'}</div>` : ai.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> AI កំពុងមើល ads…</div>' : ai.err ? `<div class="note">${esc(ai.err)}</div>` : `<div class="ai-text">${mdLite(ai.text)}</div>${ai.cached ? '<div class="hint">ចម្លើយដែលរក្សាទុក</div>' : ''}`}</div>` : ''}`;
+    }
+    return `<section class="cd-sec docsec" id="cdDocSec"><div class="cd-sec-h"><h4>🩺 Ad Doctor</h4><span class="hint">${d ? `${esc(shortDay(d.from))} – ${esc(shortDay(d.to))}` : 'ពី Meta'}</span><span class="spacer"></span>${seg}<button type="button" class="sm ${d ? 'ghost' : 'primary'}" data-docgo ${st.loading ? 'disabled' : ''}>${d ? '↻' : 'ពិនិត្យ Ads'}</button></div>${body}</section>`;
+  }
+  async function cdRunDoc(cid, fresh) {
+    const st = cdDoc[cid] = { days: (cdDoc[cid] || {}).days || 7, loading: true }; renderClientDetail();
+    try { st.data = await api(`/clients/${cid}/ad-doctor?days=${st.days}${fresh ? '&fresh=1' : ''}`); } catch (e) { st.err = e.message; }
+    st.loading = false; renderClientDetail();
+  }
+  async function cdRunDocAi(cid) {
+    const st = cdDoc[cid]; if (!st || !st.data) return; const fresh = !!(st.ai && st.ai.text);
+    st.ai = { loading: true }; renderClientDetail();
+    try { const r = await api(`/clients/${cid}/ad-doctor/ai`, { method: 'POST', body: { days: st.days, lang: 'km', fresh } }); st.ai = { text: r.text, cached: r.cached }; } catch (e) { st.ai = { err: e.message }; }
+    renderClientDetail();
+  }
   function cdAiSection(c) {
     if (me && me.aiOn === false) return ''; // Settings → AI advice off
     const k = cdAiKey(c.id), st = k ? cdAi[k] : null;
@@ -1363,6 +1398,7 @@
       ${planStrip(c)}
       </div>
       <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
+          ${cdDocSection(c)}
           ${cdAiSection(c)}
           ${cdWeeklySection(c)}
       </div>
@@ -1395,6 +1431,9 @@
     const sendB = $('cdSendBtn'); if (sendB) sendB.onclick = () => { const r = cdRange() || monthRange(); openReportDlg({ kind: 'client', cid: c.id, from: r[0], to: r[1], label: cdPerLabel() || 'this month', only: '', parts: null, skip: null }); };
     const lnB = $('cdLinkBtn'); if (lnB) lnB.onclick = () => openClientLink(c);
     const invB = $('cdInvBtn'); if (invB) invB.onclick = () => { location.hash = 'payments'; showTab('payments'); setTimeout(() => { const q = $('paySearch'); if (q) { q.value = c.name; q.dispatchEvent(new Event('input')); } }, 400); };
+    box.querySelectorAll('[data-docgo]').forEach((b) => b.onclick = () => cdRunDoc(c.id, !!(cdDoc[c.id] && cdDoc[c.id].data)));
+    box.querySelectorAll('[data-docdays]').forEach((b) => b.onclick = () => { const n = Number(b.dataset.docdays), st = cdDoc[c.id] || (cdDoc[c.id] = {}); if (st.days === n) return; st.days = n; if (st.data) cdRunDoc(c.id); else renderClientDetail(); });
+    box.querySelectorAll('[data-docai]').forEach((b) => b.onclick = () => cdRunDocAi(c.id));
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
     wireWeekly(c); wireCdStatus(c);
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });

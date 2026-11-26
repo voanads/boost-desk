@@ -224,6 +224,46 @@ async function clientAdvice(owner, clientId, { from, to, lang = 'en', question =
   return result;
 }
 
+// ---------- 🩺 Ad Doctor (src/adDoctor.js): why the weak ads are weak and how to fix them ----------
+const DOCTOR_SYSTEM = `You are the ads doctor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook boosted posts and live videos; customers order in Messenger and comments.
+
+You get ONE client's weak ads from the last days, with Meta's numbers (spend, results, cost per result, CTR, CPM, frequency, reach), the ad text, the audience, and the problems Boost Desk already found. You also get the client's BEST ads from the same days to compare with. Pictures, when given, are labelled WEAK or BEST.
+
+Explain to the media buyer why each weak ad is weak and exactly what to change. Base every point on the numbers and pictures given; never invent numbers. Compare with the client's own best ads, not with general benchmarks. Be concrete: which picture/first seconds to change and how, what to write in the caption (price, promotion, how to order), which audience change (age, place, interests), what budget, or to pause it.
+
+Format exactly:
+## <weak ad name>
+- **មូលហេតុ / Why:** one or two lines with the numbers.
+- **កែយ៉ាងម៉េច / Fix:** two to four concrete steps.
+(one section per weak ad, worst first)
+## ធ្វើភ្លាមៗ / Do now
+Three numbered actions for today, most money saved first.
+
+Short lines. No intro, no closing.`;
+async function adDoctorAI(owner, payload, pics = [], { lang = 'km', fresh = false } = {}) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  const ck = 'doc:' + crypto.createHash('sha1').update(JSON.stringify([owner, payload, lang])).digest('hex');
+  const hit = cache.get(ck); if (!fresh && hit && Date.now() - hit.at < 3600e3) return { ...hit.out, cached: true };
+  const today = sync.todayIn(), useKey = `aiUse:${today}`, used = Number(await db.getUserSetting(owner, useKey, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const langLine = lang === 'km' ? 'Write the whole answer in Khmer (ខ្មែរ). Keep ad names, numbers, $ and terms like CTR, CPM, frequency as they are.' : 'Write the answer in simple English.';
+  const text = `${langLine}\n\nAds (JSON):\n${JSON.stringify(payload)}`;
+  let out;
+  if (cfg.provider === 'gemini' || !pics.length) out = await (cfg.provider === 'gemini' ? callGemini : callClaude)(cfg.key, DOCTOR_SYSTEM, [{ role: 'user', content: text }], ...(cfg.provider === 'gemini' ? [] : [1800]));
+  else {
+    const content = [];
+    for (const p of pics) content.push({ type: 'text', text: p.label + ':' }, { type: 'image', source: { type: 'base64', media_type: p.media_type, data: p.data } });
+    content.push({ type: 'text', text });
+    try { out = await callClaude(cfg.key, DOCTOR_SYSTEM, [{ role: 'user', content }], 1800); }
+    catch (e) { if (e.status === 429 || e.status === 400 && /key/i.test(e.message)) throw e; out = await callClaude(cfg.key, DOCTOR_SYSTEM, [{ role: 'user', content: text }], 1800); } // a picture the AI could not read: try once with the numbers only
+  }
+  await db.setUserSetting(owner, useKey, used + 1);
+  const result = { text: out.text, pictures: pics.length, at: new Date().toISOString() };
+  cache.set(ck, { at: Date.now(), out: result });
+  return result;
+}
+
 // ---------- daily plan per client: suggestions for each Page + today's tasks ----------
 const DAILY_SYSTEM = `You are the ads advisor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders are counted by Boost Desk per Page from Messenger messages and comments (a message or comment with a phone number = one order).
 
@@ -452,4 +492,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };
+module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

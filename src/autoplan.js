@@ -53,7 +53,7 @@ async function candidates(owner, today) {
   for (const c of all) {
     if (c.plan && c.plan.hidden) continue; // the PM chose not to use a plan for this client
     const skip = new Set(((c.plan && c.plan.noAuto) || []).map(String));
-    const e = await db.getEntry(today, c.id);
+    const e = await db.getEntry(owner, today, c.id);
     for (const id of ((e && e.post && e.post.ids) || []).map(String)) {
       const r = raw[id]; if (!r || linked.has(id) || skip.has(id) || !(Number(r.spend) > 0)) continue;
       linked.add(id); out.push({ client: c, camp: id, name: r.name || '', account: r.accountId || '', accountName: r.account || '' });

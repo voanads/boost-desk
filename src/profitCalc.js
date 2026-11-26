@@ -1,6 +1,6 @@
 // Profit overview (admin): every person's Profit book side by side, month by month — who submitted,
 // the profit to split, and how it splits between the company and the people. Same formulas as the
-// Profit tab (public/assets/profit.js → calc), so the numbers match what each person sees.
+// old Profit tab, so the numbers match what each person saw there (the tab was removed in Nov 2026; the company page still uses this).
 const db = require('./db');
 
 const ROLES = ['developer', 'doer', 'spender', 'supporter', 'company'];

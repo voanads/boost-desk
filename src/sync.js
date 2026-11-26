@@ -281,7 +281,7 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
   for (const t of plan.targets) {
     touched.add(t.clientId);
     const c = clients.find((x) => x.id === t.clientId);
-    const e = await db.getEntry(day, t.clientId);
+    const e = await db.getEntry(user.fb_id, day, t.clientId);
     // A "Live" client that also boosted a post (a boost of a day or more): it does both now.
     if (t.post && c && c.type === 'live') { await db.updateClient(user.fb_id, c.id, { type: 'both' }); c.type = 'both'; for (const x of clients) if (x.id === c.id) x.type = 'both'; }
     // …and a "Boost post" client with a campaign set to Live by hand: it does both too.
@@ -302,7 +302,7 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     if (t.post) e.post = withRes({ ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count, ids: t.post.ids }, t.post);
     else if (e.post && Number(e.post.spend) > 0) e.post = { ...e.post, spend: 0, campaigns: 0, ids: [] }; // posts moved to Live
     e.syncedAt = syncedAt;
-    await db.putEntry(day, t.clientId, e);
+    await db.putEntry(user.fb_id, day, t.clientId, e);
   }
   // Clients that had synced spend this day but no longer match (a Page was moved to another client,
   // a client was changed…): clear their synced spend so nothing is counted twice.
@@ -312,7 +312,7 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     for (const l of Object.values(e.lives || {})) { l.spend = 0; l.campaigns = 0; l.on = false; }
     if (e.post) { e.post.spend = 0; e.post.campaigns = 0; e.post.on = false; }
     delete e.syncedAt;
-    await db.putEntry(day, Number(cid), e);
+    await db.putEntry(user.fb_id, day, Number(cid), e);
   }
   if (rematch) await db.setDayUnmatched(user.fb_id, day, { unmatched: plan.unmatched, errors });
   else await db.putDayMeta(user.fb_id, day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
@@ -364,7 +364,7 @@ async function untickedToday(user, day) {
 // numbers (entry lines + raw rows), so the text matches the ads picture (which is always live) and the Dashboard.
 // One insights call per ad account; errors leave the saved numbers as they were. Returns true when something changed.
 async function freshenToday(user, clientId, day) {
-  const owner = user.fb_id, e = await db.getEntry(day, clientId);
+  const owner = user.fb_id, e = await db.getEntry(owner, day, clientId);
   const ids = new Set();
   for (const l of Object.values(e.lives || {})) for (const id of l.ids || []) ids.add(String(id));
   for (const id of (e.post || {}).ids || []) ids.add(String(id));
@@ -384,7 +384,7 @@ async function freshenToday(user, clientId, day) {
   if (e.post && e.post.ids) { const v = sum(e.post.ids, e.post.spend); if (v !== e.post.spend) { e.post.spend = v; changed = true; } }
   for (const id of Object.keys(fresh)) fresh[id] = round2(fresh[id]);
   for (const r of rows) if (r.campaignId && fresh[String(r.campaignId)] != null && fresh[String(r.campaignId)] !== Number(r.spend)) { r.spend = fresh[String(r.campaignId)]; changed = true; }
-  if (changed) { await db.putEntry(day, clientId, e); await db.putRaw(owner, day, rows); }
+  if (changed) { await db.putEntry(owner, day, clientId, e); await db.putRaw(owner, day, rows); }
   return changed;
 }
 
@@ -544,8 +544,8 @@ async function scopeEntries(owner, c, from, to, scope, onlyIds = null, notIds = 
   });
 }
 // Campaign IDs behind ticked lines on a saved day (l1, l2, post).
-async function partIds(day, clientId, parts) {
-  const e = await db.getEntry(day, Number(clientId)), ids = new Set();
+async function partIds(owner, day, clientId, parts) {
+  const e = await db.getEntry(owner, day, Number(clientId)), ids = new Set();
   for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) ids.add(String(id));
   return ids;
 }
@@ -555,9 +555,9 @@ function splitParts(parts) {
   const all = parts || [], drop = new Set(all.filter((x) => x[0] === '!').map((x) => x.slice(1))), pick = all.filter((x) => x[0] !== '!');
   return { pick: pick.length ? pick : null, drop };
 }
-async function dropIds(clientId, drop) {
+async function dropIds(owner, clientId, drop) {
   const ids = new Set();
-  for (const k of drop) { const [day, key] = k.split(':'); for (const id of await partIds(day, clientId, [key])) ids.add(id); }
+  for (const k of drop) { const [day, key] = k.split(':'); for (const id of await partIds(owner, day, clientId, [key])) ids.add(id); }
   return ids;
 }
 // opts.orders (default true): add the client's adsbox.biz orders — per day in a range, with cost per order.
@@ -570,7 +570,7 @@ async function clientReport(owner, clientId, from, to, kind = '', parts = null, 
   const sp = splitParts(parts), drop = sp.drop; parts = sp.pick;
   let rows;
   if (scope) { // one Page (or the rest): rebuilt from the synced campaigns; ticked lines become campaign IDs
-    rows = await scopeEntries(owner, c, from, to, scope, parts && parts.length && from === to ? await partIds(from, c.id, parts) : null, drop.size ? await dropIds(c.id, drop) : null);
+    rows = await scopeEntries(owner, c, from, to, scope, parts && parts.length && from === to ? await partIds(owner, from, c.id, parts) : null, drop.size ? await dropIds(owner, c.id, drop) : null);
     parts = null;
   } else rows = (await db.monthEntries(owner, from, to)).filter((r) => r.client_id === c.id).sort((a, b) => a.day.localeCompare(b.day));
   const lines = []; let spent = 0;
@@ -776,4 +776,4 @@ async function unmatchedSpend(owner, from, to) {
   return { spend: round2(spend), pages: Object.values(m).map((x) => ({ page: x.page, pageId: x.pageId, spend: round2(x.spend), camps: Object.entries(x.camps).map(([k, v]) => [String(k), round2(v)]) })).sort((a, b) => b.spend - a.spend) };
 }
 
-module.exports = { scopeEntries, extraLogins, tokenPicker, freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };
+module.exports = { totalWithTax, scopeEntries, extraLogins, tokenPicker, freshenToday, scalePages, orderSpend, unmatchedSpend, splitParts, dropIds, scopeRows, partIds, isPostFor, pageSpend, matchClient, clientsWithLearnedPages, isAutoPost, uniqueTotals, TAX_RATE, isBusy, exclusive, rematch, clientReport, summaryReport, dashboard, buildPlan, entryStats, syncDay, syncRange, addDays, refreshAccounts, buildReport, todayIn, hhmm, tokenFor, campaignPrefix };

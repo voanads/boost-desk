@@ -47,7 +47,7 @@ async function sendClientReports(user, day = sync.todayIn(), { refresh = true, h
   }
   for (const c of await db.listClients(user.fb_id)) {
     if (c.archived || set.skip.includes(c.id)) continue;
-    const e = await db.getEntry(day, c.id);
+    const e = await db.getEntry(user.fb_id, day, c.id);
     const spend = (hasLive(c) ? Object.values(e.lives || {}).reduce((s, l) => s + (Number(l && l.spend) || 0), 0) : 0) + (hasPost(c) ? Number((e.post || {}).spend) || 0 : 0);
     if (!(spend > 0)) { out.noSpend++; continue; }
     if (!reports.routes(c).some((r) => r.chat)) { out.noGroup.push(c.name); continue; } // spent today but has no Telegram group
@@ -57,7 +57,7 @@ async function sendClientReports(user, day = sync.todayIn(), { refresh = true, h
     try {
       const done = await reports.send(user, c, day, day, { withImage: set.withImage }); // one per Page topic, if set
       if (!done.length) { out.noSpend++; continue; }
-      await db.putEntry(day, c.id, { ...(await db.getEntry(day, c.id)), reportSent: { at: new Date().toISOString(), by: 'Auto report' } });
+      await db.putEntry(user.fb_id, day, c.id, { ...(await db.getEntry(user.fb_id, day, c.id)), reportSent: { at: new Date().toISOString(), by: 'Auto report' } });
       out.sent.push(c.name);
     } catch (err) { out.failed.push({ name: c.name, error: err.message }); }
   }

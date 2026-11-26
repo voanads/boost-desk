@@ -50,11 +50,11 @@ async function fetchThumb(url) {
 
 // Ads for one client and period, straight from Meta.
 async function clientAds(user, clientId, from, to, kind = '', parts = null, scope = null) {
-  const sp = sync.splitParts(parts), notIds = sp.drop.size ? await sync.dropIds(clientId, sp.drop) : null; parts = sp.pick;
+  const sp = sync.splitParts(parts), notIds = sp.drop.size ? await sync.dropIds(user.fb_id, clientId, sp.drop) : null; parts = sp.pick;
   if (scope) { // one Page of the client (its own Telegram topic)
     const client = (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId));
     if (!client) { const e = new Error('Client not found.'); e.status = 404; throw e; }
-    const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(from, clientId, parts) : null, notIds);
+    const rows = await sync.scopeRows(user.fb_id, client, from, to, scope, parts && parts.length && from === to ? await sync.partIds(user.fb_id, from, clientId, parts) : null, notIds);
     const byAccount = {}; let posts = 0, livesN = 0;
     for (const r of rows) {
       if (!r.campaignId || !r.accountId) continue;
@@ -67,7 +67,7 @@ async function clientAds(user, clientId, from, to, kind = '', parts = null, scop
   // Ticked lines (one-day reports): keep only the campaigns behind those lives / the post.
   let only = null;
   if (parts && parts.length && from === to) {
-    const e = await db.getEntry(from, Number(clientId));
+    const e = await db.getEntry(user.fb_id, from, Number(clientId));
     only = new Set();
     for (const k of parts) for (const id of (k === 'post' ? (e.post || {}).ids : ((e.lives || {})[k] || {}).ids) || []) only.add(String(id));
     if (!only.size) return { client: (await db.listClients(user.fb_id)).find((x) => x.id === Number(clientId)), ads: [], reach: 0 }; // campaign list not saved for this day: no picture rather than a wrong one

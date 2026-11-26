@@ -24,7 +24,28 @@ async function keyConfig() {
   key = key || env;
   return { key, provider: providerOf(key), hint: c.keyHint || (env ? '…' + env.slice(-4) : ''), by: c.by || '', at: c.at || '' };
 }
-async function publicConfig() { const c = await keyConfig(); return { hasKey: !!c.key, provider: c.provider, keyHint: c.hint, savedBy: c.by, savedAt: c.at, model: MODEL_FOR(c.provider), dailyLimit: DAILY_LIMIT }; }
+async function publicConfig() { const c = await keyConfig(); return { hasKey: !!c.key, provider: c.provider, keyHint: c.hint, savedBy: c.by, savedAt: c.at, model: MODEL_FOR(c.provider), dailyLimit: DAILY_LIMIT, usage: await usageOf(sync.todayIn().slice(0, 7)) }; }
+
+// ---------- usage per month (Admin → Settings → AI advice) ----------
+// $ per million tokens [input, output] for the default models; other models show tokens only. Prices change: check
+// anthropic.com/pricing (Claude) or ai.google.dev/pricing (Gemini) when changing ANTHROPIC_MODEL / GEMINI_MODEL.
+const PRICE = { 'claude-sonnet-5-5': [2, 10] };
+const usageKey = (ym) => `aiUsage:${ym}`;
+async function usageOf(ym) {
+  const u = (await db.getSetting(usageKey(ym), null)) || { calls: 0, input: 0, output: 0, models: {} };
+  let cost = 0, priced = true;
+  for (const [m, x] of Object.entries(u.models || {})) { const p = PRICE[m]; if (!p) { priced = false; continue; } cost += (x.input * p[0] + x.output * p[1]) / 1e6; }
+  return { month: ym, calls: u.calls || 0, input: u.input || 0, output: u.output || 0, cost: Math.round(cost * 100) / 100, priced };
+}
+// One request's tokens, added to this month's total (never fails the request).
+async function noteUsage(model, input, output) {
+  try {
+    const k = usageKey(sync.todayIn().slice(0, 7)), u = (await db.getSetting(k, null)) || { calls: 0, input: 0, output: 0, models: {} };
+    u.calls++; u.input += input; u.output += output;
+    const m = (u.models[model] = u.models[model] || { calls: 0, input: 0, output: 0 }); m.calls++; m.input += input; m.output += output;
+    await db.setSetting(k, u);
+  } catch (e) { console.error('[ai] usage not saved:', e.message); }
+}
 async function saveKey(key, by) {
   const cur = (await db.getSetting('anthropicApi', null)) || {};
   const next = { ...cur, by, at: new Date().toISOString() };
@@ -147,13 +168,15 @@ async function callGemini(key, system, messages, model = MODEL_FOR('gemini'), ma
   finally { clearTimeout(t); }
   const msg = (body.error && body.error.message) || '';
   // The default model name can be retired by Google: fall back to the "latest Flash" alias once.
-  if (res.status === 404 && model !== 'gemini-flash-latest') return callGemini(key, system, messages, 'gemini-flash-latest');
+  if (res.status === 404 && model !== 'gemini-flash-latest') { console.error(`[ai] Gemini model ${model} not found; using gemini-flash-latest. Set GEMINI_MODEL to a current model.`); return callGemini(key, system, messages, 'gemini-flash-latest'); }
   if (res.status === 400 && /api key/i.test(msg) || res.status === 403) throw Object.assign(new Error('The Gemini API key was refused — check it in Admin → Settings.'), { status: 400 });
   if (res.status === 429) throw Object.assign(new Error('Gemini is busy or the free limit was reached. Try again in a minute.'), { status: 429 });
   if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
   const text = ((body.candidates || [])[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
   if (!text) throw new Error('Gemini gave no answer (it may have blocked the request). Try again.');
-  return { text, usage: body.usageMetadata || {} };
+  const um = body.usageMetadata || {};
+  await noteUsage(model, Number(um.promptTokenCount) || 0, (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0));
+  return { text, usage: um };
 }
 async function callClaude(key, system, messages, maxTokens = 1200) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
@@ -172,7 +195,13 @@ async function callClaude(key, system, messages, maxTokens = 1200) {
   const msg = (body.error && body.error.message) || '';
   if (/credit balance is too low/i.test(msg)) throw Object.assign(new Error('The Anthropic account has no credit left. The owner adds credit at console.anthropic.com → Plans & Billing, then AI advice works again.'), { status: 402 });
   if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
-  return { text: (body.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim(), usage: body.usage || {} };
+  const u = body.usage || {};
+  await noteUsage(MODEL_FOR('claude'), (Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0), Number(u.output_tokens) || 0);
+  // A safety decline comes back as HTTP 200 with stop_reason "refusal": say so instead of showing an empty answer.
+  if (body.stop_reason === 'refusal') throw Object.assign(new Error('The AI declined to answer this one. Try again, or ask the question differently.'), { status: 422 });
+  const text = (body.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+  if (!text) throw new Error('The AI gave no answer. Try again.');
+  return { text, usage: u };
 }
 
 const cache = new Map();

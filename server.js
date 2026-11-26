@@ -67,6 +67,8 @@ const { LOGINS } = require('./src/routes/auth-logins')(app, null, { wrap, get MB
 const { googleRedirect, normEmail, siteCfg, sitePerson } = require('./src/routes/auth-google')(app, null, { loggedIn, newState, stateOk, wrap });
 // ---- Public read-only API for adsbox.biz, and the Check My Ads extension hooks (src/routes/public-api.js) ----
 const { lastSeenMem, sha } = require('./src/routes/public-api')(app, null, { isDay, wrap });
+// ---- Client link: one read-only results page per client, /r/<token> (src/routes/client-link.js) ----
+require('./src/routes/client-link').mountPublic(app, { wrap });
 // ---- Media buyer site, the login wall and the four sites (/mediabuyer, /owner, /projectmanager, /admin) (src/routes/sites.js) ----
 const { MB } = require('./src/routes/sites')(app, null, { lastSeenMem, sitePerson, wrap, get AI() { return AI; }, get KPI() { return KPI; }, get canSeeAdmin() { return canSeeAdmin; }, get roleOf() { return roleOf; }, get tgt() { return tgt; } });
 // ---------- API ----------
@@ -81,6 +83,7 @@ require('./src/routes/admin-ad-accounts')(null, api, { adminOnly, getTeams, owne
 const { cleanClient } = require('./src/routes/admin-security')(null, api, { adminOnly, get dedupeClients() { return dedupeClients; }, googleRedirect, isFull, normEmail, ownerOnly, siteCfg, wrap });
 // ---- Clients, post pictures, day checklist and Sync from Meta (src/routes/clients.js) ----
 const { deepMerge } = require('./src/routes/clients')(null, api, { cleanClient, isDay, wrap });
+require('./src/routes/client-link').mountApi(api, { wrap });
 // ---- Payments: service fees and invoices (src/routes/invoices.js) ----
 require('./src/routes/invoices')(null, api, { isDay, isFull, wrap });
 // ---- Live videos, live setups, Dashboard and Page names (src/routes/lives-dashboard.js) ----

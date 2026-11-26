@@ -300,13 +300,18 @@ async function getDay(owner, day) {
   for (const r of rows) entries[r.client_id] = r.data;
   return { day, entries, meta };
 }
-// Callers must have checked the client belongs to the admin (ownsClient) or got it from listClients(owner).
-async function getEntry(day, clientId) {
-  return (await q('SELECT data FROM day_entries WHERE day=$1 AND client_id=$2', [day, clientId])).rows[0]?.data || {};
+// The owner is checked in SQL too: a client of another workspace reads as empty and is never written.
+async function getEntry(owner, day, clientId) {
+  if (!owner) throw new Error('getEntry needs the owner');
+  return (await q(`SELECT e.data FROM day_entries e JOIN clients c ON c.id=e.client_id
+                   WHERE e.day=$1 AND e.client_id=$2 AND c.owner=$3`, [day, clientId, owner])).rows[0]?.data || {};
 }
-const putEntry = (day, clientId, data) =>
-  q(`INSERT INTO day_entries (day, client_id, data) VALUES ($1,$2,$3)
-     ON CONFLICT (day, client_id) DO UPDATE SET data=$3`, [day, clientId, data]);
+async function putEntry(owner, day, clientId, data) {
+  if (!owner) throw new Error('putEntry needs the owner');
+  return q(`INSERT INTO day_entries (day, client_id, data)
+            SELECT $1, $2, $3 WHERE EXISTS (SELECT 1 FROM clients WHERE id=$2 AND owner=$4)
+            ON CONFLICT (day, client_id) DO UPDATE SET data=EXCLUDED.data`, [day, clientId, data, owner]);
+}
 const putDayMeta = (owner, day, syncedBy, unmatched) =>
   q(`INSERT INTO day_meta (owner, day, synced_at, synced_by, unmatched) VALUES ($1, $2, now(), $3, $4)
      ON CONFLICT (owner, day) DO UPDATE SET synced_at=now(), synced_by=$3, unmatched=$4`, [owner, day, syncedBy, JSON.stringify(unmatched)]);

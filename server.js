@@ -1339,8 +1339,8 @@ api.patch('/day/:day/:clientId', wrap(async (req, res) => {
   const { day, clientId } = req.params;
   if (!isDay(day)) return res.status(400).json({ error: 'Bad date.' });
   if (!(await db.ownsClient(req.user.fb_id, Number(clientId)))) return res.status(404).json({ error: 'Client not found.' });
-  const e = deepMerge(await db.getEntry(day, Number(clientId)), req.body || {});
-  await db.putEntry(day, Number(clientId), e);
+  const e = deepMerge(await db.getEntry(req.user.fb_id, day, Number(clientId)), req.body || {});
+  await db.putEntry(req.user.fb_id, day, Number(clientId), e);
   res.json(e);
 }));
 api.post('/sync/:day', wrap(async (req, res) => {
@@ -1888,7 +1888,7 @@ api.post('/client-report/:id/delete', wrap(async (req, res) => {
   let ok = 0;
   for (const m of rec.msgs) if (await telegram.remove(m.chat, m.id)) ok++;
   delete all[k]; await db.setUserSetting(req.user.fb_id, 'sentReports', all);
-  if (from === to && isDay(from)) { const id = Number(req.params.id); await db.putEntry(from, id, deepMerge(await db.getEntry(from, id), { reportSent: null })); }
+  if (from === to && isDay(from)) { const id = Number(req.params.id); await db.putEntry(req.user.fb_id, from, id, deepMerge(await db.getEntry(req.user.fb_id, from, id), { reportSent: null })); }
   res.json({ ok: true, deleted: ok, failed: rec.msgs.length - ok });
 }));
 api.post('/client-report/:id/send', wrap(async (req, res) => {
@@ -1902,7 +1902,7 @@ api.post('/client-report/:id/send', wrap(async (req, res) => {
     if (!done.length) return res.status(400).json({ error: 'No boost spend to report for these Pages.' });
     await rememberSent(req.user, cl.id, from, to, track, done.map((d) => d.to).join(', '));
     const sentAt = new Date().toISOString();
-    if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(from, cl.id, deepMerge(await db.getEntry(from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
+    if (from === to && isDay(from) && (page == null || page === '')) await db.putEntry(req.user.fb_id, from, cl.id, deepMerge(await db.getEntry(req.user.fb_id, from, cl.id), { reportSent: { at: sentAt, by: req.user.name } }));
     return res.json({ ok: true, sentTo: done.map((d) => d.to).join(', '), sent: done, sentAt, withImage: done.some((d) => d.withImage) });
   }
   const r = await sync.clientReport(req.user.fb_id, req.params.id, from, to, kind, parts, skipScope(skip), { orders });
@@ -1918,7 +1918,7 @@ api.post('/client-report/:id/send', wrap(async (req, res) => {
   // A one-day report is remembered on that day's checklist ("Sent 21:05").
   if (from === to && isDay(from)) {
     const id = Number(req.params.id);
-    await db.putEntry(from, id, deepMerge(await db.getEntry(from, id), { reportSent: { at: sentAt, by: req.user.name } }));
+    await db.putEntry(req.user.fb_id, from, id, deepMerge(await db.getEntry(req.user.fb_id, from, id), { reportSent: { at: sentAt, by: req.user.name } }));
   }
   res.json({ ok: true, sentTo: r.client.telegramTitle || r.client.telegram, sentAt, withImage: !!png });
 }));
@@ -1954,7 +1954,7 @@ async function reportStatus(owner, day) {
   const live = (c) => c.type === 'live' || c.type === 'both', post = (c) => c.type === 'post' || c.type === 'both' || !c.type;
   const rows = [];
   for (const c of clients) {
-    const e = await db.getEntry(day, c.id), lives = live(c) ? Object.values(e.lives || {}).filter((l) => Number(l && l.spend) > 0) : [];
+    const e = await db.getEntry(owner, day, c.id), lives = live(c) ? Object.values(e.lives || {}).filter((l) => Number(l && l.spend) > 0) : [];
     const liveSpend = lives.reduce((t, l) => t + Number(l.spend), 0), postSpend = post(c) ? Number((e.post || {}).spend) || 0 : 0, spend = Math.round((liveSpend + postSpend) * 100) / 100;
     const routes = reports.routes(c), chat = routes.find((r) => r.chat), o = (oc.clients || {})[c.id], orders = o ? o.orders : null;
     const sent = e.reportSent && e.reportSent.at ? { at: e.reportSent.at, by: e.reportSent.by || '' } : null;
@@ -2297,7 +2297,7 @@ api.get('/boosts', wrap(async (req, res) => {
   const all = (await db.listClients(owner)).filter((x) => !x.archived), linked = new Set(all.flatMap((c) => ((c.plan && c.plan.lines) || []).map((l) => l.camp).filter(Boolean))), found = [];
   for (const c of all) {
     const x = by[c.id] || {}, lines = (c.plan && c.plan.lines) || [];
-    try { const e = await db.getEntry(today, c.id); for (const id of ((e && e.post && e.post.ids) || []).map(String)) { const r = raw[id]; if (r && !linked.has(id) && Number(r.spend) > 0) found.push({ clientId: c.id, client: c.name, camp: id, name: r.name || '', account: r.accountId || '', accountName: r.account || '', spend: Math.round(Number(r.spend) * 100) / 100 }); } } catch (_) {}
+    try { const e = await db.getEntry(owner, today, c.id); for (const id of ((e && e.post && e.post.ids) || []).map(String)) { const r = raw[id]; if (r && !linked.has(id) && Number(r.spend) > 0) found.push({ clientId: c.id, client: c.name, camp: id, name: r.name || '', account: r.accountId || '', accountName: r.account || '', spend: Math.round(Number(r.spend) * 100) / 100 }); } } catch (_) {}
     lines.forEach((l, i) => {
       const end = l.start ? sync.addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '', state = !l.start ? 'nodate' : l.start > today ? 'new' : end < today ? 'ended' : 'active';
       rows.push({ clientId: c.id, client: c.name, i, post: l.post || `Post ${i + 1}`, link: l.link || '', daily: Number(l.daily) || 0, days: Number(l.days) || 0, budget: Math.round((Number(l.daily) || 0) * (Number(l.days) || 0) * 100) / 100,
@@ -2331,7 +2331,7 @@ api.get('/boosts/lives', wrap(async (req, res) => {
   };
   for (const l of list) {
     const k = l.clientId + '|' + l.day;
-    if (!(k in sentOf)) { try { const e = await db.getEntry(l.day, l.clientId); sentOf[k] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sentOf[k] = ''; } }
+    if (!(k in sentOf)) { try { const e = await db.getEntry(owner, l.day, l.clientId); sentOf[k] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sentOf[k] = ''; } }
     const ids = [...new Set(l.campaigns.map((c) => String(c.accountId || '').replace(/^act_/, '')).filter(Boolean))];
     // the budget is only shown when every campaign of the Live has one on Meta and the account is in USD
     const bs = l.campaigns.map((c) => { const s = setups[c.id], a = acc[String(c.accountId || '').replace(/^act_/, '')]; const usd = a && ((a.info || {}).currency || a.currency || '') === 'USD'; return s && usd ? Number(s.lifetimeBudget) || Number(s.dailyBudget) || 0 : 0; });
@@ -2377,7 +2377,7 @@ api.get('/admin/lives', adminOnly, wrap(async (req, res) => {
     let list = []; try { list = await lives.listLives(u.fb_id, today, today); } catch (_) {}
     const sent = {};
     for (const l of list) {
-      if (!(l.clientId in sent)) { try { const e = await db.getEntry(today, l.clientId); sent[l.clientId] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sent[l.clientId] = ''; } }
+      if (!(l.clientId in sent)) { try { const e = await db.getEntry(u.fb_id, today, l.clientId); sent[l.clientId] = (e && e.reportSent && e.reportSent.at) || ''; } catch (_) { sent[l.clientId] = ''; } }
       rows.push({ team: teamOf[u.fb_id] || u.name, client: l.client, page: l.page, time: l.time, start: l.start, spend: l.spend, comments: l.comments, messages: l.messages, perComment: l.perComment, camps: l.campaigns.length,
         state: l.end != null && l.end <= now ? 'ended' : l.end != null ? 'on' : '', sent: sent[l.clientId] });
     }

@@ -427,6 +427,39 @@ async function adInsights(token, actId, campaignIds, since, until) {
   return { ads: out, reach };
 }
 
+// Ad Doctor (src/adDoctor.js): per ad, the numbers that say WHY an ad is weak — frequency, CPM, CTR, link clicks — plus the
+// ad's own picture, text and the audience of its ad set. Read-only (ads_read), only for the campaigns asked for.
+async function adDiagnostics(token, actId, campaignIds, since, until) {
+  const out = [];
+  for (let i = 0; i < campaignIds.length; i += 50) {
+    const chunk = campaignIds.slice(i, i + 50);
+    const rows = await allStatuses(`/${actId}/insights`, {
+      level: 'ad', fields: 'ad_id,ad_name,campaign_id,campaign_name,spend,impressions,reach,frequency,cpm,ctr,clicks,inline_link_clicks,actions,video_thruplay_watched_actions',
+      time_range: { since, until }, filtering: [{ field: 'campaign.id', operator: 'IN', value: chunk }], limit: 500,
+    }, { field: 'ad.effective_status', operator: 'IN', value: AD_STATUSES }, token);
+    const info = {}, adIds = rows.map((r) => r.ad_id).filter(Boolean);
+    for (let j = 0; j < adIds.length; j += 50) {
+      try {
+        const ads = await allStatuses(`/${actId}/ads`, { fields: 'id,effective_status,creative{thumbnail_url,image_url,body,title,object_type},adset{optimization_goal,targeting}', filtering: [{ field: 'id', operator: 'IN', value: adIds.slice(j, j + 50) }], limit: 100 },
+          { field: 'effective_status', operator: 'IN', value: AD_STATUSES }, token);
+        for (const a of ads) info[a.id] = a;
+      } catch (e) { if (e.needsLogin) throw e; }
+    }
+    for (const r of rows) {
+      const a = info[r.ad_id] || {}, cr = a.creative || {}, as = a.adset || {};
+      out.push({
+        adId: r.ad_id, name: r.ad_name || '', campaignId: r.campaign_id, campaign: r.campaign_name || '', account: actId, status: a.effective_status || '',
+        spend: Number(r.spend || 0), impressions: Number(r.impressions || 0), reach: Number(r.reach || 0), frequency: Number(r.frequency || 0),
+        cpm: Number(r.cpm || 0), ctr: Number(r.ctr || 0), clicks: Number(r.clicks || 0), linkClicks: Number(r.inline_link_clicks || 0),
+        thumb: cr.thumbnail_url || cr.image_url || '', image: cr.image_url || cr.thumbnail_url || '', text: String(cr.body || cr.title || '').slice(0, 400), format: cr.object_type || '',
+        goal: as.optimization_goal || '', targeting: describeTargeting(as.targeting),
+        ...campaignResult(r, as.optimization_goal), ...engagement(r),
+      });
+    }
+  }
+  return out;
+}
+
 // Was this video a Facebook live? 'live' | 'post' | '' (Meta wouldn't say). Cached for the process.
 const videoKindCache = new Map();
 async function videoKind(id, token) {
@@ -540,4 +573,4 @@ function parseTime(s) {
   return Number.isNaN(t) ? null : t;
 }
 
-module.exports = { get, adAccount, videoKind, adInsights, adSpendByCampaign, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };
+module.exports = { get, adAccount, videoKind, adInsights, adDiagnostics, adSpendByCampaign, campaignSetups, describeTargeting, campaignResult, activeCampaignIds, loadPageDirectory, knownPageNames, rememberPageNames, MetaError, loginUrl, exchangeCode, me, adAccounts, accountSpend, accountSpendRange, campaignSpend, campaignSpendRange };

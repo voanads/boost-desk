@@ -84,6 +84,7 @@ const { cleanClient } = require('./src/routes/admin-security')(null, api, { admi
 // ---- Clients, post pictures, day checklist and Sync from Meta (src/routes/clients.js) ----
 const { deepMerge } = require('./src/routes/clients')(null, api, { cleanClient, isDay, wrap });
 require('./src/routes/client-link').mountApi(api, { wrap });
+require('./src/routes/ad-doctor')(api, { wrap }); // 🩺 Ad Doctor
 // ---- Payments: service fees and invoices (src/routes/invoices.js) ----
 require('./src/routes/invoices')(null, api, { isDay, isFull, wrap });
 // ---- Live videos, live setups, Dashboard and Page names (src/routes/lives-dashboard.js) ----

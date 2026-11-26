@@ -2372,7 +2372,7 @@
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
       if (own) { if (oPgN === null) api('/orders/pages').then((r) => { oPgN = r.pages.length; if (!oPgN) loadOrders(); }).catch(() => { oPgN = -1; });
-        if (oPgN === 0) msg = false ? '' : '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
+        if (oPgN === 0) msg = '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
         else if (!d.hasData) msg = 'No orders in this period yet. New orders show here within seconds.'; }
       else if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
       else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
@@ -2452,7 +2452,7 @@
   $('oUse30').onclick = () => useLive(addD(me.today, -30), addD(me.today, -1), $('oUse30'));
   // ---- Pages Boost Desk counts orders on ----
   var oPgN = null; // var: loadOrders (defined above) may run before this line
-  async function loadPages() {
+  async function loadOrderPages() {
     const box = $('oPgList');
     try {
       const r = await api('/orders/pages'); oPgN = r.pages.length;
@@ -2464,7 +2464,7 @@
       }).join('') : '<div class="empty">No Page connected yet. Tap <b>Connect Pages</b> and log in with the Facebook account that manages the client Pages.</div>';
       box.querySelectorAll('[data-pgdel]').forEach((b) => b.onclick = async () => {
         if (!confirm('Stop counting orders on this Page? Orders already counted stay.')) return;
-        try { await api('/orders/pages/' + b.dataset.pgdel, { method: 'DELETE' }); toast('Page removed'); loadPages(); } catch (e) { toast(e.message); }
+        try { await api('/orders/pages/' + b.dataset.pgdel, { method: 'DELETE' }); toast('Page removed'); loadOrderPages(); } catch (e) { toast(e.message); }
       });
       if (r.notConnected && r.notConnected.length) box.insertAdjacentHTML('beforeend', `<div class="pg-miss"><b>Not counted yet — ${r.notConnected.length} client Page${r.notConnected.length === 1 ? '' : 's'} boosted this week</b><div class="hint">No saved Facebook login of the team manages ${r.notConnected.length === 1 ? 'it' : 'them'} with the Page permissions. The Project Manager who manages the Page logs in to Boost Desk with Facebook again (or adds that Facebook account in Settings) and allows the Page permissions — Boost Desk then connects it by itself.</div><div class="pg-miss-list">${r.notConnected.map((p) => `<span title="${esc(p.id)}">${esc(p.name || p.id)}</span>`).join('')}</div></div>`);
       if (r.auto && r.auto.at) box.insertAdjacentHTML('beforeend', `<div class="hint">Automatic connect: last run ${esc(ago(r.auto.at))} · ${r.auto.withPages} of ${r.auto.logins} Facebook logins allowed Pages${r.auto.connected ? ` · ${r.auto.connected} connected` : ''}</div>`);
@@ -2472,11 +2472,11 @@
       if (r.verifyToken) { $('oPgHook').value = r.hookUrl; $('oPgTok').value = r.verifyToken; $('oPgOwnBox').hidden = !(me && me.isOwner); $('oPgOwn').checked = !!m.on; }
     } catch (e) { box.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
   }
-  $('oPgBtn').onclick = () => { dlgOpen($('oPgDlg')); loadPages(); };
+  $('oPgBtn').onclick = () => { dlgOpen($('oPgDlg')); loadOrderPages(); };
   $('oPgOwn').onchange = async () => {
     const on = $('oPgOwn').checked;
     if (!confirm(on ? 'Count orders in Boost Desk from today, and stop reading them from adsbox.biz?' : 'Go back to reading orders from adsbox.biz? Boost Desk stops counting.')) { $('oPgOwn').checked = !on; return; }
-    try { await api('/orders/own', { method: 'PUT', body: { on } }); toast(on ? 'Boost Desk counts orders now' : 'Orders come from adsbox.biz again'); oData2 = null; oCfg = null; loadPages(); loadOrders(); } catch (e) { toast(e.message); $('oPgOwn').checked = !on; }
+    try { await api('/orders/own', { method: 'PUT', body: { on } }); toast(on ? 'Boost Desk counts orders now' : 'Orders come from adsbox.biz again'); oData2 = null; oCfg = null; loadOrderPages(); loadOrders(); } catch (e) { toast(e.message); $('oPgOwn').checked = !on; }
   };
   (() => { // back from "Connect Pages" on Facebook
     const q = new URLSearchParams(location.search), m = q.get('pgmsg'); if (!m) return;
@@ -4536,7 +4536,7 @@ Notes:
     $('dRes').textContent = t.res ? (t.type === 'result' ? `${Math.round(t.res).toLocaleString('en-US')} results (mixed types)` : resText(t.res, t.type)) : 'Sync from Meta to load results';
     // empty period: say what to do instead of a row of zeros
     { const sum = $('dSpend').closest('.summary'); if (sum) { sum.classList.toggle('is-empty', !(t.spend > 0)); let n = $('dEmptyNote'); if (!n) { n = document.createElement('div'); n.id = 'dEmptyNote'; n.className = 'sum-empty'; sum.insertAdjacentElement('afterend', n); }
-      n.hidden = t.spend > 0; n.innerHTML = t.spend > 0 ? '' : (false ? '' : 'Nothing synced for this period yet — tap <b>Sync from Meta</b> to pull the spend.'); } }
+      n.hidden = t.spend > 0; n.innerHTML = t.spend > 0 ? '' : 'Nothing synced for this period yet — tap <b>Sync from Meta</b> to pull the spend.'; } }
 
     const top = Math.max(0.01, ...list.map((c) => c.spend));
     const dash = '<span class="muted">–</span>';

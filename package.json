@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/grouping.test.js && node test/orderDetect.test.js && node test/tenant.test.js && node test/runOnce.test.js && node test/backup.test.js"
+    "test": "node test/grouping.test.js && node test/orderDetect.test.js && node test/money.test.js && node test/tenant.test.js && node test/runOnce.test.js && node test/backup.test.js",
+    "lint": "eslint --quiet ."
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -21,5 +22,10 @@
     "pdfkit": "^0.20.2",
     "pg": "^8.13.1",
     "svg-to-pdfkit": "^0.1.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^15.15.0"
   }
 }

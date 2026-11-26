@@ -40,6 +40,8 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Only rules that cannot break the pages (they use inline scripts and handlers): no plugins, no <base> hijack, no framing elsewhere.
+  res.setHeader('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'self'");
   if (cfg.baseUrl.startsWith('https')) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   next();
 });
@@ -414,9 +416,13 @@ app.post('/hooks/meta', (req, res) => {
   pageOrders.handleHook(req.body).catch((e) => console.error('[meta hook]', e.message));
 });
 // adsbox.biz → Boost Desk webhook (no login; the shared secret from the Orders → adsbox.biz dialog).
+let adsboxUrlWarnAt = 0;
 app.post('/hooks/adsbox', wrap(async (req, res) => {
-  const given = String(req.get('X-Webhook-Secret') || (req.query || {}).secret || (req.body || {}).secret || ''), want = await orders.hookSecret();
+  // The secret belongs in the X-Webhook-Secret header. ?secret= in the address (or in the body) still works for now,
+  // but addresses end up in proxy and server logs, so it is logged as a warning; remove it once adsbox.biz uses the header.
+  const header = req.get('X-Webhook-Secret'), given = String(header || (req.query || {}).secret || (req.body || {}).secret || ''), want = await orders.hookSecret();
   if (!given || given.length !== want.length || !require('crypto').timingSafeEqual(Buffer.from(given), Buffer.from(want))) return res.status(401).json({ error: 'Bad webhook secret.' });
+  if (!header && Date.now() - adsboxUrlWarnAt > 864e5) { adsboxUrlWarnAt = Date.now(); console.error('[adsbox hook] the secret came in the address or body, not the X-Webhook-Secret header. Ask adsbox.biz to send it as a header.'); }
   res.json(await orders.receiveHook(req.body));
 }));
 // Every task assigned to this buyer, across every client workbook, with the day's done / late state.

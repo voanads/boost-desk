@@ -9,17 +9,7 @@ module.exports = function mountOrdersPages(app, api, deps) {
   const { adminOnly, canSeeAdmin, isDay, ownerOnly, wrap } = deps;
   api.get('/ai/status', wrap(async (req, res) => { const c = await require('../ai').publicConfig(); res.json({ hasKey: c.hasKey }); }));
   api.put('/admin/ai', ownerOnly, wrap(async (req, res) => res.json(await require('../ai').saveKey((req.body || {}).key === null ? null : String((req.body || {}).key || ''), req.user.name))));
-  // Check one day against adsbox.biz (admins), and take adsbox's numbers for a period when they match its Sales Overview.
-  api.get('/orders/compare', adminOnly, wrap(async (req, res) => {
-    const day = String(req.query.day || ''); if (!isDay(day)) return res.status(400).json({ error: 'Pick a day.' });
-    const r = await orders.compareDay(day); if (!r) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json(r);
-  }));
-  api.post('/orders/use-live', adminOnly, wrap(async (req, res) => {
-    const { from, to } = req.body || {}, today = sync.todayIn();
-    if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 92) return res.status(400).json({ error: 'Pick up to 3 months.' });
-    const n = await orders.useLive(from, to > today ? today : to); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first.' }); res.json({ ok: true, rows: n });
-  }));
-  // Boost Desk's own order counting: connected Pages, and the switch between it and adsbox.biz.
+  // Boost Desk's own order counting: connected Pages.
   api.get('/orders/pages', wrap(async (req, res) => { res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));
   api.delete('/orders/pages/:id', wrap(async (req, res) => {
     if (req.user.buyer) return res.status(403).json({ error: 'Ask your PM.' });
@@ -29,14 +19,7 @@ module.exports = function mountOrdersPages(app, api, deps) {
     if (row.connected_by !== req.user.fb_id && !(await canSeeAdmin(req.user.fb_id))) return res.status(403).json({ error: 'Only the person who connected it or an admin can remove it.' });
     await pageOrders.disconnect(id); res.json({ ok: true });
   }));
-  api.put('/orders/own', ownerOnly, wrap(async (req, res) => res.json(await pageOrders.setMode(!!(req.body || {}).on, req.user.name))));
-  api.post('/orders/test', adminOnly, wrap(async (req, res) => res.json(await orders.testApi())));
-  api.post('/orders/pull', wrap(async (req, res) => {
-    if ((await pageOrders.mode()).on) { await pageOrders.flush(); return res.json({ ok: true, own: true }); } // counted live by Boost Desk; nothing to fetch
-    const b = req.body || {}, today = sync.todayIn();
-    let n;
-    if (isDay(b.from) && isDay(b.to) && b.from <= b.to && b.from >= sync.addDays(today, -800)) n = await orders.pullRange(b.from, b.to > today ? today : b.to, { force: !!b.force });
-    else n = await orders.pullApi(Math.min(62, Number(b.days) || 7)); if (n === null) return res.status(400).json({ error: 'Connect the adsbox.biz API first (Orders page → API settings).' }); res.json({ ok: true, rows: n }); }));
+  api.post('/orders/pull', wrap(async (req, res) => { await pageOrders.flush(); res.json({ ok: true, own: true }); })); // counted live; this only saves what is waiting
   api.get('/orders/report', wrap(async (req, res) => {
     const { from, to } = req.query;
     if (!isDay(from) || !isDay(to) || from > to) return res.status(400).json({ error: 'Pick a valid period.' });

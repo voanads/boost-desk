@@ -1,4 +1,4 @@
-// Orders (adsbox.biz API), AI advice, KPIs, people today / month, audit, nudges
+// Orders, AI advice, KPIs, people today / month, audit, nudges
 // Moved out of server.js unchanged; server.js mounts it at the same place, so route order is kept.
 const cfg = require('../config');
 const db = require('../db');
@@ -8,14 +8,8 @@ const telegram = require('../telegram');
 
 module.exports = function mountOrdersAiKpi(app, api, deps) {
   const { LEAD, LOGINS, MB, ROLES, TASKS_OFF, adminOnly, adminViewers, auditFlush, canSeeAdmin, dayTasks, getTeams, isDay, ownerOnly, roleMap, roleOf, wrap } = deps;
-  // ---------- Orders page (adsbox.biz API) ----------
+  // ---------- Orders page: Boost Desk counts orders itself (src/pageOrders.js) ----------
   api.get('/orders/api', wrap(async (req, res) => { const c = await orders.publicConfig(); if (!(await canSeeAdmin(req.user.fb_id))) { delete c.keyHint; delete c.url; delete c.savedBy; c.url = c.hasKey ? 'set' : ''; } res.json(c); })); // non-admins only learn whether it is connected
-  api.put('/orders/api', adminOnly, wrap(async (req, res) => res.json(await orders.saveApiConfig(req.body || {}, req.user.name))));
-  api.get('/orders/hook', adminOnly, wrap(async (req, res) => res.json({ url: `${req.protocol}://${req.get('host')}/hooks/adsbox`, secret: await orders.hookSecret(), last: ((await db.getSetting('adsboxApi', null)) || {}).hookLast || null })));
-  api.post('/orders/hook/renew', adminOnly, wrap(async (req, res) => res.json({ secret: await orders.hookSecret(true) })));
-  api.get('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.pushStatus())));
-  api.put('/orders/push', adminOnly, wrap(async (req, res) => res.json(await orders.setPush(!!(req.body || {}).on))));
-  api.post('/orders/push', adminOnly, wrap(async (req, res) => { await orders.setPush(true); res.json(await orders.pushSpend(Math.min(31, Number((req.body || {}).days) || 7))); }));
   // AI advice for one client (Claude API). The owner adds the key in Admin → Settings.
   api.post('/ai/client/:id', wrap(async (req, res) => {
     const b = req.body || {};

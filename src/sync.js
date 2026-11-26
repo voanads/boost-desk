@@ -560,10 +560,10 @@ async function dropIds(owner, clientId, drop) {
   for (const k of drop) { const [day, key] = k.split(':'); for (const id of await partIds(owner, day, clientId, [key])) ids.add(id); }
   return ids;
 }
-// opts.orders (default true): add the client's adsbox.biz orders — per day in a range, with cost per order.
+// opts.orders (default true): add the client's orders (counted by Boost Desk) — per day in a range, with cost per order.
 async function clientReport(owner, clientId, from, to, kind = '', parts = null, scope = null, opts = {}) {
   const c = (await db.listClients(owner)).find((x) => x.id === Number(clientId));
-  let od = null; // { orders, daily: { day: n } } for this client, when adsbox.biz has data
+  let od = null; // { orders, daily: { day: n } } for this client, when orders were counted
   if (opts.orders !== false) { try { const bc = await require('./orders').byClient(owner, from, to); od = (bc.clients || {})[Number(clientId)] || null; if (od && !(od.orders > 0)) od = null; } catch (_) { od = null; } }
   const perOrder = (spend, n) => n > 0 && spend > 0 ? ` · ${fmt(spend / n)} per order` : '';
   if (!c) { const e = new Error('Client not found.'); e.status = 404; throw e; }

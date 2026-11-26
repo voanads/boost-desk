@@ -132,14 +132,6 @@ function start(deps = {}) {
   // Each account's own "auto daily report" (time chosen in the app): checked every minute.
   H.register('Auto reports', 1, 'every minute');
   every('Auto reports', '* * * * *', () => H.track('Auto reports', () => require('./extras').tick()).catch((e) => log('auto report failed:', e.message)), opts);
-  // adsbox.biz order counts, every 30 minutes once the API is connected on the Orders page.
-  H.register('adsbox.biz orders', 30, 'every 30 minutes');
-  H.register('Spend to adsbox.biz', 30, 'every 30 minutes, at :15 and :45');
-  every('Spend to adsbox.biz', '15,45 * * * *', () => H.track('Spend to adsbox.biz', () => require('./orders').pushSpend(7)).then((r) => { if (r) log('spend sent to adsbox:', r.saved, 'of', r.received); }).catch((e) => log('spend to adsbox failed:', e.message)), opts);
-  // Today's count every 5 minutes (one small call), the last 3 days every 30 minutes.
-  H.register('adsbox.biz today', 5, 'every 5 minutes');
-  every('adsbox.biz today', '2,7,12,17,22,27,32,37,42,47,52,57 * * * *', () => H.track('adsbox.biz today', () => require('./orders').pullApi(1)).catch((e) => log('adsbox today failed:', e.message)), opts);
-  every('adsbox.biz orders', '*/30 * * * *', () => H.track('adsbox.biz orders', () => require('./orders').pullApi(3)).then((n) => { if (n !== null) log('adsbox orders:', n, 'rows'); }).catch((e) => log('adsbox orders failed:', e.message)), opts); // does nothing until the API is connected
   // Boost Desk's own order counting: comments of a running Live on each connected Page, every minute
   // (Messenger messages and other comments arrive by webhook straight away).
   // Connect the team's client Pages for order counting with every saved Facebook login (new clients' Pages too).

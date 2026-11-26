@@ -57,14 +57,13 @@ async function init() {
     );
   `);
   // Switched on at release (Owner's choice, 20 Nov 2026): from today, orders come from Boost Desk, not adsbox.biz.
-  // Days before this keep adsbox.biz's numbers. An owner can switch back on the Orders page.
+  // Days before this keep adsbox.biz's numbers. adsbox.biz itself was removed on 26 Nov 2026.
   if (!(await db.getSetting('ordersOwn', null))) await db.setSetting('ordersOwn', { on: true, since: today(), at: new Date().toISOString(), by: 'release' });
 }
 
 const today = () => require('./sync').todayIn();
 const dayOf = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: cfg.tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
-async function mode() { return (await db.getSetting('ordersOwn', null)) || { on: false }; }
-async function setMode(on, by) { const cur = await mode(); const next = { ...cur, on: !!on, at: new Date().toISOString(), by }; if (on && !cur.since) next.since = today(); await db.setSetting('ordersOwn', next); return next; }
+async function mode() { return { ...((await db.getSetting('ordersOwn', null)) || {}), on: true }; } // always on: adsbox.biz was removed (26 Nov 2026)
 
 // A random secret kept in the database, so hashes can't be turned back into phone numbers by trying every number.
 let salt = null;
@@ -311,4 +310,4 @@ async function list(fbId, all) {
     notConnected: all ? await notConnected() : undefined, auto: all ? await db.getSetting('ordersAutoLast', null) : undefined };
 }
 
-module.exports = { autoConnect, init, mode, setMode, record, flush, handleHook, signatureOk, verifyToken, pollLives, connectUrl, connectFromUserToken, disconnect, list, PAGE_SCOPES };
+module.exports = { autoConnect, init, mode, record, flush, handleHook, signatureOk, verifyToken, pollLives, connectUrl, connectFromUserToken, disconnect, list, PAGE_SCOPES };

@@ -520,7 +520,7 @@
   </section>
 
   <!-- PAYMENTS -->
-  <!-- ORDERS (adsbox.biz) -->
+  <!-- ORDERS (counted by Boost Desk) -->
   <section id="tab-reports" class="wrap" hidden>
     <div class="ohead">
       <div><h1>Reports</h1><div class="hint" id="rpSub">Every client's report for one day — who got it, who didn't.</div></div>
@@ -541,9 +541,7 @@
       <div><h1>Orders</h1><div class="hint">What one order costs for each client — boost spend ÷ orders Boost Desk counted from the Pages' Messenger and comments.</div></div>
       <div class="ohead-r">
         <button type="button" id="oSync" class="orefresh" title="Get the latest order counts"><span class="ic-r" aria-hidden="true">↻</span> <span id="oUpd">Update</span></button>
-        <button type="button" id="oCmpBtn" class="ghost sm" title="Compare Boost Desk with adsbox.biz for one day" hidden>Check vs adsbox</button>
         <button type="button" id="oPgBtn" class="ghost sm" title="Facebook Pages Boost Desk counts orders on">Pages</button>
-        <button type="button" id="oSetBtn" class="ghost oicon" title="adsbox.biz API settings" aria-label="API settings" hidden>⚙</button>
       </div>
     </div>
     <div class="note onote" id="oNote" hidden></div>
@@ -797,50 +795,17 @@
     <div class="dlg-foot"><button type="button" id="arRun" title="Send today's reports right now">Send now</button><span class="spacer"></span><button type="button" id="arSave" class="primary">Save</button></div>
   </form>
 </dialog>
-<dialog id="oDlg" class="dlg" aria-labelledby="oDlgTitle">
-  <form method="dialog" class="dlg-in">
-    <div class="dlg-head"><div><h2 id="oDlgTitle">adsbox.biz API</h2><div class="hint">Paste the API address and key from adsbox.biz. The key is saved encrypted and is never shown again.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
-    <label class="fld"><span>API address</span><input type="url" id="oUrl" placeholder="https://adsbox.biz/api/orders/summary" autocomplete="off"></label>
-    <label class="fld"><span>Order list address <small class="hint">(optional — counts orders exactly like the adsbox Order page; found by Test)</small></span><input type="url" id="oListUrl" placeholder="https://adsbox.biz/api/orders" autocomplete="off"></label>
-    <label class="fld"><span>API key</span><input type="password" id="oKey" placeholder="Paste the key" autocomplete="new-password"></label>
-    <div class="hint" id="oKeyInfo"></div>
-    <div class="note" id="oTestMsg" hidden></div>
-    <div class="pushbox">
-      <label class="switch"><input type="checkbox" id="oPushOn"><span></span> <b>Send boost spend to adsbox.biz</b></label>
-      <div class="hint">Every 30 minutes Boost Desk sends the boost spend of each Page per day (date, Page ID, spend) for the last 7 days, so adsbox.biz can show cost per order too. Re-sending a day corrects it — nothing is doubled. The key needs the <b>adspend.write</b> permission (Two-way) in adsbox.biz → Admin → API Connecting.</div>
-      <div class="pushst"><span id="oPushSt" class="hint"></span><button type="button" class="sm" id="oPushNow">Send now</button></div>
-    </div>
-    <div class="pushbox" id="oHookBox">
-      <b>Webhook — adsbox.biz tells Boost Desk right away</b>
-      <div class="hint">Give these two lines to the adsbox.biz developer. When an order is detected, adsbox calls this address and Boost Desk re-reads that day within seconds (instead of waiting for the 5-minute check).</div>
-      <label class="fld"><span>Address</span><input type="text" id="oHookUrl" readonly></label>
-      <label class="fld"><span>Secret <small class="hint">(header <code>X-Webhook-Secret</code>)</small></span><input type="text" id="oHookSec" readonly></label>
-      <div class="pushst"><span id="oHookSt" class="hint"></span><button type="button" class="sm" id="oHookCopy">Copy both</button><button type="button" class="sm ghost" id="oHookNew">New secret</button></div>
-    </div>
-    <div class="dlg-foot"><button type="button" class="ghost" id="oKeyDel">Remove key</button><span class="spacer"></span><button type="button" id="oTest">Test connection</button><button type="button" class="primary" id="oSave">Save</button></div>
-  </form>
-</dialog>
 <dialog id="oPgDlg" class="dlg" aria-labelledby="oPgTitle">
   <form method="dialog" class="dlg-in">
     <div class="dlg-head"><div><h2 id="oPgTitle">Pages for orders</h2><div class="hint">Boost Desk counts an order when a customer sends a phone number in Messenger or a comment (Live included). One order per customer per Page per day. Only the count is kept — no names, phones or messages.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
-    <div class="note" id="oPgMode" hidden></div>
     <div id="oPgList" class="pglist"><div class="hint">Loading…</div></div>
     <div class="pushbox" id="oPgSetup" hidden>
       <b>Meta app setup (once, for the developer)</b>
       <div class="hint">In the Meta app → Webhooks → Page, use this address and verify token, and subscribe to <b>messages</b> and <b>feed</b>. Until Meta approves the Page permissions in App Review, only people with a role in the Meta app can connect Pages.</div>
       <label class="fld"><span>Callback URL</span><input type="text" id="oPgHook" readonly></label>
       <label class="fld"><span>Verify token</span><input type="text" id="oPgTok" readonly></label>
-      <label class="switch" id="oPgOwnBox" hidden><input type="checkbox" id="oPgOwn"><span></span> <b>Boost Desk counts orders</b> <span class="hint">(off = read orders from adsbox.biz again)</span></label>
     </div>
     <div class="dlg-foot"><span class="hint">Client Pages connect by themselves when a team member logs in with Facebook. Use this only for a Page that is missing.</span><span class="spacer"></span><a class="primary btnlink" href="/auth/facebook/pages" id="oPgConnect">Connect Pages</a></div>
-  </form>
-</dialog>
-<dialog id="oCmpDlg" class="dlg" aria-labelledby="oCmpTitle">
-  <form method="dialog" class="dlg-in">
-    <div class="dlg-head"><div><h2 id="oCmpTitle">Check orders against adsbox.biz</h2><div class="hint">Pick a day and compare Boost Desk's numbers with what adsbox.biz says right now. If adsbox's numbers match its Sales Overview, tap <b>Use adsbox numbers</b>.</div></div><button class="ghost" value="close" aria-label="Close">✕</button></div>
-    <div class="cmp-bar"><label class="fld cmp-day"><span>Day</span><input type="date" id="oCmpDay"></label><button type="button" class="primary" id="oCmpGo">Compare</button></div>
-    <div id="oCmpOut" class="cmp-out"></div>
-    <div class="dlg-foot cmp-foot"><span class="hint">Use adsbox numbers for:</span><span class="spacer"></span><button type="button" class="sm" id="oUseDay" disabled>This day</button><button type="button" class="sm" id="oUse7">Last 7 days</button><button type="button" class="sm" id="oUse30">Last 30 days</button></div>
   </form>
 </dialog>
 <dialog id="pnDlg" class="dlg" aria-labelledby="pnTitle">

@@ -61,23 +61,16 @@ module.exports = function mountAdminPanel(app, api, deps) {
       if (ar && ar.failed && ar.failed.length) add('bad', 'Reports', `${ar.failed.length} auto report(s) failed for ${u.name}`, ar.failed.slice(0, 3).map((f) => `${f.name}: ${f.error}`).join(' · '), null);
     }
     if (!telegram.hasBot()) add('bad', 'Telegram', 'The Telegram bot is not set up', 'Add TELEGRAM_BOT_TOKEN in Railway so reports can be sent.', null);
-    const oc = await orders.publicConfig();
-    if (oc.own && oc.own.on) {
+    { // Boost Desk counts orders itself (adsbox.biz removed 26 Nov 2026)
       const pg = (await db.pool.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE NOT subscribed OR last_error <> '')::int AS bad FROM page_links`)).rows[0];
       if (!pg.n) add('info', 'Orders', 'No Facebook Page is connected for orders', 'Orders → Connect Pages, so Boost Desk can count orders from Messenger and comments.', { kind: 'orders' });
       else if (pg.bad) add('warn', 'Orders', `${pg.bad} connected Page${pg.bad === 1 ? ' has' : 's have'} a problem`, 'Open Orders → Pages to see which one and connect it again.', { kind: 'orders' });
-    } else if (!oc.hasKey) add('info', 'Orders', 'adsbox.biz is not connected', 'Connect it to see cost per order.', { kind: 'orders' });
-    else if (oc.lastError) add('bad', 'Orders', 'Getting orders from adsbox.biz failed', oc.lastError.message, { kind: 'orders' });
-    else if (oc.last && now - Date.parse(oc.last.at) > 2 * 3600e3) add('warn', 'Orders', 'Orders from adsbox.biz have not updated in ' + Math.round((now - Date.parse(oc.last.at)) / 3600e3) + ' hours', 'Usually every 30 minutes.', { kind: 'orders' });
-    const ps = await orders.pushStatus();
-    if (ps.on && ps.last && ps.last.error) add('bad', 'Orders', 'Sending spend to adsbox.biz failed', ps.last.error, { kind: 'orders' });
-    else if (ps.on && ps.last && ps.last.noPage) add('info', 'Orders', `${ps.last.noPage} campaign(s) sent to adsbox.biz without a Page`, 'adsbox.biz can only match spend to orders when the Page is known.', null);
+    }
     if (process.env.AUTO_SYNC === 'off') add('warn', 'Sync', 'Auto sync is switched off on the server', 'AUTO_SYNC=off is set in Railway.', null);
     const order = { bad: 0, warn: 1, info: 2 };
     items.sort((a, b) => order[a.level] - order[b.level]);
     const ok = [];
     if (telegram.hasBot()) ok.push('Telegram bot is set up');
-    if (oc.hasKey && !oc.lastError) ok.push('adsbox.biz orders are connected' + (oc.last ? ' · last update ' + new Date(oc.last.at).toLocaleTimeString('en-GB', { timeZone: cfg.tz, hour: '2-digit', minute: '2-digit' }) : ''));
     const running = status.filter((u) => u.enabled && u.synced && !u.expired).length;
     ok.push(`Auto sync running for ${running} of ${status.length} account(s)`);
     res.json({ items, ok, checkedAt: new Date().toISOString(), today });
@@ -92,21 +85,6 @@ module.exports = function mountAdminPanel(app, api, deps) {
   api.post('/admin/alerts/test', ownerOnly, wrap(async (req, res) => {
     const chat = await db.getSetting('alertChat', null); if (!chat || !chat.id) return res.status(400).json({ error: 'Connect your Telegram first.' });
     await telegram.send('🩺 Boost Desk test alert — alerts are working.', chat.id); res.json({ ok: true });
-  }));
-  // Keys for the public spend API (owner only). The key is shown once, at creation.
-  const pubKeys = (list) => list.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, at: k.at, by: k.by, calls: k.calls || 0, lastUsed: k.lastUsed || null }));
-  api.get('/admin/spend-keys', ownerOnly, wrap(async (req, res) => res.json({ keys: pubKeys((await db.getSetting('spendApiKeys', [])) || []), base: cfg.baseUrl })));
-  api.post('/admin/spend-keys', ownerOnly, wrap(async (req, res) => {
-    const name = String((req.body || {}).name || 'adsbox.biz').trim().slice(0, 60) || 'adsbox.biz';
-    const plain = 'bd_' + crypto.randomBytes(24).toString('hex');
-    const keys = (await db.getSetting('spendApiKeys', [])) || [];
-    keys.push({ id: 'k' + Date.now().toString(36), name, prefix: plain.slice(0, 10), hash: sha(plain), at: new Date().toISOString(), by: req.user.name, calls: 0 });
-    await db.setSetting('spendApiKeys', keys);
-    res.json({ key: plain, keys: pubKeys(keys), base: cfg.baseUrl });
-  }));
-  api.delete('/admin/spend-keys/:id', ownerOnly, wrap(async (req, res) => {
-    const keys = ((await db.getSetting('spendApiKeys', [])) || []).filter((k) => k.id !== req.params.id);
-    await db.setSetting('spendApiKeys', keys); res.json({ keys: pubKeys(keys) });
   }));
   // ---- Facebook Page profile pictures: /api/page-pic/<page id> sends the browser to the picture (kept 12 hours) ----
   const picCache = new Map(); // page id -> { url | null, at }

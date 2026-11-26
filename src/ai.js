@@ -264,6 +264,25 @@ async function adDoctorAI(owner, payload, pics = [], { lang = 'km', fresh = fals
   return result;
 }
 
+// One AI request with text and pictures (content blocks in Claude's shape). Gemini gets the text parts only. If a picture
+// can't be read, Claude is asked once more with the text only. Counts against the person's daily limit.
+async function askAI(owner, system, content, { maxTokens = 1800 } = {}) {
+  const cfg = await keyConfig();
+  if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
+  const today = sync.todayIn(), useKey = `aiUse:${today}`, used = Number(await db.getUserSetting(owner, useKey, 0)) || 0;
+  if (used >= DAILY_LIMIT) throw Object.assign(new Error(`You used today's ${DAILY_LIMIT} AI requests. Try again tomorrow.`), { status: 429 });
+  const textOnly = content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  let out;
+  if (cfg.provider === 'gemini') out = await callGemini(cfg.key, system, [{ role: 'user', content: textOnly }]);
+  else if (!content.some((b) => b.type === 'image')) out = await callClaude(cfg.key, system, [{ role: 'user', content: textOnly }], maxTokens);
+  else {
+    try { out = await callClaude(cfg.key, system, [{ role: 'user', content }], maxTokens); }
+    catch (e) { if (e.status === 429 || e.status === 400 && /key|credit/i.test(e.message)) throw e; out = await callClaude(cfg.key, system, [{ role: 'user', content: textOnly }], maxTokens); }
+  }
+  await db.setUserSetting(owner, useKey, used + 1);
+  return out;
+}
+
 // ---------- daily plan per client: suggestions for each Page + today's tasks ----------
 const DAILY_SYSTEM = `You are the ads advisor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders are counted by Boost Desk per Page from Messenger messages and comments (a message or comment with a phone number = one order).
 
@@ -492,4 +511,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };
+module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

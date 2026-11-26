@@ -1225,6 +1225,55 @@
     }
     return `<section class="cd-sec docsec" id="cdDocSec"><div class="cd-sec-h"><h4>🩺 Ad Doctor</h4><span class="hint">${d ? `${esc(shortDay(d.from))} – ${esc(shortDay(d.to))}` : 'ពី Meta'}</span><span class="spacer"></span>${seg}<button type="button" class="sm ${d ? 'ghost' : 'primary'}" data-docgo ${st.loading ? 'disabled' : ''}>${d ? '↻' : 'ពិនិត្យ Ads'}</button></div>${body}</section>`;
   }
+  // 🥊 Competitors: the PM adds Pages that sell the same thing (link, what they saw, two screenshots); AI compares them with this client.
+  const cdComp = {};
+  const compImg = (file) => new Promise((ok, no) => { const r = new FileReader(); r.onerror = () => no(new Error('Could not read the picture.')); r.onload = () => { const im = new Image(); im.onerror = () => no(new Error('That file is not a picture.')); im.onload = () => {
+    const go = (max, q) => { const k = Math.min(1, max / Math.max(im.width, im.height)), cv = document.createElement('canvas'); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); return cv.toDataURL('image/jpeg', q); };
+    let u = go(1024, 0.75); if (u.length > 440000) u = go(800, 0.6); if (u.length > 440000) u = go(640, 0.5); ok(u); }; im.src = r.result; }; r.readAsDataURL(file); });
+  function cdCompSection(c) {
+    const st = cdComp[c.id];
+    if (!st) { cdComp[c.id] = { loading: true }; api(`/clients/${c.id}/competitors`).then((d) => { cdComp[c.id] = { data: d }; renderClientDetail(); }).catch((e) => { cdComp[c.id] = { err: e.message }; renderClientDetail(); }); }
+    const head = (acts) => `<div class="cd-sec-h"><h4>🥊 គូប្រកួត</h4><span class="hint">ផេកដែលលក់ដូចភ្ញៀវនេះ</span><span class="spacer"></span>${acts || ''}</div>`;
+    if (!st || st.loading) return `<section class="cd-sec compsec">${head()}<div class="hint">Loading…</div></section>`;
+    if (st.err && !st.data) return `<section class="cd-sec compsec">${head()}<div class="note">${esc(st.err)}</div></section>`;
+    const d = st.data, ai = st.ai || {};
+    const pics = (arr, who) => `<div class="cmp-pics">${(arr || []).map((u, i) => `<span class="cmp-pic"><img src="${esc(u)}" alt=""><button type="button" class="ghost sm" data-cmpimgdel="${who}|${i}" aria-label="Remove picture">✕</button></span>`).join('')}${(arr || []).length < 2 ? `<label class="sm ghost btn cmp-add">+ រូប (screenshot)<input type="file" accept="image/*" hidden data-cmpimg="${who}"></label>` : ''}</div>`;
+    const card = (x, i) => `<div class="cmp-card"><div class="cmp-row"><input type="text" maxlength="80" placeholder="ឈ្មោះផេក" value="${esc(x.name)}" data-cmpf="${i}|name"><button type="button" class="ghost sm danger-t" data-cmpdel="${i}" aria-label="Remove">✕</button></div>
+      <input type="url" maxlength="300" placeholder="https://facebook.com/…" value="${esc(x.link)}" data-cmpf="${i}|link">
+      <textarea rows="3" maxlength="1500" placeholder="តម្លៃ, ការផ្ដល់ជូន (promotion), ដឹកជញ្ជូន, Live ម៉ោងណា, រូប/វីដេអូបែបណា, comment ច្រើនឬតិច…" data-cmpf="${i}|note">${esc(x.note)}</textarea>${pics(x.images, i)}</div>`;
+    const acts = `${d.list.length < 5 ? '<button type="button" class="sm ghost" data-cmpadd>+ បន្ថែមគូប្រកួត</button>' : ''}<button type="button" class="sm" data-cmpsave ${st.dirty && !st.saving ? '' : 'disabled'}>${st.saving ? 'Saving…' : st.dirty ? 'Save' : 'Saved'}</button>`;
+    const an = d.analysis;
+    return `<section class="cd-sec compsec" id="cdCompSec">${head(acts)}
+      <div class="cmp-card ours"><b>ផេកយើង · ${esc(c.name)}</b><textarea rows="2" maxlength="1500" placeholder="តម្លៃ និងការផ្ដល់ជូនរបស់យើង (ស្រេចចិត្ត) — លេខចំណាយ/Order 30 ថ្ងៃ AI យកពី Boost Desk ដោយខ្លួនឯង" data-cmpf="ours|note">${esc(d.ours.note)}</textarea>${pics(d.ours.images, 'ours')}</div>
+      ${d.list.length ? d.list.map(card).join('') : '<div class="hint">មិនទាន់មានគូប្រកួត។ ចុច <b>+ បន្ថែមគូប្រកួត</b> ហើយដាក់ link ផេក, អ្វីដែលអ្នកឃើញ (តម្លៃ, promotion…) និង screenshot ad ឬ post របស់គេ។</div>'}
+      ${st.err ? `<div class="note">${esc(st.err)}</div>` : ''}
+      ${d.list.length ? `<div class="doc-ai"><div class="cd-sec-h"><h4>✨ AI៖ ចំណុចខ្លាំង/ខ្សោយ និងអ្វីដែលផេកយើងគួរធ្វើ</h4><span class="spacer"></span>${aiReady === false ? '' : `<button type="button" class="sm ${an ? 'ghost' : 'primary'}" data-cmpai ${ai.loading ? 'disabled' : ''}>${an ? '↻ វិភាគម្ដងទៀត' : 'វិភាគ'}</button>`}</div>
+        ${ai.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> AI កំពុងប្រៀបធៀប…</div>' : ai.err ? `<div class="note">${esc(ai.err)}</div>` : an ? `<div class="ai-text">${mdLite(an.text)}</div><div class="hint">${esc(ago(an.at))}${an.by ? ' · ' + esc(an.by) : ''} · ${an.competitors} គូប្រកួត</div>` : '<div class="hint">ប្រើ 1 AI request។ AI ប្រើតែអ្វីដែលអ្នកដាក់ (notes + screenshots) និងលេខពិតរបស់ភ្ញៀវ — មិនបង្កើតលេខដោយខ្លួនឯងទេ។</div>'}</div>` : ''}</section>`;
+  }
+  async function cdCompSave(cid) {
+    const st = cdComp[cid]; if (!st || !st.data) return false; st.saving = true; st.err = ''; renderClientDetail();
+    try { st.data = { ...(await api(`/clients/${cid}/competitors`, { method: 'PUT', body: { list: st.data.list, ours: st.data.ours } })) }; st.dirty = false; return true; }
+    catch (e) { st.err = e.message; return false; } finally { st.saving = false; renderClientDetail(); }
+  }
+  async function cdCompAi(cid) {
+    const st = cdComp[cid]; if (!st) return;
+    if (st.dirty && !(await cdCompSave(cid))) return;
+    st.ai = { loading: true }; renderClientDetail();
+    try { const r = await api(`/clients/${cid}/competitors/ai`, { method: 'POST', body: { lang: 'km' } }); st.data.analysis = r.analysis; st.ai = {}; } catch (e) { st.ai = { err: e.message }; }
+    renderClientDetail();
+  }
+  function cdCompWire(box, c) {
+    const st = cdComp[c.id]; if (!st || !st.data) return; const d = st.data;
+    const mark = () => { st.dirty = true; const b = box.querySelector('[data-cmpsave]'); if (b) { b.disabled = false; b.textContent = 'Save'; } };
+    box.querySelectorAll('[data-cmpf]').forEach((el) => el.oninput = () => { const [i, f] = el.dataset.cmpf.split('|'); if (i === 'ours') d.ours[f] = el.value; else d.list[Number(i)][f] = el.value; mark(); });
+    box.querySelectorAll('[data-cmpadd]').forEach((b) => b.onclick = () => { d.list.push({ name: '', link: '', note: '', images: [] }); st.dirty = true; renderClientDetail(); });
+    box.querySelectorAll('[data-cmpdel]').forEach((b) => b.onclick = () => { if (!confirm('Remove this competitor?')) return; d.list.splice(Number(b.dataset.cmpdel), 1); st.dirty = true; renderClientDetail(); });
+    box.querySelectorAll('[data-cmpimgdel]').forEach((b) => b.onclick = () => { const [w, i] = b.dataset.cmpimgdel.split('|'); (w === 'ours' ? d.ours : d.list[Number(w)]).images.splice(Number(i), 1); st.dirty = true; renderClientDetail(); });
+    box.querySelectorAll('[data-cmpimg]').forEach((inp) => inp.onchange = async () => { const f = inp.files[0]; if (!f) return; const w = inp.dataset.cmpimg, t = w === 'ours' ? d.ours : d.list[Number(w)];
+      try { (t.images = t.images || []).push(await compImg(f)); st.dirty = true; renderClientDetail(); } catch (e) { toast(e.message); } });
+    box.querySelectorAll('[data-cmpsave]').forEach((b) => b.onclick = async () => { if (await cdCompSave(c.id)) successBadge('Competitors saved'); });
+    box.querySelectorAll('[data-cmpai]').forEach((b) => b.onclick = () => cdCompAi(c.id));
+  }
   async function cdRunDoc(cid, fresh) {
     const st = cdDoc[cid] = { days: (cdDoc[cid] || {}).days || 7, loading: true }; renderClientDetail();
     try { st.data = await api(`/clients/${cid}/ad-doctor?days=${st.days}${fresh ? '&fresh=1' : ''}`); } catch (e) { st.err = e.message; }
@@ -1399,6 +1448,7 @@
       </div>
       <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
           ${cdDocSection(c)}
+          ${cdCompSection(c)}
           ${cdAiSection(c)}
           ${cdWeeklySection(c)}
       </div>
@@ -1434,6 +1484,7 @@
     box.querySelectorAll('[data-docgo]').forEach((b) => b.onclick = () => cdRunDoc(c.id, !!(cdDoc[c.id] && cdDoc[c.id].data)));
     box.querySelectorAll('[data-docdays]').forEach((b) => b.onclick = () => { const n = Number(b.dataset.docdays), st = cdDoc[c.id] || (cdDoc[c.id] = {}); if (st.days === n) return; st.days = n; if (st.data) cdRunDoc(c.id); else renderClientDetail(); });
     box.querySelectorAll('[data-docai]').forEach((b) => b.onclick = () => cdRunDocAi(c.id));
+    cdCompWire(box, c);
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
     wireWeekly(c); wireCdStatus(c);
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });

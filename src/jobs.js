@@ -159,6 +159,9 @@ function start(deps = {}) {
   // Media buyers get their every-day tasks again each morning at 08:00, with a fresh Done button.
   H.register('Media buyer tasks', 1440, 'daily at 08:00');
   every('Media buyer tasks', '0 8 * * *', () => H.track('Media buyer tasks', () => require('./buyers').morning(log)).then((n) => { if (n) log('media buyer tasks sent:', n); }).catch((e) => log('media buyer tasks failed:', e.message)), opts);
+  // Invoices: sent 7+ days and not paid, or made 3+ days and never sent → the PM's own Telegram, with a "paid" button.
+  H.register('Invoice reminders', 1440, 'daily at 09:10');
+  every('Invoice reminders', '10 9 * * *', () => H.track('Invoice reminders', () => require('./invoiceRemind').run(log)).then((n) => { if (n) log('invoice reminders sent:', n); }).catch((e) => log('invoice reminders failed:', e.message)), opts);
   every('Database backup', '20 3 * * *', () => H.track('Database backup', async () => { const r = await require('./backup').run(telegram); if (r.error) throw new Error(r.error); log('backup sent:', r.sizeMb, 'MB'); }).catch((e) => log('backup failed:', e.message)), opts);
 
   // Settings → "Alerts to my Telegram": each person's own picks, once a day per thing.

@@ -101,6 +101,7 @@ module.exports = function mountAccountsTelegram(app, api, deps) {
       }
     }
     try { await require('../status').onTelegram(fresh); } catch (e) { console.error('[telegram] client status:', e.message); }
+    try { await require('../invoiceRemind').onTelegram(fresh); } catch (e) { console.error('[telegram] invoices:', e.message); }
     try { await require('../buyers').onTelegram(fresh, deps.AI); } catch (e) { console.error('[telegram] media buyers:', e.message); }
     try { await require('../handoff').onTelegram(fresh); } catch (e) { console.error('[telegram] handoff:', e.message); }
     // PMs / owner connecting their own Telegram (t.me/<bot>?start=pm_CODE) for plan / result alerts from their media buyers.

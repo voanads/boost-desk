@@ -1083,6 +1083,10 @@
     host.querySelectorAll('[data-bstlp]').forEach((b) => b.onclick = () => { bstLiveP = b.dataset.bstlp; paintBoosts(); });
     host.querySelectorAll('[data-bstopen]').forEach((b) => b.onclick = () => { setCView('clients'); try { selectClient(Number(b.dataset.bstopen)); } catch (_) {} });
   }
+  // A cost per order 10× the average is almost always orders that were not counted (Page not connected for orders, comments
+  // not read), not a real cost — say so instead of showing it as if it were true (e.g. $194 against an average of $3.23).
+  const cpoOdd = (cpo, avg) => cpo != null && avg != null && avg > 0 && cpo >= avg * 10;
+  const CPO_ODD = '<span class="is-warn" title="Far above the average — usually orders that Boost Desk did not count. Check that the client\'s Pages are connected for orders.">⚠ Orders may be missing — check order tracking</span>';
   // Admin website: invoices and Live boosts of every team (read only).
   const admTeamSeg = (rows, cur, attr) => { const ts = [...new Set(rows.map((r) => r.team))].sort(); return ts.length > 1 ? `<div class="adm-seg" role="group" aria-label="Team"><button type="button" ${attr}="" aria-pressed="${!cur}">All teams</button>${ts.map((t) => `<button type="button" ${attr}="${esc(t)}" aria-pressed="${cur === t}">${esc(t)}</button>`).join('')}</div>` : ''; };
   let allPayD = null, allPayT = '', allLiveD = null, allLiveT = '';
@@ -1331,7 +1335,7 @@
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
         ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + ordSpendOf(x), 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? ordSpendOf(y) / y.orders : null;
-          return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>`; })()}
+          return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${cpoOdd(cpo, avg) ? CPO_ODD : ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>`; })()}
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : perLbl}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
@@ -2321,7 +2325,7 @@
           <span class="bd-owner"><span class="mini-av lg">${esc(mIni(c.ownerName))}</span><span><b>${esc(c.ownerName)}</b><span class="hint">${esc(c.team ? teamName[c.team] || 'Team' : 'No team')}</span></span></span></div></div>
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent this month</span><b class="num">${money(c.month.spend)}</b>${c.month.spend && d.taxRate ? `<span class="sub">+tax ${money(c.month.spend * (1 + d.taxRate / 100))}</span>` : ''}</div>
-        <div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub">${c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : c.yest.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>
+        <div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${c.cpo != null ? money(c.cpo) : '–'}</b><span class="sub">${cpoOdd(c.cpo, avg) ? CPO_ODD : c.cpoY != null ? 'Yesterday ' + money(c.cpoY) : c.yest.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>
         <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${c.month.orders ? c.month.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${c.yest.orders ? 'Yesterday ' + c.yest.orders.toLocaleString('en-US') : 'this month'}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${c.month.lives || 0} · ${money(c.month.postSpend || 0)}</b><span class="sub">${money(c.month.liveSpend || 0)} on lives · ${c.month.days || 0} day${c.month.days === 1 ? '' : 's'}</span></div>
       </div>

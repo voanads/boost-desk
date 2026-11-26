@@ -1,11 +1,11 @@
 // Payments: service fees and invoices (the Payments tab). Every route is scoped to the logged-in admin (req.user.fb_id).
-// Mounted on the /api router by server.js: require('./src/routes/invoices')(api, { wrap, isDay, isFull }).
+// Mounted on the /api router by server.js at the same place it used to be, so route order is kept.
 const db = require('../db');
 const sync = require('../sync');
 const telegram = require('../telegram');
 const invoice = require('../invoice');
 
-module.exports = function mountInvoices(api, { wrap, isDay, isFull }) {
+module.exports = function mountInvoices(app, api, { isDay, isFull, wrap }) {
   const lastOfMonth = (ym) => `${ym}-${String(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate()).padStart(2, '0')}`;
   const IMG = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
   async function invoiceProfile(owner) { return invoice.profileOf(await db.getUserSetting(owner, 'invoiceProfile', {})); }

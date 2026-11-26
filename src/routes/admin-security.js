@@ -9,7 +9,7 @@ const sync = require('../sync');
 const telegram = require('../telegram');
 
 module.exports = function mountAdminSecurity(app, api, deps) {
-  const { adminOnly, dedupeClients, googleRedirect, isFull, normEmail, ownerOnly, siteCfg, wrap } = deps;
+  const { adminOnly, googleRedirect, isFull, normEmail, ownerOnly, siteCfg, wrap } = deps;
   // ---- Admin website: who can sign in with Google (owner) ----
   api.get('/admin/site-access', ownerOnly, wrap(async (req, res) => {
     const users = (await db.allUsers()).map((u) => ({ id: u.fb_id, name: u.name }));
@@ -84,7 +84,7 @@ module.exports = function mountAdminSecurity(app, api, deps) {
     const out = await M.run(p.from.id, p.into.id, req.user.name);
     console.log('[merge]', p.from.name, '→', p.into.name, 'by', req.user.name, '·', p.clients, 'clients,', p.adAccounts, 'ad accounts');
     const into = await db.getUser(p.into.id); sync.refreshAccounts(into).catch((e) => console.error('[merge] account refresh:', e.message));
-    dedupeClients(into).catch((e) => console.error('[merge] dedupe:', e.message)); // the same client in both accounts becomes one
+    deps.dedupeClients(into).catch((e) => console.error('[merge] dedupe:', e.message)); // the same client in both accounts becomes one
     res.json(out);
   }));
   api.delete('/blocked/:id', ownerOnly, wrap(async (req, res) => { await db.setBlocked(req.params.id, '', false); res.json({ ok: true }); }));

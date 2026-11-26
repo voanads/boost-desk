@@ -84,3 +84,13 @@ src/telegram.js      Telegram sender
 public/              login page and the app (plain HTML/CSS/JS)
 test/                npm test — checks live grouping on real campaign names
 ```
+
+---
+
+## Code layout (for developers)
+
+- `server.js` — start-up, middleware (security headers, rate limits, sessions) and one line per area that mounts its routes, in order.
+- `src/routes/*.js` — the routes of one area each (auth, sites, team, admin, clients, invoices, reports, orders, task menu…). Each exports `mount(app, api, deps)`; `deps` are the shared helpers from `server.js` (names declared later are passed as getters).
+- `src/*.js` — the work itself: Meta sync (`sync.js`, `meta.js`), database (`db.js`), Telegram, invoices, AI, jobs, backups…
+- `public/` — the web app (`index.html`, `assets/app.js`, `assets/app.css`); `extension/` — the AdsCheck browser extension (the download zip is built from it).
+- Tests: `npm test` (the database tests need `TEST_DATABASE_URL`, an empty Postgres database); `npm run lint`. GitHub Actions runs both on every push.

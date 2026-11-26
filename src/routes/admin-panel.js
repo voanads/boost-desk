@@ -11,7 +11,7 @@ const sync = require('../sync');
 const telegram = require('../telegram');
 
 module.exports = function mountAdminPanel(app, api, deps) {
-  const { LEAD, ROLES, adminOnly, adminViewers, fullAdmins, getTeams, isFull, linkCode, ownerOnly, roleMap, roleOf, sha, wrap } = deps;
+  const { LEAD, ROLES, adminOnly, adminViewers, fullAdmins, getTeams, isFull, ownerOnly, roleMap, roleOf, sha, wrap } = deps;
   // ---- Admin panel: users, health, settings ----
   api.get('/admin/users', adminOnly, wrap(async (req, res) => {
     const owner = await db.ownerId(), viewers = await adminViewers(), teams = await getTeams();
@@ -84,7 +84,7 @@ module.exports = function mountAdminPanel(app, api, deps) {
   api.get('/admin/system', adminOnly, wrap(async (req, res) => {
     const snap = await health.snapshot(db);
     const chat = await db.getSetting('alertChat', null), isOwner = await isFull(req);
-    res.json({ ...snap, problems: health.problems(snap), alerts: { on: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, bot: await telegram.username(), code: isOwner ? await linkCode(req.user.fb_id) : '', canEdit: isOwner } });
+    res.json({ ...snap, problems: health.problems(snap), alerts: { on: !!(chat && chat.id), name: chat ? chat.name : '', at: chat ? chat.at : null, bot: await telegram.username(), code: isOwner ? await deps.linkCode(req.user.fb_id) : '', canEdit: isOwner } });
   }));
   api.delete('/admin/alerts', ownerOnly, wrap(async (req, res) => { await db.setSetting('alertChat', null); res.json({ ok: true }); }));
   api.post('/admin/alerts/test', ownerOnly, wrap(async (req, res) => {

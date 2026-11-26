@@ -1,6 +1,6 @@
 // AI advice for one client (Claude API). It gets the numbers Boost Desk already has for the client and period —
-// spend per day (lives and posts), each live, post results, spend per Page, orders per Page and day from
-// adsbox.biz, the period before, and the boost setups saved from the Lives page — and explains what is working,
+// spend per day (lives and posts), each live, post results, spend per Page, orders per Page and day (counted by
+// Boost Desk), the period before, and the boost setups saved from the Lives page — and explains what is working,
 // what is wasting money and what to do next. Only totals, campaign names and post text are sent; Boost Desk has
 // no customer data to send.
 const crypto = require('crypto');
@@ -92,7 +92,7 @@ async function clientData(owner, clientId, from, to) {
     campaigns: (p.list || []).slice(0, 12).map((x) => ({ id: x.id, name: x.name, kind: x.live ? 'live' : 'post', spend: r2(x.spend), days: x.days, runMinutes: typeof x.run === 'number' ? x.run : null })),
   }));
 
-  // orders from adsbox.biz per Page and day (matched to this client's Pages)
+  // orders per Page and day (counted by Boost Desk; adsbox.biz before 20 Nov 2026) (matched to this client's Pages)
   let ordersBlock = null;
   try {
     const oc = (await orders.byClient(owner, from, to)).clients[c.id];
@@ -134,7 +134,7 @@ async function clientData(owner, clientId, from, to) {
 }
 
 // ---------- Claude ----------
-const SYSTEM = `You are the ads advisor inside Boost Desk, the tool Ads Box (a Facebook ads agency in Cambodia) uses to run and track boosts for its clients. Clients sell through Facebook live videos and boosted posts; customers order in comments and Messenger. Orders come from adsbox.biz, matched to the client's Pages by Page and day.
+const SYSTEM = `You are the ads advisor inside Boost Desk, the tool Ads Box (a Facebook ads agency in Cambodia) uses to run and track boosts for its clients. Clients sell through Facebook live videos and boosted posts; customers order in comments and Messenger. Boost Desk counts the orders itself (a Messenger message or comment with a phone number = one order), per Page and day.
 
 You get ONE client's numbers for a period. Give the media buyer practical advice for this client.
 
@@ -225,7 +225,7 @@ async function clientAdvice(owner, clientId, { from, to, lang = 'en', question =
 }
 
 // ---------- daily plan per client: suggestions for each Page + today's tasks ----------
-const DAILY_SYSTEM = `You are the ads advisor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders come from adsbox.biz per Page.
+const DAILY_SYSTEM = `You are the ads advisor inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders are counted by Boost Desk per Page from Messenger messages and comments (a message or comment with a phone number = one order).
 
 You get ONE client's numbers for the last days (yesterday is the most recent full day). Write the plan for TODAY for the media buyer.
 
@@ -314,7 +314,7 @@ async function morningPlans(log = () => {}) {
 // For the clients a PM picks: every Monday the AI reads last week (against the week before) and writes a short strategy
 // in Khmer and in English with exactly three actions. It is a draft for the team; a PM may edit it and send it to the
 // client's Telegram group — nothing goes to a client by itself.
-const WEEKLY_SYSTEM = `You are the ads strategist inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders come from adsbox.biz per Page.
+const WEEKLY_SYSTEM = `You are the ads strategist inside Boost Desk (Ads Box, a Facebook ads agency in Cambodia). Clients sell through Facebook live videos and boosted posts; orders are counted by Boost Desk per Page from Messenger messages and comments (a message or comment with a phone number = one order).
 
 You get ONE client's numbers for last week and the week before. Write a short weekly strategy the Project Manager can read in one minute and may forward to the client.
 

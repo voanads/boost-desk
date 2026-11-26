@@ -1,4 +1,4 @@
-// Public read-only API for adsbox.biz, and the Check My Ads extension hooks
+// Check My Ads extension hooks (the public spend API for adsbox.biz was removed 26 Nov 2026)
 // Moved out of server.js unchanged; server.js mounts it at the same place, so route order is kept.
 const cfg = require('../config');
 const crypto = require('crypto');
@@ -8,29 +8,7 @@ const sync = require('../sync');
 
 module.exports = function mountPublicApi(app, api, deps) {
   const { isDay, wrap } = deps;
-  // ---- Public read-only API: boost spend per Page per day, for adsbox.biz (or any outside site) ----
-  // Auth with a key made in Admin → Settings (X-API-Key, Authorization: Bearer, or ?api_key=). Keys are kept as
-  // SHA-256 only. Numbers only: date, Page ID, spend.
-  const sha = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
-  app.get('/public-api/spend', wrap(async (req, res) => {
-    res.set('Access-Control-Allow-Origin', '*');
-    const key = String(req.get('x-api-key') || (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.api_key || '').trim();
-    const keys = (await db.getSetting('spendApiKeys', [])) || [];
-    const k = key && keys.find((x) => x.hash === sha(key) && x.active !== false);
-    if (!k) return res.status(401).json({ ok: false, error: 'API key missing or not valid.' });
-    const today = sync.todayIn();
-    const to = isDay(req.query.to) ? req.query.to : today, from = isDay(req.query.from) ? req.query.from : sync.addDays(to, -6);
-    if (from > to) return res.status(400).json({ ok: false, error: '"from" is after "to".' });
-    if ((Date.parse(to) - Date.parse(from)) / 864e5 > 185) return res.status(400).json({ ok: false, error: 'At most 185 days per call.' });
-    const pid = String(req.query.page_id || '').trim();
-    if (pid && !/^\d{5,25}$/.test(pid)) return res.status(400).json({ ok: false, error: 'page_id must be numeric.' });
-    let { list } = await orders.spendRows(from, to);
-    if (pid) list = list.filter((r) => r.page_id === pid);
-    list.sort((a, b) => a.date.localeCompare(b.date) || a.page_id.localeCompare(b.page_id));
-    k.calls = (k.calls || 0) + 1; k.lastUsed = new Date().toISOString(); k.lastIp = String(req.ip || '').slice(0, 45);
-    db.setSetting('spendApiKeys', keys).catch(() => {});
-    res.json({ ok: true, from, to, timezone: cfg.tz, currency: 'USD', totals: { spend: Math.round(list.reduce((t, r) => t + r.spend, 0) * 100) / 100 }, count: list.length, rows: list });
-  }));
+  const sha = (x) => crypto.createHash('sha256').update(String(x)).digest('hex'); // extension keys are kept as SHA-256 only (also used by server.js)
   // ---- Check My Ads browser extension → billing thresholds ----
   // The extension reads each account's automatic-payment ("billing") threshold from the user's own
   // logged-in Facebook session and pushes the numbers here. Meta does not expose this field to the

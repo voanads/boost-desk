@@ -47,7 +47,7 @@ app.use((req, res, next) => {
 });
 // Public addresses: a limit per address, so nobody can hammer the login or the open API.
 app.use(['/auth', '/admin/login', '/mediabuyer/login', '/mb/login'], net.rateLimit(40, 60000, 'auth'));
-app.use(['/public-api', '/hooks/adsbox'], net.rateLimit(240, 60000, 'pub')); // /hooks/meta is signed by Facebook and can be busy during a Live, so it has no per-address limit
+app.use('/public-api', net.rateLimit(240, 60000, 'pub')); // /hooks/meta is signed by Facebook and can be busy during a Live, so it has no per-address limit
 app.use('/api', net.sameOrigin);
 // /hooks/meta keeps the raw body too: Facebook signs it (X-Hub-Signature-256) and the signature is checked on those bytes.
 app.use(express.json({ limit: '8mb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/hooks/meta')) req.rawBody = buf; } })); // room for the invoice logo / QR / signature pictures
@@ -65,7 +65,7 @@ const { fbNameOf, loggedIn, newState, stateOk } = require('./src/routes/auth-fac
 const { LOGINS } = require('./src/routes/auth-logins')(app, null, { wrap, get MB() { return MB; } });
 // ---- Admin website (/admin): Google sign-in for people the owner allows (src/routes/auth-google.js) ----
 const { googleRedirect, normEmail, siteCfg, sitePerson } = require('./src/routes/auth-google')(app, null, { loggedIn, newState, stateOk, wrap });
-// ---- Public read-only API for adsbox.biz, and the Check My Ads extension hooks (src/routes/public-api.js) ----
+// ---- Check My Ads extension hooks (src/routes/public-api.js) ----
 const { lastSeenMem, sha } = require('./src/routes/public-api')(app, null, { isDay, wrap });
 // ---- Client link: one read-only results page per client, /r/<token> (src/routes/client-link.js) ----
 require('./src/routes/client-link').mountPublic(app, { wrap });
@@ -94,7 +94,7 @@ const { chatsNow, linkCode, newCode, rangeOk } = require('./src/routes/accounts-
 require('./src/routes/client-reports')(null, api, { chatsNow, deepMerge, isDay, kindOf, linkCode, partsOf, rangeOk, wrap });
 // ---- Auto daily report, report status, handoff notes and today's to-do (src/routes/auto-report-handoff.js) ----
 const { HANDOFF_DEPS } = require('./src/routes/auto-report-handoff')(null, api, { MB, adminOnly, dayTasks, getTeams, isDay, wrap });
-// ---- Orders (adsbox.biz API), AI advice, KPIs, people today / month, audit, nudges (src/routes/orders-ai-kpi.js) ----
+// ---- Orders, AI advice, KPIs, people today / month, audit, nudges (src/routes/orders-ai-kpi.js) ----
 const { AI, KPI, kpiPerson, ownClient, ownsBuyer } = require('./src/routes/orders-ai-kpi')(null, api, { LEAD, LOGINS, MB, ROLES, TASKS_OFF, adminOnly, adminViewers, auditFlush, canSeeAdmin, dayTasks, getTeams, isDay, ownerOnly, roleMap, roleOf, wrap, get MENU() { return MENU; } });
 // ---- Weekly AI strategy per client, and merging duplicate clients (src/routes/strategy-merge.js) ----
 const { dedupeClients, mergeClients, sameName } = require('./src/routes/strategy-merge')(null, api, { AI, ownClient, wrap });

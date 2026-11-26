@@ -2373,7 +2373,7 @@
   $('bSearch').oninput = () => renderBoard();
   setInterval(() => { if (!$('tab-board').hidden && !document.hidden) loadBoard(); }, 60e3);
 
-  // ---------- Orders page (adsbox.biz) ----------
+  // ---------- Orders page (Boost Desk counts orders itself) ----------
   let oData2 = null, oCfg = null;
   const cpoText = (spend, n) => (n > 0 && spend > 0 ? money(spend / n) : '–');
   const oPulled = new Set();
@@ -2388,23 +2388,14 @@
     try {
       const [cfg, d] = await Promise.all([api('/orders/api'), api(`/orders/report?from=${from}&to=${to}&src=${oSrc}`)]);
       oData2 = d; oCfg = cfg;
-      if (cfg.url && cfg.hasKey && from < addD(me.today, -2) && !oPulled.has(pk)) {
-        oPulled.add(pk);
-        api('/orders/pull', { method: 'POST', body: { from, to } }).then(() => { if (dRange().join('|') === pk) loadOrders(); }).catch(() => {});
-      }
       const own = !!(cfg.own && cfg.own.on);
-      $('oSetBtn').hidden = !(me && me.canAdmin) || own; $('oCmpBtn').hidden = !(me && me.canAdmin && cfg.url && cfg.hasKey); $('oPgBtn').hidden = false;
+      $('oPgBtn').hidden = false;
       $('oUpd').textContent = cfg.last && cfg.last.at ? 'Updated ' + ago(cfg.last.at) : 'Update';
       const note = $('oNote'), ql = d.quality || {}, est = (ql.estimate || 0) + (ql.missing || 0);
       let msg = '';
       if (own) { if (oPgN === null) api('/orders/pages').then((r) => { oPgN = r.pages.length; if (!oPgN) loadOrders(); }).catch(() => { oPgN = -1; });
         if (oPgN === 0) msg = '<b>Connect your Pages first:</b> tap <b>Pages</b> → Connect Pages, so Boost Desk can count orders from Messenger and comments.';
         else if (!d.hasData) msg = 'No orders in this period yet. New orders show here within seconds.'; }
-      else if (!cfg.url || !cfg.hasKey) msg = me && me.canAdmin ? '<b>Connect adsbox.biz first:</b> tap ⚙ and paste the API address and key.' : 'Orders from adsbox.biz are not connected yet — ask your admin.';
-      else if (cfg.lastError) msg = `⚠ Getting orders failed: ${esc(cfg.lastError.message)}`;
-      else if (cfg.listUrl && cfg.listError && cfg.last && cfg.listError.at > (cfg.last.at || '')) msg = `ⓘ The order list address could not be read (${esc(cfg.listError.message)}) — counts come from the summary API instead.`;
-      else if (!d.hasData) msg = 'No orders for this period yet. Tap <b>↻ Update</b> to fetch them.';
-      else if (est) msg = `<span title="Days from before Boost Desk started keeping each day's count (18 Oct) come from adsbox.biz's API and may be too high, so cost per order looks cheaper.">ⓘ ${est} of ${est + (ql.kept || 0)} days are estimates and may be too high.</span>`;
       note.hidden = !msg; note.innerHTML = msg;
       renderOrders();
     } catch (e) { $('oCards').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -2450,40 +2441,12 @@
     catch (e) { toast(e.message); }
     finally { b.disabled = false; b.classList.remove('spin'); loadOrders(); }
   };
-  // ---- check one day against adsbox.biz (admins) ----
-  let oCmp = null;
-  async function runCompare() {
-    const day = $('oCmpDay').value; if (!day) return;
-    const out = $('oCmpOut'); out.innerHTML = '<div class="muted">Asking adsbox.biz…</div>'; $('oUseDay').disabled = true;
-    try {
-      oCmp = await api('/orders/compare?day=' + day);
-      const d = oCmp, diff = d.live - d.kept, st = { locked: 'kept from when it was recent', fresh: 'still updating (today / yesterday)', backfill: 'estimate', missing: 'not fetched yet' }[d.state] || d.state;
-      const rows = d.pages.filter((x) => x.kept || x.live);
-      out.innerHTML = `<div class="cmp-sum"><div><span class="lbl">Boost Desk</span><b class="num">${d.kept.toLocaleString('en-US')}</b></div><div><span class="lbl">adsbox.biz now</span><b class="num">${d.live.toLocaleString('en-US')}</b></div><div><span class="lbl">Difference</span><b class="num ${diff ? (diff > 0 ? 'is-warn' : 'is-danger') : 'is-ok'}">${diff > 0 ? '+' : ''}${diff.toLocaleString('en-US')}</b></div></div>
-        <div class="hint">Boost Desk's number for this day: ${esc(st)}. Compare "adsbox.biz now" with the adsbox <b>Sales Overview</b> for the same day.</div>
-        ${rows.length ? `<div class="cmp-list"><div class="cmp-row cmp-head"><span>Page</span><span class="r">Boost Desk</span><span class="r">adsbox now</span><span class="r">Diff</span></div>${rows.slice(0, 60).map((x) => `<div class="cmp-row${x.diff ? ' off' : ''}"><span class="cmp-p">${esc(x.page || 'Page ' + x.pageId)}</span><span class="r num">${x.kept}</span><span class="r num">${x.live}</span><span class="r num ${x.diff ? (x.diff > 0 ? 'is-warn' : 'is-danger') : 'is-ok'}">${x.diff > 0 ? '+' : ''}${x.diff || '✓'}</span></div>`).join('')}</div>` : '<div class="muted">No orders on this day.</div>'}`;
-      $('oUseDay').disabled = !diff;
-    } catch (e) { out.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
-  }
-  async function useLive(from, to, btn) {
-    if (!confirm(`Replace Boost Desk's order numbers for ${from === to ? nice(from) : nice(from) + ' – ' + nice(to)} with adsbox.biz's numbers as they are now?`)) return;
-    btn.disabled = true; btn.classList.add('busy');
-    try { await api('/orders/use-live', { method: 'POST', body: { from, to } }); successBadge('Orders updated from adsbox.biz'); oData2 = null; loadOrders(); mData = null; if ($('oCmpDay').value) runCompare(); }
-    catch (e) { toast(e.message); } finally { btn.disabled = false; btn.classList.remove('busy'); }
-  }
-  $('oCmpBtn').onclick = () => { if (!$('oCmpDay').value) $('oCmpDay').value = addD(me.today, -1); $('oCmpDay').max = me.today; $('oCmpOut').innerHTML = ''; dlgOpen($('oCmpDlg')); runCompare(); };
-  $('oCmpGo').onclick = runCompare; $('oCmpDay').onchange = runCompare;
-  $('oUseDay').onclick = () => useLive($('oCmpDay').value, $('oCmpDay').value, $('oUseDay'));
-  $('oUse7').onclick = () => useLive(addD(me.today, -7), addD(me.today, -1), $('oUse7'));
-  $('oUse30').onclick = () => useLive(addD(me.today, -30), addD(me.today, -1), $('oUse30'));
   // ---- Pages Boost Desk counts orders on ----
   var oPgN = null; // var: loadOrders (defined above) may run before this line
   async function loadOrderPages() {
     const box = $('oPgList');
     try {
       const r = await api('/orders/pages'); oPgN = r.pages.length;
-      const m = r.mode || {}, note = $('oPgMode');
-      note.hidden = !!m.on; note.innerHTML = m.on ? '' : 'Boost Desk is reading orders from adsbox.biz now. Pages connected here start counting when an owner switches it on below.';
       box.innerHTML = r.pages.length ? r.pages.map((p) => {
         const st = !p.subscribed ? `<span class="is-danger">✕ Not receiving messages${p.last_error ? ' — ' + esc(p.last_error) : ''}</span>` : p.last_error ? `<span class="is-warn">⚠ ${esc(p.last_error)}</span>` : p.last_event_at ? `<span class="is-ok">✓ Working</span> · last message ${esc(ago(p.last_event_at))}` : '<span class="muted">Connected · waiting for the first message</span>';
         return `<div class="pgrow"><div><b>${esc(p.page_name || p.page_id)}</b>${p.live ? ' <span class="tag live">LIVE</span>' : ''}<div class="hint">${st}${p.connected_name ? ' · by ' + esc(p.connected_name) : ''}</div></div><span class="num pg-today" title="Orders today">${p.today}</span><button type="button" class="ghost sm" data-pgdel="${esc(p.page_id)}" aria-label="Remove ${esc(p.page_name)}">Remove</button></div>`;
@@ -2495,64 +2458,15 @@
       if (r.notConnected && r.notConnected.length) box.insertAdjacentHTML('beforeend', `<div class="pg-miss"><b>Not counted yet — ${r.notConnected.length} client Page${r.notConnected.length === 1 ? '' : 's'} boosted this week</b><div class="hint">No saved Facebook login of the team manages ${r.notConnected.length === 1 ? 'it' : 'them'} with the Page permissions. The Project Manager who manages the Page logs in to Boost Desk with Facebook again (or adds that Facebook account in Settings) and allows the Page permissions — Boost Desk then connects it by itself.</div><div class="pg-miss-list">${r.notConnected.map((p) => `<span title="${esc(p.id)}">${esc(p.name || p.id)}</span>`).join('')}</div></div>`);
       if (r.auto && r.auto.at) box.insertAdjacentHTML('beforeend', `<div class="hint">Automatic connect: last run ${esc(ago(r.auto.at))} · ${r.auto.withPages} of ${r.auto.logins} Facebook logins allowed Pages${r.auto.connected ? ` · ${r.auto.connected} connected` : ''}</div>`);
       const setup = $('oPgSetup'); setup.hidden = !r.verifyToken;
-      if (r.verifyToken) { $('oPgHook').value = r.hookUrl; $('oPgTok').value = r.verifyToken; $('oPgOwnBox').hidden = !(me && me.isOwner); $('oPgOwn').checked = !!m.on; }
+      if (r.verifyToken) { $('oPgHook').value = r.hookUrl; $('oPgTok').value = r.verifyToken; }
     } catch (e) { box.innerHTML = `<div class="note">${esc(e.message)}</div>`; }
   }
   $('oPgBtn').onclick = () => { dlgOpen($('oPgDlg')); loadOrderPages(); };
-  $('oPgOwn').onchange = async () => {
-    const on = $('oPgOwn').checked;
-    if (!confirm(on ? 'Count orders in Boost Desk from today, and stop reading them from adsbox.biz?' : 'Go back to reading orders from adsbox.biz? Boost Desk stops counting.')) { $('oPgOwn').checked = !on; return; }
-    try { await api('/orders/own', { method: 'PUT', body: { on } }); toast(on ? 'Boost Desk counts orders now' : 'Orders come from adsbox.biz again'); oData2 = null; oCfg = null; loadOrderPages(); loadOrders(); } catch (e) { toast(e.message); $('oPgOwn').checked = !on; }
-  };
   (() => { // back from "Connect Pages" on Facebook
     const q = new URLSearchParams(location.search), m = q.get('pgmsg'); if (!m) return;
     const ok = q.get('pg') === 'ok'; history.replaceState(null, '', location.pathname + location.hash);
     setTimeout(() => { if (ok) successBadge(m); else toast(m); oPgN = null; $('oPgBtn').click(); }, 900);
   })();
-  $('oSetBtn').onclick = async () => {
-    if (!(me && me.canAdmin)) return;
-    const c = oCfg || await api('/orders/api').catch(() => ({}));
-    $('oUrl').value = c.url || ''; $('oListUrl').value = c.listUrl || ''; $('oKey').value = ''; $('oTestMsg').hidden = true;
-    $('oKeyInfo').textContent = c.hasKey ? `A key is saved (${c.keyHint || 'hidden'})${c.savedBy ? ' by ' + c.savedBy : ''}. Leave the key empty to keep it.` : 'No key saved yet.';
-    $('oKeyDel').hidden = !c.hasKey;
-    const canEdit = !!(me && me.canAdmin); ['oUrl', 'oListUrl', 'oKey', 'oSave', 'oTest', 'oKeyDel', 'oPushOn', 'oPushNow'].forEach((id) => { $(id).disabled = !canEdit; });
-    if (!canEdit) $('oKeyInfo').textContent += ' Only admins can change these settings.';
-    loadPush(); loadHook();
-    dlgOpen($('oDlg'));
-  };
-  function drawPush(p) {
-    $('oPushOn').checked = !!p.on;
-    const l = p.last;
-    $('oPushSt').innerHTML = !l ? (p.on ? 'Waiting for the first send…' : 'Off') : l.error ? `<span class="over">✕ ${esc(ago(l.at))}: ${esc(l.error)}</span>`
-      : `✓ Sent ${esc(ago(l.at))} · ${l.saved} of ${l.received} rows saved (${esc(l.from)} – ${esc(l.to)})${l.noPage ? ` · ${l.noPage} campaign${l.noPage === 1 ? '' : 's'} skipped (no Page)` : ''}${l.errors && l.errors.length ? ` · <span class="over">${l.errors.length} rows refused: ${esc(l.errors[0].error)}</span>` : ''}`;
-  }
-  async function loadPush() { try { drawPush(await api('/orders/push')); } catch (_) { $('oPushSt').textContent = ''; } }
-  async function loadHook() {
-    const box = $('oHookBox'); if (!box) return; box.hidden = !(me && me.canAdmin); if (box.hidden) return;
-    try { const h = await api('/orders/hook'); $('oHookUrl').value = h.url; $('oHookSec').value = h.secret; $('oHookSt').textContent = h.last ? `✓ Last call ${ago(h.last.at)} · ${h.last.n} order${h.last.n === 1 ? '' : 's'}` : 'No call from adsbox.biz yet.'; } catch (_) { box.hidden = true; }
-  }
-  $('oHookCopy').onclick = async () => { const t = `Webhook address: ${$('oHookUrl').value}\nHeader X-Webhook-Secret: ${$('oHookSec').value}\nMethod: POST, JSON body { "event": "order.created", "date": "YYYY-MM-DD", "page_id": "…", "page_name": "…" }`; try { await navigator.clipboard.writeText(t); toast('Copied — send it to the adsbox.biz developer'); } catch (_) { prompt('Copy this', t); } };
-  $('oHookNew').onclick = async () => { if (!confirm('Make a new secret? adsbox.biz must be updated with it, or its calls will be refused.')) return; try { await api('/orders/hook/renew', { method: 'POST' }); loadHook(); } catch (e) { toast(e.message); } };
-  $('oPushOn').onchange = async () => { try { drawPush(await api('/orders/push', { method: 'PUT', body: { on: $('oPushOn').checked } })); toast($('oPushOn').checked ? 'Spend will be sent to adsbox.biz every 30 minutes' : 'Stopped sending spend'); } catch (e) { toast(e.message); } };
-  $('oPushNow').onclick = async () => {
-    const b = $('oPushNow'); b.disabled = true; $('oPushSt').textContent = 'Sending…';
-    try { await api('/orders/push', { method: 'POST', body: { days: 7 } }); successBadge('Spend sent to adsbox.biz'); } catch (e) { toast(e.message); }
-    finally { b.disabled = false; loadPush(); }
-  };
-  const saveCfg = (extra = {}) => api('/orders/api', { method: 'PUT', body: { url: $('oUrl').value.trim(), listUrl: $('oListUrl').value.trim(), key: $('oKey').value.trim(), ...extra } });
-  $('oSave').onclick = async () => { try { oCfg = await saveCfg(); $('oDlg').close(); successBadge('adsbox.biz API saved'); $('oSync').click(); } catch (e) { toast(e.message); } };
-  $('oKeyDel').onclick = async () => { if (!confirm('Remove the saved API key?')) return; try { oCfg = await saveCfg({ key: null }); $('oDlg').close(); toast('API key removed'); loadOrders(); } catch (e) { toast(e.message); } };
-  $('oTest').onclick = async () => {
-    const m = $('oTestMsg'), b = $('oTest'); b.disabled = true; m.hidden = false; m.textContent = 'Testing…';
-    try {
-      oCfg = await saveCfg();
-      const r = await api('/orders/test', { method: 'POST' });
-      if (r.month && r.month.listChosen) $('oListUrl').value = r.month.listChosen;
-      m.innerHTML = r.rows ? `✓ Connected. ${r.rows} order row${r.rows === 1 ? '' : 's'} for yesterday (${r.pages} page${r.pages === 1 ? '' : 's'}${r.total ? ', API says ' + r.total : ''})${Object.keys(r.days || {}).length > 1 ? ' · dates in answer: ' + esc(Object.entries(r.days).map(([d, c]) => d + ' ' + c).join(', ')) : ''}${r.rawRows !== r.rows ? ` (${r.rawRows - r.rows} duplicate${r.rawRows - r.rows === 1 ? '' : 's'} skipped)` : ''}${r.perOrder ? ' · one row per order' : ''}.${r.month ? (r.month.error ? `<br>Last month: ${esc(r.month.error)}` : `<br><b>Last month</b> (${esc(r.month.from)} – ${esc(r.month.to)}): by day ${r.month.byDay} orders (${r.month.byDayRows} rows) · by Page ${r.month.byPage} orders (${r.month.byPageRows} rows, group_by=${esc(r.month.byPageGroup || '?')})${r.month.totals ? ' · totals: ' + esc(JSON.stringify(r.month.totals)) : ''}${r.month.page ? `<br><b>${esc(r.month.page.name || r.month.page.id)}</b> (${esc(r.month.page.id)}): month total ${r.month.page.byPage} · days added up ${r.month.page.byDay} (${r.month.page.days} days) · Messenger ${r.month.page.messenger} · customers ${r.month.page.customers}` : ''}${r.month.listChosen ? `<br>✅ <b>Found the order list:</b> <code>${esc(r.month.listChosen)}</code> — Boost Desk now counts from it.` : ''}${r.month.listUrl ? `<br><b>Order list</b> ${esc(r.month.listUrl)}: ${r.month.listError ? '✕ ' + esc(r.month.listError) : `busiest Page last month <b>${r.month.listPage}</b> orders · ${r.month.listAll} orders on all Pages`}` : ''}${(r.month.lists || []).map((l) => `<br>Order list <code>${esc(l.path)}</code>: ${l.status ? 'HTTP ' + l.status : esc(l.error || 'no answer')}${l.json ? ' · JSON' : ''}${l.total != null ? ' · total ' + l.total : ''}${l.keys && l.keys.length ? ' · answer: ' + esc(l.keys.join(', ')) : ''}${l.rowKeys && l.rowKeys.length ? ' · fields: ' + esc(l.rowKeys.join(', ')) : ''}`).join('')}`) : ''}<br>Asked ${esc(r.asked || '')} · adsbox answered: <code>${esc(Object.entries(r.echo || {}).map(([k, v]) => k + '=' + v).join(', '))}</code><br>Answer: <code>${esc((r.keys || []).join(', '))}</code><br>Fields: <code>${esc(r.fields.join(', '))}</code>${Object.entries(r.breakdown || {}).map(([k, v]) => `<br>${esc(k)}: ${Object.entries(v).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => `<b>${esc(n)}</b> ${c}`).join(' · ')}`).join('')}${r.hasPage ? '' : '<br>⚠ No Page ID or Page name in the answer, so orders can’t be matched to clients.'}${r.hasDate ? '' : '<br>⚠ No date in the answer.'}` : '✓ Connected, but no orders came back for yesterday.';
-    } catch (e) { m.textContent = '✕ ' + e.message; }
-    finally { b.disabled = false; }
-  };
-
   // ---------- auto sync (owner only) ----------
   const ago = (t) => {
     if (!t) return '—';
@@ -2759,7 +2673,7 @@
         db.ok ? `<div class="srow"><span>Answer time</span><b>${db.ms} ms</b></div><div class="srow"><span>Size</span><b>${db.sizeMb} MB</b><span class="hint">${grow != null ? (grow >= 0 ? '+' : '') + grow.toFixed(1) + ' MB in a week' : 'growth shows after a week'}</span></div>
           <div class="hint">Biggest: ${db.tables.map((t) => `${esc(t.name)} ${t.mb} MB`).join(' · ')}</div>` : `<div class="over">${esc(db.error)}</div>`),
       card('🌐', 'Outside services', d.meta.max >= 90 ? bad('Meta limit') : d.meta.max >= 70 ? warn('Meta busy') : ok('OK'),
-        `<div class="srow"><span>Meta API usage</span><b>${d.meta.max}%</b><span class="hint">${d.meta.top.length ? 'of its rate limit, last 2 hours' : 'no data yet'}</span></div>${bar(d.meta.max)}${svc('Meta API')}${svc('adsbox.biz')}${svc('Telegram')}`),
+        `<div class="srow"><span>Meta API usage</span><b>${d.meta.max}%</b><span class="hint">${d.meta.top.length ? 'of its rate limit, last 2 hours' : 'no data yet'}</span></div>${bar(d.meta.max)}${svc('Meta API')}${svc('Telegram')}`),
       card('🔔', 'Alerts to my Telegram', al.on ? ok('On') : warn('Off'),
         al.on ? `Alerts go to <b>${esc(al.name || 'your Telegram')}</b>${al.at ? ` · since ${esc(new Date(al.at).toLocaleDateString('en-GB'))}` : ''}.<div class="hint">You get a message when the database stops, a background job stops or keeps failing, memory gets high, Meta usage is near its limit, or many errors happen — and another when it’s fixed.</div>${al.canEdit ? '<div class="sc-a"><button class="sm" data-al="test">Send test</button><button class="sm ghost" data-al="off">Turn off</button></div>' : ''}`
         : al.canEdit ? `Open <b>@${esc(al.bot || 'the bot')}</b> in Telegram (a private chat, not a group) and send:<div class="alcode"><code class="lcode" title="Tap to copy">/alerts ${esc(al.code)}</code></div><div class="hint">Within a minute this turns on. You'll then get a message whenever something serious happens.</div>` : 'Only the app owner can turn alerts on.'),
@@ -3795,16 +3709,13 @@
     const card = (ic, title, state, body, acts) => `<div class="setcard"><div class="sc-h"><span class="sc-ic">${ic}</span><b>${title}</b>${state}</div><div class="sc-b">${body}</div>${acts ? `<div class="sc-a">${acts}</div>` : ''}</div>`;
     const on = (t) => `<span class="sc-st ok">${t}</span>`, off = (t) => `<span class="sc-st bad">${t}</span>`;
     $('sGrid').innerHTML = [
-      card('📦', oc.own && oc.own.on ? 'Orders (Boost Desk)' : 'adsbox.biz orders', oc.own && oc.own.on ? on('Counting') : oc.hasKey ? (oc.lastError ? off('Error') : on('Connected')) : off('Not connected'),
-        `${oc.hasKey ? `Key ${esc(oc.keyHint || '')}${oc.savedBy ? ' · saved by ' + esc(oc.savedBy) : ''}<br>` : 'Connect to see cost per order.<br>'}${oc.last ? 'Last update ' + esc(ago(oc.last.at)) : ''}${oc.lastError ? `<div class="over">${esc(oc.lastError.message)}</div>` : ''}<div class="hint">Updates every 30 minutes for everyone. Only admins see the key.</div>`,
-        '<button class="sm" data-sgo="orders-api">⚙ API settings</button>'),
+      card('📦', 'Orders (Boost Desk)', on('Counting'), 'Boost Desk counts orders itself from Messenger messages and comments (Live included) on the connected client Pages: a phone number = one order, one per customer per Page per day.<div class="hint">adsbox.biz is no longer used (since 26 Nov 2026). Days before 20 Nov keep the numbers it sent then.</div>', ''),
       card('✈️', 'Telegram bot', d.telegram.bot ? on('Set up') : off('Missing'),
         d.telegram.bot ? `Bot: <b>@${esc(d.telegram.username || '…')}</b><div class="hint">Clients' groups are linked with the /link code in each client's window. ${d.telegram.teamGroup ? 'Team report group is set.' : 'No team report group (TELEGRAM_CHAT_ID).'}</div>` : 'Add <code>TELEGRAM_BOT_TOKEN</code> in Railway to send reports.', ''),
       card('🧾', 'Invoice', '', `<div class="sc-inv"><div><b>${esc(d.invoice.company)}</b><br>${esc(d.invoice.bankName)}<br>${esc(d.invoice.accountName)}<br><span class="num">${esc(d.invoice.accountNo)}</span></div>${d.invoice.qr ? `<img class="sc-qr" src="${d.invoice.qr}" alt="Payment QR">` : ''}</div><div class="hint">The payment QR is the same on every user's invoices.</div>`,
         `${d.canEdit ? '<button class="sm" data-sgo="qr">Change QR for everyone</button><input type="file" id="sQrFile" accept="image/png,image/jpeg" hidden>' : ''}<button class="sm ghost" data-sgo="invoice">My invoice details</button>`),
       card('⏰', d.canEdit ? 'Auto report' : 'My auto report', d.canEdit ? '<span id="arAllState"></span>' : '', `Sends each client’s report to their Telegram group at a set time every day. Each person sets their own time.${d.canEdit ? '<div id="arAllBox" class="hint">Loading…</div>' : ''}`, `<button class="sm" data-sgo="autoreport">Open my auto report</button>${d.canEdit ? '<button class="sm" data-sgo="aron">Turn on for everyone</button><button class="sm ghost" data-sgo="aroff">Turn off for everyone</button>' : ''}`),
       card('🔄', 'Auto sync', d.autoSyncServer ? on('On') : off('Off on server'), 'Every 5 minutes: new ad accounts and campaigns · every hour: today and yesterday · 05:30: the last 30 days.', d.canEdit ? '<button class="sm" data-sgo="syncon">Turn on for everyone</button><button class="sm ghost" data-sgo="syncoff">Turn off for everyone</button>' : ''),
-      d.canEdit ? card('📤', 'Boost Desk API · spend', '', '<div id="skBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="newkey">+ Create key</button><button class="sm ghost" data-sgo="devdoc">Copy instructions for developer</button>') : '',
       card('✨', 'AI advice', d.ai && d.ai.hasKey ? on(d.ai.provider === 'gemini' ? 'On · Gemini' : 'On · Claude') : off('Off'), d.ai && d.ai.hasKey ? `Key ${esc(d.ai.keyHint || '')}${d.ai.savedBy ? ' · saved by ' + esc(d.ai.savedBy) : ''}<br>Model <code>${esc(d.ai.model)}</code> · up to ${d.ai.dailyLimit} requests per person per day.${d.ai.usage ? `<br>This month: ${Number(d.ai.usage.calls).toLocaleString('en-US')} requests · ${Math.round((d.ai.usage.input + d.ai.usage.output) / 1000).toLocaleString('en-US')}K tokens${d.ai.usage.priced ? ` · about ${money(d.ai.usage.cost)}` : ''}` : ''}<div class="hint">Used by the ✨ AI advice button in each client's breakdown. Sends the client's spend, lives, posts and order counts to ${d.ai.provider === 'gemini' ? 'Google' : 'Anthropic'} — no customer data.</div>` : 'Add a Claude key (console.anthropic.com) or a Gemini key (aistudio.google.com) to turn on ✨ AI advice for each client.', d.canEdit ? `<button class="sm" data-sgo="aikey">${d.ai && d.ai.hasKey ? 'Change key' : 'Add key'}</button>${d.ai && d.ai.hasKey ? '<button class="sm ghost" data-sgo="aikeydel">Remove</button>' : ''}` : ''),
       me && me.tasksOff ? '' : card('📋', 'Task menu', '', 'The fixed daily duties every Project Manager and every media buyer ticks on their My Task page. One list per role.', '<button class="sm" data-sgo="menu">Edit task menu</button>'),
       card('🌏', 'General', '', `Time zone: <b>${esc(d.tz)}</b><br>Tax on spend: <b>${d.taxRate || 0}%</b><div class="hint">Changed in Railway variables.</div>`, ''),
@@ -3812,7 +3723,7 @@
       d.canEdit ? card('🗄', 'Database backup', '', '<div id="bkBox" class="hint">Loading…</div>', '<button class="sm" data-sgo="bknow">Back up now</button><a class="btn sm ghost" href="/api/admin/backup/download" download>⬇ Download</a>') : '',
       d.canEdit ? card('🔐', 'Security · change secrets', '', '<div id="secBox" class="hint">Loading…</div>', '') : '',
     ].join('');
-    if (d.canEdit) { loadKeys(); loadSecurity(); loadSiteAccess(); api('/admin/auto-report-all').then(paintArAll).catch((e) => { const b = $('arAllBox'); if (b) b.textContent = e.message; }); }
+    if (d.canEdit) { loadSecurity(); loadSiteAccess(); api('/admin/auto-report-all').then(paintArAll).catch((e) => { const b = $('arAllBox'); if (b) b.textContent = e.message; }); }
   }
   // Admin → App settings → Auto report: how many Project Managers have it on, and who does not.
   function paintArAll(r) {
@@ -3888,60 +3799,16 @@
       + (st.oldKey ? `<div class="${st.leftOnOld ? 'over' : 'ok-t'}">ENCRYPTION_KEY_OLD is set · ${st.leftOnOld} value${st.leftOnOld === 1 ? '' : 's'} left on old key${st.leftOnOld ? '' : ' — you can delete ENCRYPTION_KEY_OLD now'}.</div>` : '')
       + `<ol class="secl">${SEC_STEPS.map(([k, t, how, gen]) => `<li class="${r[k] ? 'done' : ''}"><label><input type="checkbox" data-secdone="${k}" ${r[k] ? 'checked' : ''}> <b>${t}</b>${r[k] ? ` <span class="hint">· done ${esc(new Date(r[k]).toLocaleDateString('en-GB'))}</span>` : ''}</label><div class="hint">${how}</div>${gen ? `<div class="secgen"><button class="sm ghost" data-secgen="${gen}">Make new value</button><code class="lcode" data-copy="" hidden></code></div>` : ''}</li>`).join('')}</ol>`;
   }
-  let skBase = location.origin;
-  const devDoc = (key) => `Boost Desk spend API — read boost spend per Facebook Page per day
-
-URL:     GET ${skBase}/public-api/spend
-Auth:    X-API-Key: ${key || '<your key>'}
-         (or Authorization: Bearer <key>, or ?api_key=<key>)
-Params:  from=YYYY-MM-DD   default: 6 days before "to"
-         to=YYYY-MM-DD     default: today
-         page_id=<numeric Facebook Page id>   optional
-         Max 185 days per call. Dates are Asia/Phnom_Penh days. Money is USD.
-
-Example:
-curl -H "X-API-Key: ${key || '<your key>'}" "${skBase}/public-api/spend?from=2026-10-01&to=2026-10-17"
-
-Answer:
-{
-  "ok": true, "from": "2026-10-01", "to": "2026-10-17",
-  "timezone": "Asia/Phnom_Penh", "currency": "USD",
-  "totals": { "spend": 1234.56 }, "count": 2,
-  "rows": [
-    { "date": "2026-10-16", "page_id": "100844805533349", "spend": 17.45 },
-    { "date": "2026-10-17", "page_id": "100844805533349", "spend": 9.80 }
-  ]
-}
-
-Notes:
-- One row per Page per day = all boosts on that Page that day added up.
-- A day can still change for ~2 days (Meta updates spend late), so re-read the last 7 days each time
-  and replace (not add) what you stored for those days.
-- Join with your orders on page_id + date: cost per order = spend / orders.
-- Errors: 401 key missing/invalid · 400 bad dates or page_id · answer { "ok": false, "error": "..." }.`;
-  async function loadKeys(fresh) {
-    const box = $('skBox'); if (!box) return;
-    let d; try { d = fresh || await api('/admin/spend-keys'); } catch (e) { box.textContent = e.message; return; }
-    if (d.base) skBase = d.base;
-    box.innerHTML = `<div>Lets adsbox.biz (or any site) read <b>date · Page ID · spend</b> from Boost Desk with a key.</div>`
-      + (d.key ? `<div class="newkey"><b>New key — copy it now, it won't be shown again:</b><code class="lcode" data-copy="${esc(d.key)}">${esc(d.key)}</code><button class="sm" data-sgo="devdoc" data-key="${esc(d.key)}">Copy instructions with this key</button></div>` : '')
-      + (d.keys.length ? d.keys.map((k) => `<div class="skrow"><span><b>${esc(k.name)}</b> <code>${esc(k.prefix)}…</code><br><span class="hint">${k.calls} call${k.calls === 1 ? '' : 's'}${k.lastUsed ? ' · last used ' + esc(ago(k.lastUsed)) : ' · not used yet'}</span></span><button class="sm ghost danger-t" data-delkey="${esc(k.id)}">Delete</button></div>`).join('') : '<div>No key yet.</div>');
-  }
   $('sGrid').addEventListener('change', async (ev) => {
     const t = ev.target.closest('[data-secdone]'); if (!t) return;
     try { await api('/admin/security/done', { method: 'POST', body: { key: t.dataset.secdone, done: t.checked } }); loadSecurity(); } catch (e) { toast(e.message); t.checked = !t.checked; }
   });
   $('sGrid').addEventListener('click', async (ev) => {
     const cp = ev.target.closest('[data-copy]'); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast('Key copied'); } catch (_) {} return; }
-    const dk = ev.target.closest('[data-delkey]');
-    if (dk) { if (!confirm('Delete this key? Anything using it will stop working.')) return; try { loadKeys({ ...(await api('/admin/spend-keys/' + dk.dataset.delkey, { method: 'DELETE' })), base: skBase }); toast('Key deleted'); } catch (e) { toast(e.message); } return; }
     const b = ev.target.closest('button'); if (!b) return;
     const k = b.dataset.sgo;
     if (b.dataset.secgen) { const c = b.nextElementSibling, v = randHex(32); c.textContent = v; c.dataset.copy = v; c.hidden = false; c.title = 'Tap to copy'; try { await navigator.clipboard.writeText(v); toast('New value copied — paste it in Railway'); } catch (_) {} return; }
     if (k === 'bknow') { b.disabled = true; b.textContent = 'Backing up…'; try { const r = await api('/admin/backup', { method: 'POST' }); r.error ? toast(r.error) : successBadge(`Backup sent · ${r.sizeMb} MB`); } catch (e) { toast(e.message); } loadSecurity(); b.disabled = false; b.textContent = 'Back up now'; return; }
-    if (k === 'newkey') { const name = prompt('Name for this key (who will use it)', 'adsbox.biz'); if (name === null) return; try { loadKeys(await api('/admin/spend-keys', { method: 'POST', body: { name } })); } catch (e) { toast(e.message); } return; }
-    if (k === 'devdoc') { try { await navigator.clipboard.writeText(devDoc(b.dataset.key || '')); successBadge('Instructions copied — paste them to the developer'); } catch (_) { toast('Could not copy'); } return; }
-    if (k === 'orders-api') { showTab('orders'); setTimeout(() => $('oSetBtn').click(), 400); }
     if (k === 'invoice') { showTab('payments'); setTimeout(() => $('paySettings').click(), 400); }
     if (k === 'autoreport') $('cAutoBtn').click();
     if (k === 'qr') $('sQrFile').click();

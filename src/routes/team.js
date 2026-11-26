@@ -293,7 +293,7 @@ module.exports = function mountTeam(app, api, deps) {
     }
     res.json({ today, from: money.from, to: money.to, taxRate: sync.TAX_RATE, teams: teams.map((t) => ({ id: t.id, name: t.name, members: t.members })), people: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || null })), clients });
   }));
-  // Main Dashboard (COO view): every account, every Page it boosts, spend and adsbox.biz orders per Page.
+  // Main Dashboard (COO view): every account, every Page it boosts, spend and orders per Page.
   api.get('/main/overview', adminOnly, wrap(async (req, res) => {
     const { from, to } = req.query;
     if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
@@ -353,7 +353,7 @@ module.exports = function mountTeam(app, api, deps) {
     if (!isDay(from) || !isDay(to) || from > to || (Date.parse(to) - Date.parse(from)) / 864e5 > 366) return res.status(400).json({ error: 'Pick a valid period (at most one year).' });
     const users = await db.allUsers();
     const out = [];
-    // Orders from adsbox.biz for the period (live), counted per account through its clients' Pages.
+    // Orders for the period (Boost Desk's own count), per account through its clients' Pages.
     const given = null; // kept daily counts (see orders.js)
     for (const u of users) {
       const d = await sync.dashboard(u.fb_id, from, to);

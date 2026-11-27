@@ -183,7 +183,7 @@
   <section id="tab-adaccts" class="wrap" hidden>
     <div class="bhead">
       <div><h1>Ad accounts</h1><div class="hint">Every ad account of every team — status, spend, balance and who syncs it.</div></div>
-      <div class="bh-r"><span class="hint" id="aaUpdated"></span><button type="button" class="ghost sm" id="aaRefresh">↻ Refresh from Facebook</button><button type="button" class="sm primary" id="aaAddBtn" hidden>+ Add ad account</button></div>
+      <div class="bh-r"><div class="seg" id="aaView" role="group" aria-label="View"><button type="button" data-v="cards" aria-pressed="true">Cards</button><button type="button" data-v="table" aria-pressed="false">Table</button></div><span class="hint" id="aaUpdated"></span><button type="button" class="ghost sm" id="aaRefresh">↻ Refresh from Facebook</button><button type="button" class="sm primary" id="aaAddBtn" hidden>+ Add ad account</button></div>
     </div>
     <form class="aa-add" id="aaAdd" hidden>
       <div class="aa-add-h"><b>Add an ad account</b><span class="hint">Boost Desk checks it with that person's Facebook login. They need access to it in Business Manager first.</span></div>
@@ -199,6 +199,10 @@
         <div class="clist" id="aaList" role="listbox" aria-label="Ad accounts"></div>
       </aside>
       <div class="cdetail" id="aaDetail"></div>
+    </div>
+    <div id="aaTableWrap" hidden>
+      <div class="aat-bar"><input type="search" id="aaTSearch" placeholder="Search account, ID, business, person or Page" aria-label="Search ad accounts"><div class="seg bfilter" id="aaTFilter" role="group" aria-label="Show"><button type="button" data-f="all">All</button><button type="button" data-f="ok">Active</button><button type="button" data-f="bad">Problems</button><button type="button" data-f="off">Off</button><button type="button" data-f="old">Old</button></div><span class="spacer"></span><span class="hint" id="aaTCount"></span><button type="button" class="ghost sm" id="aaTCsv">⬇ CSV</button></div>
+      <div class="tablewrap"><table class="dtable aat" id="aaTable"><thead id="aaTHead"></thead><tbody id="aaTBody"></tbody><tfoot id="aaTFoot"></tfoot></table></div>
     </div>
   </section>
 

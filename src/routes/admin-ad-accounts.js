@@ -54,6 +54,7 @@ module.exports = function mountAdminAdAccounts(app, api, deps) {
       if (r.dailyLimit > 0) a.dailyLimit = r.dailyLimit;
       if (r.nextBillDate && r.nextBillDate !== '—') a.nextBillDate = r.nextBillDate;
       if (r.business && !a.business) a.business = r.business;
+      if (r.originalId) a.originalId = String(r.originalId).slice(0, 40);
       a.ext = { by: hit.by, at: r.at || null };
     }
     const teamId = {}; for (const t of teams) for (const m of t.members) teamId[m] = t.id;

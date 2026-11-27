@@ -2790,6 +2790,44 @@
 
   // ---------- Ad accounts (admins): every ad account of every team, like the Clients Board ----------
   let aaData = null, aaF = 'all', aaSortK = 'today', aaTeam = '', aaSel = null, aaPicked = false;
+  // Table view (all accounts of every PM in one sortable table, like the PM's Ad accounts page). Remembered per browser.
+  let aaView = 'cards', aaTSort = { k: 'today', dir: -1 };
+  try { aaView = localStorage.getItem('aaView') === 'table' ? 'table' : 'cards'; } catch (_) {}
+  const AAT_COLS = [
+    ['status', 'Status', (a) => (aaOk(a) ? 0 : aaOld(a) ? 2 : 1)], ['name', 'Account', (a) => String(a.name || '').toLowerCase()], ['team', 'Team · PM', (a) => String((a.people[0] || {}).team || (a.people[0] || {}).name || '').toLowerCase()],
+    ['orig', 'Original ID', (a) => a.originalId || ''], ['balance', 'Balance', (a) => Number(a.balance) || 0], ['threshold', 'Threshold', (a) => (a.threshold > 0 ? a.threshold : -1)],
+    ['remain', 'Remain threshold', (a) => (a.threshold > 0 ? a.threshold - (Number(a.balance) || 0) : 1e12)], ['limit', 'Limit', (a) => a.dailyLimit || 0], ['today', 'Today', (a) => Number(a.todaySpend) || 0],
+    ['week', '7 days', (a) => Number(a.week) || 0], ['total', 'Total spent', (a) => Number(a.amountSpent) || 0], ['card', 'Card', (a) => a.card || ''],
+  ];
+  const n2 = (v) => (v == null || v === '' ? '–' : (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  function renderAaTable(list) {
+    const col = AAT_COLS.find((c) => c[0] === aaTSort.k) || AAT_COLS[8], val = col[2];
+    const rows = [...list].sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * aaTSort.dir || a.name.localeCompare(b.name); });
+    $('aaTHead').innerHTML = '<tr>' + AAT_COLS.map(([k, t]) => `<th class="${['balance', 'threshold', 'remain', 'limit', 'today', 'week', 'total'].includes(k) ? 'r' : ''}"><button type="button" class="linkish aat-sort" data-aat="${k}">${t}${aaTSort.k === k ? (aaTSort.dir < 0 ? ' ↓' : ' ↑') : ''}</button></th>`).join('') + '</tr>';
+    $('aaTBody').innerHTML = rows.map((a) => {
+      const st = aaOk(a) ? '<span class="aat-st ok">● Active</span>' : aaOld(a) ? `<span class="aat-st old">● ${esc(a.status || 'Old')}</span>` : `<span class="aat-st bad">● ${esc(a.status || 'Problem')}</span>`;
+      const rem = a.threshold > 0 ? a.threshold - (Number(a.balance) || 0) : null, pct = a.threshold > 0 ? (Number(a.balance) || 0) / a.threshold : 0;
+      const ppl = a.people.map((p) => esc(p.name) + (p.enabled ? '' : ' <span class="hint">(off)</span>')).join(', ');
+      return `<tr data-aatrow="${esc(a.id)}"><td>${st}</td><td><b>${esc(a.name)}</b><div class="hint">${esc(String(a.id).replace(/^act_/, ''))}</div></td><td>${esc((a.people[0] || {}).team || '')}<div class="hint">${ppl}</div></td>
+        <td class="num">${esc(a.originalId || '–')}</td><td class="r num ${pct >= 0.9 ? 'is-danger' : pct >= 0.75 ? 'is-warn' : ''}">${n2(a.balance)}</td><td class="r num">${a.threshold > 0 ? n2(a.threshold) : '–'}${a.thresholdExt ? ' <span title="From the AdsCheck extension">🧩</span>' : ''}</td>
+        <td class="r num ${rem != null && rem <= 0 ? 'is-danger' : ''}">${rem != null ? n2(rem) : '–'}</td><td class="r num">${a.dailyLimit ? n2(a.dailyLimit) : '–'}</td><td class="r num">${a.todaySpend != null ? n2(a.todaySpend) : '–'}</td>
+        <td class="r num">${n2(a.week || 0)}</td><td class="r num">${n2(a.amountSpent)}</td><td>${esc(a.card || '–')}</td></tr>`;
+    }).join('') || `<tr><td colspan="${AAT_COLS.length}" class="hint">No account matches.</td></tr>`;
+    const sum = (f) => rows.reduce((t, a) => t + (Number(f(a)) || 0), 0);
+    $('aaTFoot').innerHTML = rows.length ? `<tr><td colspan="4"><b>${rows.length} accounts</b></td><td class="r num"><b>${n2(sum((a) => a.balance))}</b></td><td colspan="3"></td><td class="r num"><b>${n2(sum((a) => a.todaySpend))}</b></td><td class="r num"><b>${n2(sum((a) => a.week))}</b></td><td class="r num"><b>${n2(sum((a) => a.amountSpent))}</b></td><td></td></tr>` : '';
+    $('aaTCount').textContent = `${rows.length} of ${aaData.accounts.length}`;
+    document.querySelectorAll('#aaTFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === aaF)));
+    if ($('aaTSearch').value !== $('aaSearch').value && document.activeElement !== $('aaTSearch')) $('aaTSearch').value = $('aaSearch').value;
+    aaTRows = rows;
+  }
+  let aaTRows = [];
+  function aaCsv() {
+    const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+    const head = ['Status', 'Account', 'Account ID', 'Team', 'People', 'Original ID', 'Balance', 'Threshold', 'Remain threshold', 'Limit', 'Today', '7 days', 'Total spent', 'Card', 'Business'];
+    const lines = aaTRows.map((a) => [aaOk(a) ? 'Active' : a.status || '', a.name, String(a.id).replace(/^act_/, ''), (a.people[0] || {}).team || '', a.people.map((p) => p.name).join(' / '), a.originalId || '', a.balance, a.threshold > 0 ? a.threshold : '', a.threshold > 0 ? Math.round((a.threshold - (Number(a.balance) || 0)) * 100) / 100 : '', a.dailyLimit || '', a.todaySpend ?? '', a.week || 0, a.amountSpent ?? '', a.card || '', a.business || ''].map(q).join(','));
+    const blob = new Blob(['\ufeff' + [head.map(q).join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const u = URL.createObjectURL(blob), el = document.createElement('a'); el.href = u; el.download = `ad-accounts-${(aaData && aaData.today) || 'today'}.csv`; document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+  }
   // ---------- Monthly KPIs (like the GenZ-KPI sheet): target, auto result from daily tasks, score ----------
   const kpiNames = {}; // kpi id → name, for the chips on task rows
   const kpiState = {}; // host id → { person, month, data, timer }
@@ -3711,6 +3749,9 @@
     const srt = { today: (a, b) => (Number(b.todaySpend) || 0) - (Number(a.todaySpend) || 0), week: (a, b) => (b.week || 0) - (a.week || 0), balance: (a, b) => (b.balance || 0) - (a.balance || 0) }[aaSortK];
     const grp = (a) => (aaTeam ? aaTeam : a.tms[0]), tOrder = [...d.teams.map((t) => t.id), '__none'];
     list.sort((a, b) => (aaTeam ? 0 : tOrder.indexOf(grp(a)) - tOrder.indexOf(grp(b))) || (aaOk(a) - aaOk(b)) || srt(a, b) || a.name.localeCompare(b.name));
+    $('aaWrap').hidden = aaView === 'table'; $('aaTableWrap').hidden = aaView !== 'table';
+    document.querySelectorAll('#aaView button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === aaView)));
+    if (aaView === 'table') renderAaTable(list);
     if (aaSel && !list.some((a) => a.id === aaSel)) aaSel = null;
     if ((!aaSel || !aaPicked) && list.length && matchMedia('(min-width: 901px)').matches) aaSel = list[0].id;
     let last;
@@ -3771,10 +3812,16 @@
       </div>
     </div>`;
   }
+  $('aaTSearch').addEventListener('input', () => { $('aaSearch').value = $('aaTSearch').value; renderAdAccounts(); });
   $('tab-adaccts').addEventListener('click', (ev) => {
     const t = ev.target.closest('[data-aateam]'); if (t) { aaTeam = t.dataset.aateam; aaPicked = false; renderAdAccounts(); return; }
     const f = ev.target.closest('#aaFilter [data-f]'); if (f) { aaF = f.dataset.f; aaPicked = false; renderAdAccounts(); return; }
     const k = ev.target.closest('#aaSort [data-k]'); if (k) { aaSortK = k.dataset.k; renderAdAccounts(); return; }
+    const vw = ev.target.closest('#aaView [data-v]'); if (vw) { aaView = vw.dataset.v; try { localStorage.setItem('aaView', aaView); } catch (_) {} renderAdAccounts(); return; }
+    const ts = ev.target.closest('[data-aat]'); if (ts) { const k2 = ts.dataset.aat; aaTSort = aaTSort.k === k2 ? { k: k2, dir: -aaTSort.dir } : { k: k2, dir: ['name', 'team', 'orig', 'card', 'status', 'remain'].includes(k2) ? 1 : -1 }; renderAdAccounts(); return; }
+    const tf = ev.target.closest('#aaTFilter [data-f]'); if (tf) { aaF = tf.dataset.f; document.querySelectorAll('#aaFilter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === aaF))); renderAdAccounts(); return; }
+    const tr = ev.target.closest('[data-aatrow]'); if (tr) { aaSel = tr.dataset.aatrow; aaPicked = true; aaView = 'cards'; try { localStorage.setItem('aaView', aaView); } catch (_) {} renderAdAccounts(); return; }
+    if (ev.target.closest('#aaTCsv')) { aaCsv(); return; }
     const r = ev.target.closest('[data-aasel]'); if (r) { aaSel = r.dataset.aasel; aaPicked = true; $('aaWrap').classList.add('show-detail'); renderAdAccounts(); if (!matchMedia('(min-width: 901px)').matches) window.scrollTo({ top: $('aaWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); else if (!calm && $('aaDetail').animate) $('aaDetail').animate([{ opacity: 0, transform: 'translateX(10px)' }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.22,1,.36,1)' }); return; }
     if (ev.target.closest('#aaBack')) { $('aaWrap').classList.remove('show-detail'); window.scrollTo({ top: $('aaWrap').offsetTop - 70, behavior: calm ? 'auto' : 'smooth' }); }
   });

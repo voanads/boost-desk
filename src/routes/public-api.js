@@ -41,6 +41,7 @@ module.exports = function mountPublicApi(app, api, deps) {
       const business = String(it.business || it.business_name || it.businessName || prev.business || '').trim().slice(0, 120) || null;
       const role = String(it.role || prev.role || '').trim().slice(0, 40) || null;
       const nextBillDate = String(it.nextBillDate || it.pay_date || prev.nextBillDate || '').trim().slice(0, 40) || null;
+      const originalId = String(it.originalId || it.original_id || it.bm_id || prev.originalId || '').trim().slice(0, 40) || null;
       if (it.threshold === null && !card && dailyLimit == null) {
         delete map[id];
         continue;
@@ -53,6 +54,7 @@ module.exports = function mountPublicApi(app, api, deps) {
         business,
         role,
         nextBillDate,
+        originalId,
         at: new Date().toISOString()
       };
       stored++;

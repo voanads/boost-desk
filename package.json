@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node test/grouping.test.js && node test/orderDetect.test.js && node test/money.test.js && node test/tenant.test.js && node test/runOnce.test.js && node test/backup.test.js && node test/api.test.js && node test/ai.test.js && node test/invoiceRemind.test.js && node test/clientLink.test.js && node test/setup.test.js && node test/adDoctor.test.js && node test/competitors.test.js && node test/homeScreen.test.js",
+    "test": "node test/grouping.test.js && node test/orderDetect.test.js && node test/money.test.js && node test/tenant.test.js && node test/runOnce.test.js && node test/backup.test.js && node test/api.test.js && node test/ai.test.js && node test/invoiceRemind.test.js && node test/clientLink.test.js && node test/setup.test.js && node test/adDoctor.test.js && node test/competitors.test.js && node test/homeScreen.test.js && node test/escalation.test.js",
     "lint": "eslint --quiet ."
   },
   "dependencies": {

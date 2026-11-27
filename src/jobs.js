@@ -143,6 +143,9 @@ function start(deps = {}) {
   // AI: a plan for today for each active client, every morning at 06:40 (only when an AI key is set).
   H.register('AI daily plans', 1440, 'daily at 06:40');
   every('AI daily plans', '40 6 * * *', () => H.track('AI daily plans', () => require('./ai').morningPlans(log)).then((n) => { if (n) log('AI daily plans:', n); }).catch((e) => log('AI daily plans failed:', e.message)), opts);
+  // Catch-up: each hour 07:25–20:25, when today's plans were not made (missed run, restart, AI error); at most 3 tries a day.
+  H.register('AI daily plans catch-up', 60, 'hourly 07:25–20:25 when today\'s plans are missing');
+  every('AI daily plans catch-up', '25 7-20 * * *', () => H.track('AI daily plans catch-up', () => require('./ai').plansCatchUp(log)).then((n) => { if (n) log('AI daily plans (catch-up):', n); }).catch((e) => log('AI daily plans catch-up failed:', e.message)), opts);
   // AI: a weekly strategy for the clients each PM picked, Mondays at 07:00 (drafts for the team; nothing is sent to a client).
   H.register('AI weekly strategies', 10080, 'Mondays at 07:00');
   every('AI weekly strategies', '0 7 * * 1', () => H.track('AI weekly strategies', () => require('./ai').weeklyPlans(log)).then((n) => { if (n) log('AI weekly strategies:', n); }).catch((e) => log('AI weekly strategies failed:', e.message)), opts);

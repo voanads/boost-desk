@@ -66,11 +66,30 @@ module.exports = function mountAdminPanel(app, api, deps) {
       if (!pg.n) add('info', 'Orders', 'No Facebook Page is connected for orders', 'Orders → Connect Pages, so Boost Desk can count orders from Messenger and comments.', { kind: 'orders' });
       else if (pg.bad) add('warn', 'Orders', `${pg.bad} connected Page${pg.bad === 1 ? ' has' : 's have'} a problem`, 'Open Orders → Pages to see which one and connect it again.', { kind: 'orders' });
     }
+    let plansOk = '';
+    try { // AI daily plans (src/ai.js morningPlans): saved per run, so a restart does not hide a failed morning
+      const st = await require('../ai').plansStatus(), hr = Number(new Date().toLocaleString('en-GB', { timeZone: require('../config').tz || 'Asia/Phnom_Penh', hour: '2-digit', hour12: false }));
+      if ((await require('../ai').publicConfig()).hasKey) {
+        if ((!st || st.day !== today) && hr >= 7) add('warn', 'AI', 'AI daily plans have not run today', 'They run at 06:40; Boost Desk tries again every hour until 20:25.', null);
+        else if (st && st.day === today && st.failed && !st.made) add('warn', 'AI', `AI daily plans failed today (${st.failed} client${st.failed === 1 ? '' : 's'})`, `${st.firstError || 'Unknown error'} · tries ${st.tries || 1} of 3`, null);
+        else if (st && st.day === today && st.failed) add('info', 'AI', `AI daily plans: ${st.made} made, ${st.failed} failed`, st.firstError || '', null);
+        else if (st && st.day === today) plansOk = `AI daily plans made for ${st.made} client${st.made === 1 ? '' : 's'} today`;
+      }
+    } catch (_) {}
+    let escOk = '';
+    try { // urgent escalations go to the COO (src/escalation.js)
+      const esc = await require('../escalation').resolve();
+      if (!esc.coo.length) add('warn', 'Alerts', 'No COO set — urgent alerts go to the CEO / leaders', 'Give someone the COO role in Admin → Users.', null);
+      else if (esc.fallback) add('warn', 'Alerts', `${esc.coo.map((p) => p.name).join(', ')} (COO) has not linked Telegram`, 'Urgent alerts go to the other leaders until the COO links Telegram in Settings → Telegram account → Link my Telegram.', null);
+      else escOk = `Urgent alerts go to the COO (${esc.coo.filter((p) => p.chat).map((p) => p.name).join(', ')})`;
+    } catch (_) {}
     if (process.env.AUTO_SYNC === 'off') add('warn', 'Sync', 'Auto sync is switched off on the server', 'AUTO_SYNC=off is set in Railway.', null);
     const order = { bad: 0, warn: 1, info: 2 };
     items.sort((a, b) => order[a.level] - order[b.level]);
     const ok = [];
     if (telegram.hasBot()) ok.push('Telegram bot is set up');
+    if (escOk) ok.push(escOk);
+    if (plansOk) ok.push(plansOk);
     const running = status.filter((u) => u.enabled && u.synced && !u.expired).length;
     ok.push(`Auto sync running for ${running} of ${status.length} account(s)`);
     res.json({ items, ok, checkedAt: new Date().toISOString(), today });

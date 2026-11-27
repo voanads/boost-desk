@@ -1,0 +1,31 @@
+{
+  "id": "/mediabuyer",
+  "name": "Ads Box · Media buyer",
+  "short_name": "Ads Box MB",
+  "start_url": "/mediabuyer",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F6F7F9",
+  "theme_color": "#2563EB",
+  "lang": "km",
+  "icons": [
+    {
+      "src": "/assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

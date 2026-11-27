@@ -86,7 +86,6 @@ const { deepMerge } = require('./src/routes/clients')(null, api, { cleanClient, 
 require('./src/routes/client-link').mountApi(api, { wrap });
 require('./src/routes/ad-doctor')(api, { wrap }); // 🩺 Ad Doctor
 require('./src/routes/competitors')(api, { wrap }); // 🥊 Competitor research
-require('./src/routes/manager-mobile')(app, api, { wrap, adminOnly, canSeeAdmin }); // 📱 Manager on the phone: /admin/m
 // ---- Payments: service fees and invoices (src/routes/invoices.js) ----
 require('./src/routes/invoices')(null, api, { isDay, isFull, wrap });
 // ---- Live videos, live setups, Dashboard and Page names (src/routes/lives-dashboard.js) ----

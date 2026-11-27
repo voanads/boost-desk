@@ -24,6 +24,7 @@ async function keyConfig() {
   key = key || env;
   return { key, provider: providerOf(key), hint: c.keyHint || (env ? '…' + env.slice(-4) : ''), by: c.by || '', at: c.at || '' };
 }
+async function usedToday(owner) { return Number(await db.getUserSetting(owner, `aiUse:${sync.todayIn()}`, 0)) || 0; }
 async function publicConfig() { const c = await keyConfig(); return { hasKey: !!c.key, provider: c.provider, keyHint: c.hint, savedBy: c.by, savedAt: c.at, model: MODEL_FOR(c.provider), dailyLimit: DAILY_LIMIT, usage: await usageOf(sync.todayIn().slice(0, 7)) }; }
 
 // ---------- usage per month (Admin → Settings → AI advice) ----------
@@ -125,7 +126,7 @@ async function clientData(owner, clientId, from, to) {
   const scaled = sync.scalePages(pages.map((p) => ({ ...p })), spend);
   const oSpend = ordersBlock ? sync.orderSpend(scaled.map((p) => ({ spend: p.spend, orders: (ordersBlock.perPage[p.page] || 0) })), ord, spend) : spend;
   return {
-    client: { name: c.name, type: c.type, pages: c.pages || [] },
+    client: { name: c.name, type: c.type, pages: c.pages || [], pageProfile: await require('./pageProfile').forClient(owner, c.id) },
     period: { from, to, days, previous: `${pFrom} to ${pTo}` },
     totals: { spend, live: r2(liveT), post: r2(postT), lives: lives.length, daysWithSpend: daily.length, orders: ord, costPerOrder: ord ? r2(oSpend / ord) : null, spendOnPagesWithoutOrders: ord ? r2(spend - oSpend) : null, postResults: res, postResultType: resType, postCostPerResult: res ? r2(resSpend / res) : null },
     previous: prev ? { ...prev, orders: ordersBlock ? ordersBlock.previousPeriod : null, costPerOrder: prev && ordersBlock && ordersBlock.previousPeriod ? r2(prev.spend / ordersBlock.previousPeriod) : null } : null,
@@ -151,7 +152,7 @@ Rules:
 - With little data (few days or lives), say the evidence is thin and suggest a simple test.
 - Days marked as estimates can have too many orders — mention it if most days are estimates.
 - Days where spend is high but orders are low matter most — point them out by date.
-- Be concise and scannable: short headings, bullets, no intro, max about 250 words.`;
+- Be concise and scannable: short headings, bullets, no intro, max about 250 words.` + require('./pageProfile').RULE;
 
 // Google Gemini (AI Studio key).
 async function callGemini(key, system, messages, model = MODEL_FOR('gemini'), maxTokens = 2048) {
@@ -178,6 +179,7 @@ async function callGemini(key, system, messages, model = MODEL_FOR('gemini'), ma
   await noteUsage(model, Number(um.promptTokenCount) || 0, (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0));
   return { text, usage: um };
 }
+const noCredit = { at: null }; // set when Anthropic says the balance is empty; cleared by the next good answer
 async function callClaude(key, system, messages, maxTokens = 1200) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
@@ -193,8 +195,10 @@ async function callClaude(key, system, messages, maxTokens = 1200) {
   if (res.status === 401) throw Object.assign(new Error('The Anthropic API key was refused — check it in Admin → Settings.'), { status: 400 });
   if (res.status === 429) throw Object.assign(new Error('The AI is busy or the account hit its limit. Try again in a minute.'), { status: 429 });
   const msg = (body.error && body.error.message) || '';
+  if (/credit balance is too low/i.test(msg)) { noCredit.at = new Date().toISOString(); }
   if (/credit balance is too low/i.test(msg)) throw Object.assign(new Error('The Anthropic account has no credit left. The owner adds credit at console.anthropic.com → Plans & Billing, then AI advice works again.'), { status: 402 });
   if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
+  noCredit.at = null;
   const u = body.usage || {};
   await noteUsage(MODEL_FOR('claude'), (Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0), Number(u.output_tokens) || 0);
   // A safety decline comes back as HTTP 200 with stop_reason "refusal": say so instead of showing an empty answer.
@@ -239,7 +243,7 @@ Format exactly:
 ## ធ្វើភ្លាមៗ / Do now
 Three numbered actions for today, most money saved first.
 
-Short lines. No intro, no closing.`;
+Short lines. No intro, no closing.` + require('./pageProfile').RULE;
 async function adDoctorAI(owner, payload, pics = [], { lang = 'km', fresh = false } = {}) {
   const cfg = await keyConfig();
   if (!cfg.key) throw Object.assign(new Error('AI is not set up yet. The app owner adds a Claude or Gemini API key in Admin → Settings.'), { status: 400, notSetUp: true });
@@ -300,7 +304,7 @@ Then one section per Facebook Page that had spend, biggest first:
 ## Tasks
 - [ ] 3 to 6 short, concrete tasks for today, each starting with a verb, tied to a Page and a number.
 
-Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if orders are missing say so and judge by messages and spend per live; be short — max about 220 words.`;
+Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if orders are missing say so and judge by messages and spend per live; be short — max about 220 words.` + require('./pageProfile').RULE;
 
 async function dailyPlan(owner, clientId, { lang = 'en', force = false } = {}) {
   const cfg = await keyConfig();
@@ -409,7 +413,7 @@ One or two lines: spend, orders, cost per order, and the change against the week
 ## This week
 - [ ] exactly 3 concrete actions, each starting with a verb, tied to a Page, a live time, a post or a budget and to a number.
 
-Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if there are no orders data say so once and judge by messages and spend per live; keep Page names, numbers and $ unchanged in both languages; polite and plain, no blame; each version at most about 150 words.`;
+Rules: use only the numbers given, never invent; money as $ with 2 decimals; cost per order = spend ÷ orders (lower is better); if there are no orders data say so once and judge by messages and spend per live; keep Page names, numbers and $ unchanged in both languages; polite and plain, no blame; each version at most about 150 words.` + require('./pageProfile').RULE;
 const weeklyPick = async (owner) => { const v = await db.getUserSetting(owner, 'aiWeekly', []); return (Array.isArray(v) ? v : []).map(Number).filter(Number.isFinite); };
 async function setWeeklyPick(owner, clientId, on) {
   const cur = new Set(await weeklyPick(owner)); if (on) cur.add(Number(clientId)); else cur.delete(Number(clientId));
@@ -533,4 +537,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, plansCatchUp, plansStatus, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };
+module.exports = { noCredit, usedToday, DAILY_LIMIT, publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, plansCatchUp, plansStatus, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

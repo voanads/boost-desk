@@ -42,7 +42,7 @@ Format exactly:
 ## ផេកយើងគួរធ្វើ / What our Page should do
 3–5 numbered, concrete actions (offer, price display, picture or video style, caption, live time, ad audience or budget), the most important first.
 
-Short lines. No intro, no closing.`;
+Short lines. No intro, no closing.` + require('./pageProfile').RULE;
 
 const toImg = (u) => { const m = String(u).match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/); return m ? { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } } : null; };
 async function analyze(user, clientId, { lang = 'km' } = {}) {

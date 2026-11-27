@@ -7,7 +7,7 @@ const sync = require('../sync');
 
 module.exports = function mountOrdersPages(app, api, deps) {
   const { adminOnly, canSeeAdmin, isDay, ownerOnly, wrap } = deps;
-  api.get('/ai/status', wrap(async (req, res) => { const c = await require('../ai').publicConfig(); res.json({ hasKey: c.hasKey }); }));
+  api.get('/ai/status', wrap(async (req, res) => { const ai = require('../ai'), c = await ai.publicConfig(); res.json({ hasKey: c.hasKey, used: await ai.usedToday(req.user.fb_id), limit: ai.DAILY_LIMIT, noCredit: c.provider !== 'gemini' && !!ai.noCredit.at }); }));
   api.put('/admin/ai', ownerOnly, wrap(async (req, res) => res.json(await require('../ai').saveKey((req.body || {}).key === null ? null : String((req.body || {}).key || ''), req.user.name))));
   // Boost Desk's own order counting: connected Pages.
   api.get('/orders/pages', wrap(async (req, res) => { res.json(await pageOrders.list(req.user.fb_id, await canSeeAdmin(req.user.fb_id))); }));

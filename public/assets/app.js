@@ -1244,7 +1244,7 @@
     const acts = `${d.list.length < 5 ? '<button type="button" class="sm ghost" data-cmpadd>+ បន្ថែមគូប្រកួត</button>' : ''}<button type="button" class="sm" data-cmpsave ${st.dirty && !st.saving ? '' : 'disabled'}>${st.saving ? 'Saving…' : st.dirty ? 'Save' : 'Saved'}</button>`;
     const an = d.analysis;
     return `<section class="cd-sec compsec" id="cdCompSec">${head(acts)}
-      <div class="cmp-card ours"><b>ផេកយើង · ${esc(c.name)}</b><textarea rows="2" maxlength="1500" placeholder="តម្លៃ និងការផ្ដល់ជូនរបស់យើង (ស្រេចចិត្ត) — លេខចំណាយ/Order 30 ថ្ងៃ AI យកពី Boost Desk ដោយខ្លួនឯង" data-cmpf="ours|note">${esc(d.ours.note)}</textarea>${pics(d.ours.images, 'ours')}</div>
+      <div class="cmp-card ours"><b>ផេកយើង · ${esc(c.name)}</b><textarea rows="2" maxlength="1500" placeholder="អ្វីដែលអ្នកចង់ប្រៀបធៀបបន្ថែម (ស្រេចចិត្ត) — AI យកព័ត៌មានផេក និងលេខចំណាយ/Order 30 ថ្ងៃ ដោយខ្លួនឯង" data-cmpf="ours|note">${esc(d.ours.note)}</textarea>${pics(d.ours.images, 'ours')}</div>
       ${d.list.length ? d.list.map(card).join('') : '<div class="hint">មិនទាន់មានគូប្រកួត។ ចុច <b>+ បន្ថែមគូប្រកួត</b> ហើយដាក់ link ផេក, អ្វីដែលអ្នកឃើញ (តម្លៃ, promotion…) និង screenshot ad ឬ post របស់គេ។</div>'}
       ${st.err ? `<div class="note">${esc(st.err)}</div>` : ''}
       ${d.list.length ? `<div class="doc-ai"><div class="cd-sec-h"><h4>✨ AI៖ ចំណុចខ្លាំង/ខ្សោយ និងអ្វីដែលផេកយើងគួរធ្វើ</h4><span class="spacer"></span>${aiReady === false ? '' : `<button type="button" class="sm ${an ? 'ghost' : 'primary'}" data-cmpai ${ai.loading ? 'disabled' : ''}>${an ? '↻ វិភាគម្ដងទៀត' : 'វិភាគ'}</button>`}</div>
@@ -1259,7 +1259,7 @@
     const st = cdComp[cid]; if (!st) return;
     if (st.dirty && !(await cdCompSave(cid))) return;
     st.ai = { loading: true }; renderClientDetail();
-    try { const r = await api(`/clients/${cid}/competitors/ai`, { method: 'POST', body: { lang: 'km' } }); st.data.analysis = r.analysis; st.ai = {}; } catch (e) { st.ai = { err: e.message }; }
+    try { const r = await api(`/clients/${cid}/competitors/ai`, { method: 'POST', body: { lang: aiLang } }); st.data.analysis = r.analysis; st.ai = {}; } catch (e) { st.ai = { err: e.message }; }
     renderClientDetail();
   }
   function cdCompWire(box, c) {
@@ -1282,18 +1282,92 @@
   async function cdRunDocAi(cid) {
     const st = cdDoc[cid]; if (!st || !st.data) return; const fresh = !!(st.ai && st.ai.text);
     st.ai = { loading: true }; renderClientDetail();
-    try { const r = await api(`/clients/${cid}/ad-doctor/ai`, { method: 'POST', body: { days: st.days, lang: 'km', fresh } }); st.ai = { text: r.text, cached: r.cached }; } catch (e) { st.ai = { err: e.message }; }
+    try { const r = await api(`/clients/${cid}/ad-doctor/ai`, { method: 'POST', body: { days: st.days, lang: aiLang, fresh } }); st.ai = { text: r.text, cached: r.cached }; } catch (e) { st.ai = { err: e.message }; }
     renderClientDetail();
+  }
+  // ✨ AI tab (redesign 27 Nov): one bar — AI status, one language switch, five parts — and only the picked part below.
+  let cAiTab = (() => { try { return localStorage.getItem('cAiTab') || 'advice'; } catch (_) { return 'advice'; } })();
+  let aiStat = null, aiStatAt = 0;
+  const loadAiStat = (force) => { if (!force && Date.now() - aiStatAt < 60e3) return; aiStatAt = Date.now(); api('/ai/status').then((x) => { aiStat = x; aiReady = !!x.hasKey; if (cTab === 'ai' && $('cdAiBar')) renderClientDetail(); }).catch(() => {}); };
+  const cdProf = {};
+  const PF = [
+    ['sells', 'ផេកលក់អ្វី', 'input', 'ឧ. អាវឈុតនារី ក្រណាត់ត្រជាក់', 300],
+    ['price', 'តម្លៃ', 'input', 'ឧ. $8 / ឈុត · 2 ឈុត $15', 200],
+    ['points', 'ចំណុចពិសេសរបស់ផេក', 'textarea', 'ហេតុអ្វីភ្ញៀវទិញពីយើង៖ គុណភាព, ដឹកលឿន, សាកមុនបង់, ប្ដូរបាន, ម៉ូដែលពិត…', 1500],
+    ['audience', 'អ្នកទិញភាគច្រើន', 'input', 'ឧ. នារី 22–40 ឆ្នាំ ភ្នំពេញ និងខេត្ត, បុគ្គលិកការិយាល័យ', 600],
+    ['offer', 'Promotion · ដឹកជញ្ជូន · Live', 'textarea', 'ឧ. ដឹកឥតគិតថ្លៃពី 2 ឈុត · Live រាល់យប់ 19:00 · ប្ដូរទំហំបាន 7 ថ្ងៃ', 800],
+    ['avoid', 'កុំនិយាយ / កុំធ្វើ', 'input', 'ឧ. កុំចុះតម្លៃ · កុំប្រៀបធៀបឈ្មោះផេកផ្សេង', 600],
+    ['notes', 'ប្រវត្តិ និងកំណត់ចំណាំផ្សេងៗ', 'textarea', 'ម្ចាស់ផេកចូលចិត្តអ្វី, budget ដែលព្រមព្រៀង, អ្វីដែលធ្លាប់ដើរ/មិនដើរ…', 2000],
+  ];
+  const profFilled = (d) => !!d && PF.some(([k]) => d[k]);
+  function ensureProf(c) {
+    if (cdProf[c.id]) return cdProf[c.id];
+    cdProf[c.id] = { loading: true };
+    api(`/clients/${c.id}/profile`).then((d) => { cdProf[c.id] = { data: d }; }).catch((e) => { cdProf[c.id] = { err: e.message }; }).finally(() => { if (cSel === c.id && cTab === 'ai') renderClientDetail(); });
+    return cdProf[c.id];
+  }
+  function cdProfSection(c) {
+    const st = ensureProf(c);
+    const head = (acts) => `<div class="cd-sec-h"><h4>📄 ព័ត៌មានផេក</h4><span class="hint">AI ប្រើព័ត៌មាននេះក្នុងដំបូន្មាន, ផែនការថ្ងៃ, Ad Doctor, គូប្រកួត និងយុទ្ធសាស្ត្រសប្តាហ៍</span><span class="spacer"></span>${acts || ''}</div>`;
+    if (st.loading) return `<section class="cd-sec pfsec">${head()}<div class="sk"></div></section>`;
+    if (st.err && !st.data) return `<section class="cd-sec pfsec">${head()}<div class="note">${esc(st.err)}</div></section>`;
+    const d = st.data;
+    const fld = ([k, label, kind, ph, max]) => `<label class="pf-f${kind === 'textarea' ? ' wide' : ''}"><span>${label}</span>${kind === 'textarea' ? `<textarea rows="3" maxlength="${max}" placeholder="${esc(ph)}" data-pff="${k}">${esc(d[k] || '')}</textarea>` : `<input type="text" maxlength="${max}" placeholder="${esc(ph)}" value="${esc(d[k] || '')}" data-pff="${k}">`}</label>`;
+    const acts = `<button type="button" class="sm primary" data-pfsave ${st.dirty && !st.saving ? '' : 'disabled'}>${st.saving ? 'Saving…' : st.dirty ? 'រក្សាទុក' : 'រក្សាទុករួច'}</button>`;
+    return `<section class="cd-sec pfsec" id="cdPfSec">${head(acts)}
+      ${profFilled(d) ? '' : '<div class="pf-tip">សរសេរម្ដងគត់ — AI នឹងសរសេរ hook, caption និងដំបូន្មានសម្រាប់ផេកនេះពិតៗ ជំនួសការទាយ។ មិនចាំបាច់បំពេញគ្រប់ប្រអប់ទេ។</div>'}
+      <div class="pf-grid">${PF.map(fld).join('')}</div>
+      ${st.err ? `<div class="note">${esc(st.err)}</div>` : ''}
+      <div class="hint">${d.at ? `កែចុងក្រោយ ${esc(ago(d.at))}${d.by ? ' · ' + esc(d.by) : ''}` : 'មិនទាន់មាន'} · ក្រុមរបស់អ្នកឃើញ និងកែបាន</div></section>`;
+  }
+  async function cdProfSave(cid) {
+    const st = cdProf[cid]; if (!st || !st.data) return false; st.saving = true; st.err = ''; renderClientDetail();
+    try { st.data = await api(`/clients/${cid}/profile`, { method: 'PUT', body: st.data }); st.dirty = false; return true; }
+    catch (e) { st.err = e.message; return false; } finally { st.saving = false; renderClientDetail(); }
+  }
+  function cdProfWire(box, c) {
+    const st = cdProf[c.id]; if (!st || !st.data) return;
+    box.querySelectorAll('[data-pff]').forEach((el) => el.oninput = () => { st.data[el.dataset.pff] = el.value; if (!st.dirty) { st.dirty = true; const b = box.querySelector('[data-pfsave]'); if (b) { b.disabled = false; b.textContent = 'រក្សាទុក'; } } });
+    box.querySelectorAll('[data-pfsave]').forEach((b) => b.onclick = async () => { if (await cdProfSave(c.id)) successBadge('Page profile saved — AI uses it from now on'); });
+  }
+  function cdAiPane(c) {
+    if (me && me.aiOn === false) return '<section class="cd-sec"><div class="hint">AI is switched off in Settings.</div></section>';
+    loadAiStat(); wkLang = aiLang; const pf = ensureProf(c), pfOk = pf.data ? profFilled(pf.data) : true;
+    const doc = cdDoc[c.id] && cdDoc[c.id].data, weak = doc ? doc.ads.filter((a) => a.level !== 'ok').length : 0;
+    const comp = cdComp[c.id] && cdComp[c.id].data, nComp = comp ? comp.list.length : 0;
+    const TABS = [
+      ['advice', '✨', 'ដំបូន្មាន', 'Advice', ''],
+      ['ads', '🩺', 'Ad Doctor', 'ad ខ្សោយ', weak ? `<span class="aib-n bad">${weak}</span>` : ''],
+      ['comp', '🥊', 'គូប្រកួត', 'Competitors', nComp ? `<span class="aib-n">${nComp}</span>` : ''],
+      ['week', '📅', 'សប្តាហ៍', 'Weekly', ''],
+      ['profile', '📄', 'ព័ត៌មានផេក', 'Page profile', pf.data && !pfOk ? '<span class="aib-n warn" title="មិនទាន់បំពេញ">!</span>' : ''],
+    ];
+    if (!TABS.some((t) => t[0] === cAiTab)) cAiTab = 'advice';
+    const used = aiStat && aiStat.used != null ? aiStat.used : null, lim = (aiStat && aiStat.limit) || 60;
+    const chip = aiReady === false ? '<span class="aib-chip off">AI មិនទាន់ដំឡើង</span>' : aiStat && aiStat.noCredit ? '<span class="aib-chip bad">AI អស់ credit</span>' : used != null ? `<span class="aib-chip${used >= lim ? ' bad' : used >= lim * 0.8 ? ' warn' : ''}" title="AI requests you used today">AI ${used} / ${lim} ថ្ងៃនេះ</span>` : '';
+    const lang = `<div class="seg ai-lang" role="group" aria-label="ភាសា AI"><button type="button" data-ailangall="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button><button type="button" data-ailangall="en" aria-pressed="${aiLang === 'en'}">English</button></div>`;
+    const warn = aiStat && aiStat.noCredit ? `<div class="aib-warn" role="alert"><b>AI អស់ credit</b><span>${me && me.isOwner ? 'បន្ថែម credit នៅ console.anthropic.com → Plans &amp; Billing ហើយ AI ដើរវិញភ្លាម។' : 'ប្រាប់ម្ចាស់ app ឱ្យបន្ថែម credit។'} Ad Doctor (ពិនិត្យដោយច្បាប់) និងព័ត៌មានផេក នៅប្រើបាន។</span></div>` : '';
+    const nudge = pf.data && !pfOk && cAiTab !== 'profile' ? `<div class="aib-nudge"><span>📄 មិនទាន់មានព័ត៌មានផេក <b>${esc(c.name)}</b> — AI មិនដឹងថាផេកលក់អ្វី តម្លៃប៉ុន្មាន ឬចំណុចពិសេសអ្វីទេ។</span><button type="button" class="sm" data-aitab="profile">បំពេញឥឡូវ</button></div>` : '';
+    const part = { advice: () => cdAiSection(c), ads: () => cdDocSection(c), comp: () => cdCompSection(c), week: () => cdWeeklySection(c), profile: () => cdProfSection(c) }[cAiTab]();
+    return `<section class="aib" id="cdAiBar"><div class="aib-h"><div class="aib-t"><b>AI របស់ ${esc(c.name)}</b><span class="hint">ផ្អែកលើលេខពិតក្នុង Boost Desk${pfOk && pf.data ? ' + ព័ត៌មានផេក' : ''}</span></div><span class="spacer"></span>${chip}${lang}</div>
+      ${warn}
+      <div class="aib-tabs" role="group" aria-label="AI parts">${TABS.map(([k, ic, km, en, badge]) => `<button type="button" data-aitab="${k}" aria-pressed="${cAiTab === k}"><span aria-hidden="true">${ic}</span><span class="aib-km">${km}</span><small>${en}</small>${badge}</button>`).join('')}</div>
+      ${nudge}</section>
+      <div class="aib-part">${part}</div>`;
+  }
+  function wireAiPane(box, c) {
+    box.querySelectorAll('[data-aitab]').forEach((b) => b.onclick = () => { cAiTab = b.dataset.aitab; try { localStorage.setItem('cAiTab', cAiTab); } catch (_) {} renderClientDetail(); });
+    box.querySelectorAll('[data-ailangall]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); const had = !!cdAi[cdAiKey(c.id)]; aiLang = wkLang = b.dataset.ailangall; try { localStorage.setItem('aiLang', aiLang); localStorage.setItem('wkLang', wkLang); } catch (_) {} if (cAiTab === 'advice' && had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });
+    cdProfWire(box, c);
   }
   function cdAiSection(c) {
     if (me && me.aiOn === false) return ''; // Settings → AI advice off
     const k = cdAiKey(c.id), st = k ? cdAi[k] : null;
-    const lang = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-cdlang="en" aria-pressed="${aiLang === 'en'}">English</button><button type="button" data-cdlang="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button></div>`;
     const body = !st ? `<div class="hint">${aiReady === false ? (me && me.isOwner ? 'Add a Gemini or Claude key in <b>Admin → Settings → AI advice</b> to get advice here.' : 'AI advice is not set up yet — ask the app owner.') : 'What to change for this client, from its spend, lives, posts and orders in this period.'}</div>`
       : st.loading ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading this client\'s numbers…</div>'
       : st.err ? `<div class="note">${esc(st.err)}</div>` : `<div class="ai-text">${mdLite(st.text)}</div>`;
-    return `<section class="cd-sec aisec" id="cdAiSec"><div class="cd-sec-h"><h4>✨ AI advice</h4><span class="hint">${esc(cdPerLabel())}${st && st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span>${lang}<button type="button" class="${st ? 'ghost ' : ''}sm" id="cdAiGo" ${st && st.loading ? 'disabled' : ''}>${st ? '↻ New answer' : '✨ Get advice'}</button></div>${body}
-      ${st && !st.loading && !st.err ? `<form class="ai-ask" id="cdAiAsk"><input type="text" maxlength="300" placeholder="Ask about this client… e.g. Which live time works best?" aria-label="Ask about this client"><button type="submit" class="sm">Ask</button></form>` : ''}</section>`;
+    return `<section class="cd-sec aisec" id="cdAiSec"><div class="cd-sec-h"><h4>✨ ដំបូន្មាន AI</h4><span class="hint">${esc(cdPerLabel())}${st && st.cached ? ' · saved answer' : ''}</span><span class="spacer"></span><button type="button" class="${st ? 'ghost ' : 'primary '}sm" id="cdAiGo" ${st && st.loading ? 'disabled' : ''}>${st ? '↻ New answer' : '✨ Get advice'}</button></div>${body}
+      ${aiReady !== false && !(st && st.loading) ? `<form class="ai-ask" id="cdAiAsk"><input type="text" maxlength="300" placeholder="Ask about this client… e.g. Which live time works best?" aria-label="Ask about this client"><button type="submit" class="sm">Ask</button></form>` : ''}</section>`;
   }
   // 📅 Weekly strategy: for clients the PM picks; a draft for the team in Khmer and English; the PM may send it to the client.
   const wkDay = (iso) => { try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }); } catch (_) { return iso; } };
@@ -1329,7 +1403,6 @@
     const st = cdWk[c.id];
     if (!st) { cdWk[c.id] = { loading: true }; api(`/clients/${c.id}/strategy`).then((d) => { cdWk[c.id] = { d }; }).catch((e) => { cdWk[c.id] = { err: e.message }; }).finally(() => { const sec = $('cdWkSec'); if (sec) { sec.outerHTML = cdWeeklySection(c); wireWeekly(c); } }); }
     const cur = cdWk[c.id], d = cur.d, w = d && d.weekly, pm = d && d.canSend;
-    const langSeg = `<div class="seg ai-lang" role="group" aria-label="Language"><button type="button" data-wklang="km" aria-pressed="${wkLang === 'km'}">ខ្មែរ</button><button type="button" data-wklang="en" aria-pressed="${wkLang === 'en'}">English</button></div>`;
     const txt = w ? (wkLang === 'en' ? w.en : w.km) || w.km : '';
     const body = cur.loading ? '<div class="sk"></div>' : cur.err ? `<div class="note">${esc(cur.err)}</div>`
       : cur.busy ? '<div class="ai-load"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span> Reading last week\'s numbers…</div>'
@@ -1338,7 +1411,7 @@
       : `<div class="ai-text">${mdLite(wkLang === 'en' ? txt : txt.replace(/^##\s*Last week\s*$/mi, '## សប្ដាហ៍មុន').replace(/^##\s*What worked\s*$/mi, '## អ្វីដែលដំណើរការល្អ').replace(/^##\s*What to change\s*$/mi, '## អ្វីដែលគួរប្ដូរ').replace(/^##\s*This week\s*$/mi, '## សប្ដាហ៍នេះ'))}</div>
          <div class="wk-meta hint">${esc(wkDay(w.from))} – ${esc(wkDay(w.to))}${w.edited ? ' · edited' : ''} · ${w.sent ? `<span class="is-ok">sent to the client ${esc(new Date(w.sent.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))} by ${esc(w.sent.by)}</span>` : 'draft — only your team sees it'}${w.tasksAt ? ' · actions added to Clients Task' : ''}</div>`;
     const acts = !w || cur.edit || cur.busy || w.empty || !pm ? '' : `<div class="wk-acts"><button type="button" class="sm" id="wkEditBtn">Edit</button><button type="button" class="sm" id="wkTasks" ${w.tasksAt ? 'disabled' : ''}>Add the 3 actions to Clients Task</button><span class="spacer"></span><button type="button" class="sm primary" id="wkSend">Send to the client…</button></div>`;
-    return `<section class="cd-sec aisec" id="cdWkSec"><div class="cd-sec-h"><h4>📅 Weekly strategy</h4>${d && pm ? `<label class="switch" title="Write one every Monday for this client"><input type="checkbox" id="wkOn" aria-label="Write a weekly strategy every Monday" ${d.on ? 'checked' : ''}><i></i><b class="wk-lbl">Every Monday</b></label>` : d && d.on ? '<span class="pill ok">Every Monday</span>' : ''}<span class="spacer"></span>${w && !cur.edit ? langSeg : ''}${d && pm && !cur.busy && !cur.edit ? `<button type="button" class="${w ? 'ghost ' : ''}sm" id="wkRun">${w ? '↻ Write again' : '✨ Write now'}</button>` : ''}</div>${body}${acts}</section>`;
+    return `<section class="cd-sec aisec" id="cdWkSec"><div class="cd-sec-h"><h4>📅 Weekly strategy</h4>${d && pm ? `<label class="switch" title="Write one every Monday for this client"><input type="checkbox" id="wkOn" aria-label="Write a weekly strategy every Monday" ${d.on ? 'checked' : ''}><i></i><b class="wk-lbl">Every Monday</b></label>` : d && d.on ? '<span class="pill ok">Every Monday</span>' : ''}<span class="spacer"></span>${d && pm && !cur.busy && !cur.edit ? `<button type="button" class="${w ? 'ghost ' : ''}sm" id="wkRun">${w ? '↻ Write again' : '✨ Write now'}</button>` : ''}</div>${body}${acts}</section>`;
   }
   function wireWeekly(c) {
     const st = cdWk[c.id]; if (!st || !st.d) return;
@@ -1372,6 +1445,7 @@
     cdAi[k] = { loading: true }; renderClientDetail();
     try { const x = await api(`/ai/client/${cid}`, { method: 'POST', body: { from: r[0], to: r[1], lang: aiLang, fresh, question } }); cdAi[k] = { text: x.text, cached: x.cached }; }
     catch (e) { cdAi[k] = { err: e.message }; }
+    aiStatAt = 0; loadAiStat();
     renderClientDetail();
   }
   function cdPagesSection(c) {
@@ -1434,7 +1508,7 @@
           <div class="cd-acts"><button type="button" class="sm primary" id="cdSendBtn" ${c.archived ? 'disabled' : ''}>✈ Send report</button><button type="button" class="sm" id="cdInvBtn">Invoice</button>${me && !me.buyer ? '<button type="button" class="sm" id="cdLinkBtn" title="A read-only page with this client\'s own results, to share with the client">🔗 Client link</button>' : ''}<button type="button" class="sm cd-setbtn" id="cdSetBtn" aria-expanded="${cSetOpen}" aria-controls="cdSettings" title="Client settings">⚙ Edit</button></div></div></div>
       <section class="cd-settings" id="cdSettings" ${cSetOpen ? '' : 'hidden'}><div class="cd-sec-h"><h4>⚙ Client settings</h4><span class="spacer"></span>${me && !me.buyer && clients.length > 1 ? '<button type="button" class="ghost sm" id="cdMergeBtn">Merge a duplicate…</button>' : ''}<button type="button" class="ghost sm" id="cdSetClose" aria-label="Close settings">✕</button></div><div id="cdForm"></div></section>
       ${(() => { const k = String(c.name || '').trim().toLowerCase(), n = clients.filter((x) => x.id !== c.id && String(x.name || '').trim().toLowerCase() === k).length; return n && me && !me.buyer ? `<div class="note cd-dup">${n === 1 ? 'Another client has' : n + ' other clients have'} the same name “${esc(c.name)}”. <button type="button" class="linkbtn" id="cdDupBtn">Merge them into this one…</button></div>` : ''; })()}
-      <div class="cd-tabrow"><div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">Today<small>Status · Boost plan · Tasks</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>Advice · Weekly strategy</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">History and settings<small>Notes · Reports · Settings</small></button></div><div class="cd-per"${cTab === 'today' ? '' : ' hidden'}><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div></div>
+      <div class="cd-tabrow"><div class="seg cd-tabs" id="cdTabs" role="group" aria-label="Client page parts"><button type="button" data-cdtab="today" aria-pressed="${cTab === 'today'}">Today<small>Status · Boost plan · Tasks</small></button><button type="button" data-cdtab="ai" aria-pressed="${cTab === 'ai'}">AI<small>Advice · Ads · Competitors · Weekly</small></button><button type="button" data-cdtab="more" aria-pressed="${cTab === 'more'}">History and settings<small>Notes · Reports · Settings</small></button></div><div class="cd-per"${cTab === 'today' ? '' : ' hidden'}><div class="seg" id="cdPer" role="group" aria-label="Period"><button type="button" data-per="day" aria-pressed="${cPer === 'day'}">Today</button><button type="button" data-per="week" aria-pressed="${cPer === 'week'}">7 days</button><button type="button" data-per="month" aria-pressed="${cPer === 'month'}">This month</button></div><span class="hint">${pd ? esc(nice(pd.from).replace(/ \d{4}$/, '')) + (pd.from === pd.to ? '' : ' – ' + esc(nice(pd.to).replace(/ \d{4}$/, ''))) : esc(nice(monthRange()[0]).replace(/ \d{4}$/, '')) + ' – today'}${cPer !== 'month' && !pd ? ' · loading…' : ''}</span></div></div>
       <div class="cd-pane" data-cdpane="today"${cTab === 'today' ? '' : ' hidden'}>
       <div class="cd-top2">${cdStatusSection(c)}${workSection(c)}</div>
       <div class="cd-stats">
@@ -1447,10 +1521,7 @@
       ${planStrip(c)}
       </div>
       <div class="cd-pane" data-cdpane="ai"${cTab === 'ai' ? '' : ' hidden'}>
-          ${cdDocSection(c)}
-          ${cdCompSection(c)}
-          ${cdAiSection(c)}
-          ${cdWeeklySection(c)}
+          ${cdAiPane(c)}
       </div>
       <div class="cd-pane" data-cdpane="more"${cTab === 'more' ? '' : ' hidden'}>
       <div class="cd-cols">
@@ -1484,7 +1555,7 @@
     box.querySelectorAll('[data-docgo]').forEach((b) => b.onclick = () => cdRunDoc(c.id, !!(cdDoc[c.id] && cdDoc[c.id].data)));
     box.querySelectorAll('[data-docdays]').forEach((b) => b.onclick = () => { const n = Number(b.dataset.docdays), st = cdDoc[c.id] || (cdDoc[c.id] = {}); if (st.days === n) return; st.days = n; if (st.data) cdRunDoc(c.id); else renderClientDetail(); });
     box.querySelectorAll('[data-docai]').forEach((b) => b.onclick = () => cdRunDocAi(c.id));
-    cdCompWire(box, c);
+    cdCompWire(box, c); wireAiPane(box, c);
     const aiGo = $('cdAiGo'); if (aiGo) aiGo.onclick = () => cdRunAi(c.id, { fresh: !!cdAi[cdAiKey(c.id)] });
     wireWeekly(c); wireCdStatus(c);
     box.querySelectorAll('[data-cdlang]').forEach((b) => b.onclick = () => { const had = !!cdAi[cdAiKey(c.id)]; aiLang = b.dataset.cdlang; try { localStorage.setItem('aiLang', aiLang); } catch (_) {} if (had && !cdAi[cdAiKey(c.id)]) cdRunAi(c.id); else renderClientDetail(); });

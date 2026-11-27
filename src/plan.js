@@ -15,10 +15,12 @@ const dayTxt = (d, km) => `${Number(d.slice(8, 10))} ${(km ? MON_KM : MON)[Numbe
 const addDays = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 
 // Clean what the app sends. lines: [{ post, daily, days, start }]
+// Facebook gives post titles with numbered HTML codes (&#x178f; = ត) — turn them back into letters.
+const unent = (x) => String(x == null ? '' : x).replace(/&#x([0-9a-f]{1,6});/gi, (m, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; }).replace(/&#(\d{1,7});/g, (m, d) => { const n = Number(d); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; });
 function clean(b, cur = {}) {
   const p = { ...cur };
   if (Array.isArray(b.lines)) p.lines = b.lines.slice(0, 30).map((l) => ({
-    post: String(l.post || '').trim().slice(0, 160),
+    post: unent(l.post || '').replace(/&amp;/g, '&').trim().slice(0, 160),
     link: /^https:\/\/[^\s]{4,400}$/.test(String(l.link || '').trim()) ? String(l.link).trim() : '',
     img: /^[a-f0-9]{24}$/.test(String(l.img || '')) ? String(l.img) : '',
     // more posts boosted under the same budget: [{ link, img }]
@@ -66,7 +68,7 @@ async function progress(owner, c, today = sync.todayIn()) {
 
 // One post's line of the plan: "1. name / $10/day × 7 days = $70 (from 1 Nov) / 🔗 link".
 function lineText(l, i, km, team) {
-  const name = l.post || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
+  const name = unent(l.post || '').replace(/&amp;/g, '&') || (km ? `Post ទី${i + 1}` : `Post ${i + 1}`);
   const end = l.start ? addDays(l.start, Math.max(1, Number(l.days) || 1) - 1) : '';
   const when = l.start ? (km ? ` (${dayTxt(l.start, true)} – ${dayTxt(end, true)})` : ` (${dayTxt(l.start)} – ${dayTxt(end)})`) : '';
   const link = [l.link, ...(l.extra || []).map((x) => x.link)].filter(Boolean).map((u) => `\n    🔗 ${u}`).join('')
@@ -92,7 +94,8 @@ function message(c, plan, lang = 'en', team = false) {
 // topic: a destination "<group>:<thread>" inside the client's group (one of its topics) — optional.
 // only: indexes of the lines to send (the posts just added, for example); without it the whole plan goes.
 const subset = (plan, only) => { const all = (plan && plan.lines) || [], ix = Array.isArray(only) ? [...new Set(only.map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n < all.length).sort((a, b) => a - b) : null; return ix && ix.length && ix.length < all.length ? { plan: { ...plan, lines: ix.map((n) => all[n]) }, ix } : { plan, ix: all.map((_, n) => n) }; };
-async function send(owner, c, { to = 'client', lang, topic = '', only = null } = {}) {
+// text: the message as the PM edited it before sending — sent instead of the one Boost Desk writes.
+async function send(owner, c, { to = 'client', lang, topic = '', only = null, text: edited = '' } = {}) {
   const full = c.plan, sub = subset(full, only); c = { ...c, plan: sub.plan };
   if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
   let chat = to === 'team' ? cfg.telegramChatId : c.telegram;
@@ -102,7 +105,7 @@ async function send(owner, c, { to = 'client', lang, topic = '', only = null } =
     chat = topic;
   }
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
-  const lg = lang || c.plan.lang || 'en', km = lg === 'km', team = to === 'team', text = message(c, c.plan, lg, team);
+  const lg = lang || c.plan.lang || 'en', km = lg === 'km', team = to === 'team', text = edited || message(c, c.plan, lg, team);
   const imgs = [];
   // Per line: its picture plus the pictures of its extra links (all boosted under that line's budget).
   for (const [i, l] of c.plan.lines.entries()) {
@@ -111,7 +114,11 @@ async function send(owner, c, { to = 'client', lang, topic = '', only = null } =
     if (pics.length) imgs.push({ i, pics });
   }
   if (!imgs.length) await telegram.send(text, chat);
-  else {
+  else if (edited) {
+    // An edited message is sent whole and as written: first each post's pictures numbered like its line, then the text.
+    for (const im of imgs) await telegram.sendAlbum(im.pics, `${im.i + 1}.`, chat);
+    await telegram.send(text, chat);
+  } else {
     // Every line with pictures goes as its own photo (or album) with its line under it, then the totals.
     const head = km ? `🎯 ផែនការ Boost Post — ${c.name}` : `🎯 Boost plan — ${c.name}`;
     const withPic = new Set(imgs.map((x) => x.i));
@@ -127,4 +134,4 @@ async function send(owner, c, { to = 'client', lang, topic = '', only = null } =
   return { ok: true };
 }
 
-module.exports = { clean, totals, progress, message, send, subset };
+module.exports = { clean, totals, progress, message, send, subset, unent };

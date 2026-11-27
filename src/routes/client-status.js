@@ -65,12 +65,8 @@ module.exports = function mountClientStatus(app, api, deps) {
     res.json({ today, from, rows });
   }));
   // Telegram for red clients: every 5 minutes (8:00–21:00). Leaders = the alert chat and every CEO / COO / CMO with Telegram.
-  async function leaderChats() {
-    const out = new Set(); const a = await db.getSetting('alertChat', null); if (a && a.id) out.add(String(a.id));
-    const roles = await roleMap(), owner = await db.ownerId();
-    for (const u of await db.allUsers()) { if (u.fb_id !== owner && !LEAD.has(roles[u.fb_id])) continue; const c = await db.getUserSetting(u.fb_id, 'tgChat', null); if (c && c.id) out.add(String(c.id)); }
-    return [...out];
-  }
+  // Escalations go to the COO (src/escalation.js); the old leaders only when no COO has linked Telegram.
+  const leaderChats = async () => (await require('../escalation').resolve()).chats;
   if (telegram.hasBot()) {
     health.register('Client status alerts', 5, 'every 5 minutes, 8:00–21:00');
     setInterval(require('../runOnce').once('Client status alerts', () => health.track('Client status alerts', () => STATUS().tick({ leaders: leaderChats, log: (...a) => console.log('[status]', ...a) })).then((n) => { if (n) console.log('[status] client alerts sent:', n); }).catch((e) => console.error('[status]', e.message)), 5 * 60e3), 5 * 60e3).unref();

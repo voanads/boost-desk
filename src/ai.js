@@ -41,7 +41,7 @@ async function usageOf(ym) {
 async function noteUsage(model, input, output) {
   try {
     const k = usageKey(sync.todayIn().slice(0, 7)), u = (await db.getSetting(k, null)) || { calls: 0, input: 0, output: 0, models: {} };
-    u.calls++; u.input += input; u.output += output;
+    u.models = u.models || {}; u.calls = (u.calls || 0) + 1; u.input = (u.input || 0) + input; u.output = (u.output || 0) + output;
     const m = (u.models[model] = u.models[model] || { calls: 0, input: 0, output: 0 }); m.calls++; m.input += input; m.output += output;
     await db.setSetting(k, u);
   } catch (e) { console.error('[ai] usage not saved:', e.message); }
@@ -353,20 +353,42 @@ async function saveWorkbook(owner, clientId, w) {
 }
 
 // Every morning: a plan for each client that boosted in the last 3 days (stops early if the AI says it's busy).
-async function morningPlans(log = () => {}) {
-  const cfg = await keyConfig(); if (!cfg.key) return 0;
-  let n = 0; const today = sync.todayIn(), since = sync.addDays(today, -3);
+// Every morning (06:40) — and again each hour until it worked (src/jobs.js "AI daily plans catch-up") — a plan for every
+// client that boosted in the last 3 days. Each run is saved (setting aiPlansLast) so Admin → Health can say whether
+// today's plans were made and, if not, the AI's own error — the in-memory job history is lost on every restart.
+// A client that already has today's plan is not asked again (dailyPlan returns it), so a catch-up costs only the missing ones.
+const PLANS_KEY = 'aiPlansLast', PLAN_TRIES = 3;
+async function morningPlans(log = () => {}, { reason = 'morning' } = {}) {
+  const today = sync.todayIn(), prev = (await db.getSetting(PLANS_KEY, null)) || {};
+  const rec = { day: today, at: new Date().toISOString(), reason, made: 0, failed: 0, clients: 0, firstError: '', paused: false, tries: (prev.day === today ? prev.tries || 0 : 0) + 1 };
+  const save = async () => { rec.done = !rec.paused && rec.failed === 0; await db.setSetting(PLANS_KEY, rec).catch(() => {}); };
+  const cfg = await keyConfig(); if (!cfg.key) { rec.firstError = 'No AI key'; await save(); return 0; }
+  const since = sync.addDays(today, -3);
   for (const u of await db.allUsers()) {
     if ((await db.getUserSetting(u.fb_id, 'aiOn', true)) === false) continue; // Settings → AI advice off
     const lang = (await db.getUserSetting(u.fb_id, 'aiLang', 'en')) === 'km' ? 'km' : 'en';
     const active = new Set((await db.monthEntries(u.fb_id, since, today)).filter((r) => { const e = r.data || {}; return Object.values(e.lives || {}).some((l) => Number(l && l.spend) > 0) || Number((e.post || {}).spend) > 0; }).map((r) => r.client_id));
     for (const c of (await db.listClients(u.fb_id)).filter((x) => !x.archived && active.has(x.id))) {
-      try { await dailyPlan(u.fb_id, c.id, { lang }); n++; }
-      catch (e) { if (e.status === 429) { log('AI daily plans paused: ' + e.message); return n; } log(`AI plan for ${c.name} failed: ${e.message}`); }
+      rec.clients++;
+      try { await dailyPlan(u.fb_id, c.id, { lang }); rec.made++; }
+      catch (e) {
+        rec.failed++; if (!rec.firstError) rec.firstError = `${c.name}: ${e.message}`.slice(0, 300);
+        if (e.status === 429) { rec.paused = true; log('AI daily plans paused: ' + e.message); await save(); return rec.made; }
+        log(`AI plan for ${c.name} failed: ${e.message}`);
+        if (rec.failed >= 5 && !rec.made) { log('AI daily plans stopped: the first 5 all failed'); await save(); return 0; } // the key / credit is the problem: don't hammer it
+      }
     }
   }
-  return n;
+  await save();
+  return rec.made;
 }
+// The hourly catch-up: run again when today's plans were not made (missed run, restart, AI error), at most PLAN_TRIES a day.
+async function plansCatchUp(log = () => {}) {
+  const today = sync.todayIn(), last = (await db.getSetting(PLANS_KEY, null)) || {};
+  if (last.day === today && (last.done || (last.tries || 0) >= PLAN_TRIES)) return 0;
+  return morningPlans(log, { reason: 'catch-up' });
+}
+const plansStatus = async () => (await db.getSetting(PLANS_KEY, null)) || null;
 
 
 // ---------- weekly strategy per client (19 Nov 2026) ----------
@@ -511,4 +533,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };
+module.exports = { publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, plansCatchUp, plansStatus, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

@@ -81,18 +81,7 @@ module.exports = function mountLivesDashboard(app, api, deps) {
   // Ad accounts
   // Today's spend per ad account comes from the campaign rows the last sync saved for today
   // (Sync, auto sync every hour / on new campaigns), so it stays current without extra Meta calls.
-  const FAKE_DEMO_CARDS = new Set([
-    'Visa •••• 4829',
-    'Mastercard •••• 7741',
-    'Visa •••• 3104',
-    'Mastercard •••• 9912',
-    'Amex •••• 1008',
-    'Visa •••• 6590',
-  ]);
-  const cleanCard = (c) => {
-    const s = String(c || '').trim().slice(0, 80);
-    return s && !FAKE_DEMO_CARDS.has(s) ? s : null;
-  };
+  const { cleanCard } = require('../extCards'); // fake demo cards are dropped there
 
   async function accountsWithToday(owner) {
     const list = await db.listAccounts(owner);

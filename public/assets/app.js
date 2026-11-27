@@ -3731,6 +3731,12 @@
       bn.hidden = !old; if (old) bn.innerHTML = `⚠ ${newest ? `These numbers are from Facebook <b>${esc(ago(newest))}</b>` : 'Not refreshed from Facebook yet'} — balances and problems may have changed. <button type="button" class="linkish" data-aarefresh>Refresh now</button>${d.autoSyncServer === false ? ' · auto sync is off on the server' : ''}`;
       const rb = bn.querySelector('[data-aarefresh]'); if (rb) rb.onclick = () => $('aaRefresh').click();
     }
+    { // AdsCheck Connect extension: which PMs send billing thresholds / cards (Meta's API does not give them)
+      const cov = d.extCover || [], on = cov.filter((x) => x.accounts > 0), off = cov.filter((x) => !x.accounts);
+      const withThr = d.accounts.filter((a) => a.thresholdExt).length;
+      let ex = $('aaExt'); if (!ex) { ex = document.createElement('div'); ex.id = 'aaExt'; ex.className = 'hint aa-ext'; $('aaKpis').insertAdjacentElement('afterend', ex); }
+      ex.innerHTML = cov.length ? `🧩 Extension (threshold · card): ${on.length ? on.map((x) => `<b>${esc(x.name)}</b> ${x.accounts}${x.at ? ' · ' + esc(ago(x.at)) : ''}`).join(' &nbsp;·&nbsp; ') : 'nobody yet'}${off.length ? ` &nbsp;—&nbsp; <span class="is-warn">not sending: ${off.map((x) => esc(x.name)).join(', ')}</span>` : ''} &nbsp;·&nbsp; ${withThr} accounts with a threshold from it` : '';
+    }
     // ---- detail
     const a = list.find((x) => x.id === aaSel);
     if (!a) { $('aaDetail').innerHTML = '<div class="cd-empty"><b>Pick an ad account</b><span class="hint">See its spend, balance, Pages and who syncs it.</span></div>'; return; }
@@ -3748,7 +3754,7 @@
       <div class="cd-stats">
         <div class="cd-stat hero"><span class="lbl">Spent today</span><b class="num">${a.todaySpend != null ? money(a.todaySpend) : '–'}</b><span class="sub">${a.todayAt ? 'as of ' + new Date(a.todayAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : a.people.some((p) => p.enabled) ? 'not synced yet today' : 'nobody syncs this account'}</span></div>
         <div class="cd-stat"><span class="lbl">Last 7 days</span><b class="num">${money(a.week || 0)}</b><span class="sub">${a.camps || 0} campaign-day${a.camps === 1 ? '' : 's'} with spend</span></div>
-        <div class="cd-stat ${thr != null && thr >= 80 ? 'mid' : ''}"><span class="lbl">Balance</span><b class="num">${money(a.balance)}${esc(cur)}</b>${thr != null ? `<span class="sub">of ${money(a.threshold)} threshold</span><i class="aa-thr"><i style="width:${thr}%"></i></i>` : '<span class="sub">no threshold info</span>'}</div>
+        <div class="cd-stat ${thr != null && thr >= 80 ? 'mid' : ''}"><span class="lbl">Balance</span><b class="num">${money(a.balance)}${esc(cur)}</b>${thr != null ? `<span class="sub">of ${money(a.threshold)} threshold</span><i class="aa-thr"><i style="width:${thr}%"></i></i>` : '<span class="sub">no threshold info — the PM\'s AdsCheck extension adds it</span>'}${a.thresholdExt && a.ext ? `<span class="sub">🧩 from ${esc(a.ext.by)}'s extension${a.ext.at ? ' · ' + esc(ago(a.ext.at)) : ''}</span>` : ''}${a.card || a.nextBillDate || a.dailyLimit ? `<span class="sub">${[a.card ? '💳 ' + esc(a.card) : '', a.nextBillDate ? 'next bill ' + esc(a.nextBillDate) : '', a.dailyLimit ? 'daily limit ' + money(a.dailyLimit) : ''].filter(Boolean).join(' · ')}</span>` : ''}</div>
         <div class="cd-stat"><span class="lbl">Spent all time</span><b class="num">${money(a.amountSpent)}</b><span class="sub">${capLeft != null ? money(capLeft) + ' left of spend limit' : 'no spend limit'}</span></div>
       </div>
       <div class="cd-cols">

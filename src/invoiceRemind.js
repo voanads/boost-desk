@@ -9,6 +9,9 @@ const sync = require('./sync');
 const telegram = require('./telegram');
 
 const PAID_AFTER = 7, SEND_AFTER = 3, AGAIN_DAYS = 3, MAX_BUTTONS = 8, LOOKBACK = 120;
+// Owner's decision (27 Nov 2026): an invoice older than 45 days is no longer reminded every few days. Most of those were
+// paid and never marked, so the reminders had become noise. An admin checks them in Admin → Payments and marks Paid there.
+const STALE_AFTER = 45;
 const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const daysSince = (today, day) => Math.round((Date.parse(today) - Date.parse(day)) / 864e5);
 
@@ -18,7 +21,8 @@ function due(invs, names, today, reminded = {}) {
   for (const v of invs) {
     if (v.paidAt) continue;
     const last = reminded[v.id]; if (last && daysSince(today, last) < AGAIN_DAYS) continue;
-    const d = daysSince(today, v.date), row = { id: v.id, number: v.number, client: names[v.clientId] || '', total: Number(v.total) || 0, days: d };
+    const d = daysSince(today, v.date); if (d > STALE_AFTER) continue;
+    const row = { id: v.id, number: v.number, client: names[v.clientId] || '', total: Number(v.total) || 0, days: d };
     if (v.sentAt && d >= PAID_AFTER) unpaid.push(row);
     else if (!v.sentAt && d >= SEND_AFTER) unsent.push(row);
   }
@@ -71,4 +75,4 @@ async function onTelegram(fresh) {
   }
 }
 
-module.exports = { due, text, run, onTelegram, PAID_AFTER, SEND_AFTER, AGAIN_DAYS };
+module.exports = { due, text, run, onTelegram, PAID_AFTER, SEND_AFTER, AGAIN_DAYS, STALE_AFTER };

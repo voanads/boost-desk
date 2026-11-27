@@ -104,7 +104,7 @@ const { dedupeClients, mergeClients, sameName } = require('./src/routes/strategy
 // ---- Boosts: one row per post in a boost plan, and Live boosts (src/routes/boosts.js) ----
 require('./src/routes/boosts')(null, api, { wrap, get STATUS() { return STATUS; } });
 // ---- Client status, admin today / lives / invoices pages, KPI copy and targets (src/routes/client-status.js) ----
-const { STATUS } = require('./src/routes/client-status')(null, api, { KPI, LEAD, MB, adminOnly, getTeams, isDay, kpiPerson, ownClient, roleMap, tgt, wrap });
+const { STATUS } = require('./src/routes/client-status')(null, api, { KPI, LEAD, MB, adminOnly, getTeams, isDay, isFull, kpiPerson, ownClient, ownerOnly, roleMap, tgt, wrap });
 // ---- My profile, onboarding, usernames, Facebook accounts, my Telegram and alerts (src/routes/me.js) ----
 const { MENU, menuPerson } = require('./src/routes/me')(null, api, { KPI, LOGINS, MB, TASKS_OFF, canSeeAdmin, fbNameOf, getTeams, isFull, newCode, roleOf, wrap });
 // ---- Task menu, tasks, team, targets and client workbooks (src/routes/task-menu.js) ----

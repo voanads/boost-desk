@@ -7,7 +7,7 @@ const sync = require('../sync');
 const telegram = require('../telegram');
 
 module.exports = function mountClientStatus(app, api, deps) {
-  const { KPI, LEAD, MB, adminOnly, getTeams, isDay, kpiPerson, ownClient, roleMap, tgt, wrap } = deps;
+  const { KPI, LEAD, MB, adminOnly, getTeams, isDay, isFull, kpiPerson, ownClient, ownerOnly, roleMap, tgt, wrap } = deps;
   // ---- Client status (19 Nov 2026): fine / watch / problem per client, "checked today", "I'm on it", Telegram alerts ----
   const STATUS = () => require('../status');
   const whoAmI = (req) => (req.user.buyer ? req.user.buyer.name : req.user.name);
@@ -53,16 +53,26 @@ module.exports = function mountClientStatus(app, api, deps) {
   }));
   api.get('/admin/invoices', adminOnly, wrap(async (req, res) => {
     const teams = await getTeams(), teamOf = {}; for (const t of teams) for (const m of t.members) teamOf[m] = t.name;
-    const today = sync.todayIn(), from = sync.addDays(today, -60), rows = [];
+    // 120 days back (same as the reminders), so invoices past the 45-day stop still show here for an admin to check
+    const today = sync.todayIn(), from = sync.addDays(today, -120), rows = [], stale = require('../invoiceRemind').STALE_AFTER;
     for (const u of await db.allUsers()) {
       let inv = [], names = {}; try { inv = await db.listInvoices(u.fb_id, from, today); if (inv.length) for (const c of await db.listClients(u.fb_id)) names[c.id] = c.name; } catch (_) {}
       // db.listInvoices returns camelCase rows (clientId, sentAt, paidAt) — reading client_id / sent_at / paid_at here showed
       // every invoice as "not sent · not paid" with no client name, and Paid as $0.
-      for (const i of inv) rows.push({ team: teamOf[u.fb_id] || u.name, client: names[i.clientId] || i.clientName || '', number: i.number, date: i.date, total: Number(i.total) || 0, sent: !!i.sentAt, paid: !!i.paidAt,
+      for (const i of inv) rows.push({ id: i.id, owner: u.fb_id, team: teamOf[u.fb_id] || u.name, client: names[i.clientId] || i.clientName || '', number: i.number, date: i.date, total: Number(i.total) || 0, sent: !!i.sentAt, paid: !!i.paidAt,
         days: i.paidAt ? 0 : Math.max(0, Math.round((new Date(today) - new Date(i.date)) / 864e5)) });
     }
     rows.sort((a, b) => (a.paid - b.paid) || (b.days - a.days) || String(b.date).localeCompare(String(a.date)));
-    res.json({ today, from, rows });
+    res.json({ today, from, rows, stale, canMark: !!(isFull && await isFull(req)) });
+  }));
+  // An admin marks an invoice paid (or not) after checking the bank — for invoices past the 45-day reminder stop above all.
+  api.post('/admin/invoices/paid', ownerOnly, wrap(async (req, res) => {
+    const b = req.body || {}, id = Number(b.id), owner = String(b.owner || '');
+    if (!Number.isInteger(id) || !/^[\w:.@-]{3,80}$/.test(owner)) return res.status(400).json({ error: 'Pick an invoice.' });
+    const row = (await db.pool.query('SELECT id FROM invoices WHERE id=$1 AND owner=$2', [id, owner])).rows[0];
+    if (!row) return res.status(404).json({ error: 'That invoice is no longer there.' });
+    await db.markInvoice(owner, id, { paid: b.paid !== false });
+    res.json({ ok: true, paid: b.paid !== false });
   }));
   // Telegram for red clients: every 5 minutes (8:00–21:00). Leaders = the alert chat and every CEO / COO / CMO with Telegram.
   // Escalations go to the COO (src/escalation.js); the old leaders only when no COO has linked Telegram.

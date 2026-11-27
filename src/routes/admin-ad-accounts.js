@@ -38,9 +38,27 @@ module.exports = function mountAdminAdAccounts(app, api, deps) {
       if (on.length && (at || (a.daily && a.daily[today] != null))) { a.todaySpend = (a.daily && a.daily[today]) || 0; a.todayAt = at ? new Date(at).toISOString() : a.todayAt; }
     }
     for (const a of map.values()) { a.week = Math.round((a.week || 0) * 100) / 100; a.pages = Object.values(a._pg || {}).sort((x, y) => y.spend - x.spend).slice(0, 12).map((x) => ({ ...x, spend: Math.round(x.spend * 100) / 100 })); delete a._pg; }
+    // What each PM's AdsCheck Connect extension read from Ads Manager (billing threshold, card, daily limit, next bill
+    // date) — Meta's API does not give these. The newest reading among the people who have the account wins.
+    const X = require('../extCards'), extByUser = {}, extCover = [];
+    for (const u of users) {
+      const m = (await db.getUserSetting(u.fb_id, 'extThresholds', {})) || {}, ids = Object.keys(m);
+      extByUser[u.fb_id] = m;
+      extCover.push({ id: u.fb_id, name: u.name, accounts: ids.length, at: ids.reduce((t, k) => (String(m[k].at || '') > t ? String(m[k].at) : t), '') || null });
+    }
+    for (const a of map.values()) {
+      const hit = X.newest(a.id, a.people, extByUser); if (!hit) continue;
+      const r = hit.rec;
+      if (r.v != null && r.v > 0 && !(a.threshold > 0)) { a.threshold = r.v; a.thresholdExt = true; }
+      const card = X.cleanCard(r.card); if (card) a.card = card;
+      if (r.dailyLimit > 0) a.dailyLimit = r.dailyLimit;
+      if (r.nextBillDate && r.nextBillDate !== '—') a.nextBillDate = r.nextBillDate;
+      if (r.business && !a.business) a.business = r.business;
+      a.ext = { by: hit.by, at: r.at || null };
+    }
     const teamId = {}; for (const t of teams) for (const m of t.members) teamId[m] = t.id;
     for (const a of map.values()) for (const p of a.people) p.teamId = teamId[p.id] || null;
-    res.json({ today, from14, accounts: [...map.values()], teams: teams.map((t) => ({ id: t.id, name: t.name })), users: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || '', teamId: teamId[u.fb_id] || null })), canEdit: (await db.ownerId()) === req.user.fb_id });
+    res.json({ today, from14, extCover, accounts: [...map.values()], teams: teams.map((t) => ({ id: t.id, name: t.name })), users: users.map((u) => ({ id: u.fb_id, name: u.name, team: teamOf[u.fb_id] || '', teamId: teamId[u.fb_id] || null })), canEdit: (await db.ownerId()) === req.user.fb_id });
   }));
   // Add an ad account by ID to someone's workspace — checked through their own Facebook login.
   api.post('/admin/ad-accounts', ownerOnly, wrap(async (req, res) => {

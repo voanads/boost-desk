@@ -37,6 +37,10 @@ function cacheHeader(req, name) {
 
 const page = fs.readFileSync.bind(fs, path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 // One site of the app (index.html with its site name and title), with hashed asset addresses.
-const sitePage = (req, site, title) => rewrite(page(), req).replace('<body>', `<body data-site="${site}">`).replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+// Each site installs to the phone's home screen as its own app (Add to Home Screen): its manifest opens that site.
+const HOME_TITLE = { admin: 'Ads Box Admin', pm: 'Boost Desk', mb: 'Ads Box MB', owner: 'Ads Box Owner' };
+const sitePage = (req, site, title) => rewrite(page(), req).replace('<body>', `<body data-site="${site}">`).replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
+  .replace('/assets/app-pm.webmanifest', `/assets/app-${HOME_TITLE[site] ? site : 'pm'}.webmanifest`)
+  .replace('<meta name="apple-mobile-web-app-title" content="Boost Desk">', `<meta name="apple-mobile-web-app-title" content="${HOME_TITLE[site] || 'Boost Desk'}">`);
 
 module.exports = { rewrite, cacheHeader, versionFor, sitePage };

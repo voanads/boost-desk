@@ -14,7 +14,9 @@ let d = due([
   inv(3, '2026-11-01', { sentAt: sent, paidAt: sent }),      // paid → never
   inv(4, '2026-11-20'),                                      // made 6 days ago, never sent → remind to send
   inv(5, '2026-11-25'),                                      // made yesterday → not yet
-  inv(6, '2026-10-01', { sentAt: sent, clientId: 2 }),       // oldest unpaid first
+  inv(6, '2026-10-20', { sentAt: sent, clientId: 2 }),       // oldest unpaid first
+  inv(7, '2026-10-01', { sentAt: sent }),                    // 56 days: past the 45-day stop → not reminded (an admin checks it)
+  inv(8, '2026-10-05'),                                      // never sent, 52 days → not reminded either
 ], names, today);
 assert.deepStrictEqual(d.unpaid.map((r) => r.id), [6, 1]);
 assert.deepStrictEqual(d.unsent.map((r) => r.id), [4]);

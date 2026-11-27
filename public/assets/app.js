@@ -1318,7 +1318,9 @@
   // ✨ AI tab (redesign 27 Nov): one bar — AI status, one language switch, five parts — and only the picked part below.
   let cAiTab = (() => { try { return localStorage.getItem('cAiTab') || 'advice'; } catch (_) { return 'advice'; } })();
   let aiStat = null, aiStatAt = 0;
-  const loadAiStat = (force) => { if (!force && Date.now() - aiStatAt < 60e3) return; aiStatAt = Date.now(); api('/ai/status').then((x) => { aiStat = x; aiReady = !!x.hasKey; if (cTab === 'ai' && $('cdAiBar')) renderClientDetail(); }).catch(() => {}); };
+  const loadAiStat = (force) => { if (!force && Date.now() - aiStatAt < 60e3) return; aiStatAt = Date.now(); api('/ai/status').then((x) => { const was = !!(aiStat && aiStat.noCredit), first = !aiStat; aiStat = x; aiReady = !!x.hasKey; if ((cTab === 'ai' && $('cdAiBar')) || (cSel && (first || was !== !!x.noCredit) && x.noCredit !== was)) renderClientDetail(); }).catch(() => {}); };
+  // No Anthropic credit (owner's decision, 27 Nov 2026): the AI parts that cannot work are hidden until credit is back.
+  const aiOff = () => !!(aiStat && aiStat.noCredit);
   const cdProf = {};
   const PF = [
     ['sells', 'ផេកលក់អ្វី', 'input', 'ឧ. អាវឈុតនារី ក្រណាត់ត្រជាក់', 300],
@@ -1372,11 +1374,12 @@
       ['week', '📅', 'សប្តាហ៍', 'Weekly', ''],
       ['profile', '📄', 'ព័ត៌មានផេក', 'Page profile', pf.data && !pfOk ? '<span class="aib-n warn" title="មិនទាន់បំពេញ">!</span>' : ''],
     ];
-    if (!TABS.some((t) => t[0] === cAiTab)) cAiTab = 'advice';
+    if (aiOff()) for (let i = TABS.length - 1; i >= 0; i--) if (['advice', 'week'].includes(TABS[i][0])) TABS.splice(i, 1); // need AI to work at all
+    if (!TABS.some((t) => t[0] === cAiTab)) cAiTab = TABS[0][0];
     const used = aiStat && aiStat.used != null ? aiStat.used : null, lim = (aiStat && aiStat.limit) || 60;
     const chip = aiReady === false ? '<span class="aib-chip off">AI មិនទាន់ដំឡើង</span>' : aiStat && aiStat.noCredit ? '<span class="aib-chip bad">AI អស់ credit</span>' : used != null ? `<span class="aib-chip${used >= lim ? ' bad' : used >= lim * 0.8 ? ' warn' : ''}" title="AI requests you used today">AI ${used} / ${lim} ថ្ងៃនេះ</span>` : '';
     const lang = `<div class="seg ai-lang" role="group" aria-label="ភាសា AI"><button type="button" data-ailangall="km" aria-pressed="${aiLang === 'km'}">ខ្មែរ</button><button type="button" data-ailangall="en" aria-pressed="${aiLang === 'en'}">English</button></div>`;
-    const warn = aiStat && aiStat.noCredit ? `<div class="aib-warn" role="alert"><b>AI អស់ credit</b><span>${me && me.isOwner ? 'បន្ថែម credit នៅ console.anthropic.com → Plans &amp; Billing ហើយ AI ដើរវិញភ្លាម។' : 'ប្រាប់ម្ចាស់ app ឱ្យបន្ថែម credit។'} Ad Doctor (ពិនិត្យដោយច្បាប់) និងព័ត៌មានផេក នៅប្រើបាន។</span></div>` : '';
+    const warn = aiStat && aiStat.noCredit ? `<div class="aib-warn" role="alert"><b>AI អស់ credit</b><span>ដំបូន្មាន AI, ផែនការពេលព្រឹក និងយុទ្ធសាស្ត្រសប្តាហ៍ ត្រូវបានលាក់ សិន។ ${me && me.isOwner ? 'បន្ថែម credit នៅ console.anthropic.com → Plans &amp; Billing ហើយវាត្រឡប់មកវិញដោយខ្លួនឯង ក្រោយផែនការពេលព្រឹកលើកក្រោយ។' : 'ប្រាប់ម្ចាស់ app ឱ្យបន្ថែម credit។'} Ad Doctor (ពិនិត្យដោយច្បាប់) គូប្រកួត និងព័ត៌មានផេក នៅប្រើបាន។</span></div>` : '';
     const nudge = pf.data && !pfOk && cAiTab !== 'profile' ? `<div class="aib-nudge"><span>📄 មិនទាន់មានព័ត៌មានផេក <b>${esc(c.name)}</b> — AI មិនដឹងថាផេកលក់អ្វី តម្លៃប៉ុន្មាន ឬចំណុចពិសេសអ្វីទេ។</span><button type="button" class="sm" data-aitab="profile">បំពេញឥឡូវ</button></div>` : '';
     const part = { advice: () => cdAiSection(c), ads: () => cdDocSection(c), comp: () => cdCompSection(c), week: () => cdWeeklySection(c), profile: () => cdProfSection(c) }[cAiTab]();
     return `<section class="aib" id="cdAiBar"><div class="aib-h"><div class="aib-t"><b>AI របស់ ${esc(c.name)}</b><span class="hint">ផ្អែកលើលេខពិតក្នុង Boost Desk${pfOk && pf.data ? ' + ព័ត៌មានផេក' : ''}</span></div><span class="spacer"></span>${chip}${lang}</div>

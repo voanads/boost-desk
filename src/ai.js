@@ -179,7 +179,12 @@ async function callGemini(key, system, messages, model = MODEL_FOR('gemini'), ma
   await noteUsage(model, Number(um.promptTokenCount) || 0, (Number(um.candidatesTokenCount) || 0) + (Number(um.thoughtsTokenCount) || 0));
   return { text, usage: um };
 }
-const noCredit = { at: null }; // set when Anthropic says the balance is empty; cleared by the next good answer
+// Set when Anthropic says the balance is empty; cleared by the next good answer. Kept in settings (aiNoCredit) so a restart
+// remembers it: while it is set the app hides the AI parts (owner's decision, 27 Nov 2026). The morning plans and their
+// catch-up keep trying in the background, so the first good answer after credit is added brings the AI parts back.
+const noCredit = { at: null, loaded: false };
+async function setNoCredit(at) { noCredit.at = at; noCredit.loaded = true; try { await db.setSetting('aiNoCredit', at); } catch (_) {} }
+async function creditOut() { if (!noCredit.loaded) { noCredit.loaded = true; try { noCredit.at = noCredit.at || (await db.getSetting('aiNoCredit', null)) || null; } catch (_) {} } return noCredit.at; }
 async function callClaude(key, system, messages, maxTokens = 1200) {
   const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 90000);
   let res, body;
@@ -195,10 +200,10 @@ async function callClaude(key, system, messages, maxTokens = 1200) {
   if (res.status === 401) throw Object.assign(new Error('The Anthropic API key was refused — check it in Admin → Settings.'), { status: 400 });
   if (res.status === 429) throw Object.assign(new Error('The AI is busy or the account hit its limit. Try again in a minute.'), { status: 429 });
   const msg = (body.error && body.error.message) || '';
-  if (/credit balance is too low/i.test(msg)) { noCredit.at = new Date().toISOString(); }
+  if (/credit balance is too low/i.test(msg) && !noCredit.at) await setNoCredit(new Date().toISOString());
   if (/credit balance is too low/i.test(msg)) throw Object.assign(new Error('The Anthropic account has no credit left. The owner adds credit at console.anthropic.com → Plans & Billing, then AI advice works again.'), { status: 402 });
   if (!res.ok) throw new Error('AI error: ' + (msg || 'HTTP ' + res.status));
-  noCredit.at = null;
+  if (noCredit.at || !noCredit.loaded) await setNoCredit(null);
   const u = body.usage || {};
   await noteUsage(MODEL_FOR('claude'), (Number(u.input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0), Number(u.output_tokens) || 0);
   // A safety decline comes back as HTTP 200 with stop_reason "refusal": say so instead of showing an empty answer.
@@ -537,4 +542,4 @@ async function menuSuggest(ownerId, { kpis = [], menu = [], role = 'pm', lang = 
   return result;
 }
 
-module.exports = { noCredit, usedToday, DAILY_LIMIT, publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, plansCatchUp, plansStatus, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };
+module.exports = { noCredit, creditOut, usedToday, DAILY_LIMIT, publicConfig, saveKey, clientAdvice, adDoctorAI, askAI, plansCatchUp, plansStatus, clientData, dailyPlan, workbook, saveWorkbook, morningPlans, kpiSuggest, menuSuggest, weeklyStrategy, weeklyPlans, weeklyPick, setWeeklyPick, saveWeeklyText, weeklyMessage, weekRange, splitWeekly };

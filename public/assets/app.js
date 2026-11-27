@@ -1571,7 +1571,7 @@
   // ---- post boost plan: posts ($/day × days), tax, total to pay — sent to the client before boosting ----
   const planOpen = {}; // client id → 'edit' | 'send'
   const planProg = {}; // client id → progress from the server (post spend since the plan starts)
-  const planSend = { lang: 'en', to: 'client', topic: '', text: '', err: '', only: [] };
+  const planSend = { lang: 'en', to: 'client', topic: '', text: '', err: '', only: [], edited: null };
   let planDraft = null; // lines being edited
   const hasPostType = (c) => c.type === 'post' || c.type === 'both';
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -1628,11 +1628,12 @@
       cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); ok(cv.toDataURL('image/jpeg', 0.85)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
   }
   // Plans made before the current one: kept when a new plan is made or the plan is deleted.
+  const unent = (x) => String(x == null ? '' : x).replace(/&#x([0-9a-f]{1,6});/gi, (m, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; }).replace(/&#(\d{1,7});/g, (m, d) => { const n = Number(d); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; }).replace(/&amp;/g, '&');
   function planPast(c) {
     const past = (c.plan && c.plan.past) || []; if (!past.length) return '';
     const span = (pl) => { const st = pl.lines.map((l) => l.start).filter(Boolean).sort(), en = pl.lines.filter((l) => l.start).map((l) => addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1)).sort(); return st.length ? `${shortDay(st[0])} – ${shortDay(en[en.length - 1])}` : 'no dates'; };
     return `<details class="bp-past"><summary>Past plans (${past.length})</summary>${past.map((pl, i) => `<div class="bp-pp"><div class="bp-pp-h"><b>${esc(span(pl))}</b><span class="hint">${money(planTotals(pl).total)} · ${pl.lines.length} post${pl.lines.length === 1 ? '' : 's'}${pl.by ? ' · kept by ' + esc(pl.by) : ''}</span><span class="spacer"></span><button type="button" class="ghost sm" data-bpback="${i}">Bring back</button><button type="button" class="ghost sm bp-rm" data-bpforget="${i}" aria-label="Remove this past plan">✕</button></div>
-      ${pl.lines.map((l, k) => `<div class="hint bp-pp-l">${esc(l.post || 'Post ' + (k + 1))} — ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</div>`).join('')}</div>`).join('')}</details>`;
+      ${pl.lines.map((l, k) => `<div class="hint bp-pp-l">${esc(unent(l.post) || 'Post ' + (k + 1))} — ${money(l.daily)}/day × ${l.days} day${l.days === 1 ? '' : 's'}${l.start ? ' · from ' + esc(shortDay(l.start)) : ''}</div>`).join('')}</div>`).join('')}</details>`;
   }
   function planStrip(c) {
     if (!hasPostType(c)) return '';
@@ -1642,8 +1643,10 @@
     if (open === 'edit') return `<section class="bplan"><div class="bp-top"><b>📣 Boost plan</b><span class="hint">$ a day × days for each post</span></div>${planEditor(c)}</section>`;
     const t = planTotals(c.plan), [st, cls] = planStatus(c), p = planProg[c.id];
     if (open === 'send' && planSend.to === 'client' && !c.telegram) planSend.to = 'copy';
-    const pickPosts = lines.length > 1 ? `<fieldset class="bp-pick"><legend>Posts to send</legend>${lines.map((l, i) => `<label><input type="checkbox" data-bponly="${i}" ${planSend.only.includes(i) ? 'checked' : ''}> <span>${esc(l.post || 'Post ' + (i + 1))} · ${money((Number(l.daily) || 0) * (Number(l.days) || 0))}</span>${l.sent ? `<span class="hint">sent ${esc(new Date(l.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</span>` : '<span class="pill warn">not sent yet</span>'}</label>`).join('')}<span class="hint">The message and the total cover only the posts you tick.</span></fieldset>` : '';
-    const send = open === 'send' ? `<div class="bp-send">${pickPosts}<pre class="bp-msg" id="bpMsg">${esc(planSend.err || planSend.text || 'Loading…')}</pre>
+    const pickPosts = lines.length > 1 ? `<fieldset class="bp-pick"><legend>Posts to send</legend>${lines.map((l, i) => `<label><input type="checkbox" data-bponly="${i}" ${planSend.only.includes(i) ? 'checked' : ''}> <span>${esc(unent(l.post) || 'Post ' + (i + 1))} · ${money((Number(l.daily) || 0) * (Number(l.days) || 0))}</span>${l.sent ? `<span class="hint">sent ${esc(new Date(l.sent).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))}</span>` : '<span class="pill warn">not sent yet</span>'}</label>`).join('')}<span class="hint">The message and the total cover only the posts you tick.</span></fieldset>` : '';
+    const send = open === 'send' ? `<div class="bp-send">${pickPosts}<div class="bp-edh"><b>សារដែលនឹងផ្ញើ</b><span class="hint">ចុចលើអក្សរ ដើម្បីកែមុនផ្ញើ</span><span class="spacer"></span><span class="bp-edst" id="bpEdSt"${planSend.edited ? '' : ' hidden'}>✎ បានកែ</span><button type="button" class="ghost sm" id="bpReset"${planSend.edited ? '' : ' hidden'}>↺ ដូចដើមវិញ</button></div>
+        <textarea class="bp-msg" id="bpMsg" aria-label="Message to send — you can edit it" spellcheck="false" ${planSend.err || !planSend.text ? 'readonly' : ''}>${esc(planSend.err || (planSend.edited != null ? planSend.edited : planSend.text) || 'Loading…')}</textarea>
+        <div class="hint bp-edhint">${(c.plan.lines || []).some((l) => l.img) ? 'បើកែ៖ រូបនៃ Post នីមួយៗផ្ញើមុន (មានលេខ 1., 2.… ដូចបន្ទាត់ក្នុងសារ) បន្ទាប់មកសារទាំងមូលតាមដែលអ្នកកែ។ ' : ''}ប្ដូរភាសា ឬ Post ដែលធីក នឹងសរសេរសារថ្មី ហើយការកែត្រូវបាត់។</div>
         <div class="bp-opts"><div class="seg bp-lang" role="group" aria-label="Language"><button type="button" data-bpl="en" aria-pressed="${planSend.lang === 'en'}">English</button><button type="button" data-bpl="km" aria-pressed="${planSend.lang === 'km'}">ខ្មែរ</button></div>
           ${(() => { const n = (c.plan.lines || []).filter((l) => l.img).length; return n ? `<span class="hint">📷 ${n} picture${n === 1 ? '' : 's'} — each post is sent as its picture with its line under it, then the total.</span>` : ''; })()}
           <span class="hint">Send to</span>
@@ -1672,17 +1675,19 @@
         <div class="bp-sbox"><span class="lbl">Dates</span><b class="num">${starts.length ? esc(shortDay(starts[0])) + ' – ' + esc(shortDay(ends[ends.length - 1])) : '–'}</b><span class="hint">${lines.length} Post${nEnd ? ` · ${nEnd} end today` : ''}</span></div>
       </div>
       ${lines.length > 3 && (nEnd || nAuto) ? `<div class="bp-chips" role="group" aria-label="Which posts">${chipB('all', 'All', lines.length)}${nEnd ? chipB('end', 'Ends today', nEnd) : ''}${nAuto ? chipB('auto', 'Added by itself', nAuto) : ''}</div>` : ''}
-      <div class="bp-tw"><table class="bp-tbl"><thead><tr><th scope="col">Post</th><th scope="col" class="num">$ / day × days</th><th scope="col">Start – end</th><th scope="col">Ad account</th><th scope="col" class="num">Total</th></tr></thead><tbody>${shown.map(({ l, i }) => `<tr><td><div class="bp-pc">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(l.post || 'Post ' + (i + 1))}</a>` : esc(l.post || 'Post ' + (i + 1))}</span>${l.auto ? '<span class="bp-tag" title="Added by itself from Meta — please check">Auto</span>' : ''}</div></td><td class="num">${money(l.daily)} × ${l.days}</td><td>${l.start ? esc(sd(l.start)) + (Number(l.days) > 1 ? ' – ' + esc(sd(endOf(l))) : '') : '–'}${endOf(l) === today ? ' <span class="bp-tag warn">ends today</span>' : ''}</td><td><span class="bp-ac" title="Ad account">${esc(l.accountName || l.account || '–')}</span></td><td class="num"><b>${money(l.daily * l.days)}</b></td></tr>`).join('')}</tbody></table></div>
+      <div class="bp-tw"><table class="bp-tbl"><thead><tr><th scope="col">Post</th><th scope="col" class="num">$ / day × days</th><th scope="col">Start – end</th><th scope="col">Ad account</th><th scope="col" class="num">Total</th></tr></thead><tbody>${shown.map(({ l, i }) => `<tr><td><div class="bp-pc">${l.img ? `<img class="bp-th" src="/api/post-img/${esc(l.img)}" alt="">` : '<span class="bp-th none" aria-hidden="true"></span>'}<span class="bp-pn">${l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener">${esc(unent(l.post) || 'Post ' + (i + 1))}</a>` : esc(unent(l.post) || 'Post ' + (i + 1))}</span>${l.auto ? '<span class="bp-tag" title="Added by itself from Meta — please check">Auto</span>' : ''}</div></td><td class="num">${money(l.daily)} × ${l.days}</td><td>${l.start ? esc(sd(l.start)) + (Number(l.days) > 1 ? ' – ' + esc(sd(endOf(l))) : '') : '–'}${endOf(l) === today ? ' <span class="bp-tag warn">ends today</span>' : ''}</td><td><span class="bp-ac" title="Ad account">${esc(l.accountName || l.account || '–')}</span></td><td class="num"><b>${money(l.daily * l.days)}</b></td></tr>`).join('')}</tbody></table></div>
       ${rows.length > CAP ? `<div class="bp-more"><button type="button" class="sm" data-bpall aria-expanded="${planView.all}">${planView.all ? 'Show fewer' : `Show ${rows.length - CAP} more posts`}</button></div>` : ''}${send}${planPast(c)}</section>`;
   }
   let planView = { id: 0, f: 'all', all: false }; // the plan table: which posts, and whether all of them are open
   function redrawPlan(c) { const sec = document.querySelector('#cDetail .bplan'); if (!sec) return; sec.outerHTML = planStrip(c); bindPlan(c); }
   async function loadPlanMsg(c) {
-    planSend.text = ''; planSend.err = '';
+    planSend.text = ''; planSend.err = ''; planSend.edited = null;
+    const ta = $('bpMsg'); if (ta) { ta.readOnly = true; ta.value = 'Loading…'; } if ($('bpEdSt')) $('bpEdSt').hidden = true; if ($('bpReset')) $('bpReset').hidden = true;
     const n = ((c.plan && c.plan.lines) || []).length, part = planSend.only.length && planSend.only.length < n;
     try { planSend.text = (await api(`/clients/${c.id}/boost-plan/message?lang=${planSend.lang}${part ? '&only=' + planSend.only.join(',') : ''}`)).text; } catch (e) { planSend.err = e.message; }
-    const el = $('bpMsg'); if (el && cSel === c.id) el.textContent = planSend.err || planSend.text;
+    const el = $('bpMsg'); if (el && cSel === c.id) { el.value = planSend.err || planSend.text; el.readOnly = !!planSend.err; fitMsg(el); }
   }
+  const fitMsg = (el) => { el.style.height = 'auto'; el.style.height = Math.min(640, el.scrollHeight + 4) + 'px'; };
   async function loadPlanProg(c) {
     if (!(c.plan && c.plan.lines && c.plan.lines.length)) { delete planProg[c.id]; return; }
     try { planProg[c.id] = await api(`/clients/${c.id}/boost-plan/progress`); if (cSel === c.id && planOpen[c.id] !== 'edit') redrawPlan(c); } catch (_) {}
@@ -1775,19 +1780,24 @@
         try { await savePlan(c, { lines, tax: !!planDraft.tax, ...(planDraft.isNew ? { sentAt: null } : {}) }); successBadge('Boost plan saved — tap Send plan'); } catch (e) { toast(e.message); }
       };
     }
-    sec.querySelectorAll('[data-bponly]').forEach((b) => b.onchange = () => { planSend.only = [...sec.querySelectorAll('[data-bponly]:checked')].map((x) => Number(x.dataset.bponly)); const el = $('bpMsg'); if (!planSend.only.length) { if (el) el.textContent = 'Tick at least one post to send.'; return; } loadPlanMsg(c); });
+    sec.querySelectorAll('[data-bponly]').forEach((b) => b.onchange = () => { planSend.only = [...sec.querySelectorAll('[data-bponly]:checked')].map((x) => Number(x.dataset.bponly)); const el = $('bpMsg'); if (!planSend.only.length) { if (el) { el.value = 'Tick at least one post to send.'; el.readOnly = true; } return; } loadPlanMsg(c); });
     sec.querySelectorAll('[data-bpl]').forEach((b) => b.onclick = () => { planSend.lang = b.dataset.bpl; sec.querySelectorAll('[data-bpl]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); api(`/clients/${c.id}/boost-plan`, { method: 'PUT', body: { lang: planSend.lang } }).then((u) => { clients = clients.map((x) => x.id === u.id ? u : x); }).catch(() => {}); loadPlanMsg(c); });
     sec.querySelectorAll('input[name="bpTo"]').forEach((r) => r.onchange = () => { planSend.to = r.value; $('bpGo').textContent = r.value === 'copy' ? 'Copy text' : 'Send now'; });
     if ($('bpTopic')) $('bpTopic').onchange = () => { planSend.topic = $('bpTopic').value; const r = sec.querySelector('input[name="bpTo"][value="client"]'); if (r) { r.checked = true; planSend.to = 'client'; $('bpGo').textContent = 'Send now'; } };
+    const msgEl = $('bpMsg');
+    if (msgEl) { fitMsg(msgEl); msgEl.oninput = () => { if (msgEl.readOnly) return; planSend.edited = msgEl.value === planSend.text ? null : msgEl.value; const on = planSend.edited != null; $('bpEdSt').hidden = !on; $('bpReset').hidden = !on; fitMsg(msgEl); }; }
+    if ($('bpReset')) $('bpReset').onclick = () => { planSend.edited = null; msgEl.value = planSend.text; $('bpEdSt').hidden = true; $('bpReset').hidden = true; fitMsg(msgEl); msgEl.focus(); };
     if ($('bpGo')) $('bpGo').onclick = async () => {
       const b = $('bpGo');
-      if (planSend.to === 'copy') { try { await navigator.clipboard.writeText(planSend.text); toast('Copied — paste it to the client'); } catch (_) { toast('Could not copy — select the text and copy it'); } return; }
+      if (planSend.to === 'copy') { try { await navigator.clipboard.writeText(planSend.edited != null ? planSend.edited : planSend.text); toast('Copied — paste it to the client'); } catch (_) { toast('Could not copy — select the text and copy it'); } return; }
       b.disabled = true; b.textContent = 'Sending…';
       try {
         const tp = $('bpTopic'); planSend.topic = tp ? tp.value : '';
         if (!planSend.only.length) { b.disabled = false; b.textContent = 'Send now'; return toast('Tick at least one post to send.'); }
         const only = planSend.only.slice();
-        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '', only } });
+        if (planSend.edited != null && !planSend.edited.trim()) { b.disabled = false; b.textContent = 'Send now'; return toast('The message is empty — write something or tap ↺ to get it back.'); }
+        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '', only, ...(planSend.edited != null ? { text: planSend.edited } : {}) } });
+        planSend.edited = null;
         if (planSend.to === 'client') { const now = new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now, lines: x.plan.lines.map((l, i) => (only.includes(i) ? { ...l, sent: now } : l)) } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
         planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : 'Plan sent to ' + c.name);
       } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send now'; }

@@ -58,7 +58,7 @@ module.exports = function mountClients(app, api, deps) {
     if (!r.ok) throw new Error('Facebook said ' + r.status);
     return (await r.text()).slice(0, 1.5e6);
   }
-  const unesc = (x) => String(x || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+  const unesc = (x) => require('../plan').unent(String(x || '')).replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
   api.post('/post-preview', wrap(async (req, res) => {
     const url = String((req.body || {}).url || '').trim();
     let html; try { html = await fbGet(url); } catch (e) { return res.status(400).json({ error: (e.message.startsWith('Paste') ? e.message : 'Could not open that post') + ' — upload the picture instead.' }); }
@@ -115,7 +115,9 @@ module.exports = function mountClients(app, api, deps) {
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
     if (!c) return res.status(404).json({ error: 'Client not found.' });
     const b = req.body || {};
-    res.json(await require('../plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || ''), only: Array.isArray(b.only) ? b.only.slice(0, 30) : null }));
+    const text = typeof b.text === 'string' && b.text.trim() ? b.text.replace(/\u0000/g, '').trim() : '';
+    if (text.length > 4000) return res.status(400).json({ error: 'The message is too long for Telegram (4,000 letters at most). Shorten it a little.' });
+    res.json(await require('../plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || ''), only: Array.isArray(b.only) ? b.only.slice(0, 30) : null, text }));
   }));
   api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 

@@ -4503,3 +4503,15 @@ td{font-variant-numeric:tabular-nums}
 .doc-flag > div { margin-top: 2px; }
 .doc-ok summary { cursor: pointer; padding: 8px 0; }
 .doc-ai { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line, #e7e5ef); }
+
+/* Admin › Ad accounts › Table view */
+.aat-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 10px; }
+.aat-bar input[type=search] { min-width: 260px; flex: 1; max-width: 420px; }
+table.aat th { white-space: nowrap; position: sticky; top: 0; background: var(--surface, #fff); z-index: 1; }
+table.aat .aat-sort { font-weight: 600; color: inherit; text-decoration: none; padding: 0; }
+table.aat td { vertical-align: top; }
+table.aat tbody tr { cursor: pointer; }
+table.aat tbody tr:hover { background: var(--hover, rgba(37, 99, 235, .05)); }
+table.aat tfoot td { border-top: 2px solid var(--line, #e7e5ef); }
+.aat-st { white-space: nowrap; font-weight: 500; }
+.aat-st.ok { color: #0f8a4b; } .aat-st.bad { color: #c2410c; } .aat-st.old { color: #8a8799; }

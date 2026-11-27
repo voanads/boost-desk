@@ -4515,3 +4515,48 @@ table.aat tbody tr:hover { background: var(--hover, rgba(37, 99, 235, .05)); }
 table.aat tfoot td { border-top: 2px solid var(--line, #e7e5ef); }
 .aat-st { white-space: nowrap; font-weight: 500; }
 .aat-st.ok { color: #0f8a4b; } .aat-st.bad { color: #c2410c; } .aat-st.old { color: #8a8799; }
+
+/* ---- 🥊 Competitors cards (these rules were missing, so the section looked broken) ---- */
+.cmp-card{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;display:grid;gap:8px;background:var(--surface)}
+.cmp-card.ours{background:var(--bg-2)}
+.cmp-card input,.cmp-card textarea{width:100%;box-sizing:border-box;min-height:44px}
+.cmp-card textarea{min-height:84px;resize:vertical}
+.cmp-row{display:flex;gap:8px;align-items:center}.cmp-row input{flex:1;min-width:0}
+.cmp-pics{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.cmp-pic{position:relative}.cmp-pic img{width:88px;height:88px;object-fit:cover;border-radius:8px;display:block}
+.cmp-pic button{position:absolute;top:2px;right:2px;padding:0 6px;background:var(--surface)}
+.cmp-add{cursor:pointer;display:inline-flex;align-items:center;min-height:44px}
+
+/* ---- ✨ AI tab bar: status, one language switch, five parts (redesign 27 Nov) ---- */
+.aib{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:grid;gap:12px;margin-bottom:12px}
+.aib-h{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.aib-t{display:flex;flex-direction:column;gap:2px;min-width:0}.aib-t b{font-size:1.05rem}
+.aib-chip{font-size:.8rem;font-weight:600;border-radius:999px;padding:5px 10px;background:var(--ok-soft);color:var(--ok)}
+.aib-chip.warn{background:var(--warn-soft);color:var(--warn)}.aib-chip.bad{background:var(--danger-soft);color:var(--danger)}.aib-chip.off{background:var(--bg-2);color:var(--muted)}
+.aib-warn{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;background:var(--warn-soft);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;font-size:.9rem;color:var(--ink)}
+.aib-warn b{color:var(--warn)}
+.aib-nudge{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--brand-soft);border-radius:12px;padding:10px 12px;font-size:.9rem}
+.aib-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.aib-tabs button{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font-weight:600}
+.aib-tabs button small{font-weight:400;color:var(--muted);font-size:.78rem}
+.aib-tabs button[aria-pressed="true"]{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand)}
+.aib-tabs button[aria-pressed="true"] small{color:var(--on-brand);opacity:.85}
+.aib-n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--bg-2);color:var(--ink);font-size:.75rem;display:inline-flex;align-items:center;justify-content:center}
+.aib-n.bad{background:var(--danger-soft);color:var(--danger)}.aib-n.warn{background:var(--warn-soft);color:var(--warn)}
+.aib-tabs button[aria-pressed="true"] .aib-n{background:rgba(255,255,255,.22);color:var(--on-brand)}
+.aib-part .cd-sec{margin-top:0}
+.aib-part .ai-text{font-size:.95rem;line-height:1.65}
+.aib-part .ai-text h2,.aib-part .ai-text h3{font-size:1rem}
+.aib-part .ai-ask{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.aib-part .ai-ask input{flex:1;min-width:0;min-height:44px}
+@media (max-width:640px){.aib-tabs button small{display:none}.aib-tabs button{padding:0 10px}}
+
+/* ---- 📄 Page profile ---- */
+.pf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.pf-f{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted);font-weight:600}
+.pf-f.wide{grid-column:1 / -1}
+.pf-f input,.pf-f textarea{width:100%;box-sizing:border-box;min-height:44px;font-weight:400;color:var(--ink)}
+.pf-f textarea{min-height:84px;resize:vertical}
+.pf-tip{background:var(--brand-soft);border-radius:12px;padding:10px 12px;font-size:.9rem;margin-bottom:12px}
+.pfsec .hint:last-child{margin-top:10px}
+@media (max-width:640px){.pf-grid{grid-template-columns:1fr}}

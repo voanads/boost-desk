@@ -86,7 +86,7 @@ async function advice(user, clientId, { days = 7, lang = 'km', fresh = false } =
   // pictures: the weak ads first, then the best ones to compare with (at most 6)
   const pics = [];
   for (const a of [...weak.slice(0, 4), ...best.slice(0, 2)]) { const img = await fetchImage(a.image || a.thumb); if (img) pics.push({ label: `${weak.includes(a) ? 'WEAK' : 'BEST'} ad "${a.name}"`, ...img }); }
-  const payload = { client: d.client.name, clientType: d.client.type, period: `${d.from} to ${d.to}`, totals: d.totals, weakAds: weak.map(slim), bestAds: best.map(slim) };
+  const payload = { client: { name: d.client.name, pageProfile: await require('./pageProfile').forClient(user.fb_id, clientId) }, clientType: d.client.type, period: `${d.from} to ${d.to}`, totals: d.totals, weakAds: weak.map(slim), bestAds: best.map(slim) };
   return require('./ai').adDoctorAI(user.fb_id, payload, pics, { lang, fresh });
 }
 

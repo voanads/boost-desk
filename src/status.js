@@ -184,7 +184,8 @@ async function tickOnce({ leaders = async () => [], log = () => {} } = {}) {
         }
         if (!s.alert.escalated && !c.onIt && Date.now() - Date.parse(s.alert.at) > ESCALATE_MIN * 60e3) {
           const text = alertText(c, u.name) + `\n\n⏱ ${ESCALATE_MIN} នាទីហើយ មិនទាន់មានអ្នកមើល។` + (s.alert.noTeam ? `\n⚠ ក្រុម ${u.name} មិនទាន់ភ្ជាប់ Telegram — មិនបានទទួលការជូនដំណឹងនេះទេ។` : '');
-          for (const chat of await leaders()) { if (chats.some((t) => t.chat === chat)) continue; telegram.send(text, chat).catch(() => {}); }
+          // the COO can take it with one tap too (27 Nov): "ខ្ញុំកំពុងមើល" marks them on it, like the team's button
+          for (const chat of await leaders()) { if (chats.some((t) => t.chat === chat)) continue; telegram.sendButtons(text, chat, [[{ text: 'ខ្ញុំកំពុងមើល', data: `cs:on:${c.id}` }]]).catch(() => telegram.send(text, chat).catch(() => {})); }
           s.alert.escalated = true; note(s, 'escalated'); dirty = true; touched.add(c.id);
         }
       }

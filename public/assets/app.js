@@ -1185,7 +1185,16 @@
     return top ? top.pageId : (c.pages || []).map(String).find((x) => /^\d{5,20}$/.test(x)) || c.picId || cPic[c.id] || '';
   }
   const cPic = {};
+  // Owner's decision (27 Nov 2026): opening a client that is "to watch" counts as "Checked today" — few people tapped the
+  // button (5 of 78). Urgent clients are not marked: those still need "I'm on it". Media buyers' opens count too.
+  function autoChecked(id) {
+    const x = ctMineData && (ctMineData.clients || []).find((k) => k.id === id);
+    if (!x || x.level !== 'warn' || x.checked || (me && me.viewOnly)) return;
+    x.checked = { by: (me && me.name) || '', at: new Date().toISOString() }; // at once, so a second tap does not send it again
+    api(`/clients/${id}/checked`, { method: 'POST', body: { on: true } }).then((r) => { x.checked = r.checked; x.seen = !!r.checked; if (r.log) x.log = r.log; renderClients(); }).catch(() => { x.checked = null; });
+  }
   function selectClient(id) {
+    autoChecked(id);
     cSel = id; cPicked = true; cSetOpen = false; $('cWrap').classList.add('show-detail');
     document.querySelectorAll('#cGrid [data-csel]').forEach((b) => { const on = Number(b.dataset.csel) === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
     renderClientDetail(true);

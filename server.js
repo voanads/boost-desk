@@ -231,9 +231,6 @@ db.init().then(() => pageOrders.init()).then(() => { profit.init().catch((e) => 
   }, 60e3).unref();
   // One-off (20 Nov 2026): the first auto Boost plan lines took the campaign's start on Meta, which counted older posts against them.
   setTimeout(async () => { try { if (await db.getSetting('autoPlanFix1', null)) return; await db.setSetting('autoPlanFix1', { at: new Date().toISOString(), running: true }); const n = await require('./src/autoplan').fixPastStarts(); await db.setSetting('autoPlanFix1', { at: new Date().toISOString(), lines: n }); console.log(`[autoplan] one-off: ${n} lines now start today`); } catch (e) { console.error('[autoplan] one-off', e.message); } }, 20e3).unref();
-  setTimeout(() => require('./src/announce').run().catch((e) => console.error('[announce]', e.message)), 30e3).unref(); // one-off announcement of 19 Nov 2026
-  setTimeout(() => require('./src/announce').runConnect().catch((e) => console.error('[announce]', e.message)), 45e3).unref(); // one-off of 20 Nov 2026 13:42: PMs connect client Pages (daytime only)
-  setInterval(require('./src/runOnce').once('Announce guide', () => require('./src/announce').runGuide().catch((e) => console.error('[announce]', e.message)), 5 * 60e3), 5 * 60e3).unref(); // one-off guide of 20 Nov 2026: goes out once, from 08:10
   // One time: recount saved days with the newer live/post rule (and keep campaign IDs for "Move to Post/Live").
   (async () => {
     for (const u of await db.allUsers()) {

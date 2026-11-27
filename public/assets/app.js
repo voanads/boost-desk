@@ -698,9 +698,16 @@
       today += Number(i.todaySpend) || 0;
     }
     const q = acctQuery.trim().toLowerCase();
+    // Old = disabled or closed, nothing to pay and no spend today — hidden from "All" (review 27 Nov: 92 of 239 were like this).
+    // Unsettled accounts (money owed) never count as old. Same rule as the admin Ad accounts page.
+    const isOld = (a) => { const i = a.info || {}; return [2, 101].includes(i.statusCode) && !(Number(i.balance) > 0) && !(Number(i.todaySpend) > 0); };
+    const nOld = accounts.filter(isOld).length;
+    const ob = document.querySelector('#acctFilterSeg [data-af="old"]'); if (ob) { ob.hidden = !nOld && acctFilter !== 'old'; ob.textContent = `Old · ${nOld}`; }
     const filtered = accounts.filter((a) => {
       const i = a.info || {};
       const ok = [1, 201].includes(i.statusCode);
+      if (acctFilter === 'old') { if (!isOld(a)) return false; }
+      else if (isOld(a) && !acctQuery.trim()) return false; // a search still finds old accounts
       if (acctFilter === 'active' && !ok) return false;
       if (acctFilter === 'bad' && ok) return false;
       if (q) {
@@ -1538,7 +1545,7 @@
         <div class="cd-stat hero"><span class="lbl">${perTitle}</span><b class="num">${money(m.spend || 0)}</b>${m.spend && taxRate() ? `<span class="sub">+tax ${money(withTax(m.spend))}</span>` : ''}</div>
         ${(() => { const all = Object.values(cOrd).filter((x) => x.orders && x.spend), avg = all.length ? all.reduce((t, x) => t + ordSpendOf(x), 0) / all.reduce((t, x) => t + x.orders, 0) : null, tn = cpo == null || avg == null ? '' : cpo <= avg * 0.8 ? 'good' : cpo >= avg * 1.5 ? 'bad' : 'mid', y = cOrdY[c.id], ycpo = y && y.orders && y.spend ? ordSpendOf(y) / y.orders : null;
           return `<div class="cd-stat cpo ${tn}"><span class="lbl">Cost per order</span><b class="num">${cpo ? money(cpo) : '–'}</b><span class="sub">${cpoOdd(cpo, avg) ? CPO_ODD : ycpo ? 'Yesterday ' + money(ycpo) : y && y.spend ? 'Yesterday: no orders' : avg ? 'Average ' + money(avg) : 'from chats &amp; comments'}</span></div>`; })()}
-        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : perLbl}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days from before Boost Desk kept daily order counts come from adsbox.biz's API and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
+        <div class="cd-stat"><span class="lbl">Orders</span><b class="num">${o.orders ? o.orders.toLocaleString('en-US') : '–'}</b><span class="sub">${cOrdY[c.id] && cOrdY[c.id].orders ? 'Yesterday ' + cOrdY[c.id].orders.toLocaleString('en-US') : perLbl}${cOrdQ && cOrdQ.estimate ? ` · <span title="Days before Boost Desk counted orders itself (before 20 Nov 2026) come from the old counter and may be too high">${cOrdQ.estimate} day${cOrdQ.estimate === 1 ? '' : 's'} estimated</span>` : ''}</span></div>
         <div class="cd-stat"><span class="lbl">Lives · posts</span><b class="num">${m.lives || 0} · ${money(m.postSpend || 0)}</b><span class="sub">${money(m.liveSpend || 0)} on lives · ${m.days || 0} day${m.days === 1 ? '' : 's'}</span></div>
       </div>
       ${planStrip(c)}

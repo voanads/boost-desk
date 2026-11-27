@@ -1152,13 +1152,19 @@
     };
     dlg.showModal(); (f ? $('bstD') : $('bstP')).focus();
   }
+  let cQuietOpen = false;
   function renderClients() {
     if (cView === 'boosts') { if (bstData) paintBoosts(); return; }
     const q = ($('cSearch').value || '').trim().toLowerCase();
     const att = Object.fromEntries(clients.map((c) => [c.id, attentionOf(c)]));
     // Boosting now first (spend today or yesterday, or a plan line that runs today), then the clients that are not boosting now.
-    const stMap = Object.fromEntries(((ctMineData && ctMineData.clients) || []).map((x) => [x.id, x])), grp = (c) => (c.archived ? 2 : !stMap[c.id] ? 0 : stMap[c.id].level === 'idle' ? 1 : 0), lvl = (c) => { const x = stMap[c.id] || {}; return x.level === 'warn' && x.seen && x.checked ? 1.5 : ({ bad: 0, warn: 1, ok: 2 }[x.level] ?? 2); };
-    const nAct = clients.filter((c) => !c.archived && stMap[c.id] && stMap[c.id].level !== 'idle').length, nIdle = clients.filter((c) => !c.archived && stMap[c.id] && stMap[c.id].level === 'idle').length;
+    // Owner's decision (27 Nov 2026): a client with no spend for 30 days is paused by itself — folded into its own group at the
+    // bottom. It is NOT archived: archived clients get no spend matched, so a client that boosts again would lose it. This
+    // one comes back to "Boosting now" by itself on the day it spends again. New clients (under 30 days) are never folded.
+    const stMap = Object.fromEntries(((ctMineData && ctMineData.clients) || []).map((x) => [x.id, x])), today0 = (ctMineData && ctMineData.today) || (me && me.today) || iso(new Date()),
+      quiet = (c) => !c.archived && !!stMap[c.id] && stMap[c.id].level === 'idle' && !stMap[c.id].lastBoost && !stMap[c.id].follow && (!c.created_at || String(c.created_at).slice(0, 10) <= addDaysIso(today0, -30)),
+      grp = (c) => (c.archived ? 3 : !stMap[c.id] ? 0 : quiet(c) ? 2 : stMap[c.id].level === 'idle' ? 1 : 0), lvl = (c) => { const x = stMap[c.id] || {}; return x.level === 'warn' && x.seen && x.checked ? 1.5 : ({ bad: 0, warn: 1, ok: 2 }[x.level] ?? 2); };
+    const nAct = clients.filter((c) => !c.archived && stMap[c.id] && stMap[c.id].level !== 'idle').length, nQuiet = clients.filter(quiet).length, nIdle = clients.filter((c) => !c.archived && stMap[c.id] && stMap[c.id].level === 'idle').length - nQuiet;
     const list = clients.filter((c) => !q || [c.name, ...(c.pages || [])].some((x) => String(x).toLowerCase().includes(q)))
       .sort((a, b) => (a.archived - b.archived) || (grp(a) - grp(b)) || (cSort === 'attention' ? (lvl(a) - lvl(b)) : 0) || (cSort === 'attention' ? ((att[b.id].urgent - att[a.id].urgent) || (att[b.id].n - att[a.id].n)) : 0) || ((cMonth[b.id]?.spend || 0) - (cMonth[a.id]?.spend || 0)) || a.name.localeCompare(b.name));
     if ($('cSortSeg')) $('cSortSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === cSort)));
@@ -1166,14 +1172,20 @@
     if (cSel && !clients.some((c) => c.id === cSel)) cSel = null;
     if ((!cSel || !cPicked) && list.length && matchMedia('(min-width: 901px)').matches) cSel = list[0].id; // until someone picks, show the top client
     $('cGrid').innerHTML = list.map((c, i) => {
+      if (!q && quiet(c)) { if (i && grp(list[i - 1]) === 2) return cQuietOpen ? cRow(c, i) : '';
+        return `<button type="button" class="cg-h cg-quiet" id="cQuietTg" aria-expanded="${cQuietOpen}">${cQuietOpen ? '▾' : '▸'} Paused automatically · no spend for 30 days · ${nQuiet}<span class="hint"> — they come back by themselves when they spend again</span></button>${cQuietOpen ? cRow(c, i) : ''}`; }
+      return cRow(c, i);
+    }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on the Dashboard and add the Pages it finds.'}</div>`;
+    if ($('cQuietTg')) $('cQuietTg').onclick = () => { cQuietOpen = !cQuietOpen; renderClients(); };
+    function cRow(c, i) {
       const m = cMonth[c.id], o = cOrd[c.id], cpo = o && o.orders && o.spend ? ordSpendOf(o) / o.orders : null, sx = stMap[c.id], idle = !!sx && sx.level === 'idle';
-      const head = !q && (nAct + nIdle) && !c.archived && sx && (i === 0 || grp(list[i - 1]) !== grp(c)) ? `<div class="cg-h" role="presentation">${idle ? `Not boosting now · ${nIdle}` : `Boosting now · ${nAct}`}</div>` : '';
+      const head = !q && !quiet(c) && (nAct + nIdle) && !c.archived && sx && (i === 0 || grp(list[i - 1]) !== grp(c)) ? `<div class="cg-h" role="presentation">${idle ? `Not boosting now · ${nIdle}` : `Boosting now · ${nAct}`}</div>` : '';
       return `${head}<button type="button" class="crow${c.archived ? ' paused' : ''}${c.id === cSel ? ' on' : ''}" role="option" aria-selected="${c.id === cSel}" data-csel="${c.id}" style="--i:${Math.min(i, 14)}">
         <span class="cr-av" aria-hidden="true">${esc(String(c.name || '?').trim().slice(0, 1).toUpperCase())}${pagePic(clientPageId(c), 'av')}</span>
         <span class="cr-n"><b>${esc(c.name)}${att[c.id].n ? `<span class="cr-badge${att[c.id].urgent && !idle ? ' urgent' : ''}" title="${att[c.id].n} thing${att[c.id].n === 1 ? '' : 's'} to do today">${att[c.id].n}</span>` : ''}</b><span class="cr-tags">${typeTags(c.type)}${c.archived ? '<span class="chip meta">Paused</span>' : ''}${!c.telegram ? '<span class="chip nogroup" title="No Telegram group — reports can\'t be sent">No group</span>' : ''}</span><span class="cr-status">${(() => { const ps = c.plan && c.plan.lines && c.plan.lines.length && !c.plan.hidden && hasPostType(c) ? planStatus(c) : null; const w = cWork[c.id]; const parts = []; if (c.archived) parts.push('Paused'); else if (idle) parts.push(sx.follow ? `<span class="is-warn">${esc(sx.follow.text)}</span>` : 'not boosting now'); else if (sx && sx.level === 'bad') parts.push('<span class="is-danger">urgent</span>'); else if (sx && ctSeen(sx)) parts.push('<span class="hint">checked ✓</span>'); else if (sx && sx.level === 'warn') parts.push('<span class="is-warn">to watch</span>'); else if (!sx && att[c.id].urgent) parts.push('<span class="is-danger">needs attention</span>'); else if (ps && ps[1] === 'bp-bad') parts.push('<span class="is-danger">over plan</span>'); else if (ps && ps[1] === 'bp-draft') parts.push('<span class="is-warn">plan not sent</span>'); if (w && w.openTasks) parts.push(`${w.openTasks} task${w.openTasks === 1 ? '' : 's'} left`); else if (w && !w.openTasks && (w.ticked || []).length) parts.push('<span class="is-ok">all done</span>'); return parts.join(' · '); })()}</span>${c.plan && c.plan.lines && c.plan.lines.length && !c.plan.hidden && hasPostType(c) ? (() => { const [st, cls] = planStatus(c); return `<span class="cr-plan ${cls}" title="Boost plan">🎯 ${money(planTotals(c.plan).total)} · ${esc(st)}</span>`; })() : ''}</span>
         <span class="cr-v"><b class="num">${m && m.spend ? money(m.spend) : '–'}</b><span class="hint">${o && o.orders ? `${o.orders.toLocaleString('en-US')} orders${cpo ? ' · ' + money(cpo) : ''}` : 'this month'}</span></span>
       </button>`;
-    }).join('') || `<div class="empty">${clients.length ? 'No client matches your search.' : '<b>No clients yet.</b><br>Tap <b>+ Add client</b>, or tap <b>Sync from Meta</b> on the Dashboard and add the Pages it finds.'}</div>`;
+    }
     document.querySelectorAll('#cGrid [data-csel]').forEach((b) => b.onclick = () => selectClient(Number(b.dataset.csel)));
     $('cWrap').classList.toggle('show-detail', !!cSel && $('cWrap').classList.contains('show-detail'));
     renderClientDetail();

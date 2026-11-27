@@ -4569,3 +4569,8 @@ textarea.bp-msg[readonly]{opacity:.85}
 .bp-edh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:6px}
 .bp-edst{font-size:.8rem;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:999px;padding:3px 10px}
 .bp-edhint{margin-top:6px}
+
+/* Clients: the folded "Paused automatically" group (no spend for 30 days) */
+button.cg-h.cg-quiet{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;min-height:44px;font:inherit;color:var(--muted);font-weight:600;padding:10px 12px}
+button.cg-h.cg-quiet:hover{color:var(--ink)}
+button.cg-h.cg-quiet .hint{font-weight:400}

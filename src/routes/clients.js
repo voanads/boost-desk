@@ -106,6 +106,12 @@ module.exports = function mountClients(app, api, deps) {
     if (!P.totals(pl).budget) return res.status(400).json({ error: 'Add at least one post with a daily budget first.' });
     res.json({ text: P.message(c, pl, req.query.lang === 'km' ? 'km' : 'en'), teamGroup: !!cfg.telegramChatId });
   }));
+  // Delete the plan last sent to the client's Telegram group (sent by mistake / wrong plan) — within 48 hours.
+  api.post('/clients/:id/boost-plan/unsend', wrap(async (req, res) => {
+    const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
+    if (!c) return res.status(404).json({ error: 'Client not found.' });
+    try { res.json(await require('../plan').unsend(req.user.fb_id, c)); } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  }));
   api.get('/clients/:id/boost-plan/progress', wrap(async (req, res) => {
     const c = (await db.listClients(req.user.fb_id)).find((x) => x.id === Number(req.params.id));
     if (!c) return res.status(404).json({ error: 'Client not found.' });
@@ -117,7 +123,7 @@ module.exports = function mountClients(app, api, deps) {
     const b = req.body || {};
     const text = typeof b.text === 'string' && b.text.trim() ? b.text.replace(/\u0000/g, '').trim() : '';
     if (text.length > 4000) return res.status(400).json({ error: 'The message is too long for Telegram (4,000 letters at most). Shorten it a little.' });
-    res.json(await require('../plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || ''), only: Array.isArray(b.only) ? b.only.slice(0, 30) : null, text }));
+    res.json(await require('../plan').send(req.user.fb_id, c, { to: b.to === 'team' ? 'team' : 'client', lang: b.lang === 'km' ? 'km' : 'en', topic: String(b.topic || ''), only: Array.isArray(b.only) ? b.only.slice(0, 30) : null, text, replace: !!b.replace }));
   }));
   api.delete('/clients/:id', wrap(async (req, res) => { await db.deleteClient(req.user.fb_id, Number(req.params.id)); await sync.rematch(req.user); res.json({ ok: true }); }));
 

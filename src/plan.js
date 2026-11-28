@@ -94,9 +94,25 @@ function message(c, plan, lang = 'en', team = false) {
 // topic: a destination "<group>:<thread>" inside the client's group (one of its topics) — optional.
 // only: indexes of the lines to send (the posts just added, for example); without it the whole plan goes.
 const subset = (plan, only) => { const all = (plan && plan.lines) || [], ix = Array.isArray(only) ? [...new Set(only.map(Number))].filter((n) => Number.isInteger(n) && n >= 0 && n < all.length).sort((a, b) => a - b) : null; return ix && ix.length && ix.length < all.length ? { plan: { ...plan, lines: ix.map((n) => all[n]) }, ix } : { plan, ix: all.map((_, n) => n) }; };
+// A plan sent to the client's group by mistake can be taken back (28 Nov 2026): every message of the last send is kept in
+// plan.sentMsgs = { at, chat, ids }. Telegram lets a bot delete its own messages for 48 hours only.
+const DELETE_HOURS = 48;
+const canUnsend = (plan, now = Date.now()) => { const s = plan && plan.sentMsgs; return !!(s && Array.isArray(s.ids) && s.ids.length && now - Date.parse(s.at) < DELETE_HOURS * 36e5); };
+// Delete the last plan sent to the client's group. Returns the plan as it is afterwards (that send no longer counts as sent).
+async function unsend(owner, c) {
+  const plan = c.plan || {}, s = plan.sentMsgs;
+  if (!s || !Array.isArray(s.ids) || !s.ids.length) throw Object.assign(new Error('There is no sent plan to delete.'), { status: 400 });
+  if (!canUnsend(plan)) throw Object.assign(new Error(`Telegram only lets Boost Desk delete its messages for ${DELETE_HOURS} hours. Delete them in the Telegram group yourself.`), { status: 400 });
+  let deleted = 0, failed = 0;
+  for (const id of s.ids) { if (await telegram.remove(s.chat, id)) deleted++; else failed++; }
+  const next = { ...plan, sentMsgs: null, sentAt: plan.sentAt === s.at ? null : plan.sentAt || null, lines: (plan.lines || []).map((l) => (l.sent === s.at ? { ...l, sent: '' } : l)) };
+  await db.updateClient(owner, c.id, { plan: next });
+  return { deleted, failed, plan: next };
+}
 // text: the message as the PM edited it before sending — sent instead of the one Boost Desk writes.
-async function send(owner, c, { to = 'client', lang, topic = '', only = null, text: edited = '' } = {}) {
-  const full = c.plan, sub = subset(full, only); c = { ...c, plan: sub.plan };
+// replace: delete the plan sent last time first, so the client only sees the new one.
+async function send(owner, c, { to = 'client', lang, topic = '', only = null, text: edited = '', replace = false } = {}) {
+  let full = c.plan; const sub = subset(full, only), track = to === 'client' ? [] : null; c = { ...c, plan: sub.plan };
   if (!totals(c.plan).budget) throw new Error('Add at least one post with a daily budget first.');
   let chat = to === 'team' ? cfg.telegramChatId : c.telegram;
   if (to === 'client' && topic) {
@@ -105,6 +121,8 @@ async function send(owner, c, { to = 'client', lang, topic = '', only = null, te
     chat = topic;
   }
   if (!chat) throw new Error(to === 'team' ? 'No team group is set up (TELEGRAM_CHAT_ID in Railway).' : 'This client has no Telegram group yet — pick one in Client settings.');
+  // only now that the new plan can go: the old one is taken out of the group first
+  if (replace && to === 'client' && canUnsend(full)) full = (await unsend(owner, { ...c, plan: full })).plan;
   const lg = lang || c.plan.lang || 'en', km = lg === 'km', team = to === 'team', text = edited || message(c, c.plan, lg, team);
   const imgs = [];
   // Per line: its picture plus the pictures of its extra links (all boosted under that line's budget).
@@ -113,25 +131,27 @@ async function send(owner, c, { to = 'client', lang, topic = '', only = null, te
     for (const id of [l.img, ...(l.extra || []).map((x) => x.img)].filter(Boolean)) { const im = await db.getPostImage(owner, id); if (im) pics.push(im); }
     if (pics.length) imgs.push({ i, pics });
   }
-  if (!imgs.length) await telegram.send(text, chat);
+  if (!imgs.length) await telegram.send(text, chat, track);
   else if (edited) {
     // An edited message is sent whole and as written: first each post's pictures numbered like its line, then the text.
-    for (const im of imgs) await telegram.sendAlbum(im.pics, `${im.i + 1}.`, chat);
-    await telegram.send(text, chat);
+    for (const im of imgs) await telegram.sendAlbum(im.pics, `${im.i + 1}.`, chat, track);
+    await telegram.send(text, chat, track);
   } else {
     // Every line with pictures goes as its own photo (or album) with its line under it, then the totals.
     const head = km ? `🎯 ផែនការ Boost Post — ${c.name}` : `🎯 Boost plan — ${c.name}`;
     const withPic = new Set(imgs.map((x) => x.i));
-    for (const [n, im] of imgs.entries()) await telegram.sendAlbum(im.pics, (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km, team), chat);
+    for (const [n, im] of imgs.entries()) await telegram.sendAlbum(im.pics, (n === 0 ? head + '\n\n' : '') + lineText(c.plan.lines[im.i], im.i, km, team), chat, track);
     const rest = c.plan.lines.map((l, i) => (withPic.has(i) ? null : lineText(l, i, km, team))).filter(Boolean);
     const t = totals(c.plan), tail = km
       ? [...rest, rest.length ? '' : null, t.rate ? `ថវិកាផ្សាយ: ${money(t.budget)}` : null, t.rate ? `ពន្ធ ${t.rate}%: ${money(t.tax)}` : null, `💰 សរុបត្រូវបង់: ${money(t.total)}`, '', 'សូមបង់ប្រាក់មុន ដើម្បីចាប់ផ្តើម Boost 🙏']
       : [...rest, rest.length ? '' : null, t.rate ? `Ad budget: ${money(t.budget)}` : null, t.rate ? `Tax ${t.rate}%: ${money(t.tax)}` : null, `💰 Total to pay: ${money(t.total)}`, '', 'Please pay first so we can start boosting 🙏'];
-    await telegram.send(tail.filter((x) => x !== null).join('\n'), chat);
+    await telegram.send(tail.filter((x) => x !== null).join('\n'), chat, track);
   }
   if (to === 'client') { const now = new Date().toISOString(), sentIx = new Set(sub.ix); // remember which posts the client was sent
-    await db.updateClient(owner, c.id, { plan: { ...full, lines: full.lines.map((l, n) => (sentIx.has(n) ? { ...l, sent: now } : l)), sentAt: now } }); }
+    const sentMsgs = { at: now, chat: String(chat), ids: track.map((t) => t.id).slice(0, 60) };
+    await db.updateClient(owner, c.id, { plan: { ...full, lines: full.lines.map((l, n) => (sentIx.has(n) ? { ...l, sent: now } : l)), sentAt: now, sentMsgs } });
+    return { ok: true, sentMsgs }; }
   return { ok: true };
 }
 
-module.exports = { clean, totals, progress, message, send, subset, unent };
+module.exports = { clean, totals, progress, message, send, subset, unent, unsend, canUnsend, DELETE_HOURS };

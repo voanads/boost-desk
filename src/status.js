@@ -36,7 +36,9 @@ const HOW = {
 // A short history per client (newest first, 30 lines): who checked, who took a problem, alerts and when they were solved.
 const note = (s, kind, by, text) => { const d = sync.todayIn(); if ((kind === 'checked' || kind === 'onIt') && (s.log || []).some((l) => l.kind === kind && l.by === (by || '') && sync.todayIn(undefined, new Date(l.at)) === d)) return; s.log = [{ at: new Date().toISOString(), kind, by: by || '', text: text || '' }, ...(s.log || [])].slice(0, 30); };
 
-async function forOwner(user) {
+// /clients-status and /handoff ask for this together when a page opens: calls at the same moment share one run.
+const forOwner = (user) => require('./shared').shared(`status|${user.fb_id}|${user.name}`, () => forOwnerNow(user));
+async function forOwnerNow(user) {
   const owner = user.fb_id, today = sync.todayIn(), hour = hourNow();
   const clients = (await db.listClients(owner)).filter((c) => !c.archived);
   if (!clients.length) return { today, clients: [] };

@@ -73,7 +73,7 @@ module.exports = function mountSites(app, api, deps) {
       }
     }
     // KPI names for chips
-    for (const key of new Set(out.map((t) => t.owner))) { try { for (const k of await deps.KPI().getList(buyer.id, today.slice(0, 7))) kpiNames[k.id] = k.name; } catch (_) {} }
+    if (out.length) { try { for (const k of await deps.KPI().getList(buyer.id, today.slice(0, 7))) kpiNames[k.id] = k.name; } catch (_) {} } // the buyer's own KPIs: read once
     out.sort((a, b) => (a.done - b.done) || (b.late - a.late) || a.client.localeCompare(b.client));
     return { tasks: out.map((t) => ({ ...t, kpiName: kpiNames[t.kpi] || '' })), all, logs, clients: cl };
   }
@@ -133,13 +133,16 @@ module.exports = function mountSites(app, api, deps) {
       const pmId = b && (b.addedById || Object.fromEntries((await db.allUsers()).map((u) => [u.name, u.fb_id]))[b.addedBy]);
       const pm = pmId && (await db.getUser(pmId));
       if (b && pm) {
-        if (req.method !== 'GET' && req.path.startsWith('/api/') && (
-          /^\/api\/(admin|auto-sync|profit|media-buyers|kpis|main|company|team|targets)/.test(req.path)
-          || (req.method === 'DELETE' && /^\/api\/clients\/\d+$/.test(req.path))
-          || (req.method === 'PATCH' && /^\/api\/clients\/\d+$/.test(req.path) && req.body && 'archived' in req.body) // pausing a client stays with the PM
+        // Express matches routes ignoring letter case and a trailing slash, so the limits below check the path the same way
+        // (otherwise /api/clients/5/ or /api/Media-Buyers would get past them).
+        const ap = req.path.toLowerCase().replace(/\/+$/, '') + '/';
+        if (req.method !== 'GET' && ap.startsWith('/api/') && (
+          /^\/api\/(admin|auto-sync|profit|media-buyers|kpis|main|company|team|targets)/.test(ap)
+          || (req.method === 'DELETE' && /^\/api\/clients\/\d+\/$/.test(ap))
+          || (req.method === 'PATCH' && /^\/api\/clients\/\d+\/$/.test(ap) && req.body && 'archived' in req.body) // pausing a client stays with the PM
         )) return res.status(403).json({ error: 'Media buyers can\'t do this — ask your PM.' });
-        if (req.path.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(req.path)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
-        if (!req.path.startsWith('/api/') && !req.path.startsWith('/mediabuyer') && !req.path.startsWith('/mb')) return res.redirect('/mediabuyer');
+        if (ap.startsWith('/api/') && /^\/api\/(admin|profit|main|company|auto-sync|kpis\/people|admin\/)/.test(ap)) return res.status(403).json({ error: 'Not available on the media buyer site.' });
+        if (!ap.startsWith('/api/') && !ap.startsWith('/mediabuyer') && !ap.startsWith('/mb')) return res.redirect('/mediabuyer');
         user = { ...pm, buyer: { id: b.id, name: b.name, photo: !!b.photo } };
       }
     }

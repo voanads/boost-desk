@@ -10,7 +10,9 @@ const isDay = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
 const money = (n) => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // ---------- today's to-do ----------
-async function todo(user) {
+// /todo, /clients-status and /handoff all ask for this when a page opens: calls at the same moment share one run.
+const todo = (user) => require('./shared').shared(`todo|${user.fb_id}|${user.name}`, () => todoNow(user));
+async function todoNow(user) {
   const owner = user.fb_id, today = sync.todayIn();
   const clients = (await db.listClients(owner)).filter((c) => !c.archived);
   const entries = Object.fromEntries((await db.monthEntries(owner, today, today)).map((r) => [r.client_id, r.data || {}]));

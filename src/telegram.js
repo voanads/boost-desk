@@ -156,7 +156,8 @@ async function username() {
 }
 
 // Up to 10 pictures as one album; the text goes as the album's caption when it fits, else as a message after it.
-async function sendAlbum(images, text, chatId) {
+// track (optional array): each message sent is added as { chat, id }, so it can be deleted later (Boost plan → Delete).
+async function sendAlbum(images, text, chatId, track = null) {
   if (!cfg.telegramToken) throw new Error('Telegram is not set up. Add TELEGRAM_BOT_TOKEN in Railway.');
   if (!chatId) throw new Error('No Telegram group chosen.');
   const list = images.slice(0, 10), fits = text && text.length <= 1024;
@@ -165,14 +166,16 @@ async function sendAlbum(images, text, chatId) {
     form.append('photo', new Blob([list[0].data], { type: list[0].mime }), 'post.jpg');
     const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendPhoto`, { method: 'POST', body: form })).json().catch(() => ({}));
     if (!body.ok) throw new Error('Telegram: ' + (body.description || 'photo failed'));
+    if (track && body.result && body.result.message_id) track.push({ chat: String(chatId), id: body.result.message_id });
   } else {
     const form = new FormData(); addDest(form, chatId);
     form.append('media', JSON.stringify(list.map((im, i) => ({ type: 'photo', media: `attach://p${i}`, ...(i === 0 && fits ? { caption: text } : {}) }))));
     list.forEach((im, i) => form.append(`p${i}`, new Blob([im.data], { type: im.mime }), `p${i}.jpg`));
     const body = await (await fetch(`${API}/bot${cfg.telegramToken}/sendMediaGroup`, { method: 'POST', body: form })).json().catch(() => ({}));
     if (!body.ok) throw new Error('Telegram: ' + (body.description || 'album failed'));
+    if (track && Array.isArray(body.result)) for (const m of body.result) if (m && m.message_id) track.push({ chat: String(chatId), id: m.message_id });
   }
-  if (text && !fits) await send(text, chatId);
+  if (text && !fits) await send(text, chatId, track);
 }
 
 // A message with buttons under it: buttons = [[{ text, data }]].

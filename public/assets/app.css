@@ -4574,3 +4574,9 @@ textarea.bp-msg[readonly]{opacity:.85}
 button.cg-h.cg-quiet{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;min-height:44px;font:inherit;color:var(--muted);font-weight:600;padding:10px 12px}
 button.cg-h.cg-quiet:hover{color:var(--ink)}
 button.cg-h.cg-quiet .hint{font-weight:400}
+
+/* Boost plan: the last plan sent to the client's group, with Delete / Fix & resend (48 h) */
+.bp-sentbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0;padding:10px 12px;border-radius:12px;background:var(--bg-2);font-size:.9rem}
+.bp-sentbar .hint{font-size:.8rem}
+.bp-repl{display:flex;gap:8px;align-items:flex-start;font-size:.88rem;margin:6px 0;line-height:1.4}
+.bp-repl input{margin-top:3px;width:18px;height:18px;flex:none}

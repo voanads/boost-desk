@@ -1614,6 +1614,9 @@
     return { budget, rate, tax, total: r2(budget + tax) };
   }
   const shortDay = (d) => d ? nice(d).replace(/ \d{4}$/, '') : '';
+  // A plan sent to the client's group can be taken back for 48 hours (Telegram's limit for a bot deleting its messages).
+  const planSentMsgs = (c) => { const m = c.plan && c.plan.sentMsgs; return m && Array.isArray(m.ids) && m.ids.length && Date.now() - Date.parse(m.at) < 48 * 36e5 ? m : null; };
+  const hhmmOf = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   function planStatus(c) {
     const p = planProg[c.id];
     if (p && p.done) return ['Finished', 'bp-done'];
@@ -1692,6 +1695,7 @@
             return `<label class="bp-topic"><span class="hint">Topic</span><select id="bpTopic"><option value="">Main chat${c.telegram.includes(':') ? ' (the topic set on the client)' : ''}</option>${[...seen].map(([id, n]) => `<option value="${esc(id)}" ${planSend.topic === id ? 'selected' : ''}># ${esc(n)}</option>`).join('')}</select></label>`; })()}` : '<span class="hint bp-nogroup">No Telegram group yet — link one in ⚙ Settings to send it there.</span>'}
           ${me && me.telegram && me.telegram.teamGroup ? `<label><input type="radio" name="bpTo" value="team" ${planSend.to === 'team' ? 'checked' : ''}> My team group</label>` : ''}
           <label><input type="radio" name="bpTo" value="copy" ${planSend.to === 'copy' ? 'checked' : ''}> Just copy the text</label>
+          ${(() => { const m = planSentMsgs(c); return m && c.telegram ? `<label class="bp-repl"><input type="checkbox" id="bpReplace" ${planSend.replace !== false ? 'checked' : ''}> លុបផែនការដែលផ្ញើម៉ោង ${hhmmOf(m.at)} ចេញពី group មុន — ភ្ញៀវឃើញតែផែនការថ្មី</label>` : ''; })()}
           <button type="button" class="primary sm" id="bpGo">${planSend.to === 'copy' ? 'Copy text' : 'Send now'}</button></div></div>` : '';
     const today = (ctMineData && ctMineData.today) || (me && me.today) || new Date(Date.now() + 7 * 36e5).toISOString().slice(0, 10), endOf = (l) => (l.start ? addDaysIso(l.start, Math.max(1, Number(l.days) || 1) - 1) : ''), starts = lines.map((l) => l.start).filter(Boolean).sort(), ends = lines.map(endOf).filter(Boolean).sort();
     const nEnd = lines.filter((l) => endOf(l) === today).length, nAuto = lines.filter((l) => l.auto).length;
@@ -1702,6 +1706,7 @@
     const chipB = (k, lab, n) => `<button type="button" class="bp-chip" data-bpf="${k}" aria-pressed="${planView.f === k}">${lab} · ${n}</button>`;
     return `<section class="bplan ${cls}"><div class="bp-top"><b>📣 Boost plan</b><span class="hint">${lines.length} post${lines.length === 1 ? '' : 's'}</span>
         <span class="bp-st">${esc(st)}</span><button type="button" class="ghost sm" data-bp="hide">Hide</button><button type="button" class="ghost sm" data-bp="edit">Edit</button><button type="button" class="ghost sm" data-bp="new">New plan</button><button type="button" class="ghost sm bp-rm" data-bp="clear" title="Delete this plan">Delete</button><button type="button" class="sm" data-bp="send">📤 Send plan</button></div>
+      ${(() => { const m = planSentMsgs(c); return m && open !== 'send' ? `<div class="bp-sentbar"><span>✈ ផ្ញើទៅ group ភ្ញៀវ ${esc(shortDay(m.at.slice(0, 10)))} ម៉ោង ${hhmmOf(m.at)} · ${m.ids.length} សារ</span><span class="hint">ផែនការខុស? លុបចេញពី group បានក្នុង 48 ម៉ោង</span><span class="spacer"></span><button type="button" class="ghost sm" data-bp="send">✎ កែ ហើយផ្ញើម្ដងទៀត</button><button type="button" class="ghost sm bp-rm" id="bpUnsend">🗑 លុបចេញពី group</button></div>` : ''; })()}
       <div class="bp-sum">
         <div class="bp-sbox"><span class="lbl">Total to pay</span><b class="num">${money(t.total)}</b><span class="hint">Ad budget ${money(t.budget)}${t.rate ? ` + tax ${t.rate}% ${money(t.tax)}` : ''}</span></div>
         <div class="bp-sbox"><span class="lbl">Post spend</span>${p && p.started ? `<b class="num">${money(p.spent)} <small>of ${money(p.budget)} · ${p.pct}%</small></b><div class="bp-bar" role="img" aria-label="Spent ${p.pct}% of the plan"><i style="width:${Math.min(100, p.pct)}%"></i></div><span class="hint">since ${esc(shortDay(p.from))}</span>` : '<b class="num">–</b><span class="hint">The plan has not started</span>'}</div>
@@ -1829,11 +1834,23 @@
         if (!planSend.only.length) { b.disabled = false; b.textContent = 'Send now'; return toast('Tick at least one post to send.'); }
         const only = planSend.only.slice();
         if (planSend.edited != null && !planSend.edited.trim()) { b.disabled = false; b.textContent = 'Send now'; return toast('The message is empty — write something or tap ↺ to get it back.'); }
-        await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '', only, ...(planSend.edited != null ? { text: planSend.edited } : {}) } });
-        planSend.edited = null;
-        if (planSend.to === 'client') { const now = new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now, lines: x.plan.lines.map((l, i) => (only.includes(i) ? { ...l, sent: now } : l)) } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
-        planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : 'Plan sent to ' + c.name);
+        const replace = planSend.to === 'client' && !!planSentMsgs(c) && !!($('bpReplace') && $('bpReplace').checked), was = replace ? planSentMsgs(c).at : null;
+        const r = await api(`/clients/${c.id}/boost-plan/send`, { method: 'POST', body: { to: planSend.to, lang: planSend.lang, topic: planSend.to === 'client' ? planSend.topic : '', only, replace, ...(planSend.edited != null ? { text: planSend.edited } : {}) } });
+        planSend.edited = null; planSend.replace = true;
+        if (planSend.to === 'client') { const now = (r.sentMsgs && r.sentMsgs.at) || new Date().toISOString(); clients = clients.map((x) => x.id === c.id ? { ...x, plan: { ...x.plan, sentAt: now, sentMsgs: r.sentMsgs || null, lines: x.plan.lines.map((l, i) => (only.includes(i) ? { ...l, sent: now } : was && l.sent === was ? { ...l, sent: '' } : l)) } } : x); c = clients.find((x) => x.id === c.id); renderClients(); }
+        planOpen[c.id] = null; redrawPlan(c); successBadge(planSend.to === 'team' ? 'Plan sent to your team group' : (replace ? 'Old plan deleted · new plan sent to ' : 'Plan sent to ') + c.name);
       } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Send now'; }
+    };
+    if ($('bpReplace')) $('bpReplace').onchange = () => { planSend.replace = $('bpReplace').checked; };
+    if ($('bpUnsend')) $('bpUnsend').onclick = async () => {
+      const m = planSentMsgs(c); if (!m) return;
+      if (!confirm(`លុបផែនការដែលផ្ញើម៉ោង ${hhmmOf(m.at)} ចេញពី Telegram group របស់ ${c.name}? (${m.ids.length} សារ) ភ្ញៀវនឹងមិនឃើញវាទៀតទេ។`)) return;
+      const b = $('bpUnsend'); b.disabled = true; b.textContent = 'កំពុងលុប…';
+      try {
+        const r = await api(`/clients/${c.id}/boost-plan/unsend`, { method: 'POST' });
+        clients = clients.map((x) => (x.id === c.id ? { ...x, plan: r.plan } : x)); c = clients.find((x) => x.id === c.id); renderClients(); redrawPlan(c);
+        if (r.failed) toast(`លុបបាន ${r.deleted} សារ · ${r.failed} សារលុបមិនបាន — សូមលុបក្នុង group ដោយដៃ`); else successBadge(`បានលុប ${r.deleted} សារចេញពី group — កែផែនការ ហើយផ្ញើម្ដងទៀតបាន`);
+      } catch (e) { toast(e.message); b.disabled = false; b.textContent = '🗑 លុបចេញពី group'; }
     };
   }
   async function loadWorkbook(cid) {

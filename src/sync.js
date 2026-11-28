@@ -215,10 +215,15 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   const noAccess = (await db.getUserSetting(owner, 'acctNoAccess', {})) || {};
   const manual = !/^Auto (sync|report)$/.test(String(user.name || ''));
   let noAccessChanged = false;
-  for (const [i, id] of ids.entries()) {
-    onProgress({ phase: 'accounts', done: i, total: ids.length, account: names[id] || id });
+  // Ad accounts are read a few at a time (28 Nov 2026): one by one, a sync of many accounts took 1–3.5 minutes. Meta's
+  // limits are per ad account, so SYNC_PARALLEL (default 4) accounts at once is safe. Results keep the account order.
+  // A Meta "slow down" stops new accounts from starting (as the old loop stopped); an expired login stops the sync.
+  const PAR = Math.max(1, Math.min(8, Number(process.env.SYNC_PARALLEL) || 4));
+  const itemsBy = ids.map(() => []), errBy = ids.map(() => []), checkBy = ids.map(() => []);
+  let next = 0, doneN = 0, stop = false, fatal = null;
+  const readAccount = async (i, id) => {
     const na = noAccess[id];
-    if (na && !manual && Date.now() - Date.parse(na.at) < 6 * 3600e3) { errors.push({ account: names[id] || id, message: na.message, noAccess: true }); continue; }
+    if (na && !manual && Date.now() - Date.parse(na.at) < 6 * 3600e3) { errBy[i].push({ account: names[id] || id, message: na.message, noAccess: true }); return; }
     try {
       // Completeness check: the account's own total vs what we collect campaign by campaign.
       // The total is read FIRST: a live that is running keeps spending during the sync, so reading it
@@ -241,27 +246,38 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
           if (more.diag) why[id] = Object.entries(more.diag).map(([k, v]) => `${k} ${v}`).join(', ');
         } catch (e) { if (e.needsLogin || e.rateLimited) throw e; }
       }
-      items.push(...rows);
+      itemsBy[i] = rows;
       if (noAccess[id]) { delete noAccess[id]; noAccessChanged = true; }
       if (total != null) {
         const found = round2(rows.reduce((t, r) => t + r.spend, 0));
         if (why[id] && total - found > 1) console.log(`[sync] ${names[id] || id}: still missing ${round2(total - found)} — rows from Meta: ${why[id]}`);
         // Meta rounds each campaign-day to the cent, so many rows can differ from the total by a few cents.
         const tol = round2(Math.max(0.5, rows.length * 0.005));
-        if (total > 0 || found > 0) checks.push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol, ...(why[id] && total - found > tol ? { why: why[id] } : {}) });
+        if (total > 0 || found > 0) checkBy[i].push({ account: names[id] || id, meta: total, found, missing: round2(total - found), tol, ...(why[id] && total - found > tol ? { why: why[id] } : {}) });
       }
     } catch (e) {
-      if (e.needsLogin) throw e;
+      if (e.needsLogin) { fatal = fatal || e; stop = true; return; }
       const perm = e.code === 200 || e.code === 10 || /cannot call api|permission|not authorized|does not exist/i.test(e.message || '');
       if (perm) {
         const first = !noAccess[id];
         noAccess[id] = { at: new Date().toISOString(), name: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message }; noAccessChanged = true;
         if (first) console.error(`[sync] ${names[id] || id}: no permission —`, e.message); else console.log(`[sync] ${names[id] || id}: still no permission`);
       } else console.error(`[sync] ${names[id] || id} failed:`, e.code, e.message);
-      errors.push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message, noAccess: perm });
-      if (e.rateLimited) break;
+      errBy[i].push({ account: names[id] || id, message: (e.code ? `(#${e.code}) ` : '') + e.message, noAccess: perm });
+      if (e.rateLimited) stop = true; // Meta says slow down: no new account is started
     }
-  }
+  };
+  const worker = async () => {
+    while (!stop && next < ids.length) {
+      const i = next++, id = ids[i];
+      onProgress({ phase: 'accounts', done: doneN, total: ids.length, account: names[id] || id });
+      try { await readAccount(i, id); } catch (e) { fatal = fatal || e; stop = true; }
+      doneN++;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PAR, ids.length) }, worker));
+  if (fatal) throw fatal;
+  for (let i = 0; i < ids.length; i++) { items.push(...itemsBy[i]); errors.push(...errBy[i]); checks.push(...checkBy[i]); }
   if (noAccessChanged) await db.setUserSetting(owner, 'acctNoAccess', noAccess).catch(() => {});
   // A workspace with ticked ad accounts that reads nothing at all: say why in the log (it looked like "0 campaigns" with no error).
   if (!items.length && ids.length) { try { const ex = await extraLogins(owner), via = {}; for (const a of await db.listAccounts(owner)) if (a.enabled) { const k = (a.info || {}).via || 'main'; via[k] = (via[k] || 0) + 1; }

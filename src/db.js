@@ -9,6 +9,21 @@ types.setTypeParser(1082, (v) => v); // keep DATE as 'YYYY-MM-DD' strings (no ti
 const pool = new Pool({ connectionString: cfg.databaseUrl, ssl: cfg.pgSsl ? { rejectUnauthorized: false } : false, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000, statement_timeout: 60000 });
 // an idle client that errors (e.g. Postgres restarts) must not crash the process
 pool.on('error', (e) => console.error('[db] idle client error:', e.message));
+// Every write (anything that is not a plain SELECT) moves writeGen on, before it starts and again once it is done.
+// src/shared.js keys its shared reads by it, so a read that starts after a change never reuses an older read.
+let writeGen = 0;
+{
+  const rawQuery = pool.query.bind(pool);
+  pool.query = (text, ...rest) => {
+    const sql = typeof text === 'string' ? text : (text && text.text) || '';
+    if (/^\s*SELECT\b/i.test(sql)) return rawQuery(text, ...rest);
+    writeGen++;
+    const r = rawQuery(text, ...rest);
+    if (r && typeof r.finally === 'function') r.finally(() => { writeGen++; }).catch(() => {});
+    return r;
+  };
+}
+const getWriteGen = () => writeGen;
 const q = (text, params) => pool.query(text, params);
 
 async function init() {
@@ -354,7 +369,7 @@ const getPostImage = async (owner, id) => (await q('SELECT mime, data FROM post_
 
 module.exports = {
   putPostImage, getPostImage,
-  pool, init, getSetups, putSetup,
+  pool, init, getSetups, putSetup, getWriteGen,
   upsertUser, getUser, activeUsers, allUsers, ownerId, removeUser, blockedUsers, setBlocked,
   listClients, createClient, updateClient, deleteClient, ownsClient,
   createInvoice, listInvoices, getInvoice, markInvoice, deleteInvoice, renumberInvoice, invoiceNumberUsed,

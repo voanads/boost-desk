@@ -270,6 +270,8 @@ async function fetchRange(since, until, user, onProgress = () => {}) {
   return { items, errors, checks };
 }
 
+// JSON with object keys sorted, so two values compare equal whatever key order Postgres (jsonb) returned them in.
+const stableJson = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((n) => [n, x[n]])) : x));
 // Write one day's campaign rows into the client entries.
 async function applyDay(day, items, errors, user, clients, { rematch = false } = {}) {
   const on = new Set(await db.enabledAccountIds(user.fb_id)); items = items.filter((r) => !r.accountId || on.has(r.accountId)); // unticked accounts never count
@@ -278,10 +280,15 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
   const plan = buildPlan(items, clients);
   const syncedAt = new Date().toISOString();
   const touched = new Set();
+  // The day's entries are read once (not once per client). A recount (rematch) writes only the entries whose numbers
+  // changed, so re-running every saved day after a client edit no longer rewrites thousands of unchanged rows (28 Nov 2026).
+  const { entries, meta } = await db.getDay(user.fb_id, day);
+  if (errors == null) errors = (meta && meta.unmatched && meta.unmatched.errors) || [];
+  const same = (e) => stableJson({ ...e, syncedAt: null });
   for (const t of plan.targets) {
     touched.add(t.clientId);
     const c = clients.find((x) => x.id === t.clientId);
-    const e = await db.getEntry(user.fb_id, day, t.clientId);
+    const e = entries[t.clientId] || (entries[t.clientId] = {}), before = rematch && e.syncedAt ? same(e) : null;
     // A "Live" client that also boosted a post (a boost of a day or more): it does both now.
     if (t.post && c && c.type === 'live') { await db.updateClient(user.fb_id, c.id, { type: 'both' }); c.type = 'both'; for (const x of clients) if (x.id === c.id) x.type = 'both'; }
     // …and a "Boost post" client with a campaign set to Live by hand: it does both too.
@@ -301,12 +308,12 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     }
     if (t.post) e.post = withRes({ ...(e.post || {}), spend: t.post.spend, on: true, campaigns: t.post.count, ids: t.post.ids }, t.post);
     else if (e.post && Number(e.post.spend) > 0) e.post = { ...e.post, spend: 0, campaigns: 0, ids: [] }; // posts moved to Live
+    if (before !== null && before === same(e)) continue; // recount found the same numbers: keep the row as it is
     e.syncedAt = syncedAt;
     await db.putEntry(user.fb_id, day, t.clientId, e);
   }
   // Clients that had synced spend this day but no longer match (a Page was moved to another client,
   // a client was changed…): clear their synced spend so nothing is counted twice.
-  const { entries } = await db.getDay(user.fb_id, day);
   for (const [cid, e] of Object.entries(entries)) {
     if (touched.has(Number(cid)) || !e.syncedAt) continue;
     for (const l of Object.values(e.lives || {})) { l.spend = 0; l.campaigns = 0; l.on = false; }
@@ -314,7 +321,7 @@ async function applyDay(day, items, errors, user, clients, { rematch = false } =
     delete e.syncedAt;
     await db.putEntry(user.fb_id, day, Number(cid), e);
   }
-  if (rematch) await db.setDayUnmatched(user.fb_id, day, { unmatched: plan.unmatched, errors });
+  if (rematch) { const um = { unmatched: plan.unmatched, errors }; if (!meta || stableJson(meta.unmatched) !== stableJson(um)) await db.setDayUnmatched(user.fb_id, day, um); }
   else await db.putDayMeta(user.fb_id, day, user.name || user.fb_id, { unmatched: plan.unmatched, errors });
   return { day, matched: plan.targets.length, unmatched: plan.unmatched, errors, campaigns: items.length };
 }
@@ -403,10 +410,7 @@ async function rematch(user) {
   const days = await db.listRaw(user.fb_id, undefined, undefined, { all: true }); // applyDay drops the unticked accounts itself
   const all = days.flatMap((d) => d.rows);
   const clients = await clientsWithLearnedPages(user.fb_id, all);
-  for (const d of days) {
-    const prevErrors = ((await db.getDay(user.fb_id, d.day)).meta?.unmatched?.errors) || [];
-    await applyDay(d.day, d.rows, prevErrors, user, clients, { rematch: true });
-  }
+  for (const d of days) await applyDay(d.day, d.rows, null, user, clients, { rematch: true }); // null: keep the day's saved errors
   return { days: days.length, ms: Date.now() - t0 };
 }
 
@@ -439,7 +443,9 @@ async function syncRange(since, until, user, onProgress = () => {}) {
 }
 
 // Per-client totals over [from, to] for the dashboard.
-async function dashboard(owner, from, to) {
+// Pages ask for the same dashboard several times at once (status, to-do, handoff, orders): those calls share one run.
+const dashboard = (owner, from, to) => require('./shared').shared(`dashboard|${owner}|${from}|${to}`, () => dashboardNow(owner, from, to));
+async function dashboardNow(owner, from, to) {
   const clients = await db.listClients(owner);
   const rows = await db.monthEntries(owner, from, to); // [{day, client_id, data}]
   const per = new Map(clients.map((c) => [c.id, {
